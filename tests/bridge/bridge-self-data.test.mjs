@@ -97,6 +97,13 @@ function seed(jti) {
 			{ id: 'c3', requester_id: USER_A, addressee_id: PEER_BLOCKER, status: 'pending', source: 'manual', created_at: '2026-10-05T00:00:00.000Z', responded_at: null },
 			{ id: 'c4', requester_id: USER_B, addressee_id: PEER_PLAIN, status: 'accepted', source: 'manual', created_at: '2026-10-06T00:00:00.000Z', responded_at: null },
 		],
+		follows: [
+			{ follower_id: PEER_PLAIN, followee_id: USER_A, created_at: '2026-10-07T00:00:00.000Z' },
+			{ follower_id: PEER_QUIET, followee_id: USER_A, created_at: '2026-10-08T00:00:00.000Z' },
+			{ follower_id: PEER_BLOCKER, followee_id: USER_A, created_at: '2026-10-09T00:00:00.000Z' },
+			{ follower_id: USER_A, followee_id: PEER_PLAIN, created_at: '2026-10-10T00:00:00.000Z' },
+			{ follower_id: USER_B, followee_id: PEER_PLAIN, created_at: '2026-10-11T00:00:00.000Z' },
+		],
 		workspaces: [
 			{ id: WORKSPACE_ONE, owner_id: USER_A, name: 'One', slug: 'one', source: 'bridge', settings: { secret: true }, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-20T00:00:00.000Z' },
 			{ id: WORKSPACE_TWO, owner_id: USER_B, name: 'Two', slug: 'two', source: 'bridge', settings: { secret: true }, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-21T00:00:00.000Z' },
@@ -139,7 +146,7 @@ async function world(t, { rows = {}, fail = null, kv, pageAccessFilter } = {}) {
 const read = (base, source, options = {}) => send(base, `/api/account/self-data/${source}`, options);
 
 describe('GET /api/account/self-data/<source>', () => {
-	it('answers the seven sources with their own name, their allowlist and their rows', async (t) => {
+	it('answers the eight sources with their own name, their allowlist and their rows', async (t) => {
 		const { base, token } = await world(t);
 		for (const source of SELF_SOURCES) {
 			const response = await read(base, source.id, { token });
@@ -287,6 +294,30 @@ describe('GET /api/account/self-data/<source>', () => {
 		assert.equal(JSON.stringify(response.body).includes('peer@example.com'), false, 'no address of the peer reaches the answer');
 		assert.equal(byPeer.get(PEER_PLAIN).direction, 'outgoing', 'the caller sent the request');
 		assert.equal(byPeer.get(PEER_QUIET).direction, 'incoming', 'the peer sent the request');
+	});
+
+	it('reduces each follower of the caller to their public card', async (t) => {
+		const { base, store, token } = await world(t);
+		const response = await read(base, 'my-followers', { token });
+		assert.equal(response.status, 200);
+		assert.deepEqual(response.body.columns, ['follower_id', 'created_at', 'follower']);
+		assert.deepEqual(
+			response.body.rows.map((row) => row.follower.userId).sort(),
+			[PEER_PLAIN, PEER_QUIET, PEER_BLOCKER].sort(),
+			'the people who follow the caller; whom the caller follows and the follows of others are absent',
+		);
+		for (const row of response.body.rows) assert.equal(row.follower_id, row.follower.userId, 'the card is the one of the row');
+		const byFollower = new Map(response.body.rows.map((row) => [row.follower.userId, row.follower]));
+		assert.deepEqual(
+			Object.keys(byFollower.get(PEER_PLAIN)).sort(),
+			['avatar', 'headline', 'lastSeenAt', 'name', 'userId', 'username'].sort(),
+			'a follower in the directory gets the full card',
+		);
+		assert.deepEqual(Object.keys(byFollower.get(PEER_QUIET)).sort(), ['avatar', 'name', 'userId'], 'a follower who left the directory is reduced');
+		assert.deepEqual(Object.keys(byFollower.get(PEER_BLOCKER)).sort(), ['avatar', 'name', 'userId'], 'a follower who blocked the caller is reduced');
+		const path = store.callsTo('osionos_follows').at(-1).params;
+		assert.equal(path.get('followee_id'), `eq.${USER_A}`, 'the follows are scoped to the caller in the path');
+		assert.equal(path.get('order'), 'created_at.desc', 'newest first');
 	});
 
 	it('answers the workspaces of the caller once each, with their own role', async (t) => {

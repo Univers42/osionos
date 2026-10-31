@@ -15,6 +15,10 @@ import { AlertCircle, GitBranch, PanelBottom } from "lucide-react";
 
 import { Tooltip } from "@/shared/ui";
 import { useDiagnosticsStore } from "@/features/ide/model/diagnosticsStore";
+import { terminalOffer } from "@/features/machines/model/machineChoice";
+import { useMachinesStore } from "@/features/machines/model/machinesStore";
+import { openOwnMachine } from "@/features/machines/model/machineWindowStore";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import {
   isSandboxOnline,
   useSandboxHealthStore,
@@ -22,6 +26,7 @@ import {
 } from "@/features/ide/model/sandboxHealthStore";
 import { useSandboxBranch } from "@/features/ide/model/useSandboxBranch";
 import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";
+import { connectivityStatus, useConnectivityStore } from "@/shared/api/connectivity";
 
 const STATE_LABEL: Record<SandboxHealthState, string> = {
   unknown: "Sandbox: checking",
@@ -61,8 +66,33 @@ const BranchChip: React.FC = () => {
   );
 };
 
+/** Where no hosted sandbox runs, the code runs on the person's own machine: the chip names it. */
+const MachineChip: React.FC = () => {
+  const offer = terminalOffer(useMachinesStore((s) => s.machines));
+  const refresh = useMachinesStore((s) => s.refresh);
+  const chip = {
+    loading: { label: "Machine: checking", dot: DOT_CLASS.unknown, hint: "Looking for your machines", act: () => void refresh() },
+    open: { label: `Machine: ${offer.kind === "open" ? offer.name : ""}`, dot: DOT_CLASS.online, hint: "Open your machine's terminal and files", act: () => { openOwnMachine(); } },
+    start: { label: `Machine: ${offer.kind === "start" ? offer.name : ""} offline`, dot: DOT_CLASS.stopped, hint: "Start osionos-node on it - click to check again", act: () => void refresh() },
+    pair: { label: "Add a machine", dot: DOT_CLASS.disabled, hint: "Connect your own computer for a terminal", act: () => openSettings("machines") },
+  }[offer.kind];
+  return (
+    <Tooltip label={chip.hint} side="top">
+      <button type="button" data-testid="machine-chip" onClick={chip.act} className={CHIP}>
+        <span aria-hidden className={`h-2 w-2 rounded-full ${chip.dot}`} />
+        {chip.label}
+      </button>
+    </Tooltip>
+  );
+};
+
 const SandboxChip: React.FC = () => {
   const state = useSandboxHealthStore((s) => s.state);
+  if (state === "disabled") return <MachineChip />;
+  return <SandboxStateChip state={state} />;
+};
+
+const SandboxStateChip: React.FC<{ state: SandboxHealthState }> = ({ state }) => {
   const reason = useSandboxHealthStore((s) => s.reason);
   const retry = useSandboxHealthStore((s) => s.retry);
   const online = isSandboxOnline(state);
@@ -96,6 +126,24 @@ const ProblemsChip: React.FC = () => {
   );
 };
 
+/** Shown only while the bridge can't be reached; the toast says the change, this says it lasts (#176). */
+const ConnectivityChip: React.FC = () => {
+  const status = useConnectivityStore(connectivityStatus);
+  if (status === "online") return null;
+  const offline = status === "offline";
+  return (
+    <Tooltip
+      label={`${offline ? "No network" : "The server is not answering"}: your changes are kept on this device and sync when the connection is back.`}
+      side="top"
+    >
+      <span data-testid="connectivity-chip" className={CHIP_BASE}>
+        <span aria-hidden className={`h-2 w-2 rounded-full ${offline ? DOT_CLASS.unavailable : DOT_CLASS.stopped}`} />
+        {offline ? "Offline" : "Connection unstable"}
+      </span>
+    </Tooltip>
+  );
+};
+
 const PanelToggleChip: React.FC = () => {
   const dockOpen = useWorkbenchStore((s) => s.dockOpen);
   const toggleDock = useWorkbenchStore((s) => s.toggleDock);
@@ -114,6 +162,7 @@ export const WorkbenchStatusBar: React.FC = () => (
     className="flex shrink-0 items-center gap-1 bg-transparent pl-[var(--osio-statusbar-px)] pr-[var(--osio-statusbar-end)] text-2xs text-[var(--osio-fg-muted)]"
     style={{ height: "var(--osio-statusbar-h)" }}
   >
+    <ConnectivityChip />
     <BranchChip />
     <SandboxChip />
     <ProblemsChip />

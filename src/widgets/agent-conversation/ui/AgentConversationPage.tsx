@@ -461,7 +461,8 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
 
   return (
     <div className="flex h-full min-w-0 bg-[var(--osio-bg-page)] text-[var(--osio-fg-default)]">
-      <main className="flex min-w-0 flex-1 flex-col">
+      {/* A section, not <main>: the workspace already has the page's one main landmark. */}
+      <section aria-label="Agent conversation" className="flex min-w-0 flex-1 flex-col">
         <header className="flex min-h-16 items-center justify-between gap-3 border-b border-[var(--osio-border-default)] px-5">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--osio-accent-subtle)] text-[var(--osio-accent)]">
@@ -572,7 +573,7 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
             </button>
           </div>
         </form>
-      </main>
+      </section>
     </div>
   );
 };

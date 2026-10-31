@@ -84,8 +84,8 @@ async function giveTheAppABridgeOrigin(page, origin) {
   });
 }
 
-/** The panel's list and the two publish routes, over one mutable fixture. */
-async function stubTheBridge(page, { pages = FIXTURE_PAGES } = {}) {
+/** The panel's list and the two publish routes, over one mutable fixture; `refusal` answers every publish. */
+async function stubTheBridge(page, { pages = FIXTURE_PAGES, refusal = null } = {}) {
   const state = { pages: [...pages], published: [], unpublished: [] };
   await page.route("**/api/account/published-pages", (route) =>
     route.fulfill({ json: { ok: true, pages: state.pages } }),
@@ -98,6 +98,7 @@ async function stubTheBridge(page, { pages = FIXTURE_PAGES } = {}) {
       state.pages = state.pages.filter((entry) => entry.pageId !== pageId);
     } else {
       state.published.push(pageId);
+      if (refusal) return route.fulfill(refusal);
     }
     return route.fulfill({ json: { ok: true, token: TOKEN_LIVE } });
   });
@@ -162,6 +163,30 @@ test.describe("the published pages panel", () => {
       `${new URL(baseURL).origin}/p/${TOKEN_LIVE}`,
     );
   });
+
+  // A refused republish passed for done: publishPage answers a result object, never a falsy token.
+  for (const [what, refusal, says] of [
+    ["the owner check", { status: 403, json: { ok: false, message: "Only the owner can publish." } }, "Only the owner can publish."],
+    ["the moderation check", {
+      status: 409,
+      json: { ok: false, code: "moderation_warning", message: "This may hurt someone. Edit it, or post it anyway.", details: { reasons: ["insult"], terms: [] } },
+    }, "Not republished: the moderation check flagged this page. Edit it, or publish it from its Share menu."],
+  ]) {
+    test(`a republish refused by ${what} says so on its row`, async ({ page, baseURL }) => {
+      await enablePublishFlag(page);
+      await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);
+      const state = await stubTheBridge(page, { refusal });
+
+      await openFreshPage(page, baseURL);
+      await openPublishedPages(page);
+
+      const row = region(page).locator("table tbody tr").nth(0);
+      await row.getByRole("button", { name: "Republish" }).click();
+
+      await expect.poll(() => state.published.length).toBe(1);
+      await expect(row).toContainText(says);
+    });
+  }
 
   test("Unpublish calls the unpublish route and the row disappears", async ({ page, baseURL }) => {
     await enablePublishFlag(page);

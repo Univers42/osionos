@@ -57,6 +57,8 @@ services:
       VITE_LEGACY_SECOND_BRAIN: ${VITE_LEGACY_SECOND_BRAIN:-}
       # "1" runs only tests/e2e/bridge-stub against a build with a (stubbed) bridge URL set.
       PLAYWRIGHT_BRIDGE_STUB: ${PLAYWRIGHT_BRIDGE_STUB:-}
+      # "1" runs only tests/e2e/ai-stub against a build with a (stubbed) AI service URL set.
+      PLAYWRIGHT_AI_STUB: ${PLAYWRIGHT_AI_STUB:-}
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     volumes:

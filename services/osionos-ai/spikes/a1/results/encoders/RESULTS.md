@@ -63,6 +63,21 @@ Confusion matrices (rows truth, columns prediction; in `<model>/run.log`): cardi
 (en 171/290, fr 187/290, es 174/290 neutral rows right). tabularis in French predicts neutral for 710 of 870 rows
 (negative recall 58/290, positive 41/290): that is the 0.352.
 
+The run.log files were not committed. The matrices of the shipped model and of the baseline, rebuilt on
+2026-10-30 by `encoders/sentiment-matrices.py` (its header has the command): the model's from
+`sent-xlmr-cardiff/scores.tsv`, the baseline re-trained with the bench's own `baseline()`. Both macro-F1 equal
+the table above in every language (the script asserts it). Order: negative / neutral / positive.
+
+| Lang | cardiff, truth negative | truth neutral | truth positive | baseline, truth negative | truth neutral | truth positive |
+| --- | --- | --- | --- | --- | --- | --- |
+| en | 234 / 46 / 10 | 66 / 171 / 53 | 19 / 55 / 216 | 176 / 75 / 39 | 109 / 121 / 60 | 68 / 80 / 142 |
+| fr | 228 / 21 / 41 | 29 / 187 / 74 | 31 / 45 / 214 | 176 / 64 / 50 | 49 / 158 / 83 | 63 / 89 / 138 |
+| es | 216 / 61 / 13 | 61 / 174 / 55 | 15 / 59 / 216 | 164 / 79 / 47 | 87 / 116 / 87 | 61 / 71 / 158 |
+
+Each cell is the predicted negative / neutral / positive count of the 290 rows of that truth. Negative read as
+positive or the reverse: baseline vs model en 107 vs 29, es 108 vs 28, but fr 113 vs 72 — French is where the
+model swaps the two poles most (41 negative rows read positive).
+
 | Model | Latency p50 single (31 tok) | p50 batch of 32 | per text in batch | RSS (docker stats, after the run) |
 | --- | --- | --- | --- | --- |
 | sent-xlmr-cardiff (278M params, 12 layers) | 17.5 ms (p95 41.6) | 612.7 ms | 19.4 ms | 2.32 GiB |

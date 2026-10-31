@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { config } from '../config.ts';
+import { CODE_LANGUAGE } from '../tools/blockTypes.ts';
 import { approvalToolNames, hookRefusal } from '../context/hooks.ts';
 import { checkDailyBuildLimit } from '../rateLimit.ts';
 import { resolveTarget } from '../gateway/resolve.ts';
@@ -103,8 +104,9 @@ export function bridgeWriteOf(row: ApprovalRow): BridgeWrite | null {
 		// (C235); the approval id is the idempotency key, so a retry of this
 		// write lands once (C226).
 		const blocks = args.blocks.map((block) => {
-			const { type, content } = (block ?? {}) as { type?: unknown; content?: unknown };
-			return { id: randomUUID(), type: String(type ?? ''), content: String(content ?? '') };
+			const { type, content, language } = (block ?? {}) as { type?: unknown; content?: unknown; language?: unknown };
+			const named = type === 'code' && typeof language === 'string' && CODE_LANGUAGE.test(language);
+			return { id: randomUUID(), type: String(type ?? ''), content: String(content ?? ''), ...(named ? { language } : {}) };
 		});
 		return {
 			method: 'POST',

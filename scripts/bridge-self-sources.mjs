@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 /**
- * The six self sources: the caller's own rows, as the read-only databases a `sys:` block
+ * The eight self sources: the caller's own rows, as the read-only databases a `sys:` block
  * shows. This file is the ONE place that knows a source's table, its scope and its
  * columns — the route reads them here and never names a table or a column itself.
  *
@@ -25,6 +25,9 @@
  *   membership a service-role read of the membership table — the membership is the
  *              authority for "my workspaces", the owned rows are only a lookup;
  *   account    an account-role read: the row-level security of the table is the scope.
+ *
+ * `peerId` marks a source whose rows each name one other person: the reader reduces that
+ * person to their public card (`peerCard`) and hands it to `computed` as `peerOf(row)`.
  *
  * `computed` names the keys a mapper adds on top of the allowlist. They are computed from
  * the row and the verified session, never read from the table.
@@ -126,6 +129,14 @@ const MY_PAGES_COLUMNS = [
 	'created_at', 'updated_at', 'archived_at',
 ];
 
+// The public card of a person: the same directory read for every source that names one.
+const PEOPLE_DIRECTORY = {
+	table: 'osionos_people_directory',
+	columns: ['user_id', 'display_name', 'username', 'profile', 'last_seen_at', 'directory_opt_out', 'headline'],
+	idColumn: 'user_id',
+	chunk: 50,
+};
+
 export const SELF_SOURCES = [
 	{
 		id: 'my-pages',
@@ -162,16 +173,23 @@ export const SELF_SOURCES = [
 		scope: { kind: 'edge', columns: ['requester_id', 'addressee_id'] },
 		order: 'created_at.desc',
 		columns: ['id', 'requester_id', 'addressee_id', 'status', 'source', 'created_at', 'responded_at'],
+		peerId: connectionPeerId,
 		computed: {
 			direction: connectionDirection,
 			peer: (row, context) => context.peerOf(row),
 		},
-		related: {
-			table: 'osionos_people_directory',
-			columns: ['user_id', 'display_name', 'username', 'profile', 'last_seen_at', 'directory_opt_out', 'headline'],
-			idColumn: 'user_id',
-			chunk: 50,
-		},
+		related: PEOPLE_DIRECTORY,
+	},
+	{
+		id: 'my-followers',
+		label: 'Followers',
+		table: 'osionos_follows',
+		scope: { kind: 'owner', column: 'followee_id' },
+		order: 'created_at.desc',
+		columns: ['follower_id', 'created_at'],
+		peerId: (row) => row?.follower_id,
+		computed: { follower: (row, context) => context.peerOf(row) },
+		related: PEOPLE_DIRECTORY,
 	},
 	{
 		id: 'my-workspaces',

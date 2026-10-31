@@ -30,6 +30,7 @@ import { RailHomeButton } from "./RailHomeButton";
 import { prefetchPanel } from "./panelLoaders";
 import { RAIL_GROUPS, visibleRailItems, type RailApp, type RailItem } from "../model/railItems";
 import { useConnectionNotifications, useIncomingInviteCount } from "@/widgets/notifications/model/useConnectionNotifications";
+import { useNotificationsStore } from "@/store/chat/useNotificationsStore";
 
 interface Props {
   onOpenSettings?: () => void;
@@ -62,6 +63,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
   // Live connection-invitation notifications: hydrate + realtime; badge = incoming count.
   useConnectionNotifications();
   const inviteCount = useIncomingInviteCount();
+  const notificationsUnread = useNotificationsStore((s) => s.unread);
 
   useEffect(() => useInstalledApps.getState().load(), []);
   const installedApps = useMemo(
@@ -100,7 +102,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
   const isActive = (item: RailItem) =>
     item.action.kind === "panel" && sidebarMode !== "rail" && activePanel === item.action.panel;
   const badgeOf = (item: RailItem) => {
-    if (item.id === "notifications") return inviteCount;
+    if (item.id === "notifications") return inviteCount + notificationsUnread;
     if (item.id === "conversations") return unread;
     return undefined;
   };

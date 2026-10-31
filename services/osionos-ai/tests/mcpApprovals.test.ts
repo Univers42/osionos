@@ -99,7 +99,7 @@ async function seedPending(tokenId: string, count: number): Promise<void> {
 }
 
 describe('what a token sees (C117)', () => {
-	it('read lists the reads only, read+write_approval lists the reads and the three writes', async () => {
+	it('read lists the reads only, read+write_approval lists the reads and the four writes', async () => {
 		const read = await mint(USER_A, [WORKSPACE_A], ['read']);
 		const readList = await rpc(read.token, 'tools/list');
 		const readNames = (readList.body.result.tools as { name: string }[]).map((tool) => tool.name).sort();

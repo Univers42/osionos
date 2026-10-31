@@ -63,6 +63,7 @@ describe('the scope of a token (C115)', () => {
 		const inW1 = await pageIn(WORKSPACE_A, USER_A, 'In W1');
 		const { token } = await mint(USER_A, [WORKSPACE_A]);
 		assert.ok((await callTool(token, 'search_workspace', { query: TERM })).text.includes(inW1));
+		assert.equal((await callTool(token, 'graph_neighbors', { pageId: inW1 })).isError, false);
 		await app.db.query('delete from public.osionos_workspace_members where workspace_id = $1 and user_id = $2', [
 			WORKSPACE_A,
 			USER_A,
@@ -70,6 +71,10 @@ describe('the scope of a token (C115)', () => {
 		const after_ = await callTool(token, 'search_workspace', { query: TERM });
 		assert.ok(!after_.text.includes(inW1));
 		assert.equal((await callTool(token, 'read_page', { pageId: inW1 })).isError, true);
+		// C98 names graph_neighbors too: the same stale token reaches no neighbour of W1.
+		const graph = await callTool(token, 'graph_neighbors', { pageId: inW1 });
+		assert.equal(graph.isError, true);
+		assert.ok(!graph.text.includes('In W1'));
 	});
 });
 

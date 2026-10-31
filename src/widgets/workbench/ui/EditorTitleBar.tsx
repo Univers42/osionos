@@ -14,8 +14,8 @@ import React from "react";
 
 import { PageHeaderBar } from "@/entities/page";
 import { usePageHeaderBarProps } from "@/entities/page/model/usePageHeaderBarProps";
-import { usePageStore } from "@/store/usePageStore";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
+import { useTabTitle } from "@/widgets/workspace-grid/model/tabTitle";
 
 interface EditorTitleBarProps {
   tab: WorkspaceTab;
@@ -44,9 +44,8 @@ const PlainTitleBar: React.FC<{ title: string }> = ({ title }) => (
  * title. The region is named after the document so several panes stay distinguishable.
  */
 export const EditorTitleBar: React.FC<EditorTitleBarProps> = ({ tab }) => {
-  const pageTitle = usePageStore((s) => s.pageById(tab.pageId)?.title);
+  const title = useTabTitle(tab);
   const isPage = tab.kind === "page";
-  const title = (isPage ? pageTitle : undefined) || tab.title || "Untitled";
 
   return (
     <section aria-label={`Title bar: ${title}`} data-osio-editor-titlebar className="shrink-0">

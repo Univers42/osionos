@@ -34,6 +34,19 @@ import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 const PUBLISH_PATH = /^\/api\/pages\/([0-9a-fA-F-]{36})\/publish$/;
 const PUBLIC_PATH = /^\/api\/public\/pages\/([0-9a-f]{32})$/;
 
+const MAX_SHOWN_IDS = 20_000;
+const MAX_ID_LENGTH = 128;
+
+/**
+ * The gated ids the owner's view showed. Anything but an array of short strings
+ * is no decision, and no decision publishes no gated content.
+ */
+function shownIds(payload) {
+	const shown = payload?.shown;
+	if (!Array.isArray(shown)) return new Set();
+	return new Set(shown.slice(0, MAX_SHOWN_IDS).filter((id) => typeof id === 'string' && id.length <= MAX_ID_LENGTH));
+}
+
 const PUBLIC_CACHE_HEADERS = { 'cache-control': 'public, max-age=60' };
 const NO_STORE_HEADERS = { 'cache-control': 'no-store' };
 
@@ -51,7 +64,7 @@ async function publish(deps, session, request, pageId, response, config) {
 		body: {
 			page_id: pageId, owner_id: session.userId,
 			title: row.title || 'Untitled', icon: row.icon ?? null,
-			content: publishSnapshot(row.content), published_at: new Date().toISOString(),
+			content: publishSnapshot(row.content, { shown: shownIds(payload) }), published_at: new Date().toISOString(),
 		},
 		prefer: 'resolution=merge-duplicates,return=representation',
 	});

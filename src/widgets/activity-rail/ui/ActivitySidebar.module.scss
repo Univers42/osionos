@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/30 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -102,5 +102,46 @@
 @media (prefers-reduced-motion: reduce) {
   .resizeHandle::after {
     transition: none;
+  }
+}
+
+.scrim {
+  display: none;
+}
+
+/* A phone has no room for the panel beside the page (it left the page 67px wide):
+   the panel opens over the page as a drawer, the rest of the page dims and a tap
+   on it folds the drawer. 767px is PHONE_QUERY in useResponsiveSidebar.ts. */
+@media (max-width: 767px) {
+  .activitySidebar {
+    position: relative;
+  }
+
+  .activitySidebar:not([data-sidebar-mode="peek"]) .panel {
+    position: absolute;
+    z-index: 1;
+    top: var(--osio-frame-gap);
+    bottom: var(--osio-frame-gap);
+    left: 100%;
+    height: auto;
+    max-width: calc(100vw - 100% - var(--osio-frame-gap));
+  }
+
+  .activitySidebar:not([data-sidebar-mode="peek"]) .panelInner {
+    max-width: 100%;
+  }
+
+  .scrim {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 100%;
+    width: calc(100vw - 100%);
+    background: var(--osio-overlay);
+  }
+
+  .resizeHandle {
+    display: none;
   }
 }

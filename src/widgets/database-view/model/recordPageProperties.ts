@@ -184,6 +184,23 @@ const placeCodec: Codec = {
   },
 };
 
+/** People are names; one chip each (#162). */
+const personCodec: Codec = {
+  type: "person",
+  project: (value) => toStringArray(value),
+};
+
+/** An attachment is `{name, url, …}` or a bare name; the chip shows the name, not the JSON. */
+const filesCodec: Codec = {
+  type: "files",
+  project: (value) => (Array.isArray(value) ? value : [value]).map(fileName).filter(Boolean),
+};
+
+function fileName(value: unknown): string {
+  if (value && typeof value === "object" && "name" in value) return toSafeString((value as { name?: unknown }).name);
+  return toSafeString(value);
+}
+
 const relationCodec: Codec = {
   type: "relation",
   project: (value, _property, _page, resolve) =>
@@ -222,12 +239,12 @@ const CODECS: Readonly<Record<PropertyTypeKey, Codec>> = {
   status: selectCodec("status"),
   date: dateCodec(true),
   checkbox: checkboxCodec,
-  person: readOnly(fallbackCodec),
-  user: readOnly(fallbackCodec),
+  person: personCodec,
+  user: personCodec,
   url: urlCodec,
   email: emailCodec,
   phone: phoneCodec,
-  files_media: readOnly(fallbackCodec),
+  files_media: filesCodec,
   relation: relationCodec,
   formula: formulaCodec,
   rollup: rollupCodec,
@@ -236,9 +253,9 @@ const CODECS: Readonly<Record<PropertyTypeKey, Codec>> = {
   id: readOnly(fallbackCodec),
   created_time: readOnly(dateCodec(false)),
   last_edited_time: readOnly(dateCodec(false)),
-  created_by: readOnly(fallbackCodec),
-  last_edited_by: readOnly(fallbackCodec),
-  assigned_to: readOnly(fallbackCodec),
+  created_by: personCodec,
+  last_edited_by: personCodec,
+  assigned_to: personCodec,
   due_date: dateCodec(true),
   custom: readOnly(fallbackCodec),
 };

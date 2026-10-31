@@ -111,6 +111,25 @@ describe('add_blocks: the proposal', () => {
 		}
 	});
 
+	it('a code block names its language, so a mermaid block is a diagram on the page (#34)', async () => {
+		const pageId = await page([INTRO]);
+		const chart = 'flowchart TD\n  Idea --> Page';
+		const answer = await addBlocks.run(CTX, { pageId, blocks: [{ type: 'code', language: 'mermaid', content: chart }] });
+		assert.ok(answer.ok);
+		if (!answer.ok) return;
+		assert.deepEqual(answer.data.args.blocks, [{ type: 'code', language: 'mermaid', content: chart }]);
+		const refused = [
+			{ type: 'paragraph', language: 'mermaid', content: 'x' },
+			{ type: 'code', language: 'Mermaid', content: 'x' },
+			{ type: 'code', language: 'mer maid"', content: 'x' },
+			{ type: 'code', language: '', content: 'x' },
+		];
+		for (const block of refused) {
+			const parsed = addBlocks.input.safeParse({ pageId, blocks: [block] });
+			assert.equal(parsed.success, false, `${JSON.stringify(block)} is refused, never stripped`);
+		}
+	});
+
 	it('refuses an archived page, a page of someone else, and an ambiguous or nested anchor (C234, C236)', async () => {
 		const archived = await page([INTRO], { archived: true });
 		const archivedAnswer = await addBlocks.run(CTX, { pageId: archived, blocks: [{ type: 'paragraph', content: 'x' }] });
@@ -183,6 +202,19 @@ describe('add_blocks: the approved write', () => {
 		const card = await call(`/api/ai/approvals/${approvalId}`, { method: 'GET', token: tokenFor(USER_A, WORKSPACE_A) });
 		assert.equal(card.status, 200);
 		assert.equal((card.body as { summary: string }).summary, row.result.summary);
+	});
+
+	it('a mermaid code block reaches the append with its language, and nothing else of the model (#34)', async () => {
+		bridge.reset();
+		const pageId = await page([INTRO]);
+		const approvalId = await ask({ pageId, blocks: [{ type: 'code', language: 'mermaid', content: 'flowchart TD\n  A --> B' }] });
+		const answer = await decide(approvalId);
+		assert.equal((answer.body as { status: string }).status, 'executed');
+		const post = bridge.ofMethod('POST').find((c) => c.path === `/api/pages/${pageId}/blocks`);
+		const block = (post?.body as { blocks: Record<string, unknown>[] }).blocks[0];
+		assert.deepEqual(Object.keys(block).sort(), ['content', 'id', 'language', 'type']);
+		assert.equal(block.language, 'mermaid');
+		assert.equal((bridge.pageContent(pageId)?.content[1] as { language?: string }).language, 'mermaid');
 	});
 
 	it('says "at the end" when the block it was to follow is gone since the card', async () => {

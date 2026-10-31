@@ -73,6 +73,7 @@ bash scripts/docker-run.sh lint
 | **C142** | A stale score never counts | the score joins on the sha256 of the current content — "C142 a stale score" |
 | **C143–C148** | Erase, no moderation use, locked storage, off on public, pinned model | migration and handler slices (PR #99, groot PR #118) |
 | **C149** | The gaps are stated | the Caveat below |
+| **C155** | The "AI sentiment" database property reads labels through the kit's `autofill` host adapter, read-only | `tests/canvas/ai-sentiment-rows.test.ts`; in a browser, labels for an opted-in workspace and "—" with no row read otherwise — `tests/e2e/ai-stub/aiSentimentProperty.spec.mjs` (`PLAYWRIGHT_AI_STUB=1`) |
 
 ---
 
@@ -92,6 +93,9 @@ cd services/osionos-ai/spikes/a1 && sh encoders.sh sentiment2     # run 2026-10-
 | `cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual` (macro-F1) | 0.712 | 0.723 | 0.697 |
 | TF-IDF + LR baseline (macro-F1) | 0.503 | 0.542 | 0.502 |
 | Paired difference, CI 95% | +0.209 [+0.170, +0.252] | +0.181 [+0.136, +0.224] | +0.195 [+0.158, +0.238] |
+
+The confusion matrices of the model and of the baseline, per language, are in the same RESULTS.md (rebuilt
+by `services/osionos-ai/spikes/a1/encoders/sentiment-matrices.py`, which asserts the macro-F1 above).
 
 The pinned model: revision `82107f4ccba672c9ab1eee538e727e462cad21de`, served by TEI `/predict`. Single text
 p50 17.5 ms, batch of 32 p50 612.7 ms, RSS 2.32 GiB — measured with host load 12–17, so latencies are upper bounds.
@@ -120,5 +124,6 @@ p50 17.5 ms, batch of 32 p50 612.7 ms, RSS 2.32 GiB — measured with host load 
 - **No audio, no transcripts, no images, no video** (C139). Text comments of pages only.
 - **No per-person view** (C140): no route, column or chart is keyed by author.
 - **No moderation, ranking or decision about a person** (C144): the score is display-only.
-- No database "AI sentiment" property in the app, and no feed comments: out of this slice.
+- No feed comments: out of this slice. The database "AI sentiment" property only **shows** labels the
+  service already has; it never writes `page.properties`, and a build without an AI service does not offer it.
 - No public rollout (C147, C149).

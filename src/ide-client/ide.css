@@ -1,0 +1,28 @@
+/* The IDE page's frame around VS Code's parts, in the app's own tokens so both origins read as
+   one product. Phase 8 restyles it; it must stay token-only (scripts/check-style-tokens.sh). */
+@import "../app/styles/tokens.generated.css";
+
+:root { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+html, body { height: 100%; margin: 0; }
+/* A display rule below would otherwise beat the hidden attribute. */
+[hidden] { display: none !important; }
+body { display: flex; flex-direction: column; background: var(--osio-bg-canvas); color: var(--osio-fg-default); }
+.bar { display: flex; flex: 0 0 36px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--osio-border); }
+.status { color: var(--osio-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
+.status[data-state="connected"]::before { background: var(--osio-success); }
+.status[data-state="error"] { color: var(--osio-danger); }
+.actions { display: flex; gap: 6px; }
+.actions button { font: inherit; color: inherit; background: transparent; border: 1px solid var(--osio-border); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.actions button:hover { background: var(--osio-accent-subtle); }
+.actions button:focus-visible { outline: 2px solid var(--osio-accent); outline-offset: 1px; }
+.workbench { display: flex; flex: 1 1 auto; min-height: 0; }
+.explorer { flex: 0 0 240px; overflow: auto; padding: 6px 0; border-right: 1px solid var(--osio-border); background: var(--osio-bg-panel); }
+.explorer ul { list-style: none; margin: 0; padding: 0; }
+.explorer .node > .label { display: block; padding: 2px 8px 2px calc(12px + var(--depth, 0) * 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.explorer .node > .label:hover { background: var(--osio-accent-subtle); }
+.explorer .folder > .label::before { content: "▸"; display: inline-block; width: 12px; margin-left: -12px; color: var(--osio-fg-muted); }
+.explorer .folder[aria-expanded="true"] > .label::before { content: "▾"; }
+.explorer-error { padding: 8px 12px; color: var(--osio-danger); }
+.editor { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.terminal { flex: 0 0 38vh; border-top: 1px solid var(--osio-border); }

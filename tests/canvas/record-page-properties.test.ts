@@ -238,3 +238,26 @@ test("values the table owns are shown read-only; the ones it stores stay editabl
     assert.ok(!entry(key).readOnly, key);
   }
 });
+
+test("people and attachments are one chip per value, not joined text or raw JSON", () => {
+  const team = {
+    ...database,
+    properties: {
+      owner: { id: "owner", name: "Owner", type: "person" },
+      by: { id: "by", name: "Created by", type: "created_by" },
+      files: { id: "files", name: "Files", type: "files_media" },
+    },
+  } as unknown as DatabaseSchema;
+  const row = {
+    ...page,
+    properties: {
+      owner: ["Ada Lovelace", "Alan Turing"],
+      by: "Grace Hopper",
+      files: [{ id: "f1", name: "brief.pdf", url: "https://files.example/brief.pdf", type: "pdf" }, "cover.png"],
+    },
+  } as unknown as DatabasePage;
+  const byKey = new Map(projectRecordProperties(team, row, resolver).map((item) => [item.key, item]));
+  assert.deepEqual(byKey.get("owner"), { key: "owner", label: "Owner", type: "person", value: ["Ada Lovelace", "Alan Turing"], options: undefined, relationTarget: undefined, readOnly: true });
+  assert.deepEqual(byKey.get("by")?.value, ["Grace Hopper"]);
+  assert.deepEqual([byKey.get("files")?.type, byKey.get("files")?.value], ["files", ["brief.pdf", "cover.png"]]);
+});

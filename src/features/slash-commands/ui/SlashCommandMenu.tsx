@@ -224,6 +224,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           ref={listRef}
           id="slash-command-list"
           role="listbox"
+          aria-label="Block commands"
           className="osio-scroll-fade relative min-h-0 flex-1 overflow-y-auto"
           style={{ "--osio-scroll-fade-size": "34px" } as React.CSSProperties}
         >
