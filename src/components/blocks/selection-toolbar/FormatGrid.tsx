@@ -44,10 +44,8 @@ interface FormatGridProps {
 }
 
 /**
- * The 5 x 2 grid from the reference panel. The text-colour cell keeps today's
- * background-colour action as the small highlighter in its lower-right corner:
- * Notion folds both palettes into one "A", and the existing action stays
- * reachable instead of becoming a dead menu row.
+ * The format grid: standard 36x36px icon cells with dedicated text-colour
+ * and background-colour buttons, satisfying WCAG 2.2 SC 2.5.8 touch targets.
  */
 export const FormatGrid: React.FC<FormatGridProps> = ({
   palette,
@@ -64,28 +62,24 @@ export const FormatGrid: React.FC<FormatGridProps> = ({
   onClearFormat,
   onToggleMath,
 }) => (
-  <div className="grid grid-cols-5 justify-items-center gap-y-1">
-    <div className="relative h-9 w-9">
-      <ToolbarIconButton
-        label="Text color"
-        active={palette === "text"}
-        onClick={() => onTogglePalette("text")}
-      >
-        <Baseline className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
-      </ToolbarIconButton>
-      <button
-        type="button"
-        title="Background color"
-        aria-label="Background color"
-        aria-pressed={palette === "background"}
-        data-selection-panel-control
-        className="absolute bottom-0.5 right-0.5 grid h-4 w-4 place-items-center rounded-sm text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-menu-item-hover-bg)] hover:text-[var(--osio-fg-default)] data-[kb-active=true]:bg-[var(--osio-menu-item-hover-bg)] data-[kb-active=true]:text-[var(--osio-fg-default)]"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => onTogglePalette("background")}
-      >
-        <Highlighter className="h-3 w-3" strokeWidth={2.5} aria-hidden />
-      </button>
-    </div>
+  <div
+    data-testid="selection-format-grid"
+    className="grid grid-cols-6 justify-items-center gap-y-1"
+  >
+    <ToolbarIconButton
+      label="Text color"
+      active={palette === "text"}
+      onClick={() => onTogglePalette("text")}
+    >
+      <Baseline className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+    </ToolbarIconButton>
+    <ToolbarIconButton
+      label="Background color"
+      active={palette === "background"}
+      onClick={() => onTogglePalette("background")}
+    >
+      <Highlighter className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+    </ToolbarIconButton>
 
     <ToolbarIconButton label="Bold" onClick={onFormatBold}>
       <Bold className={TOOLBAR_ICON} strokeWidth={2.5} aria-hidden />

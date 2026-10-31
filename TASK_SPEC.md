@@ -1,48 +1,67 @@
-# TASK SPEC: Batch 1, Component 3 — Remediate Todo Due Date Controls
+# TASK SPEC: Batch 1, Component 4 — Remediate FormatGrid Color Controls & Target Size
 
 ## 1. Goal
-Upgrade `TodoDueDate.tsx` buttons (both floating "Add date" affordance and active due date pill) to satisfy WCAG 2.2 SC 2.5.8 (Target Size >= 24x24 px) and SC 2.4.11 / 2.4.12 (Focus Visible), without causing layout shift or clipping in todo block rows.
+Remediate `FormatGrid.tsx` color controls to satisfy WCAG 2.2 SC 2.5.8 (Target Size Minimum >= 24x24 px), eliminate target overlap between text and background color buttons, and provide token-driven `:focus-visible` rings, while preserving all existing selection toolbar functionality and test compatibility.
 
 ---
 
 ## 2. Exact Filepaths
-1. `src/features/block-editor/ui/TodoDueDate.tsx`
+1. `src/components/blocks/selection-toolbar/FormatGrid.tsx`
+2. `tests/e2e/visual/a11y.spec.mjs`
 
 ---
 
 ## 3. Technical Requirements
 
-### `src/features/block-editor/ui/TodoDueDate.tsx`
-1. **Unset state ("Add date" button, lines 51-60)**:
-   - Change `h-5 w-5` to `h-6 w-6 min-h-[24px] min-w-[24px]`.
-   - Adjust position from `top-1 right-1` to `top-0.5 right-1` for vertical symmetry in standard todo row height.
-   - Add focus ring: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]`.
-   - Maintain `aria-label="Add date"` and `aria-hidden` on `CalendarPlus` icon.
+### `src/components/blocks/selection-toolbar/FormatGrid.tsx`
+1. **Separate Background Color into Dedicated Toolbar Button**:
+   - Replace the 16x16 px absolute button (`h-4 w-4`) inside the text color cell with a standalone `ToolbarIconButton`:
+     ```tsx
+     <ToolbarIconButton
+       label="Background color"
+       active={palette === "background"}
+       onClick={() => onTogglePalette("background")}
+     >
+       <Highlighter className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+     </ToolbarIconButton>
+     ```
+   - Standard 36x36 px touch target (`h-9 w-9`), with full focus styling and zero target overlap.
 
-2. **Set state (Active due date button, lines 65-77)**:
-   - Ensure minimum touch target height: add `min-h-[24px] px-1.5`.
-   - Add focus ring: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]`.
-   - Maintain truncated label and `aria-hidden` on `CalendarClock` icon.
+2. **Update Grid Layout**:
+   - Switch container grid from `grid-cols-5` to `grid-cols-6`:
+     ```tsx
+     <div className="grid grid-cols-6 justify-items-center gap-y-1">
+     ```
+   - Row 1: Text color, Background color, Bold, Italic, Underline, Clear formatting
+   - Row 2: Add link, Strikethrough, Inline code, Equation, MoreMenu
+
+### `tests/e2e/visual/a11y.spec.mjs`
+- Add scenario `"a11y: inline text selection toolbar surface"`:
+  - Create paragraph, select text to trigger `[data-testid="inline-selection-toolbar"]`.
+  - Run `runA11yAudit(page, "inline text selection toolbar surface")`.
+  - Assert `expect(results.violations).toEqual([]);`.
 
 ---
 
 ## 4. Verification Protocol (Docker-First)
 1. `npm run test:quality` -> 0 errors.
-2. `npm run test:e2e -- tests/e2e/visual/a11y.spec.mjs` -> 0 violations.
+2. `npm run test:e2e -- tests/e2e/functional/selectionPanel.spec.mjs` -> 3/3 passed.
+3. `npm run test:e2e -- tests/e2e/visual/a11y.spec.mjs` -> 5/5 passed (0 violations).
 
 ---
 
 ## 5. Commit Plan
-- Message: `fix(a11y): upgrade todo due date controls to 24px target size with focus rings`
+- Message: `fix(a11y): separate selection toolbar background color into 36px touch target`
 - Author: `DJSurgeon <djsurgeon83@gmail.com>`
 - Flag: `-s`
 
 ---
 
 ## 6. Done-When
-- [x] `TodoDueDate.tsx` floating "Add date" button meets 24x24 px target size with focus ring.
-- [x] `TodoDueDate.tsx` active date button meets 24px minimum height with focus ring.
+- [x] `FormatGrid.tsx` updated with standalone `ToolbarIconButton` for background color in `grid-cols-6`.
+- [x] `tests/e2e/visual/a11y.spec.mjs` tests inline selection toolbar with 0 violations.
 - [x] `npm run test:quality` passes (0 errors).
-- [x] `npm run test:e2e -- tests/e2e/visual/a11y.spec.mjs` passes (0 violations).
+- [x] `tests/e2e/functional/selectionPanel.spec.mjs` passes.
+- [x] `tests/e2e/visual/a11y.spec.mjs` passes.
 - [x] Commit signed with `-s` by `DJSurgeon`.
-- [x] Documented in `docs/CHANGELOG.md`.
+- [ ] Documented in `docs/CHANGELOG.md`.

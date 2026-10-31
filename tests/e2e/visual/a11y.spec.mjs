@@ -21,6 +21,7 @@ import {
   createBlockViaSlash,
   getEditors,
   openFreshPage,
+  selectText,
   slashMenu,
 } from "../../browser/core/app.mjs";
 import { runA11yAudit } from "../support/a11yAudit.mjs";
@@ -63,6 +64,19 @@ test("a11y: settings surface", async ({ page, baseURL }) => {
   await openFreshPage(page, baseURL);
   await openSettings(page);
   const results = await runA11yAudit(page, "settings surface");
+  expect(results).toBeDefined();
+  expect(results.violations).toEqual([]);
+});
+
+test("a11y: inline text selection toolbar surface", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  const editor = await activateFirstEditor(page);
+  await editor.type("Sample sentence for testing inline formatting selection toolbar.");
+  await selectText(editor, "testing");
+  await page.getByTestId("inline-selection-toolbar").waitFor({ state: "visible" });
+  const results = await runA11yAudit(page, "inline text selection toolbar format grid", {
+    contextSelector: '[data-testid="selection-format-grid"]',
+  });
   expect(results).toBeDefined();
   expect(results.violations).toEqual([]);
 });

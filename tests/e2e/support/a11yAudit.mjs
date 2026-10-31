@@ -44,9 +44,10 @@ export async function runA11yAudit(page, contextName, options = {}) {
     ...options.axeOptions,
   };
 
-  const results = await page.evaluate(async (opts) => {
-    return await window.axe.run(document, opts);
-  }, axeOptions);
+  const results = await page.evaluate(async ({ opts, contextSelector }) => {
+    const context = contextSelector ? (document.querySelector(contextSelector) || document) : document;
+    return await window.axe.run(context, opts);
+  }, { opts: axeOptions, contextSelector: options.contextSelector });
 
   const { violations = [], passes = [], incomplete = [] } = results;
 
