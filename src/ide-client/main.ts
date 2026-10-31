@@ -82,6 +82,10 @@ async function homeFolder(): Promise<string> {
   return folder;
 }
 
+// Set once the app answers, so a failure after it (home folder, VS Code start) reaches the app's
+// card too and not only this window's status line.
+let appLink: AppLink | null = null;
+
 async function main() {
   const target = readMachineTarget(location.search);
   const appOrigins = (document.querySelector<HTMLMetaElement>('meta[name="osionos-app-origin"]')?.content ?? "").split(" ").filter(Boolean);
@@ -89,6 +93,7 @@ async function main() {
   document.title = target.node;
   const link = linkToApp(target.node, appOrigins);
   if (!link) return report(null, "error", "open this machine from osionos");
+  appLink = link;
   report(link, "connecting");
   await link.firstSession;
   const folder = target.folder ?? await homeFolder();
@@ -118,4 +123,4 @@ async function main() {
   if (explorer) await mountExplorer(explorer, folderUri, (resource) => void openFile(resource));
 }
 
-main().catch((error: Error) => report(null, "error", error.message));
+main().catch((error: Error) => report(appLink, "error", error.message));
