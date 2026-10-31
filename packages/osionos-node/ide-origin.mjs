@@ -21,7 +21,7 @@ import { isNodeId, signNodeCap, verifyIdeToken, verifyNodeCap } from '../../scri
 import { createSocketRegistry, forwardHttp, forwardUpgrade, refuseRaw } from './node-proxy.mjs';
 
 const PREFIX = '/api/node/';
-const COOKIE_PREFIX = '__Host-osio-node-';
+const COOKIE_NAME = 'osio-node-';
 const MAX_SESSION_BODY = 1024;
 const TEXT = { 401: 'Machine access is invalid.', 403: 'Forbidden.', 404: 'Not found.', 405: 'Method not allowed.', 429: 'Too many machine connections.' };
 
@@ -32,12 +32,28 @@ function reply(res, status, text = TEXT[status]) {
 	res.end(text);
 }
 
-function readCookie(header, name) {
+// C6 as amended 2026-10-31: `__Host-` everywhere except a plain-http IP-literal loopback origin,
+// whose cookie keeps every attribute but the prefix. An IP literal has no subdomains and cookies
+// ignore ports, so the prefix adds nothing there, and Electron 32 (Chromium 128) stores no
+// `__Host-` cookie on http://127.0.0.1 (measured, C23). The mode comes from the configured origin
+// only, never from a request header.
+// Caveat: assumes Chromium keeps storing unprefixed Secure cookies on http loopback (measured on
+// Electron 32.2.7 only); a browser that refuses them fails closed with a 401, never opens.
+export function cookiePrefixFor(ideOrigin) {
+	const url = new URL(ideOrigin);
+	const loopbackLiteral = url.protocol === 'http:' && /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(url.hostname);
+	return loopbackLiteral ? COOKIE_NAME : `__Host-${COOKIE_NAME}`;
+}
+
+// Every value under `name`: a second cookie of the same name (set by another local port, which
+// cookies do not isolate) must not shadow the real one, so each is checked, never the first only.
+function readCookies(header, name) {
+	const values = [];
 	for (const part of String(header ?? '').split(';')) {
 		const at = part.indexOf('=');
-		if (at !== -1 && part.slice(0, at).trim() === name) return part.slice(at + 1).trim();
+		if (at !== -1 && part.slice(0, at).trim() === name) values.push(part.slice(at + 1).trim());
 	}
-	return null;
+	return values;
 }
 
 function readSmallJson(req) {
@@ -66,6 +82,7 @@ function splitNodePath(url) {
 
 export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null }) {
 	const sockets = createSocketRegistry({ maxPerUser: maxSocketsPerUser });
+	const cookiePrefix = cookiePrefixFor(ideOrigin);
 	const revokedAt = new Map();
 	const isRevoked = (userId, iat) => iat <= (revokedAt.get(userId) ?? -1);
 
@@ -83,7 +100,7 @@ export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, node
 		sockets.extend(token.userId, node, exp);
 		const maxAge = exp - Math.floor(Date.now() / 1000);
 		res.writeHead(204, {
-			'set-cookie': `${COOKIE_PREFIX}${node}=${cap}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`,
+			'set-cookie': `${cookiePrefix}${node}=${cap}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`,
 			'cache-control': 'no-store',
 		});
 		res.end();
@@ -95,10 +112,10 @@ export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, node
 		if (!checkNodeOrigin(req.headers, ideOrigin, isUpgrade)) throw fail(403);
 		const route = splitNodePath(req.url);
 		if (!route?.id) throw fail(404);
-		const value = readCookie(req.headers.cookie, `${COOKIE_PREFIX}${route.id}`);
-		let cap;
-		try { cap = verifyNodeCap(value, { secret }); } catch { throw fail(401); }
-		if (cap.node !== route.id || isRevoked(cap.userId, cap.iat)) throw fail(401);
+		const cap = readCookies(req.headers.cookie, `${cookiePrefix}${route.id}`).map((value) => {
+			try { return verifyNodeCap(value, { secret }); } catch { return null; }
+		}).find((candidate) => candidate && candidate.node === route.id && !isRevoked(candidate.userId, candidate.iat));
+		if (!cap) throw fail(401);
 		if (cap.userId !== ownerId) throw fail(403);
 		// C7c: the id is only ever a registry key.
 		if (!Object.hasOwn(nodes, route.id)) throw fail(404);
