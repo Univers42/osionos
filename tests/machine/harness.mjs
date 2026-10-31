@@ -35,6 +35,12 @@ export function makeFolder(base) {
 		version: '2.0.0',
 		tasks: [{ label: 'sentinel', type: 'shell', command: 'touch untrusted-task-ran', runOptions: { runOn: 'folderOpen' } }],
 	}));
+	// C11: a debug launch writes its own sentinel; it must not run before the owner trusts.
+	writeFileSync(join(folder, 'debug-target.js'), "require('fs').writeFileSync(__dirname + '/debug-ran', 'yes');\n");
+	writeFileSync(join(folder, '.vscode', 'launch.json'), JSON.stringify({
+		version: '0.2.0',
+		configurations: [{ name: 'sentinel', type: 'node', request: 'launch', program: '${workspaceFolder}/debug-target.js' }],
+	}));
 	execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: folder });
 	execFileSync('git', ['-c', 'user.email=e2e@osionos', '-c', 'user.name=e2e', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: folder });
 	return folder;

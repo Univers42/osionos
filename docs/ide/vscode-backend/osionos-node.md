@@ -37,11 +37,16 @@ cookie is HttpOnly; and the page reports no CSP violation. It needs `OSIONOS_SER
 OSIONOS_SERVER_LIB=<.../lib> OSIONOS_E2E_CHROME=<chrome> node --test tests/machine/ide-machine.e2e.test.mjs
 ```
 
+A debug launch (F5) in an untrusted folder asks for trust and runs nothing when declined; once
+trusted, the same launch runs (C11).
+
+Live, 2026-10-31: the deployed app at `https://baas.tail10f2ea.ts.net:8443/machine` signed in as
+the owner, passed the emailed step-up, opened this laptop's folder in its own window, saved an
+edit to disk and ran the owner's shell in the folder. The step-up needs grobase's email OTP
+(`EMAIL_OTP_ENABLED=true` on tenant-control); without it the bridge answers 503.
+
 ## Not done yet
 
-- **C11, the debug half:** that a debug launch is refused while untrusted is not tested yet.
-- **The app side:** `/machine` was not run against the live bridge as dev.pro.photo@gmail.com.
-  It needs a running osionos-node and `VITE_OSIONOS_MACHINE_URL` in the deployed app.
-- **Desktop app:** its edition is blocked (C21, C23).
+- **Desktop app:** its edition is blocked until the C23 run.
 - **Connection token:** VS Code appends an empty `tkn=` to resource URLs when it has no token.
   The proxy drops the parameter.
