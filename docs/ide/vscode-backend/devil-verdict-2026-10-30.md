@@ -303,6 +303,10 @@ scripts, Playwright for the browser. Each is green in CI before the phase is cal
 - **C23. Desktop edition (F13).** No `/api/node` from `app://osionos` until a measured run shows, from the desktop app:
   - resource GETs and the WebSocket both working;
   - the C5 and C7 tests passing.
+  - **Met 2026-10-31.** groot `apps/osionos-electron/test/smoke/machine-smoke.mjs` ran 9/9, exit 0,
+    with the emailed step-up. The machine window is a child of `app://osionos`. The editor connected,
+    and a save and a terminal probe reached disk. No token was in storage or the HAR (C5). Direct
+    fetch and WebSocket from `app://osionos` were refused (C7). It needed the C6 amendment.
 
 ## Records owed
 
