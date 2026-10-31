@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@ import { AlertCircle, GitBranch, PanelBottom } from "lucide-react";
 
 import { Tooltip } from "@/shared/ui";
 import { useDiagnosticsStore } from "@/features/ide/model/diagnosticsStore";
+import { hasLocalTerminal } from "@/features/ide/model/localPty";
 import { terminalOffer } from "@/features/machines/model/machineChoice";
 import { useMachinesStore } from "@/features/machines/model/machinesStore";
 import { openOwnMachine } from "@/features/machines/model/machineWindowStore";
@@ -86,10 +87,25 @@ const MachineChip: React.FC = () => {
   );
 };
 
+/** The desktop app's terminal is a shell on this computer: the chip opens it in the dock. */
+const LocalTerminalChip: React.FC = () => {
+  const openDock = useWorkbenchStore((s) => s.openDock);
+  return (
+    <Tooltip label="Open a terminal on this computer" side="top">
+      <button type="button" data-testid="local-terminal-chip" onClick={() => openDock("terminal")} className={CHIP}>
+        <span aria-hidden className={`h-2 w-2 rounded-full ${DOT_CLASS.online}`} />
+        This computer
+      </button>
+    </Tooltip>
+  );
+};
+
+/** With a hosted sandbox the desktop app shows both chips: the terminal is this computer, the
+ *  sandbox is still the server's. With none, the machine chip gives way to "This computer". */
 const SandboxChip: React.FC = () => {
   const state = useSandboxHealthStore((s) => s.state);
-  if (state === "disabled") return <MachineChip />;
-  return <SandboxStateChip state={state} />;
+  if (state !== "disabled") return <SandboxStateChip state={state} />;
+  return hasLocalTerminal() ? null : <MachineChip />;
 };
 
 const SandboxStateChip: React.FC<{ state: SandboxHealthState }> = ({ state }) => {
@@ -164,6 +180,7 @@ export const WorkbenchStatusBar: React.FC = () => (
   >
     <ConnectivityChip />
     <BranchChip />
+    {hasLocalTerminal() && <LocalTerminalChip />}
     <SandboxChip />
     <ProblemsChip />
     <span className="flex-1" />
