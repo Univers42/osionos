@@ -42,7 +42,7 @@ test("a11y: block editor surface with blocks", async ({ page, baseURL }) => {
   const h1Editor = getEditors(page).nth(1);
   await h1Editor.type("Document Section Heading");
   await page.keyboard.press("Enter");
-  await createBlockViaSlash(page, "code", "Code", 2);
+  await createBlockViaSlash(page, "toggle", "Toggle", 2);
   const results = await runA11yAudit(page, "block editor surface with blocks");
   expect(results).toBeDefined();
   expect(results.violations).toEqual([]);
