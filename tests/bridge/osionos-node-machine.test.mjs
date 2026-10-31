@@ -2,7 +2,7 @@
 // tokens the bridge signed for it, proves who it is to the app, and keeps its identity file private.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, statSync, existsSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readdirSync, rmSync, statSync, existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -67,6 +67,32 @@ test('machine.json is written owner-only and read back; a missing one reads as n
 		assert.equal(statSync(file).mode & 0o777, 0o600);
 		assert.equal(loadMachine(file).machineId, MACHINE);
 	} finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('saveMachine makes a missing folder 0700 and leaves no temp file behind', () => {
+	const dir = mkdtempSync(join(tmpdir(), 'mj-'));
+	try {
+		const folder = join(dir, '.osionos');
+		const { publicKeyRaw: _drop, ...stored } = identity();
+		saveMachine(join(folder, 'machine.json'), stored);
+		assert.equal(statSync(folder).mode & 0o777, 0o700);
+		assert.deepEqual(readdirSync(folder), ['machine.json']);
+	} finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('machine.json is refused when others can read it or write its folder', () => {
+	const dir = mkdtempSync(join(tmpdir(), 'mj-'));
+	try {
+		const file = join(dir, 'machine.json');
+		const { publicKeyRaw: _drop, ...stored } = identity();
+		saveMachine(file, stored);
+		chmodSync(file, 0o644);
+		assert.throws(() => loadMachine(file), /readable or writable by others/);
+		chmodSync(file, 0o600);
+		chmodSync(dir, 0o777);
+		assert.throws(() => saveMachine(file, stored), /writable by others/);
+		assert.throws(() => loadMachine(file), /writable by others/);
+	} finally { chmodSync(dir, 0o700); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('a bridge-signed token for this machine and origin opens a session once', async (t) => {

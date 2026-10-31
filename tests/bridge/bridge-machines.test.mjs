@@ -31,6 +31,18 @@ const NONCE = 'n0nce-n0nce-n0nce-n0nce';
 const NEXT_SEED = Buffer.alloc(32, 7).toString('base64url');
 
 describe('POST /api/machines/heartbeat', () => {
+	it('limits one client address before it reads Postgres: 429 after 20 a minute', async (t) => {
+		const world = await startMachineWorld(t);
+		const body = { machineId: 'm-aaaaaaaaaaaaaaaa', ideOrigin: IDE_ORIGIN, ts: world.clock.at, sig: 'x' };
+		const statuses = [];
+		for (let index = 0; index < 21; index += 1) statuses.push((await call(world.base, '/api/machines/heartbeat', { body })).status);
+		assert.deepEqual([...new Set(statuses.slice(0, 20))], [410]);
+		assert.equal(statuses[20], 429);
+		const reads = world.store.calls.length;
+		await call(world.base, '/api/machines/heartbeat', { body });
+		assert.equal(world.store.calls.length, reads, 'a limited beat costs no query');
+	});
+
 	it('records presence and answers the current key', async (t) => {
 		const world = await startMachineWorld(t);
 		const { id, machine } = await pairThrough(world);
@@ -198,12 +210,28 @@ describe('POST /api/machines/:id/identity', () => {
 describe('POST /api/machines/:id/token', () => {
 	it('mints a token the machine verifies, with aud = the presence ideOrigin', async (t) => {
 		const world = await startMachineWorld(t);
-		const { id, token } = await onlineMachine(world);
+		const { id, token, machine } = await onlineMachine(world);
+		assert.equal((await call(world.base, `/api/machines/${id}/identity`, { token, body: machine.whoamiBody(id, NONCE) })).status, 200);
 		const answer = await call(world.base, `/api/machines/${id}/token`, { token });
 		assert.equal(answer.status, 200);
 		const claims = verifyMachineToken(answer.body.token, { keys: { [CURRENT.kid]: CURRENT.publicKey }, machine: id, aud: IDE_ORIGIN, now: world.clock.at });
 		assert.equal(claims.sub, USER_A);
 		assert.equal(answer.body.exp, claims.exp);
+	});
+
+	it('needs a fresh identity check of the presence origin: 428 before, 200 once, 428 again and after 60 s (condition 5)', async (t) => {
+		const world = await startMachineWorld(t);
+		const { id, token, machine } = await onlineMachine(world);
+		const mint = () => call(world.base, `/api/machines/${id}/token`, { token });
+		const check = () => call(world.base, `/api/machines/${id}/identity`, { token, body: machine.whoamiBody(id, NONCE) });
+		assert.equal((await mint()).body.code, 'identity_required');
+		await check();
+		assert.equal((await mint()).status, 200);
+		assert.equal((await mint()).status, 428, 'one check buys one mint');
+		await check();
+		world.clock.at += 60_001;
+		await call(world.base, '/api/machines/heartbeat', { body: machine.heartbeatBody(id, world.clock.at) });
+		assert.equal((await mint()).status, 428, 'a check older than 60 s buys nothing');
 	});
 
 	it('needs a step-up: 403 sudo_required', async (t) => {

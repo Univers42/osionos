@@ -18,17 +18,33 @@ import { rmSync } from 'node:fs';
 
 import { fromB64url, signMessage, verifyMessage } from '../../scripts/ide-agent-frames.mjs';
 import { heartbeatMessage, nextKeyMessage } from '../../scripts/machine-protocol.mjs';
-import { loadMachine } from './machine-identity.mjs';
+import { loadMachine, saveMachine } from './machine-identity.mjs';
 
 const INTERVAL_MS = 30_000;
 
-/** Pins a next key only when a key already pinned signed it. Mutates `keys`. */
-function pinNextKeys(keys, offered, origin) {
-	for (const { kid, publicKey, sig } of Array.isArray(offered) ? offered : []) {
-		if (Object.hasOwn(keys, kid) || typeof sig !== 'string') continue;
+/**
+ * The pinned set after one reply (devil 2026-10-31, 3): a next key joins only when a key already
+ * pinned signed it, and a pinned key the bridge no longer lists leaves. A reply that lists none of
+ * the pinned keys is not the bridge we paired with, so it changes nothing.
+ */
+function rotateKeys(keys, offered, origin) {
+	const listed = (Array.isArray(offered) ? offered : []).filter((key) => key && typeof key.kid === 'string');
+	const kept = Object.fromEntries(Object.entries(keys).filter(([kid]) => listed.some((key) => key.kid === kid)));
+	if (Object.keys(kept).length === 0) return keys;
+	for (const { kid, publicKey, sig } of listed) {
+		if (Object.hasOwn(kept, kid) || typeof sig !== 'string' || typeof publicKey !== 'string') continue;
 		const message = nextKeyMessage({ origin, kid, publicKey });
-		if (Object.values(keys).some((pinned) => verifyMessage(fromB64url(pinned), message, sig))) keys[kid] = publicKey;
+		if (Object.values(keys).some((pinned) => verifyMessage(fromB64url(pinned), message, sig))) kept[kid] = publicKey;
 	}
+	return kept;
+}
+
+const sameKeys = (left, right) => JSON.stringify(Object.entries(left).sort()) === JSON.stringify(Object.entries(right).sort());
+
+/** Replaces the contents of `keys` in place: the machine session verifies tokens against it. */
+function replaceKeys(keys, next) {
+	for (const kid of Object.keys(keys)) if (!Object.hasOwn(next, kid)) delete keys[kid];
+	Object.assign(keys, next);
 }
 
 export function createHeartbeat({ file, keys, ideOrigin, fetchImpl = fetch, onGone }) {
@@ -58,7 +74,11 @@ export function createHeartbeat({ file, keys, ideOrigin, fetchImpl = fetch, onGo
 			return 'gone';
 		}
 		if (!res.ok) return 'refused';
-		pinNextKeys(keys, (await res.json().catch(() => ({}))).bridgeKeys, machine.bridgeUrl);
+		const next = rotateKeys(keys, (await res.json().catch(() => ({}))).bridgeKeys, machine.bridgeUrl);
+		if (!sameKeys(keys, next)) {
+			saveMachine(file, { ...machine, bridgeKeys: next });
+			replaceKeys(keys, next);
+		}
 		return 'ok';
 	}
 

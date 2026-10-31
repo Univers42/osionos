@@ -25,6 +25,7 @@ import { sendJson } from './bridge-social-core.mjs';
 import { fromB64url, verifyMessage } from './ide-agent-frames.mjs';
 import { heartbeatMessage, isLoopbackIdeOrigin, newMachineId, signMachineToken, whoamiMessage } from './machine-protocol.mjs';
 import { createMachinePairing } from './bridge-machines-pairing.mjs';
+import { createSlidingLimiter } from './ide-relay-limits.mjs';
 import { acceptHeartbeatTs, bridgeKeysOf, dropPresence, machineSetup, readPresence, writePresence } from './bridge-machines-presence.mjs';
 import { MACHINE_CAP, countLiveMachines, insertMachine, listMachines, readMachine, readOwnedMachine, revokeMachine, setDefaultMachine } from './bridge-machines-store.mjs';
 
@@ -36,6 +37,12 @@ const OPEN_PATHS = new Set([START, POLL, HEARTBEAT]);
 const ITEM = /^\/api\/machines\/(m-[a-z2-7]{16})(?:\/(default|identity|token))?$/;
 const MACHINE_ID = /^m-[a-z2-7]{16}$/;
 const NONCE = /^[A-Za-z0-9_-]{16,128}$/;
+// A beat is due every 30 s, so 20 a minute is ten machines behind one address.
+const BEATS_PER_CLIENT = 20;
+const BEATS_GLOBAL = 2000;
+const BEAT_WINDOW_MS = 60_000;
+const IDENTITY_TTL_MS = 60_000;
+const identityKey = (userId, id, ideOrigin) => `machine-identity-ok:${userId}:${id}:${ideOrigin}`;
 
 const badRequest = (message = 'The request is malformed.') => accountError(400, 'bad_request', message);
 const notFound = () => accountError(404, 'not_found', 'No such machine.');
@@ -63,7 +70,12 @@ async function liveOrigin(kv, id) {
 	return presence && isLoopbackIdeOrigin(presence.ideOrigin) ? presence : null;
 }
 
-function createOpenRoutes({ config, pg, kv, pairing }) {
+// Caveat: the beat limiters live in this process, like the pairing ones; behind a proxy without a
+// client-IP header every node shares one per-client budget, so a crowd behind it goes offline first.
+function createOpenRoutes({ config, pg, kv, pairing, now }) {
+	const beatsPerClient = createSlidingLimiter({ limit: BEATS_PER_CLIENT, windowMs: BEAT_WINDOW_MS, now });
+	const beatsGlobal = createSlidingLimiter({ limit: BEATS_GLOBAL, windowMs: BEAT_WINDOW_MS, now });
+	const beatLimited = () => accountError(429, 'rate_limited', 'Too many heartbeats; try again later.', { retryAfterSeconds: BEAT_WINDOW_MS / 1000 });
 	async function start(ctx) {
 		const body = await openBody(ctx.request);
 		const clientKey = clientAddress(ctx.request, { ipHeader: config.clientIpHeader });
@@ -79,6 +91,8 @@ function createOpenRoutes({ config, pg, kv, pairing }) {
 	async function heartbeat(ctx) {
 		const { machineId, ideOrigin, ts, sig } = await openBody(ctx.request);
 		if (typeof machineId !== 'string' || !MACHINE_ID.test(machineId) || !isLoopbackIdeOrigin(ideOrigin)) throw badRequest();
+		const clientKey = clientAddress(ctx.request, { ipHeader: config.clientIpHeader });
+		if ((clientKey && !beatsPerClient.take(clientKey)) || !beatsGlobal.take('global')) throw beatLimited();
 		const row = await readMachine({ pg, id: machineId });
 		if (!row || row.revoked_at != null) throw accountError(410, 'gone', 'This machine is not paired.');
 		const message = heartbeatMessage({ origin: ctx.setup.origin, machineId, ideOrigin, ts });
@@ -90,7 +104,21 @@ function createOpenRoutes({ config, pg, kv, pairing }) {
 	return { [START]: start, [POLL]: poll, [HEARTBEAT]: heartbeat };
 }
 
+// Approves of one user run one after another, so two in flight cannot both pass the count and
+// write a sixth row. Caveat: per process; two bridge replicas would each hold their own queue.
+function createUserQueue() {
+	const tails = new Map();
+	return (userId, task) => {
+		const run = (tails.get(userId) ?? Promise.resolve()).then(task);
+		const tail = run.catch(() => {});
+		tails.set(userId, tail);
+		void tail.then(() => { if (tails.get(userId) === tail) tails.delete(userId); });
+		return run;
+	};
+}
+
 function createPairingRoutes({ config, pg, kv, pairing, fetchImpl }) {
+	const oneAtATime = createUserQueue();
 	async function claim(ctx, session) {
 		await requireSudo(kv, session);
 		const { code } = await readBody(ctx.request);
@@ -113,7 +141,7 @@ function createPairingRoutes({ config, pg, kv, pairing, fetchImpl }) {
 		const { pairId } = await readBody(ctx.request);
 		const entry = pairing.reserve(session.userId, pairId);
 		try {
-			const approved = await writeRow(ctx, session, entry);
+			const approved = await oneAtATime(session.userId, () => writeRow(ctx, session, entry));
 			pairing.markApproved(entry, approved);
 			return sendJson(ctx.response, 201, { id: approved.machineId }, config);
 		} catch (error) {
@@ -164,6 +192,7 @@ function createItemRoutes({ config, pg, kv }) {
 		if (!presence) throw offline();
 		const message = whoamiMessage({ origin: ctx.setup.origin, machineId: id, ideOrigin: presence.ideOrigin, nonce });
 		if (!verifyMessage(fromB64url(row.pubkey), message, sig)) throw accountError(422, 'identity_mismatch', 'The process on that port is not this machine.');
+		await kv.set(identityKey(session.userId, id, presence.ideOrigin), '1', IDENTITY_TTL_MS);
 		return sendJson(ctx.response, 200, { ok: true }, config);
 	}
 	async function token(ctx, session, id) {
@@ -173,6 +202,10 @@ function createItemRoutes({ config, pg, kv }) {
 		if (row.user_id !== session.userId || row.revoked_at != null) throw notAllowed();
 		const presence = await liveOrigin(kv, id);
 		if (!presence) throw offline();
+		// One identity check buys one mint, for this origin, within 60 s (condition 5).
+		if (await kv.getDel(identityKey(session.userId, id, presence.ideOrigin)) !== '1') {
+			throw accountError(428, 'identity_required', 'Check the machine\'s identity first.');
+		}
 		const minted = signMachineToken({ sub: session.userId, machine: id, aud: presence.ideOrigin, seed: ctx.setup.seed, now: ctx.now });
 		return sendJson(ctx.response, 200, minted, config);
 	}
@@ -197,7 +230,7 @@ export function createMachineRoutes({ config, pg, kv, verifySession, env = proce
 	const clock = typeof now === 'function' ? now : () => Date.now();
 	const call = typeof fetchImpl === 'function' ? fetchImpl : (url, init) => globalThis.fetch(url, init);
 	const pairing = createMachinePairing({ now: clock });
-	const open = createOpenRoutes({ config, pg, kv, pairing });
+	const open = createOpenRoutes({ config, pg, kv, pairing, now: clock });
 	const routes = { pairingRoutes: createPairingRoutes({ config, pg, kv, pairing, fetchImpl: call }), items: createItemRoutes({ config, pg, kv }) };
 	return async function handleMachines(url, request, response) {
 		const { pathname } = url;
