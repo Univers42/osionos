@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/30 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/30 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,7 +17,7 @@ import { ICommandService, IRemoteAgentService, ITerminalService, getService, ini
 import "@codingame/monaco-vscode-theme-defaults-default-extension";
 
 import pin from "../../packages/osionos-node/server-pin.json";
-import { boundedCommand, machineOptions, readMachineTarget } from "../features/ide/vscode/machineSession.ts";
+import { boundedCommand, machineOptions, readHomeFolder, readMachineTarget } from "../features/ide/vscode/machineSession.ts";
 import type { IdeState } from "../features/ide/vscode/ideFrameProtocol.ts";
 import { mountExplorer } from "./explorer.ts";
 import { linkToApp, type AppLink } from "./appSession.ts";
@@ -73,17 +73,28 @@ async function openTerminal(cwd: monaco.Uri) {
   terminal.focus();
 }
 
+// A paired machine opened without a folder opens its home, which the node names once the session
+// cookie is set (own-machines plan §6): the app never sends a path for it.
+async function homeFolder(): Promise<string> {
+  const res = await fetch("/api/machine/home", { credentials: "same-origin" });
+  const folder = res.status === 200 ? readHomeFolder(await res.json().catch(() => null)) : null;
+  if (!folder) throw new Error(`the machine did not name its home folder (${res.status})`);
+  return folder;
+}
+
 async function main() {
   const target = readMachineTarget(location.search);
   const appOrigins = (document.querySelector<HTMLMetaElement>('meta[name="osionos-app-origin"]')?.content ?? "").split(" ").filter(Boolean);
   if (!target) return report(null, "error", "this address names no machine folder");
-  document.title = `${target.folder.split("/").pop() || target.folder} · ${target.node}`;
+  document.title = target.node;
   const link = linkToApp(target.node, appOrigins);
   if (!link) return report(null, "error", "open this machine from osionos");
   report(link, "connecting");
   await link.firstSession;
+  const folder = target.folder ?? await homeFolder();
+  document.title = `${folder.split("/").pop() || folder} · ${target.node}`;
 
-  const options = machineOptions({ host: location.host, ...target, commit: pin.server.commit });
+  const options = machineOptions({ host: location.host, node: target.node, folder, commit: pin.server.commit });
   const folderUri = monaco.Uri.parse(options.workspaceProvider.workspace.folderUri);
   await initialize(editorModeServices(async (modelRef) => {
     showEditor().setModel(modelRef.object.textEditorModel);

@@ -16,6 +16,7 @@ import { useUserStore } from "@/features/auth";
 import { useIdeFsSync } from "@/features/ide/model/useIdeFsSync";
 import { usePageFileWriter } from "@/features/page-file/model/usePageFileWriter";
 import { useSandboxHealthProbe } from "@/features/ide/model/sandboxHealthStore";
+import { useMachinesStore } from "@/features/machines/model/machinesStore";
 import { MainContent } from "@/widgets/page-renderer/ui/MainContent";
 import { useDockHotkeys } from "@/widgets/workbench/model/useDockHotkeys";
 import { useOpenDockOnRunRequest } from "@/widgets/workbench/model/useOpenDockOnRunRequest";
@@ -40,6 +41,10 @@ export const Workbench: React.FC = () => {
   useDockHotkeys();
   useOpenDockOnRunRequest();
   useOpenDockOnDebugStart();
+  // The Terminal menu decides inside its click, so the machine list is known before it.
+  React.useEffect(() => {
+    if (workspaceId) void useMachinesStore.getState().refresh();
+  }, [workspaceId]);
 
   return (
     <div data-osio-workbench className="flex h-full w-full min-w-0 flex-col">

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/30 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/30 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,8 +14,13 @@
 // configuration is global to a page, so a page is one machine and one folder. The client reaches
 // the machine through the IDE origin's /api/node/<id> proxy, which holds the only credential:
 // there is no connection token to give it (A8). Free of `@/` imports for the canvas runner.
+//
+// A paired machine (an `m-` id) may leave the folder out: the app sends no path, and the page
+// asks the node for its home once the session cookie is set (own-machines plan §6). The legacy
+// `laptop` path keeps its folder required, because that node has no home route.
+import { isMachineId } from "../../machines/model/machineShape.ts";
 
-export type MachineTarget = { node: string; folder: string };
+export type MachineTarget = { node: string; folder: string | null };
 
 const NODE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 // eslint-disable-next-line no-control-regex -- refusing control characters is the point
@@ -33,13 +38,20 @@ export function readMachineTarget(search: string): MachineTarget | null {
   const params = new URLSearchParams(search);
   const nodes = params.getAll("node");
   const folders = params.getAll("folder");
-  if (nodes.length !== 1 || folders.length !== 1) return null;
+  if (nodes.length !== 1 || folders.length > 1) return null;
   const [node] = nodes;
-  const [folder] = folders;
-  return NODE_ID.test(node) && isAbsoluteFolder(folder) ? { node, folder } : null;
+  if (!NODE_ID.test(node)) return null;
+  if (folders.length === 0) return isMachineId(node) ? { node, folder: null } : null;
+  return isAbsoluteFolder(folders[0]) ? { node, folder: folders[0] } : null;
 }
 
-export function machineOptions({ host, node, folder, commit }: MachineTarget & { host: string; commit: string }) {
+/** The folder `GET /api/machine/home` names, or null when the answer is not an absolute, normal path. */
+export function readHomeFolder(body: unknown): string | null {
+  const folder = body !== null && typeof body === "object" ? (body as { folder?: unknown }).folder : undefined;
+  return typeof folder === "string" && isAbsoluteFolder(folder) ? folder : null;
+}
+
+export function machineOptions({ host, node, folder, commit }: { host: string; node: string; folder: string; commit: string }) {
   return {
     remoteAuthority: host,
     serverBasePath: `/api/node/${node}`,
