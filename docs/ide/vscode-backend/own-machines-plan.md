@@ -199,7 +199,7 @@ message is the bridge's public origin (`config.publicOrigin`, e.g. `https://baas
 | `POST /api/machines/pair/decline` | S, the claimer | `{pairId}` | 204 | 404 |
 | `POST /api/machines/pair/poll` | none (sig) | `{pairId,ts,sig}`; sig = `pairPollMessage` with the start key | 202 `{status:"pending"}`, or 200 once `{machineId, ownerId, accountEmail, bridgeKeys:[{kid,publicKey}]}`, then the entry is gone | 401, 404 `not_found`, 410 `declined` |
 | `POST /api/machines/heartbeat` | none (sig) | `{machineId,ideOrigin,ts,sig}`; sig = `heartbeatMessage`; \|ts−now\| ≤ 60 s and ts > last ts | 200 `{bridgeKeys:[{kid,publicKey,sig?}]}`. A next key carries `sig` = current key over `nextKeyMessage`. | 400 `stale`, 401, 410 `gone` (unknown and revoked look the same), 429 `rate_limited` (20 a minute per client address, before any query) |
-| `GET /api/machines` | S | — | 200 `{machines:[{id,name,platform,fingerprint,isDefault,online,ideOrigin,lastSeenAt}]}`. `ideOrigin` is null when offline. | 401 |
+| `GET /api/machines` | S | — | 200 `{bridgeOrigin, machines:[{id,name,platform,fingerprint,isDefault,online,ideOrigin,lastSeenAt}]}`. `ideOrigin` is null when offline. | 401 |
 | `PUT /api/machines/:id/default` | S | — | 204 | 404 |
 | `DELETE /api/machines/:id` | S+sudo | — | 204 (sets `revoked_at`, drops presence) | 404 |
 | `POST /api/machines/:id/identity` | S | `{nonce,sig}`; sig = `whoamiMessage` with the row's pubkey and the presence `ideOrigin` | 200 `{ok:true}` | 404, 409 `offline`, 422 `identity_mismatch` |

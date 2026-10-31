@@ -167,7 +167,9 @@ function createItemRoutes({ config, pg, kv }) {
 				online: presence !== null, ideOrigin: presence?.ideOrigin ?? null, lastSeenAt: presence?.lastSeenAt ?? null,
 			};
 		}));
-		return sendJson(ctx.response, 200, { machines }, config);
+		// The web app reaches the bridge through its own proxy and the desktop app directly, so the
+		// app cannot know which origin the pairing signatures must name; the bridge says.
+		return sendJson(ctx.response, 200, { machines, bridgeOrigin: ctx.setup.origin }, config);
 	}
 	async function makeDefault(ctx, session, id) {
 		if (!(await readOwnedMachine({ pg, id, userId: session.userId }))) throw notFound();

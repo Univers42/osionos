@@ -122,6 +122,7 @@ describe('GET /api/machines and PUT /api/machines/:id/default', () => {
 		await pairThrough(world, { user: USER_B });
 		const answer = await call(world.base, '/api/machines', { method: 'GET', token: world.plain() });
 		assert.equal(answer.status, 200);
+		assert.equal(answer.body.bridgeOrigin, ORIGIN, 'the origin a node must pair with: the one its signatures name');
 		const byId = Object.fromEntries(answer.body.machines.map((row) => [row.id, row]));
 		assert.deepEqual(Object.keys(byId).sort(), [online.id, offline.id].sort());
 		assert.equal(byId[online.id].online, true);
@@ -136,7 +137,7 @@ describe('GET /api/machines and PUT /api/machines/:id/default', () => {
 		const world = await startMachineWorld(t);
 		await onlineMachine(world);
 		const answer = await call(world.base, '/api/machines', { method: 'GET', token: world.plain(USER_B) });
-		assert.deepEqual(answer.body, { machines: [] });
+		assert.deepEqual(answer.body.machines, []);
 	});
 
 	it('needs a session: 401', async (t) => {
@@ -164,7 +165,7 @@ describe('DELETE /api/machines/:id', () => {
 		assert.equal((await call(world.base, `/api/machines/${id}`, { method: 'DELETE', token })).status, 204);
 		assert.ok(world.store.rows()[0].revoked_at);
 		assert.equal(await world.kv.get(`machine-presence:${id}`), null);
-		assert.deepEqual((await call(world.base, '/api/machines', { method: 'GET', token: world.plain() })).body, { machines: [] });
+		assert.deepEqual((await call(world.base, '/api/machines', { method: 'GET', token: world.plain() })).body.machines, []);
 	});
 
 	it('needs a step-up (403) and answers 404 to a second account (condition 1)', async (t) => {
