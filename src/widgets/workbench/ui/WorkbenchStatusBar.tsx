@@ -15,6 +15,9 @@ import { AlertCircle, GitBranch, PanelBottom } from "lucide-react";
 
 import { Tooltip } from "@/shared/ui";
 import { useDiagnosticsStore } from "@/features/ide/model/diagnosticsStore";
+import { terminalOffer } from "@/features/machines/model/machineChoice";
+import { useMachinesStore } from "@/features/machines/model/machinesStore";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import {
   isSandboxOnline,
   useSandboxHealthStore,
@@ -62,8 +65,33 @@ const BranchChip: React.FC = () => {
   );
 };
 
+/** Where no hosted sandbox runs, the code runs on the person's own machine: the chip names it. */
+const MachineChip: React.FC = () => {
+  const offer = terminalOffer(useMachinesStore((s) => s.machines));
+  const refresh = useMachinesStore((s) => s.refresh);
+  const chip = {
+    loading: { label: "Machine: checking", dot: DOT_CLASS.unknown, hint: "Looking for your machines", act: () => void refresh() },
+    open: { label: `Machine: ${offer.kind === "open" ? offer.name : ""}`, dot: DOT_CLASS.online, hint: "Open your machine's terminal and files", act: () => { globalThis.open("/machine", "osionos-machine"); } },
+    start: { label: `Machine: ${offer.kind === "start" ? offer.name : ""} offline`, dot: DOT_CLASS.stopped, hint: "Start osionos-node on it - click to check again", act: () => void refresh() },
+    pair: { label: "Add a machine", dot: DOT_CLASS.disabled, hint: "Connect your own computer for a terminal", act: () => openSettings("machines") },
+  }[offer.kind];
+  return (
+    <Tooltip label={chip.hint} side="top">
+      <button type="button" data-testid="machine-chip" onClick={chip.act} className={CHIP}>
+        <span aria-hidden className={`h-2 w-2 rounded-full ${chip.dot}`} />
+        {chip.label}
+      </button>
+    </Tooltip>
+  );
+};
+
 const SandboxChip: React.FC = () => {
   const state = useSandboxHealthStore((s) => s.state);
+  if (state === "disabled") return <MachineChip />;
+  return <SandboxStateChip state={state} />;
+};
+
+const SandboxStateChip: React.FC<{ state: SandboxHealthState }> = ({ state }) => {
   const reason = useSandboxHealthStore((s) => s.reason);
   const retry = useSandboxHealthStore((s) => s.retry);
   const online = isSandboxOnline(state);

@@ -58,6 +58,23 @@ export function readMachineRoute(search: string): MachineRoute | null {
   return target.folder === null ? null : { kind: "legacy", node: target.node, folder: target.folder };
 }
 
+export type TerminalOffer =
+  | { kind: "loading" }
+  | { kind: "pair" }
+  | { kind: "start"; name: string }
+  | { kind: "open"; name: string };
+
+/** What the terminal panel offers instead of a hosted sandbox: the default online machine, the
+ *  machine to start when none is online, or pairing one. */
+export function terminalOffer(machines: readonly Machine[] | null): TerminalOffer {
+  if (machines === null) return { kind: "loading" };
+  const choice = chooseMachine(machines, null);
+  if (choice.kind === "open") return { kind: "open", name: choice.machine.name || choice.machine.id };
+  if (machines.length === 0) return { kind: "pair" };
+  const preferred = machines.find((machine) => machine.isDefault) ?? machines[0];
+  return { kind: "start", name: preferred.name || preferred.id };
+}
+
 /** The Terminal action opens the machine window once the list is known; with no machine yet that
  *  window shows how to pair one, so a person is never handed a hosted terminal instead. */
 export function terminalOpensMachine(machines: readonly Machine[] | null): boolean {
