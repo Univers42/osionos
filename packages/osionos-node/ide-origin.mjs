@@ -80,7 +80,19 @@ function splitNodePath(url) {
 	return isNodeId(id) ? { id } : { id: null };
 }
 
-export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null }) {
+// The shared-secret mode of milestone 1: an `osionos_ide1` token with the node scope.
+function legacyVerifier(secret) {
+	return (bearer) => {
+		let token;
+		try { token = verifyIdeToken(bearer, { secret }); } catch { throw fail(401); }
+		if (token.scope !== 'node') throw fail(403);
+		return token;
+	};
+}
+
+// A paired machine passes `capSecret`, `verifySession` and `machineRoutes` (machine-identity.mjs);
+// the shared-secret mode passes `secret` alone.
+export function createIdeOriginServer({ secret, capSecret = secret, verifySession = legacyVerifier(secret), machineRoutes = null, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null }) {
 	const sockets = createSocketRegistry({ maxPerUser: maxSocketsPerUser });
 	const cookiePrefix = cookiePrefixFor(ideOrigin);
 	const revokedAt = new Map();
@@ -90,13 +102,12 @@ export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, node
 		if (req.method !== 'POST') throw fail(405);
 		if (!checkNodeOrigin(req.headers, ideOrigin, false) || req.headers.origin !== ideOrigin) throw fail(403);
 		const bearer = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')?.[1];
-		let token;
-		try { token = verifyIdeToken(bearer, { secret }); } catch { throw fail(401); }
-		if (token.scope !== 'node' || token.userId !== ownerId) throw fail(403);
+		const token = verifySession(bearer, { ideOrigin });
+		if (token.userId !== ownerId) throw fail(403);
 		if (isRevoked(token.userId, token.iat)) throw fail(401);
 		const { node } = await readSmallJson(req);
 		if (!isNodeId(node) || !Object.hasOwn(nodes, node)) throw fail(404);
-		const { cap, exp } = signNodeCap({ userId: token.userId, node, secret, parentExp: token.exp });
+		const { cap, exp } = signNodeCap({ userId: token.userId, node, secret: capSecret, parentExp: token.exp });
 		sockets.extend(token.userId, node, exp);
 		const maxAge = exp - Math.floor(Date.now() / 1000);
 		res.writeHead(204, {
@@ -106,15 +117,25 @@ export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, node
 		res.end();
 	}
 
+	function liveCap(cookieHeader, node) {
+		return readCookies(cookieHeader, `${cookiePrefix}${node}`).map((value) => {
+			try { return verifyNodeCap(value, { secret: capSecret }); } catch { return null; }
+		}).find((candidate) => candidate && candidate.node === node && candidate.userId === ownerId && !isRevoked(candidate.userId, candidate.iat)) ?? null;
+	}
+
+	const routeContext = {
+		ideOrigin,
+		isSameOrigin: (req) => checkNodeOrigin(req.headers, ideOrigin, false) && req.headers.origin === ideOrigin,
+		hasSession: (req) => Object.keys(nodes).some((node) => liveCap(req.headers.cookie, node) !== null),
+	};
+
 	// Order matters for C6: an unknown node and a known one without its cookie both answer 401,
 	// so an unauthenticated caller cannot list the owner's machines.
 	function authorize(req, isUpgrade) {
 		if (!checkNodeOrigin(req.headers, ideOrigin, isUpgrade)) throw fail(403);
 		const route = splitNodePath(req.url);
 		if (!route?.id) throw fail(404);
-		const cap = readCookies(req.headers.cookie, `${cookiePrefix}${route.id}`).map((value) => {
-			try { return verifyNodeCap(value, { secret }); } catch { return null; }
-		}).find((candidate) => candidate && candidate.node === route.id && !isRevoked(candidate.userId, candidate.iat));
+		const cap = liveCap(req.headers.cookie, route.id);
 		if (!cap) throw fail(401);
 		if (cap.userId !== ownerId) throw fail(403);
 		// C7c: the id is only ever a registry key.
@@ -130,6 +151,7 @@ export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, node
 	async function onRequest(req, res) {
 		try {
 			if (req.url === `${PREFIX}session`) return await openSession(req, res);
+			if (machineRoutes && req.url.startsWith('/api/machine/')) return await machineRoutes(req, res, routeContext);
 			if (!req.url.startsWith(PREFIX)) return client ? client(req, res) : reply(res, 404);
 			const { machine, verdict } = authorize(req, false);
 			forwardHttp(req, res, { socketPath: machine.socketPath, upstreamPath: verdict.upstreamPath });
