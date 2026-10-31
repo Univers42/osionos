@@ -53,7 +53,7 @@ export const TodoDueDate: React.FC<{ dueAt?: string; checked?: boolean; onChange
         onClick={() => setEditing(true)}
         aria-label="Add date"
         title="Add date"
-        className="absolute right-1 top-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-xs text-[var(--osio-fg-subtle)] opacity-0 transition-opacity duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] group-hover:opacity-100 focus-visible:opacity-100"
+        className="absolute right-1 top-0.5 inline-flex h-6 w-6 min-h-[24px] min-w-[24px] shrink-0 items-center justify-center rounded-xs text-[var(--osio-fg-subtle)] opacity-0 transition-opacity duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
       >
         <CalendarPlus size={14} aria-hidden />
       </button>
@@ -68,7 +68,7 @@ export const TodoDueDate: React.FC<{ dueAt?: string; checked?: boolean; onChange
       aria-label={`Due ${formatDue(dueKey)} — change date`}
       title="Change due date"
       className={cx(
-        "mt-[3px] inline-flex min-w-0 max-w-full items-center gap-1 rounded-xs px-1 py-0.5 text-xs hover:bg-[var(--osio-bg-hover)]",
+        "mt-[3px] inline-flex min-h-[24px] min-w-0 max-w-full items-center gap-1 rounded-xs px-1.5 py-0.5 text-xs hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]",
         overdue ? "text-[var(--osio-danger)]" : "text-[var(--osio-fg-muted)]",
       )}
     >
