@@ -13,18 +13,16 @@
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { terminalOpensMachine } from "@/features/machines/model/machineChoice";
 import { useMachinesStore } from "@/features/machines/model/machinesStore";
+import { openOwnMachine } from "@/features/machines/model/machineWindowStore";
 import { terminalMenuAction, workbenchViewItems, type MenuItemSpec } from "@/widgets/top-bar/model/workbenchMenuItems";
 import { useWorkbenchStore } from "./workbenchStore";
 
-/** Terminal menu: the person's own machine once they have paired one (own-machines plan §6), so
- *  the hosted sandbox is no longer the default terminal. /machine picks the default online machine
- *  or says how to pair one; it opens inside this click, the only moment a popup is allowed.
+/** Terminal menu: one click opens the person's own default machine in its window (own-machines
+ *  plan §6), Settings › Machines when none is paired, and the dock's panel when none is online.
  *  Only before the list has loaded does the dock keep its terminal (the Run panel's runner). */
 export function openWorkbenchTerminal(mode: "new" | "split"): void {
-  if (terminalOpensMachine(useMachinesStore.getState().machines)) {
-    globalThis.open("/machine", "osionos-machine");
-    return;
-  }
+  // "start": machines exist but none is online; the dock's panel says which one to start.
+  if (terminalOpensMachine(useMachinesStore.getState().machines) && openOwnMachine() !== "start") return;
   const workbench = useWorkbenchStore.getState();
   const ideDock = useIdeDockStore.getState();
   const action = terminalMenuAction(mode, { dockOpen: workbench.dockOpen, dockTab: workbench.dockTab });

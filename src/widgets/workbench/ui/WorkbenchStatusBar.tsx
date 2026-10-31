@@ -17,6 +17,7 @@ import { Tooltip } from "@/shared/ui";
 import { useDiagnosticsStore } from "@/features/ide/model/diagnosticsStore";
 import { terminalOffer } from "@/features/machines/model/machineChoice";
 import { useMachinesStore } from "@/features/machines/model/machinesStore";
+import { openOwnMachine } from "@/features/machines/model/machineWindowStore";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import {
   isSandboxOnline,
@@ -71,7 +72,7 @@ const MachineChip: React.FC = () => {
   const refresh = useMachinesStore((s) => s.refresh);
   const chip = {
     loading: { label: "Machine: checking", dot: DOT_CLASS.unknown, hint: "Looking for your machines", act: () => void refresh() },
-    open: { label: `Machine: ${offer.kind === "open" ? offer.name : ""}`, dot: DOT_CLASS.online, hint: "Open your machine's terminal and files", act: () => { globalThis.open("/machine", "osionos-machine"); } },
+    open: { label: `Machine: ${offer.kind === "open" ? offer.name : ""}`, dot: DOT_CLASS.online, hint: "Open your machine's terminal and files", act: () => { openOwnMachine(); } },
     start: { label: `Machine: ${offer.kind === "start" ? offer.name : ""} offline`, dot: DOT_CLASS.stopped, hint: "Start osionos-node on it - click to check again", act: () => void refresh() },
     pair: { label: "Add a machine", dot: DOT_CLASS.disabled, hint: "Connect your own computer for a terminal", act: () => openSettings("machines") },
   }[offer.kind];
