@@ -300,6 +300,7 @@ scripts, Playwright for the browser. Each is green in CI before the phase is cal
   - It covers any machine or session belonging to anyone but the owner.
   - It opens only with D3 extensible (owner-signed OPEN), isolation, and its own ruling.
   - **TEST:** the node mint answers `not-allowed` for the exempt test account.
+  - **Amended 2026-10-31 (own-machines verdict, groot ADR 0037):** BLOCKED for any machine the viewer does not own. A user opens their own paired machine when the row's owner = the token `sub` = the node's `ownerId`. **TEST:** `tests/bridge/bridge-machines.test.mjs` "a second account gets 403 not_allowed (condition 1)".
 - **C23. Desktop edition (F13).** No `/api/node` from `app://osionos` until a measured run shows, from the desktop app:
   - resource GETs and the WebSocket both working;
   - the C5 and C7 tests passing.
