@@ -65,8 +65,11 @@ test('the IDE window edits, saves and runs a terminal on this machine, across si
 	await until(() => page.evaluate(() => window.__ide.states.includes('connected')), 90_000, 'the machine to connect');
 	await frame.locator('#status[data-state="connected"]').waitFor({ timeout: 5_000 });
 
-	// The app may show a file; the editor then holds the machine's copy.
-	await page.evaluate(() => window.__ideOpen('app.py'));
+	// The file tree lists the folder; a folder expands in place, a file opens in the editor.
+	const tree = frame.locator('#explorer');
+	await tree.getByRole('treeitem', { name: '.vscode' }).click();
+	await tree.getByRole('treeitem', { name: 'tasks.json' }).waitFor({ timeout: 15_000 });
+	await tree.getByRole('treeitem', { name: 'app.py' }).click();
 	await frame.locator('.monaco-editor .view-lines').filter({ hasText: 'def add' }).waitFor({ timeout: 30_000 });
 
 	// Edit and save land on this machine's disk.
