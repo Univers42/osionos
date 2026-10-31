@@ -49,7 +49,7 @@ function readListen(value) {
 export function readServeConfig(argv, env) {
 	const { values } = parseArgs({
 		args: argv, strict: true,
-		options: { node: { type: 'string' }, server: { type: 'string' }, listen: { type: 'string', default: '127.0.0.1:4100' }, 'app-origin': { type: 'string' }, 'ide-origin': { type: 'string' }, client: { type: 'string', default: DEFAULT_CLIENT } },
+		options: { node: { type: 'string' }, server: { type: 'string' }, listen: { type: 'string', default: '127.0.0.1:4100' }, 'app-origin': { type: 'string', multiple: true }, 'ide-origin': { type: 'string' }, client: { type: 'string', default: DEFAULT_CLIENT } },
 	});
 	if (!isNodeId(values.node)) throw new Error('--node must be a short lowercase name, e.g. laptop');
 	if (!values.server) throw new Error('--server must name the unpacked server\'s lib directory');
@@ -60,7 +60,7 @@ export function readServeConfig(argv, env) {
 	const home = env.HOME;
 	const dataDir = join(home, '.osionos', 'server-data');
 	return {
-		node: values.node, secret, ownerId: env.OSIONOS_IDE_OWNER, listen, appOrigin: values['app-origin'], client: values.client,
+		node: values.node, secret, ownerId: env.OSIONOS_IDE_OWNER, listen, appOrigins: values['app-origin'] ?? [], client: values.client,
 		ideOrigin: values['ide-origin'] ?? `http://${listen.host}:${listen.port}`,
 		serverDir: values.server, nodeBin: join(values.server, 'node'),
 		// A1: not $XDG_RUNTIME_DIR, which logind removes at an ssh-only user's last logout.
@@ -75,7 +75,7 @@ async function serve(argv, env) {
 	const origin = createIdeOriginServer({
 		secret: config.secret, ownerId: config.ownerId, ideOrigin: config.ideOrigin, commit: SERVER_PIN.server.commit,
 		nodes: { [config.node]: { socketPath: server.socketPath, extensionRoots: config.extensionRoots } },
-		client: createClientHandler({ root: config.client, appOrigin: config.appOrigin }),
+		client: createClientHandler({ root: config.client, appOrigins: config.appOrigins }),
 	});
 	await new Promise((resolve, reject) => origin.server.once('error', reject).listen(config.listen.port, config.listen.host, resolve));
 	console.log(`osionos-node: ${config.node} on ${config.ideOrigin} (server ${server.reused ? 'reused' : `pid ${server.pid}`})`);
@@ -86,6 +86,6 @@ async function serve(argv, env) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
 	const [command, ...rest] = process.argv.slice(2);
-	const run = command === 'serve' ? serve(rest, process.env) : Promise.reject(new Error('usage: osionos-node serve --node <id> --server <lib dir> --app-origin <origin> [--listen 127.0.0.1:4100] [--ide-origin <origin>] [--client <dist-ide>]'));
+	const run = command === 'serve' ? serve(rest, process.env) : Promise.reject(new Error('usage: osionos-node serve --node <id> --server <lib dir> --app-origin <origin>... [--listen 127.0.0.1:4100] [--ide-origin <origin>] [--client <dist-ide>]'));
 	run.catch((error) => { console.error(`osionos-node: ${error.message}`); process.exit(1); });
 }

@@ -49,10 +49,13 @@ async function mintCookie(node: string, token: string): Promise<void> {
   if (res.status !== 204) throw new Error(`the machine refused the session (${res.status})`);
 }
 
-export function linkToApp(node: string, appOrigin: string): AppLink | null {
+// `appOrigins` lists the web app and the desktop app. Until one answers, a message goes to each
+// (the browser drops it unless the origin is the opener's); the first session pins the answer.
+export function linkToApp(node: string, appOrigins: readonly string[]): AppLink | null {
   const host = appWindow();
-  if (!host || !appOrigin) return null;
-  const send = (message: IdeMessage) => host.postMessage(message, appOrigin);
+  if (!host || appOrigins.length === 0) return null;
+  let pinned: readonly string[] = appOrigins;
+  const send = (message: IdeMessage) => { for (const origin of pinned) host.postMessage(message, origin); };
   const openListeners: Array<(path: string) => void> = [];
   let refresh: ReturnType<typeof setTimeout> | undefined;
   let settleFirst: { resolve: () => void; reject: (error: Error) => void } | undefined;
@@ -77,8 +80,11 @@ export function linkToApp(node: string, appOrigin: string): AppLink | null {
 
   window.addEventListener("message", (event) => {
     if (event.source !== host) return;
-    const message: AppMessage | null = readAppMessage(event.data, event.origin, appOrigin);
-    if (message?.type === "osionos-ide/session") void onSession(message.token);
+    const message: AppMessage | null = readAppMessage(event.data, event.origin, pinned);
+    if (message?.type === "osionos-ide/session") {
+      pinned = [event.origin];
+      void onSession(message.token);
+    }
     if (message?.type === "osionos-ide/open") for (const listener of openListeners) listener(message.path);
   });
   send({ type: "osionos-ide/ready", node });

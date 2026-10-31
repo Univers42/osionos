@@ -48,8 +48,8 @@ export function isSafeRelativePath(path: unknown): path is string {
   return path.split("/").every((segment) => segment.length > 0 && !segment.startsWith("."));
 }
 
-export function readAppMessage(data: unknown, origin: string, appOrigin: string): AppMessage | null {
-  if (origin !== appOrigin) return null;
+export function readAppMessage(data: unknown, origin: string, appOrigins: readonly string[]): AppMessage | null {
+  if (!appOrigins.includes(origin)) return null;
   const type = (data as { type?: unknown } | null)?.type;
   if (type === "osionos-ide/session") {
     const record = shaped(data, ["type", "token"]);

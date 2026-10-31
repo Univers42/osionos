@@ -31,6 +31,11 @@ test('serve reads node, server, listen address, app origin and the owner from en
 	assert.equal(config.dataDir, '/home/me/.osionos/server-data');
 	assert.deepEqual(config.extensionRoots, ['/opt/osionos-server/1.138.0/lib/vscode/extensions', '/home/me/.osionos/server-data/extensions']);
 	assert.equal(config.ideOrigin, 'http://127.0.0.1:4100');
+	assert.deepEqual(config.appOrigins, ['http://localhost:3001']);
+});
+
+test('--app-origin repeats, so the web app and the desktop app share one node', () => {
+	assert.deepEqual(readServeConfig([...ARGS, '--app-origin', 'app://osionos'], ENV).appOrigins, ['http://localhost:3001', 'app://osionos']);
 });
 
 test('the listen address defaults to loopback, and a wildcard or public bind is refused', () => {
