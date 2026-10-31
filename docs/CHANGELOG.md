@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Accessibility Remediation across Core Surfaces**:
+  - `BlockCollapseToggle` & `ToggleBlockEditor`: Upgraded block collapse/expand chevrons to 24x24px minimum touch targets with token-driven `:focus-visible` outline rings, preserving text baseline alignment via negative margins (WCAG 2.2 SC 2.5.8, SC 2.4.11).
   - `SidebarFooter`: Refactored invite CTA card container to eliminate nested interactive button structure (`nested-interactive`), match accessible name with visible text (`label-content-name-mismatch`), and enforce 24x24px minimum touch target size on dismiss button (`target-size`, WCAG 2.2 SC 2.5.8).
   - `SlashCommandMenu`: Added `aria-label="Commands"` to `#slash-command-list` to satisfy ARIA input field accessible naming requirements (`aria-input-field-name`).
   - `SettingsSectionsNav`: Adjusted settings navigation column layout to prevent sticky footer overlap from obscuring adjacent section row touch targets (`target-size`, WCAG 2.2 SC 2.5.8).
