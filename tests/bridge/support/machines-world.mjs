@@ -23,7 +23,7 @@ import { createMachineRoutes } from '../../../scripts/bridge-machines.mjs';
 import { createPg } from '../../../scripts/bridge-pg.mjs';
 import { verifyAppSessionToken } from '../../../scripts/bridge-api.mjs';
 import { b64url, generateAgentKeyPair, signMessage } from '../../../scripts/ide-agent-frames.mjs';
-import { heartbeatMessage, pairPollMessage, pairStartMessage, whoamiMessage } from '../../../scripts/machine-protocol.mjs';
+import { heartbeatMessage, pairPollMessage, pairStartMessage, whoamiMessage } from '../../../scripts/ide-machine-protocol.mjs';
 import { createTtlKv } from './account-kv.mjs';
 import { ACCOUNT_JWT_SECRET, USER_A, USER_B, accountConfig, sessionToken, sudoToken } from './account-world.mjs';
 

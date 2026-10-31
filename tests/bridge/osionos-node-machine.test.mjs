@@ -4,12 +4,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, readdirSync, rmSync, statSync, existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createIdeOriginServer } from '../../packages/osionos-node/ide-origin.mjs';
 import { createMachineSession, loadMachine, saveMachine } from '../../packages/osionos-node/machine-identity.mjs';
-import { bridgeKeyFromSeed, signMachineToken, whoamiMessage } from '../../scripts/machine-protocol.mjs';
+import { bridgeKeyFromSeed, signMachineToken, whoamiMessage } from '../../scripts/ide-machine-protocol.mjs';
 import { fromB64url, generateAgentKeyPair, verifyMessage } from '../../scripts/ide-agent-frames.mjs';
 import { signIdeToken } from '../../scripts/ide-token.mjs';
 
@@ -32,7 +33,7 @@ function identity() {
 }
 
 async function world(t, machine = identity()) {
-	const server = http0();
+	const server = await http0();
 	const session = createMachineSession({ machine, home: '/home/owner' });
 	const origin = createIdeOriginServer({
 		...session.originOptions, ideOrigin: server.ideOrigin, commit: 'c'.repeat(40),
@@ -43,9 +44,14 @@ async function world(t, machine = identity()) {
 	return { base: server.ideOrigin, machine, origin };
 }
 
-let nextPort = 46000 + Math.floor(Math.random() * 2000);
-function http0() {
-	const port = nextPort++;
+// The origin server needs its own origin before it listens, so the port is asked of the OS first.
+// Caveat: another process can take the port between this probe and the listen; rare, and it
+// fails loudly (EADDRINUSE), never silently.
+async function http0() {
+	const probe = createServer();
+	await new Promise((resolve) => probe.listen(0, '127.0.0.1', resolve));
+	const { port } = probe.address();
+	await new Promise((resolve) => probe.close(resolve));
 	return { port, ideOrigin: `http://127.0.0.1:${port}` };
 }
 

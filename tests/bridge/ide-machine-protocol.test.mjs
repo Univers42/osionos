@@ -7,7 +7,7 @@ import { generateKeyPairSync, randomBytes } from 'node:crypto';
 
 import {
 	MACHINE_TOKEN_VERSION, bridgeKeyFromSeed, isLoopbackIdeOrigin, newMachineId, signMachineToken, verifyMachineToken,
-} from '../../scripts/machine-protocol.mjs';
+} from '../../scripts/ide-machine-protocol.mjs';
 import { isNodeId } from '../../scripts/ide-token.mjs';
 
 const SEED = randomBytes(32).toString('base64url');

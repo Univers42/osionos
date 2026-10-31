@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { pairMachine } from '../../packages/osionos-node/pair.mjs';
 import { createHeartbeat } from '../../packages/osionos-node/heartbeat.mjs';
 import { loadMachine, saveMachine } from '../../packages/osionos-node/machine-identity.mjs';
-import { bridgeKeyFromSeed, heartbeatMessage, nextKeyMessage, pairPollMessage, pairStartMessage } from '../../scripts/machine-protocol.mjs';
+import { bridgeKeyFromSeed, heartbeatMessage, nextKeyMessage, pairPollMessage, pairStartMessage } from '../../scripts/ide-machine-protocol.mjs';
 import { b64url, fromB64url, generateAgentKeyPair, verifyMessage } from '../../scripts/ide-agent-frames.mjs';
 
 const BRIDGE = 'https://bridge.example:10000';

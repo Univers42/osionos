@@ -31,7 +31,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 import { accountError } from './bridge-account-sudo.mjs';
 import { b64url, fingerprint, fromB64url, verifyMessage } from './ide-agent-frames.mjs';
 import { createSlidingLimiter } from './ide-relay-limits.mjs';
-import { pairPollMessage, pairStartMessage } from './machine-protocol.mjs';
+import { pairPollMessage, pairStartMessage } from './ide-machine-protocol.mjs';
 
 const CODE_ALPHABET = 'BCDFGHJKLMNPQRSTVWXZ';
 const CODE_RE = /^[BCDFGHJKLMNPQRSTVWXZ]{8}$/;
