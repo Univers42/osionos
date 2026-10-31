@@ -64,4 +64,4 @@ Remediate `FormatGrid.tsx` color controls to satisfy WCAG 2.2 SC 2.5.8 (Target S
 - [x] `tests/e2e/functional/selectionPanel.spec.mjs` passes.
 - [x] `tests/e2e/visual/a11y.spec.mjs` passes.
 - [x] Commit signed with `-s` by `DJSurgeon`.
-- [ ] Documented in `docs/CHANGELOG.md`.
+- [x] Documented in `docs/CHANGELOG.md`.
