@@ -49,7 +49,7 @@ export const AiSkillsSection: React.FC<{
   selectionText: string;
   onAskAI: AskAiHandler;
 }> = ({ selectionText, onAskAI }) => (
-  <div className="pt-1">
+  <div role="menu" aria-label="Skills" className="pt-1">
     <p className="h-6 px-2 text-xs font-medium text-[var(--osio-fg-muted)]">
       Skills
     </p>
@@ -79,7 +79,6 @@ export const AiEditRow: React.FC<{
 }> = ({ selectionText, onAskAI }) => (
   <ToolbarRowButton
     title="Ask AI"
-    role="menuitem"
     disabled={!selectionText}
     onClick={() => onAskAI(selectionText)}
   >

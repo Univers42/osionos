@@ -74,8 +74,8 @@ test("a11y: inline text selection toolbar surface", async ({ page, baseURL }) =>
   await editor.type("Sample sentence for testing inline formatting selection toolbar.");
   await selectText(editor, "testing");
   await page.getByTestId("inline-selection-toolbar").waitFor({ state: "visible" });
-  const results = await runA11yAudit(page, "inline text selection toolbar format grid", {
-    contextSelector: '[data-testid="selection-format-grid"]',
+  const results = await runA11yAudit(page, "inline text selection toolbar surface", {
+    contextSelector: '[data-testid="inline-selection-toolbar"]',
   });
   expect(results).toBeDefined();
   expect(results.violations).toEqual([]);
