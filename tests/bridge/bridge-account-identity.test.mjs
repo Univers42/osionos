@@ -92,7 +92,7 @@ describe('POST /api/account/username', () => {
 		const held = await world(t, {
 			rows: {
 				profiles: [profileOf(USER_A)],
-				history: [{ id: 'dddddddd-4444-4444-8444-dddddddddddd', user_id: USER_B, username: 'held', changed_at: '2026-10-01T00:00:00.000Z', released_at: '2027-01-01T00:00:00.000Z' }],
+				history: [{ id: 'dddddddd-4444-4444-8444-dddddddddddd', user_id: USER_B, username: 'held', changed_at: '2026-10-01T00:00:00.000Z', released_at: new Date(Date.now() + 90 * 86_400_000).toISOString() }],
 			},
 		});
 		const first = await changeName(taken.base, taken.token, 'taken');
