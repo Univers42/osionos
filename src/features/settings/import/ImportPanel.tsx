@@ -23,10 +23,17 @@ import { DataTable, EmptyState, FeatureCard, MiniTabs, PanelStatus, Section } fr
 import { assetKindFromFile, formatBytes, readFileAsDataUrl, stringPayload } from '../model/settingsFiles';
 import { runAsync } from '../model/settingsCalls';
 import { useSettingsHydration } from '../model/settingsHydration';
+import { readZipEntries } from './zipEntries';
 
 const EMPTY_IMPORT_HISTORY: ImportHistoryEntry[] = [];
 
 type SettingsModalName = 'typed-import';
+
+const PAGE_EXTENSIONS = new Set(['.md', '.markdown', '.html', '.json', '.txt']);
+
+function extensionOf(name: string): string {
+  return name.slice(name.lastIndexOf('.')).toLowerCase();
+}
 
 interface ActiveSettingsModal {
   name: SettingsModalName;
@@ -56,11 +63,45 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
     if (failure) throw new Error(failure);
   }, [hydrateHistory, workspaceId]);
 
+  /** The folder page for `path`, created with its parents on first use. */
+  async function folderFor(path: string[], folders: Map<string, string>): Promise<string | undefined> {
+    let parent: string | undefined;
+    for (let depth = 1; depth <= path.length; depth += 1) {
+      const key = path.slice(0, depth).join('/');
+      if (!folders.has(key)) {
+        const folder = await addPage(workspaceId, path[depth - 1], jwt ?? '', parent, { surface: 'folder' });
+        if (folder?._id) folders.set(key, folder._id);
+      }
+      parent = folders.get(key) ?? parent;
+    }
+    return parent;
+  }
+
+  // Caveat: a relative `.md` link stays a plain link, it is not resolved to the imported page.
+  async function importZip(file: File) {
+    const startedAt = new Date().toISOString();
+    const folders = new Map<string, string>();
+    const pageIds: string[] = [];
+    for (const { segments, bytes } of await readZipEntries(file)) {
+      const name = segments[segments.length - 1];
+      if (!PAGE_EXTENSIONS.has(extensionOf(name))) continue;
+      const parent = await folderFor(segments.slice(0, -1), folders);
+      const payload = await importPageFile(new File([bytes.slice()], name));
+      const page = await addPage(workspaceId, payload.title || name, jwt ?? '', parent, { content: payload.content });
+      if (page?._id) pageIds.push(page._id);
+    }
+    const error = pageIds.length ? null : 'No Markdown, HTML, JSON or text files in this archive.';
+    addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: error ? 'failed' : 'completed', pageIds, error, startedAt, finishedAt: new Date().toISOString() });
+  }
+
   async function importFiles(imports: File[]) {
-    const pageExtensions = new Set(['.md', '.markdown', '.html', '.json', '.txt']);
     for (const file of imports) {
-      const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-      if (pageExtensions.has(extension)) {
+      const extension = extensionOf(file.name);
+      if (extension === '.zip') {
+        await importZip(file);
+        continue;
+      }
+      if (PAGE_EXTENSIONS.has(extension)) {
         const payload = await importPageFile(file);
         const page = await addPage(workspaceId, payload.title || file.name, jwt ?? '', undefined, { content: payload.content });
         addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: 'completed', pageIds: page?._id ? [page._id] : [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
