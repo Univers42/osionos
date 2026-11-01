@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/20 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/20 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,9 +38,9 @@ function codeTheme(host: HTMLElement): ITheme {
   };
 }
 
-/** xterm.js terminal over the sandbox PTY (P3). Lazy-loaded from IdeBottomStrip
- *  so xterm never lands in the warm IDE chunk — it loads on first terminal open.
- *  The transport (WS + resize) is useIdeTerminal; this file owns the emulator. */
+/** xterm.js terminal over the sandbox PTY (P3, useIdeTerminal); the desktop app's dock shows
+ *  LocalVsCodeTerminal instead. Lazy-loaded from the dock so xterm never lands in the warm
+ *  IDE chunk — it loads on first terminal open. This file owns the emulator. */
 export const IdeTerminal: React.FC<{ termId?: string; safe?: boolean }> = ({ termId = "0", safe = false }) => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const hostRef = React.useRef<HTMLDivElement>(null);
