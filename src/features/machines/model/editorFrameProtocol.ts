@@ -20,7 +20,11 @@ const THEME_ATTRIBUTES = ["theme", "palette", "accent", "density", "radius", "ui
 const THEME_VALUE = /^[a-z0-9-]{1,32}$/;
 const ACCENT_HUE = /^\d{1,3}(\.\d+)?$/;
 
-export type EditorTheme = Partial<Record<(typeof THEME_ATTRIBUTES)[number], string>> & { accentHue?: string };
+export type EditorTheme = Partial<Record<(typeof THEME_ATTRIBUTES)[number], string>> & {
+  accentHue?: string;
+  /** A theme's own `--osio-*` values, which the page's stylesheet cannot know. */
+  tokens?: Record<string, string>;
+};
 
 export type AppToEditor =
   | { type: typeof EDITOR_OPEN; key: string }
@@ -38,6 +42,24 @@ const isKey = (value: unknown): value is string => typeof value === "string" && 
 const isTitle = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= MAX_TITLE && !value.includes("/") && !value.includes("\\");
 
+const MAX_THEME_TOKENS = 512;
+const TOKEN_NAME = /^--osio-[a-z0-9-]{1,64}$/;
+// What a token's value may hold: no semicolon, brace or backslash, and url() is refused below, so
+// the app can repaint this page and never make it load anything.
+const TOKEN_VALUE = /^[\w\s#%.,()"'/+*-]{1,240}$/;
+
+function readTokens(value: unknown): Record<string, string> | null {
+  if (!isRecord(value)) return null;
+  const entries = Object.entries(value);
+  if (entries.length > MAX_THEME_TOKENS) return null;
+  const tokens: Record<string, string> = {};
+  for (const [name, token] of entries) {
+    if (!TOKEN_NAME.test(name) || typeof token !== "string" || !TOKEN_VALUE.test(token) || /url\s*\(/i.test(token)) return null;
+    tokens[name] = token;
+  }
+  return tokens;
+}
+
 function readTheme(value: unknown): EditorTheme | null {
   if (!isRecord(value)) return null;
   const theme: EditorTheme = {};
@@ -50,6 +72,11 @@ function readTheme(value: unknown): EditorTheme | null {
   if (value.accentHue !== undefined) {
     if (typeof value.accentHue !== "string" || !ACCENT_HUE.test(value.accentHue)) return null;
     theme.accentHue = value.accentHue;
+  }
+  if (value.tokens !== undefined) {
+    const tokens = readTokens(value.tokens);
+    if (!tokens) return null;
+    theme.tokens = tokens;
   }
   return theme;
 }

@@ -753,13 +753,28 @@ body {
 }
 
 /* ── Code block ("/code") — high-contrast editor card ─────────────────── */
-/* The snippet card always renders on a dark surface for maximum contrast and
-   a polished, focused look, so its palette is fixed (bright) and independent
-   of the page light/dark theme. Tokens live on the card itself (they only
-   apply here) and inherit to its descendants. The IDE's surfaces are not
-   cards but carry the same data-code-theme, so they get the same tokens. */
-.osio-code-card,
-[data-code-theme] {
+/* Code follows the theme: these tokens sit on :root, where a theme's own values
+   land, so a theme can set them and every code surface inherits the result. A
+   rule on the surface itself would outrank the theme. The fixed palettes below
+   are only the per-block "dark" and "light" toggle, an explicit choice. */
+:root {
+  --osio-code-bg: var(--osio-bg-surface);
+  --osio-code-header-bg: var(--osio-bg-surface);
+  --osio-code-border: var(--osio-border);
+  --osio-code-ring: var(--osio-border);
+  --osio-code-fg: var(--osio-fg-default);
+  --osio-code-fg-muted: var(--osio-fg-muted);
+  --osio-code-caret: var(--osio-caret);
+  --osio-code-selection: color-mix(in srgb, var(--osio-accent) 30%, transparent);
+  --osio-code-active-line: var(--osio-bg-hover);
+  --osio-code-bracket: color-mix(in srgb, var(--osio-accent) 22%, transparent);
+  --osio-code-shadow: var(--osio-shadow-sm);
+  --osio-code-chip-bg: var(--osio-bg-muted);
+  --osio-code-btn-hover: var(--osio-bg-hover);
+  --osio-code-btn-active: var(--osio-bg-muted);
+}
+
+[data-code-theme="dark"] {
   --osio-code-bg: #0d1117;
   --osio-code-header-bg: rgba(255, 255, 255, 0.025);
   --osio-code-border: #2a313a;
@@ -795,24 +810,6 @@ body {
   --osio-code-btn-hover: rgba(13, 17, 23, 0.06);
   --osio-code-btn-active: rgba(13, 17, 23, 0.08);
 
-}
-
-/* The workbench dock: the app's own palette, light or dark, so the terminal it frames can be
-   painted in the same colours (features/ide/model/codeThemeFromTokens.ts reads these). */
-[data-code-theme="app"] {
-  --osio-code-bg: var(--osio-bg-surface);
-  --osio-code-header-bg: var(--osio-bg-surface);
-  --osio-code-border: var(--osio-border);
-  --osio-code-ring: var(--osio-border);
-  --osio-code-fg: var(--osio-fg-default);
-  --osio-code-fg-muted: var(--osio-fg-muted);
-  --osio-code-caret: var(--osio-caret);
-  --osio-code-selection: color-mix(in srgb, var(--osio-accent) 30%, transparent);
-  --osio-code-active-line: var(--osio-bg-hover);
-  --osio-code-bracket: color-mix(in srgb, var(--osio-accent) 22%, transparent);
-  --osio-code-chip-bg: var(--osio-bg-muted);
-  --osio-code-btn-hover: var(--osio-bg-hover);
-  --osio-code-btn-active: var(--osio-bg-muted);
 }
 
 .osio-code-card .hljs,

@@ -15,7 +15,7 @@ const ratio = (a: string, b: string) => contrastRatio(parseHexColor(a)!, parseHe
 
 const sheet = (path: string, selector: RegExp) => Object.assign({}, ...blocksOf(readAppFile(path), selector).values()) as Record<string, string>;
 const ROOT = { ...sheet("src/app/styles/global.css", /^:root$/), ...sheet("src/app/styles/appearance.css", /^:root$/) };
-const DOCK = sheet("src/app/styles/global.css", /\[data-code-theme="app"\]/);
+const DOCK = Object.fromEntries(Object.entries(ROOT).filter(([name]) => name.startsWith("--osio-code-"))) as Record<string, string>;
 
 // Caveat: resolves only `var(--x)` and `var(--x, fallback)`, which is all the tokens read here use;
 // a calc() or color-mix() comes back as written, as the browser's custom-property value would.

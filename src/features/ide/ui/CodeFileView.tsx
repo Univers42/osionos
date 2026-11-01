@@ -208,7 +208,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   if (!contentLoaded || !blockId) return <LoadingPane />;
 
   return (
-    <div data-code-theme="dark" data-osio-ide className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
+    <div data-code-theme="app" data-osio-ide className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
       {conflict && (
         <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 text-xs text-[var(--osio-code-fg)]">
           {/* The page theme's warning colour clears 3:1 on the dark card, not 4.5:1, so only the icon wears it. */}
