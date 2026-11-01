@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clampDockHeight, migrateFromIdeMode, DOCK_TABS, DOCK_MIN_HEIGHT, DOCK_DEFAULT_HEIGHT, isDockTab } from "../../src/widgets/workbench/model/workbenchLayout.ts";
+import { clampDockHeight, dockPresence, migrateFromIdeMode, DOCK_TABS, DOCK_MIN_HEIGHT, DOCK_DEFAULT_HEIGHT, isDockTab } from "../../src/widgets/workbench/model/workbenchLayout.ts";
 
 // --- DOCK_TABS ---
 
@@ -145,4 +145,13 @@ test("isDockTab: undefined returns false", () => {
 
 test("isDockTab: number 1 returns false", () => {
   assert.strictEqual(isDockTab(1), false);
+});
+// In the desktop app the dock's shell lives as long as the window, as in VS Code: closing the dock
+// hides it. On the web it unmounts, and its sandbox session reconnects on the next open.
+test("dockPresence: hidden after a close only where the dock keeps a local shell", () => {
+  assert.equal(dockPresence({ open: false, everOpened: false, keepsShell: true }), "absent");
+  assert.equal(dockPresence({ open: true, everOpened: true, keepsShell: true }), "shown");
+  assert.equal(dockPresence({ open: false, everOpened: true, keepsShell: true }), "hidden");
+  assert.equal(dockPresence({ open: false, everOpened: true, keepsShell: false }), "absent");
+  assert.equal(dockPresence({ open: true, everOpened: true, keepsShell: false }), "shown");
 });

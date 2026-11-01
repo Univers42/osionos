@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- osionos-node writes its --app-origin values here (web only; the desktop page ignores it). -->
+    <meta name="osionos-app-origin" content="%OSIONOS_APP_ORIGIN%" />
+    <title>osionos terminal</title>
+  </head>
+  <body>
+    <p id="status" class="status" role="status" aria-live="polite" hidden></p>
+    <section id="terminal" class="terminal" aria-label="Terminal"></section>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

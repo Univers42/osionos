@@ -12,7 +12,7 @@
 
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { hasLocalTerminal } from "@/features/ide/model/localPty";
-import { openOwnMachine } from "@/features/machines/model/machineWindowStore";
+import { isSandboxReachable, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
 import { terminalMenuAction, workbenchViewItems, type MenuItemSpec } from "@/widgets/top-bar/model/workbenchMenuItems";
 import { useWorkbenchStore } from "./workbenchStore";
 
@@ -20,8 +20,9 @@ import { useWorkbenchStore } from "./workbenchStore";
  *  click opens this computer's osionos-node in its window (owner 2026-11-01), whatever the account's
  *  list says, and the dock shows the terminal panel, which follows that window's state. */
 export function openWorkbenchTerminal(mode: "new" | "split"): void {
-  if (!hasLocalTerminal()) {
-    openOwnMachine();
+  // On the web with no hosted sandbox the dock is VS Code's panel on this computer's node, which has
+  // its own new and split: the menu opens the dock on it, never a window (owner 2026-11-01).
+  if (!hasLocalTerminal() && !isSandboxReachable(useSandboxHealthStore.getState().state)) {
     useWorkbenchStore.getState().openDock("terminal");
     return;
   }
