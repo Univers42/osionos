@@ -14,44 +14,25 @@
 // own terminal page opens `ws://<node>/api/pty` per shell. The upgrade needs the node's exact Origin;
 // the first message is the owner's bridge-signed token, spent once through the same verifySession
 // (the same jti guard) as /api/node/session, or the session secret this node gave that frame on its
-// first shell. The token gates the opening, not the life: a shell lives until its socket closes,
+// first shell, both through the gate /api/fs shares (node-credentials.mjs, devil F5). The token gates the opening, not the life: a shell lives until its socket closes,
 // the node stops, or the owner is revoked. `conn` is the slice of ws's WebSocket used here.
-import { createHash, randomBytes } from 'node:crypto';
-
 import { checkNodeOrigin } from '../../scripts/ide-node-policy.mjs';
 import { PTY_CLOSE, PTY_LIMITS, readPtyAuth, readPtyCommand } from './pty-wire.mjs';
 import { refuseRaw } from './node-proxy.mjs';
+import { createCredentialGate } from './node-credentials.mjs';
 
 const GOING_AWAY = 1001;
-const secretKey = (secret) => createHash('sha256').update(secret).digest('hex');
 
-export function createPtyService({ ideOrigin, ownerId, verifySession, isRevoked, host, accept, newSecret = () => randomBytes(32).toString('base64url') }) {
+export function createPtyService({ ideOrigin, ownerId, verifySession, isRevoked, host, accept, newSecret }) {
 	const pending = new Set();
 	const live = new Set();
-	// One per frame, keyed by the secret's hash so a lookup never compares the secret itself.
-	const sessions = new Map();
-
-	function credentialSession(auth) {
-		if (auth.kind === 'secret') return sessions.get(secretKey(auth.secret)) ?? null;
-		let token;
-		try { token = verifySession(auth.token, { ideOrigin }); } catch { return null; }
-		if (token.userId !== ownerId || isRevoked(token.userId, token.iat)) return null;
-		const secret = newSecret();
-		return { secret, key: secretKey(secret), conns: new Set(), fresh: true };
-	}
-
-	function leaveSession(record) {
-		const { session } = record;
-		if (!session) return;
-		session.conns.delete(record.conn);
-		if (session.conns.size === 0) sessions.delete(session.key);
-	}
+	const gate = createCredentialGate({ ideOrigin, ownerId, verifySession, isRevoked, newSecret });
 
 	function end(record) {
 		if (record.ended) return;
 		record.ended = true;
 		live.delete(record);
-		leaveSession(record);
+		gate.leave(record.session, record.conn);
 		try { record.shell?.kill(); } catch { /* the pty already exited */ }
 	}
 
@@ -66,7 +47,7 @@ export function createPtyService({ ideOrigin, ownerId, verifySession, isRevoked,
 	}
 
 	async function open(conn, auth) {
-		const found = credentialSession(auth);
+		const found = gate.admit(auth);
 		if (!found) return conn.close(PTY_CLOSE.auth);
 		if (live.size >= PTY_LIMITS.maxShells) return conn.close(PTY_CLOSE.full);
 		// Reserved before the spawn, so eight openings in flight cannot become nine shells.
@@ -89,10 +70,8 @@ export function createPtyService({ ideOrigin, ownerId, verifySession, isRevoked,
 		if (record.ended) return shell?.kill();
 		if (!shell) { end(record); return conn.close(PTY_CLOSE.unavailable); }
 		record.shell = shell;
-		if (found.fresh) { found.fresh = false; sessions.set(found.key, found); }
 		record.session = found;
-		found.conns.add(conn);
-		send(auth.kind === 'token' ? { op: 'opened', secret: found.secret } : { op: 'opened' });
+		send(gate.join(found, conn) ? { op: 'opened', secret: found.secret } : { op: 'opened' });
 		const held = early;
 		early = null;
 		for (const message of held) send(message);
@@ -131,8 +110,8 @@ export function createPtyService({ ideOrigin, ownerId, verifySession, isRevoked,
 		for (const waiting of [...pending]) waiting.conn?.close(GOING_AWAY);
 		pending.clear();
 		for (const record of [...live]) { end(record); record.conn.close(GOING_AWAY); }
-		sessions.clear();
+		gate.clear();
 	}
 
-	return { upgrade, attach, killAll, counts: () => ({ pending: pending.size, shells: live.size, sessions: sessions.size }) };
+	return { upgrade, attach, killAll, counts: () => ({ pending: pending.size, shells: live.size, sessions: gate.size() }) };
 }
