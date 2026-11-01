@@ -15,12 +15,13 @@
 // it holds no secret that could mint one; its cookie cap is keyed by a secret that never leaves
 // this process.
 import { createPrivateKey, randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import { isNodeId } from '../../scripts/ide-token.mjs';
 import { signMessage } from '../../scripts/ide-agent-frames.mjs';
 import { verifyMachineToken, whoamiMessage } from '../../scripts/ide-machine-protocol.mjs';
+import { assertPrivateFile, assertPrivateFolder, writePrivateFile } from './private-file.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const NONCE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -33,16 +34,7 @@ function isMachine(value) {
 }
 
 // The key in this file opens the owner's files and terminal to whoever holds it, and whoever can
-// write its folder can swap the file for one naming their own account. Windows has no uid: skipped.
-function assertPrivate(path, forbiddenBits, problem) {
-	const stat = statSync(path);
-	const uid = process.getuid?.();
-	if (uid !== undefined && stat.uid !== uid) throw new Error(`${path} belongs to another user; refusing it`);
-	if (stat.mode & forbiddenBits) throw new Error(`${path} is ${problem}`);
-}
-const assertPrivateFolder = (folder) => assertPrivate(folder, 0o022, 'writable by others; chmod 700 it');
-const assertPrivateFile = (file) => assertPrivate(file, 0o077, 'readable or writable by others; chmod 600 it or pair again');
-
+// write its folder can swap the file for one naming their own account (private-file.mjs).
 export function loadMachine(file) {
 	if (!existsSync(file)) return null;
 	assertPrivateFolder(dirname(file));
@@ -52,20 +44,9 @@ export function loadMachine(file) {
 	return value;
 }
 
-/**
- * Written to a fresh 0600 temp file (`wx`: never through a name someone planted) and renamed, so
- * no reader ever sees it partial or world-readable.
- */
 export function saveMachine(file, machine) {
 	if (!isMachine(machine)) throw new Error('refusing to save an incomplete machine identity');
-	const folder = dirname(file);
-	mkdirSync(folder, { recursive: true, mode: 0o700 });
-	// An existing ~/.osionos of ours made by an older install (0775) is tightened, never trusted as is.
-	if (statSync(folder).uid === process.getuid?.()) chmodSync(folder, 0o700);
-	assertPrivateFolder(folder);
-	const temp = `${file}.${randomBytes(8).toString('hex')}.tmp`;
-	writeFileSync(temp, `${JSON.stringify(machine, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
-	renameSync(temp, file);
+	writePrivateFile(file, `${JSON.stringify(machine, null, 2)}\n`);
 }
 
 const privateKeyOf = (machine) => createPrivateKey({ key: Buffer.from(machine.privateKey, 'base64url'), format: 'der', type: 'pkcs8' });
