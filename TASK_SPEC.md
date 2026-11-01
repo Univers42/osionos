@@ -1,50 +1,52 @@
 # TASK SPEC: Selection Toolbar Chrome, Component 6 — Remediate AI Section ARIA Parent Structure
 
 ## 1. Goal
-Fix WCAG 2.2 / ARIA rule `aria-required-parent` on selection toolbar AI buttons by wrapping `role="menuitem"` buttons within a valid `role="group" aria-label="Skills"` container and removing orphaned `role="menuitem"` from the standalone `Ask AI` toolbar row button.
+Fix WCAG 2.2 / ARIA rule `aria-required-parent` on selection toolbar AI buttons by wrapping `role="menuitem"` buttons within a valid `role="menu" aria-label="Skills"` container spanning both AI skills and Edit with AI action, preserving Playwright test compatibility.
 
 ---
 
 ## 2. Exact Filepaths
 1. `src/components/blocks/selection-toolbar/AiMenu.tsx`
-2. `tests/e2e/visual/a11y.spec.mjs`
+2. `src/components/blocks/selection-toolbar/InlineSelectionToolbar.tsx`
+3. `tests/e2e/functional/menuChrome.spec.mjs`
+4. `tests/e2e/visual/a11y.spec.mjs`
 
 ---
 
 ## 3. Technical Requirements
 
+### `src/components/blocks/selection-toolbar/InlineSelectionToolbar.tsx`
+- Wrap `AiSkillsSection` and `AiEditRow` in `<div role="menu" aria-label="Skills" className="pt-1">`.
+
 ### `src/components/blocks/selection-toolbar/AiMenu.tsx`
-1. In `AiSkillsSection` (line 52):
-   - Add `role="group"` and `aria-label="Skills"` to the wrapper `<div>`:
-     ```tsx
-     <div role="group" aria-label="Skills" className="pt-1">
-     ```
-2. In `AiEditRow` (line 80-85):
-   - Remove `role="menuitem"` so `ToolbarRowButton` renders as a standard toolbar action button (matching `Comment`).
+- Strip redundant inner `div role="menu"` from `AiSkillsSection`.
+- Keep `role="menuitem"` on `AiEditRow` (`ToolbarRowButton`) so all 5 AI actions are valid children of `role="menu"`.
+
+### `tests/e2e/functional/menuChrome.spec.mjs`
+- Target `page.getByRole("menu", { name: "Turn into" })` to avoid strict-mode collision when selection toolbar is open.
 
 ### `tests/e2e/visual/a11y.spec.mjs`
-- Expand `a11y: inline text selection toolbar surface` to audit the entire toolbar `[data-testid="inline-selection-toolbar"]` with 0 axe violations.
+- Audit `[data-testid="inline-selection-toolbar"]` with 0 axe violations.
 
 ---
 
 ## 4. Verification Protocol (Docker-First)
 1. `npm run test:quality` -> 0 errors.
-2. `npm run test:e2e -- tests/e2e/functional/selectionPanel.spec.mjs` -> 3/3 passed.
-3. `npm run test:e2e -- tests/e2e/visual/a11y.spec.mjs` -> 5/5 passed (0 violations).
+2. `npm run test:e2e -- tests/e2e/functional/menuChrome.spec.mjs tests/e2e/functional/inlineToolbar.spec.mjs tests/e2e/visual/a11y.spec.mjs` -> 65/65 passed.
 
 ---
 
 ## 5. Commit Plan
-- Message: `fix(a11y): wrap ai skills menuitems in role group and standardize edit action`
+- Message: `fix(a11y): wrap ai section menuitems in composite role menu container`
 - Author: `DJSurgeon <djsurgeon83@gmail.com>`
 - Flag: `-s`
 
 ---
 
 ## 6. Done-When
-- [x] `AiMenu.tsx` wraps skills in `role="menu"` and standardizes `AiEditRow`.
-- [x] `tests/e2e/visual/a11y.spec.mjs` audits full inline selection toolbar with 0 violations.
+- [x] `InlineSelectionToolbar.tsx` and `AiMenu.tsx` wrap all 5 AI actions in `role="menu"`.
+- [x] `tests/e2e/functional/menuChrome.spec.mjs` scopes Turn into menu lookup.
 - [x] `npm run test:quality` passes (0 errors).
-- [x] `tests/e2e/functional/selectionPanel.spec.mjs` passes (3/3).
+- [x] All 65 Playwright E2E and visual tests pass.
 - [x] Commit signed with `-s` by `DJSurgeon`.
 - [x] Documented in `docs/CHANGELOG.md`.

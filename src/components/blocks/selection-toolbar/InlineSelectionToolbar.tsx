@@ -272,13 +272,13 @@ const InlineSelectionToolbarImpl: React.FC<InlineSelectionToolbarProps> = ({
       ) : null}
 
       {onAskAI ? (
-        <>
+        <div role="menu" aria-label="Skills" className="pt-1">
           <AiSkillsSection
             selectionText={selectionText ?? ""}
             onAskAI={onAskAI}
           />
           <AiEditRow selectionText={selectionText ?? ""} onAskAI={onAskAI} />
-        </>
+        </div>
       ) : null}
       {palette && (
         <InlineColorPalettePanel
