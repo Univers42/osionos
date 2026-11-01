@@ -15,6 +15,10 @@ import {
 import { fakePty } from "./support/local-pty-fakes.ts";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+// A message crosses the port in its own task, later under load: wait for what must arrive.
+async function until(arrived: () => boolean) {
+  for (let waited = 0; !arrived() && waited < 2000; waited += 5) await tick();
+}
 
 // An open MessagePort keeps node alive: a failed assertion must not leave one behind.
 const openChannels: MessageChannel[] = [];
@@ -42,7 +46,7 @@ test("the page creates a shell, types, resizes and acknowledges through the port
   w.page.write("p1", "ls\r");
   w.page.resize("p1", 120, 40);
   w.page.ack("p1", 2048);
-  await tick();
+  await until(() => w.desktop.calls.length === 4);
   assert.deepEqual(w.desktop.calls, [["create", 100, 30], ["write", "p1", "ls\r"], ["resize", "p1", 120, 40], ["ack", "p1", 2048]]);
   w.stop(); w.channel.port2.close();
 });
@@ -54,10 +58,9 @@ test("output and exit come back to the page's listeners", async () => {
   await w.page.create(80, 24);
   w.page.onData("p1", (d) => out.push(d));
   w.page.onExit("p1", (c) => exits.push(c));
-  await tick();
   w.desktop.emit("p1", "hello");
   w.desktop.exit("p1", 0);
-  await tick();
+  await until(() => exits.length > 0);
   assert.deepEqual(out, ["hello"]);
   assert.deepEqual(exits, [0]);
   w.stop(); w.channel.port2.close();
@@ -137,11 +140,11 @@ test("a shell the desktop creates after the panel stopped is killed, not served"
   const channel = channelOpen();
   const stop = servePtyOverPort(channel.port1, desktop.api);
   channel.port2.postMessage({ op: "create", req: 1, cols: 80, rows: 24 });
-  await tick();
+  await until(() => desktop.of("create").length > 0);
   stop();
   finish("p9");
-  await tick();
-  assert.deepEqual(desktop.calls, [["kill", "p9"]]);
+  await until(() => desktop.of("kill").length > 0);
+  assert.deepEqual(desktop.calls, [["create", 80, 24], ["kill", "p9"]]);
   assert.equal(desktop.listeners(), 0);
   channel.port2.close();
 });

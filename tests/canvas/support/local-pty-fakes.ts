@@ -36,7 +36,10 @@ export function fakePty(created: Array<string | null | Error> = ["p1"]) {
   /** The next create waits until the test answers it: a desktop still starting the shell. */
   const deferCreate = () => {
     let answer: (id: string) => void = () => {};
-    api.create = () => new Promise((resolve) => { answer = resolve; });
+    api.create = (cols, rows) => {
+      calls.push(["create", cols, rows]);
+      return new Promise((resolve) => { answer = resolve; });
+    };
     return (id: string) => answer(id);
   };
   return { api, calls, emit, exit, listeners, of, deferCreate };
