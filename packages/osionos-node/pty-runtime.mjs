@@ -33,14 +33,15 @@ export function ptyHostCommand(serverDir) {
 	return { execPath: join(serverDir, 'node'), script: HOST_SCRIPT, args: [serverDir] };
 }
 
-/** The server's ws, set up as the pty socket's acceptor; null when the server ships none. */
-export function serverSocketAcceptor(serverDir) {
+/** The server's ws, set up as one socket route's acceptor; null when the server ships none. Each
+ *  call is its own WebSocketServer, so /api/fs's 1 MiB maxPayload never applies to /api/pty (F6). */
+export function serverSocketAcceptor(serverDir, maxPayload = PTY_LIMITS.maxPayload) {
 	let WebSocketServer;
 	try {
 		({ WebSocketServer } = createRequire(join(serverDir, 'vscode', 'package.json'))('ws'));
 	} catch { return null; }
 	if (typeof WebSocketServer !== 'function') return null;
-	const wss = new WebSocketServer({ noServer: true, maxPayload: PTY_LIMITS.maxPayload, perMessageDeflate: false });
+	const wss = new WebSocketServer({ noServer: true, maxPayload, perMessageDeflate: false });
 	return (req, socket, head) => new Promise((resolve) => wss.handleUpgrade(req, socket, head, resolve));
 }
 
