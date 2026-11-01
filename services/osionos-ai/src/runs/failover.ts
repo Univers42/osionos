@@ -50,6 +50,16 @@ function networkCode(error: unknown): string | undefined {
 	return typeof code === 'string' && NETWORK_CODES.has(code) ? code : undefined;
 }
 
+/** The failure, or one it wraps, was tagged by `markOwnError`. */
+export function isOwnFailure(error: unknown): boolean {
+	let current: unknown = error;
+	for (let depth = 0; depth < MAX_UNWRAP && current !== undefined && current !== null; depth += 1) {
+		if (typeof current === 'object' && ownErrors.has(current)) return true;
+		current = RetryError.isInstance(current) ? current.lastError : (current as { cause?: unknown }).cause;
+	}
+	return false;
+}
+
 /** The APICallError under a RetryError or a `cause` chain, when there is one. */
 export function apiCallOf(error: unknown): APICallError | undefined {
 	let current: unknown = error;
