@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/01 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,10 +16,7 @@ import { AlertCircle, GitBranch, PanelBottom } from "lucide-react";
 import { Tooltip } from "@/shared/ui";
 import { useDiagnosticsStore } from "@/features/ide/model/diagnosticsStore";
 import { hasLocalTerminal } from "@/features/ide/model/localPty";
-import { terminalOffer } from "@/features/machines/model/machineChoice";
-import { useMachinesStore } from "@/features/machines/model/machinesStore";
-import { openOwnMachine } from "@/features/machines/model/machineWindowStore";
-import { openSettings } from "@/features/settings/model/settingsNav";
+import { openOwnMachine, useMachineWindowStore } from "@/features/machines/model/machineWindowStore";
 import {
   isSandboxOnline,
   useSandboxHealthStore,
@@ -67,21 +64,21 @@ const BranchChip: React.FC = () => {
   );
 };
 
-/** Where no hosted sandbox runs, the code runs on the person's own machine: the chip names it. */
+/** Where no hosted sandbox runs, the code runs on this computer, through its own osionos-node: the
+ *  chip opens its window and shows the dock's panel, which says why when it cannot open. */
 const MachineChip: React.FC = () => {
-  const offer = terminalOffer(useMachinesStore((s) => s.machines));
-  const refresh = useMachinesStore((s) => s.refresh);
-  const chip = {
-    loading: { label: "Machine: checking", dot: DOT_CLASS.unknown, hint: "Looking for your machines", act: () => void refresh() },
-    open: { label: `Machine: ${offer.kind === "open" ? offer.name : ""}`, dot: DOT_CLASS.online, hint: "Open your machine's terminal and files", act: () => { openOwnMachine(); } },
-    start: { label: `Machine: ${offer.kind === "start" ? offer.name : ""} offline`, dot: DOT_CLASS.stopped, hint: "Start osionos-node on it - click to check again", act: () => void refresh() },
-    pair: { label: "Add a machine", dot: DOT_CLASS.disabled, hint: "Connect your own computer for a terminal", act: () => openSettings("machines") },
-  }[offer.kind];
+  const phase = useMachineWindowStore((s) => s.phase);
+  const openDock = useWorkbenchStore((s) => s.openDock);
+  const dot = phase === "connected" ? DOT_CLASS.online : phase === "idle" || phase === "connecting" ? DOT_CLASS.unknown : DOT_CLASS.stopped;
+  const open = () => {
+    openOwnMachine();
+    openDock("terminal");
+  };
   return (
-    <Tooltip label={chip.hint} side="top">
-      <button type="button" data-testid="machine-chip" onClick={chip.act} className={CHIP}>
-        <span aria-hidden className={`h-2 w-2 rounded-full ${chip.dot}`} />
-        {chip.label}
+    <Tooltip label="Open this computer's terminal and files" side="top">
+      <button type="button" data-testid="machine-chip" onClick={open} className={CHIP}>
+        <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
+        This computer
       </button>
     </Tooltip>
   );

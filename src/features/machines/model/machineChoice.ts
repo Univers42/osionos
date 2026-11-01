@@ -6,18 +6,20 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/31 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/01 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-// Which of the person's machines one click opens, and the words the pairing screen uses. Pure,
-// so the canvas tests cover every branch. The rule (own-machines plan §6): the default machine if
-// it is online, else the first online one, else none. There is no hosted sandbox fallback: "none"
-// is an answer the view explains, never a reason to open something else.
+// Which of the person's machines /machine opens, what the terminal panel says while one click
+// opens this computer's node, and the words the pairing screen uses. Pure, so the canvas tests
+// cover every branch. The /machine rule (own-machines plan §6): the default machine if it is
+// online, else the first online one, else none. There is no hosted sandbox fallback: "none" is an
+// answer the view explains, never a reason to open something else.
 
 import type { Machine, PairClaim } from "../api/machinesApi";
 import { readMachineTarget } from "../../ide/vscode/machineSession";
 import { isMachineId } from "./machineShape";
+import type { WindowPhase } from "./machineWindow";
 
 export type MachineChoice =
   | { kind: "open"; machine: Machine }
@@ -58,27 +60,30 @@ export function readMachineRoute(search: string): MachineRoute | null {
   return target.folder === null ? null : { kind: "legacy", node: target.node, folder: target.folder };
 }
 
-export type TerminalOffer =
-  | { kind: "loading" }
-  | { kind: "pair" }
-  | { kind: "start"; name: string }
-  | { kind: "open"; name: string };
+export type ThisComputerPanel = {
+  title: string;
+  detail: string;
+  action: "open" | "show" | "check-again" | "settings";
+  command: boolean;
+};
 
-/** What the terminal panel offers instead of a hosted sandbox: the default online machine, the
- *  machine to start when none is online, or pairing one. */
-export function terminalOffer(machines: readonly Machine[] | null): TerminalOffer {
-  if (machines === null) return { kind: "loading" };
-  const choice = chooseMachine(machines, null);
-  if (choice.kind === "open") return { kind: "open", name: choice.machine.name || choice.machine.id };
-  if (machines.length === 0) return { kind: "pair" };
-  const preferred = machines.find((machine) => machine.isDefault) ?? machines[0];
-  return { kind: "start", name: preferred.name || preferred.id };
-}
+const PANEL_TITLE = "Terminal on this computer";
+const PANEL: Record<WindowPhase, ThisComputerPanel> = {
+  idle: { title: PANEL_TITLE, detail: "Your terminal and your files run on this computer, through its osionos-node, in their own window.", action: "open", command: false },
+  connecting: { title: PANEL_TITLE, detail: "Opening this computer's window…", action: "show", command: false },
+  "step-up": { title: PANEL_TITLE, detail: "Confirm it is you to open this computer's terminal.", action: "show", command: false },
+  connected: { title: PANEL_TITLE, detail: "This computer is open in its own window.", action: "show", command: false },
+  reconnecting: { title: PANEL_TITLE, detail: "Reconnecting to this computer…", action: "show", command: false },
+  error: { title: PANEL_TITLE, detail: "The window was blocked, or this computer's osionos-node did not answer.", action: "open", command: false },
+  mismatch: { title: PANEL_TITLE, detail: "The program on this computer's osionos-node port is not the machine it claims to be. Restart osionos-node, then check again.", action: "check-again", command: false },
+  unavailable: { title: PANEL_TITLE, detail: "osionos could not check this computer's machine against your account. Check again in a moment.", action: "check-again", command: false },
+  "other-account": { title: "This computer is paired to another account", detail: "This computer's osionos-node belongs to another osionos account. Pair this computer with yours in Settings > Machines.", action: "settings", command: false },
+  "no-node": { title: "osionos-node is not running on this computer", detail: "Start it on this computer, then check again.", action: "check-again", command: true },
+};
 
-/** The Terminal action opens the machine window once the list is known; with no machine yet that
- *  window shows how to pair one, so a person is never handed a hosted terminal instead. */
-export function terminalOpensMachine(machines: readonly Machine[] | null): boolean {
-  return machines !== null;
+/** What the terminal panel says while one click opens this computer's node (2026-11-01). */
+export function thisComputerPanel(phase: WindowPhase): ThisComputerPanel {
+  return PANEL[phase];
 }
 
 // Caveat: the bridge compares IP prefixes (clientMeta ipPrefix), so two devices behind one NAT

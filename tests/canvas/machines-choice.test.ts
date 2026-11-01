@@ -19,7 +19,7 @@ import test from "node:test";
 
 import type { Machine } from "../../src/features/machines/api/machinesApi.ts";
 import {
-  chooseMachine, normalizePairCode, pairCommand, pairWarning, readMachineRoute, serveCommand, shellWord, terminalOffer, terminalOpensMachine,
+  chooseMachine, normalizePairCode, pairCommand, pairWarning, readMachineRoute, serveCommand, shellWord, thisComputerPanel,
 } from "../../src/features/machines/model/machineChoice.ts";
 
 const machine = (id: string, online: boolean, isDefault = false): Machine => ({
@@ -83,15 +83,22 @@ test("/machine with no node chooses; a machine id opens it with or without a fol
   }
 });
 
-test("the Terminal action opens the machine window once the list is known, even empty: no cloud terminal", () => {
-  assert.equal(terminalOpensMachine([C]), true);
-  assert.equal(terminalOpensMachine([]), true, "no machine yet: /machine shows how to pair one");
-  assert.equal(terminalOpensMachine(null), false, "not loaded yet: the dock keeps its terminal");
+// The terminal panel speaks of this computer (2026-11-01): one click opens this computer's node,
+// whatever the account's list says, and the panel follows that window's state.
+test("the terminal panel speaks of this computer in every state of its window", () => {
+  assert.deepEqual(thisComputerPanel("idle"), { title: "Terminal on this computer", detail: "Your terminal and your files run on this computer, through its osionos-node, in their own window.", action: "open", command: false });
+  assert.equal(thisComputerPanel("connected").action, "show");
+  assert.equal(thisComputerPanel("connecting").action, "show");
+  for (const phase of ["idle", "connecting", "step-up", "connected", "reconnecting", "error", "mismatch", "unavailable", "other-account", "no-node"] as const) {
+    const panel = thisComputerPanel(phase);
+    assert.match(`${panel.title} ${panel.detail}`, /this computer/i, phase);
+    assert.doesNotMatch(`${panel.title} ${panel.detail}`, /default machine|online machine/, phase);
+  }
 });
 
-test("the terminal panel offers the person's own machine: open, start it, pair one, or wait for the list", () => {
-  assert.deepEqual(terminalOffer(null), { kind: "loading" });
-  assert.deepEqual(terminalOffer([]), { kind: "pair" });
-  assert.deepEqual(terminalOffer([machine("m-cccccccccccccccc", false, true)]), { kind: "start", name: "cccc" });
-  assert.deepEqual(terminalOffer([A, B]), { kind: "open", name: "bbbb" }, "the default online machine");
+test("no node shows the serve command and Check again; another account leads to pairing this computer", () => {
+  assert.deepEqual(thisComputerPanel("no-node"), { title: "osionos-node is not running on this computer", detail: "Start it on this computer, then check again.", action: "check-again", command: true });
+  assert.deepEqual(thisComputerPanel("other-account"), { title: "This computer is paired to another account", detail: "This computer's osionos-node belongs to another osionos account. Pair this computer with yours in Settings > Machines.", action: "settings", command: false });
+  assert.equal(thisComputerPanel("mismatch").action, "check-again");
+  assert.equal(thisComputerPanel("unavailable").action, "check-again");
 });
