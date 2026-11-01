@@ -118,3 +118,13 @@ test("a nonce is 16 random bytes in base64url and never repeats", () => {
   }
   assert.equal(seen.size, 64);
 });
+
+// The app tells the page why it will not send a token, so the page shows words, not "Connecting…".
+test("refused carries one known reason, from a listed app origin only", () => {
+  for (const reason of ["mismatch", "unavailable", "other-account"] as const) {
+    assert.deepEqual(readAppMessage({ type: "osionos-ide/refused", reason }, APP, [APP]), { type: "osionos-ide/refused", reason });
+  }
+  assert.equal(readAppMessage({ type: "osionos-ide/refused", reason: "mismatch" }, "https://evil.example", [APP]), null);
+  assert.equal(readAppMessage({ type: "osionos-ide/refused", reason: "<b>pwned</b>" }, APP, [APP]), null);
+  assert.equal(readAppMessage({ type: "osionos-ide/refused", reason: "mismatch", text: "x" }, APP, [APP]), null);
+});

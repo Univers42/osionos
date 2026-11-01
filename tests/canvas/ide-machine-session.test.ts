@@ -17,7 +17,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { boundedCommand, machineOptions, readHomeFolder, readMachineTarget } from "../../src/features/ide/vscode/machineSession.ts";
+import { boundedCommand, isLocalOpen, machineOptions, readHomeFolder, readMachineTarget, readSelf } from "../../src/features/ide/vscode/machineSession.ts";
 
 const COMMIT = "59c988c744a240b05b039f57b856a5312f19d5b1";
 
@@ -62,4 +62,17 @@ test("a command that never settles fails with its name after the bound (C13)", a
   const never = new Promise<never>(() => {});
   await assert.rejects(boundedCommand(() => never, "git.checkout", 30), /git\.checkout did not finish within 30 ms/);
   assert.equal(await boundedCommand(async () => 7, "x", 30), 7);
+});
+
+// This computer's node (2026-11-01): the app opens `/?local=1` with no id, and the page asks its
+// own node who it is, so computer B never asks its loopback for computer A's machine.
+test("the local page URL is exactly local=1, and the node's self answer names one machine id", () => {
+  assert.equal(isLocalOpen("?local=1"), true);
+  for (const search of ["", "?local=0", "?local=1&node=m-abcdefghijklmnop", "?local=1&local=1", "?local=1&folder=/x", "?node=m-abcdefghijklmnop"]) {
+    assert.equal(isLocalOpen(search), false, search);
+  }
+  assert.equal(readSelf({ paired: true, machineId: "m-abcdefghijklmnop" }), "m-abcdefghijklmnop");
+  for (const body of [null, {}, { paired: false, machineId: "m-abcdefghijklmnop" }, { paired: true, machineId: "laptop" }, { paired: true }]) {
+    assert.equal(readSelf(body), null, JSON.stringify(body));
+  }
 });

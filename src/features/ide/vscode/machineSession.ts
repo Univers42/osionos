@@ -45,6 +45,19 @@ export function readMachineTarget(search: string): MachineTarget | null {
   return isAbsoluteFolder(folders[0]) ? { node, folder: folders[0] } : null;
 }
 
+/** `/?local=1` and nothing else: this computer's node, which names itself (GET /api/machine/self). */
+export function isLocalOpen(search: string): boolean {
+  const params = new URLSearchParams(search);
+  return [...params.keys()].length === 1 && params.getAll("local").length === 1 && params.get("local") === "1";
+}
+
+/** The machine id `GET /api/machine/self` names, or null when the answer is not a paired machine. */
+export function readSelf(body: unknown): string | null {
+  if (body === null || typeof body !== "object") return null;
+  const { paired, machineId } = body as { paired?: unknown; machineId?: unknown };
+  return paired === true && isMachineId(machineId) ? machineId : null;
+}
+
 /** The folder `GET /api/machine/home` names, or null when the answer is not an absolute, normal path. */
 export function readHomeFolder(body: unknown): string | null {
   const folder = body !== null && typeof body === "object" ? (body as { folder?: unknown }).folder : undefined;
