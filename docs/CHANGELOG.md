@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Accessibility Remediation across Core Surfaces**:
+  - `TableHeader`: Upgraded database view table header buttons ("Add property", "Column options") to 24x24px minimum touch targets and added token-driven focus outline rings to all header action and column trigger buttons (WCAG 2.2 SC 2.5.8, SC 2.4.11).
   - `MemoTableRow`: Upgraded database view row drag grip and sub-items expand chevron to 24x24px minimum touch targets with token-driven focus outline rings and keyboard focusability, adjusting lane padding to preserve cell text clearance (WCAG 2.2 SC 2.5.8, SC 2.4.11).
   - `TableAddButton`: Upgraded table edge add button and quick-count flyout to 24x24px minimum touch targets with token-driven focus outline rings and keyboard focus-within visibility (WCAG 2.2 SC 2.5.8, SC 2.4.11).
   - `BlockEditorSurface`: Upgraded universal block drag handle to 24x24px minimum touch target with token-driven focus outline ring and keyboard visibility (WCAG 2.2 SC 2.5.8, SC 2.4.11).
