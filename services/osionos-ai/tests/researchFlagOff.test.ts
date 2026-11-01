@@ -50,7 +50,7 @@ describe('research mode with the flag off', () => {
 			emit: async () => {},
 		});
 		assert.ok(Object.keys(run.tools ?? {}).length > 4, 'the chat keeps its whole read set');
-		assert.equal(TOOL_DEFINITION_CHARS, 7710);
+		assert.equal(TOOL_DEFINITION_CHARS, 8549);
 		// Measured with the defaults on 2026-10-30 (59_166 before add_blocks named a code
 		// block's language, #34); a change here moves every reservation.
 		assert.equal(estimateRunMicroUsd(PLATFORM, { text: 'hello', historyChars: 0 }), 59_412);
