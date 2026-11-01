@@ -8,13 +8,14 @@
 
 import { isNativeApp } from "./installedAppLauncher";
 import { configuredUrlFor, currentPageHostname, currentPageOrigin, isReachableUrl } from "@/shared/config/appUrls";
-import { isSameOrigin } from "@/shared/lib/embed/embedUrlGuard";
+import { isSameOrigin, safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard";
 
 /** `configured`: "" = the build opted the app out, null = no gate (catalogue URL used).
  *  An app on this page's own origin is refused too: osionos refuses to be framed
- *  (frame-ancestors 'none'), and a same-origin pane would void the embed sandbox. */
+ *  (frame-ancestors 'none'), and a same-origin pane would void the embed sandbox.
+ *  The answer is an http(s) URL or "", a native app's too (C4), though its URL is never loaded. */
 export function launchUrlFor(identifier: string, catalogueUrl: string, configured: string | null, pageHostname: string, pageOrigin = ""): string {
-  if (isNativeApp(identifier)) return catalogueUrl;
+  if (isNativeApp(identifier)) return safeHttpUrl(catalogueUrl) === "" ? "" : catalogueUrl;
   if (configured === "") return "";
   const url = configured ?? catalogueUrl;
   if (isSameOrigin(url, pageOrigin)) return "";
