@@ -74,7 +74,9 @@
   inset-block: 0;
   right: 2.125rem;
   padding-left: 1.5rem;
-  background: linear-gradient(to right, transparent, var(--color-surface-primary) 1.5rem);
+  /* Blurs a long title behind the tools: a painted fade showed over a tinted callout. */
+  background: transparent;
+  backdrop-filter: blur(6px);
 }
 
 /* Floating beside the title only works while both fit: at 400 px the toolbar
