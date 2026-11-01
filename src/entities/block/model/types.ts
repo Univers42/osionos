@@ -152,7 +152,7 @@ export interface Block {
   language?: string;		/** Programming language for code blocks */
   codeView?: "preview" | "source";		/** View mode for renderable code blocks (default: preview) */
   fileName?: string;					/** Optional title/filename shown in a code block header */
-  codeTheme?: "dark" | "light";			/** Per-block code card theme (default: dark) */
+  codeTheme?: "dark" | "light";			/** Per-block code card theme (default: the theme) */
   lineNumbers?: boolean;				/** Show a line-number gutter in a code block */
   sqlMountId?: string;		/** Live-DB mount a `sql` code block runs against (read-only) */
   heightLines?: number;					/** Persisted height in lines for code blocks */

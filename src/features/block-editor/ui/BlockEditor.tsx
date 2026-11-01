@@ -792,7 +792,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
     case "code":
       return (
         <div
-          data-code-theme={block.codeTheme ?? "dark"}
+          data-code-theme={block.codeTheme ?? "app"}
           className="osio-code-card group/code relative my-0 rounded-xl border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]"
         >
           {codeBlockHeader}

@@ -8,7 +8,7 @@ import { APPEARANCE_ATTRIBUTES } from "@/shared/config/theme";
 export function watchAppearance(host: HTMLElement, onChange: () => void): () => void {
   const rerun = () => { if (host.isConnected) onChange(); };
   const rootObserver = new MutationObserver(rerun);
-  rootObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette", "class", ...APPEARANCE_ATTRIBUTES] });
+  rootObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette", "class", "style", ...APPEARANCE_ATTRIBUTES] });
   const card = host.closest<HTMLElement>("[data-code-theme]");
   const cardObserver = card ? new MutationObserver(rerun) : null;
   cardObserver?.observe(card as HTMLElement, { attributes: true, attributeFilter: ["data-code-theme"] });

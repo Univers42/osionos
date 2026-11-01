@@ -1,6 +1,7 @@
 // The app's half of a frame of the node's editor page: the same link as the terminal's, the app's
 // theme on `ready`, and only what editorFrameProtocol.ts lets through. The app never sees a path, a
 // listing or a file's content: it hears a base name and whether it has unsaved changes.
+import { watchAppearance } from "@/features/ide/ui/watchAppearance";
 import React from "react";
 
 import { readIdeMessage } from "@/features/ide/vscode/ideFrameProtocol";
@@ -19,7 +20,9 @@ function appTheme(): EditorTheme {
   const root = document.documentElement;
   const { theme, palette, accent, density, radius, uiScale } = root.dataset;
   const accentHue = root.style.getPropertyValue("--osio-accent-hue").trim() || undefined;
-  return { theme, palette, accent, density, radius, uiScale, accentHue };
+  const tokens: Record<string, string> = {};
+  for (const name of Array.from(root.style)) if (name.startsWith("--osio-")) tokens[name] = root.style.getPropertyValue(name).trim();
+  return { theme, palette, accent, density, radius, uiScale, accentHue, tokens };
 }
 
 export function useEditorFrame({ armed, mayPromptStepUp, onMessage }: {
@@ -65,6 +68,13 @@ export function useEditorFrame({ armed, mayPromptStepUp, onMessage }: {
       setReady(false);
     };
   }, [armed, attempt, mayPromptStepUp, post]);
+
+  // The folder tree and the open file repaint with the app, whatever changed its theme.
+  React.useEffect(() => {
+    const host = frameRef.current;
+    if (!armed || !ready || !host) return undefined;
+    return watchAppearance(host, () => post({ type: EDITOR_THEME, theme: appTheme() }));
+  }, [armed, ready, post]);
 
   return { frameRef, attempt, phase, ready, post, tryAgain: React.useCallback(() => setAttempt((count) => count + 1), []) };
 }

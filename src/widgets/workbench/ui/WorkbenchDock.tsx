@@ -205,7 +205,7 @@ export const WorkbenchDock: React.FC = () => {
     <section
       aria-label="Panel"
       data-testid="workbench-dock"
-      data-code-theme="dark"
+      data-code-theme="app"
       data-osio-code-chrome
       style={{ height: clampDockHeight(height, globalThis.innerHeight), minHeight: "var(--osio-dock-min-h)" }}
       // A card like a pane: it clips the terminal to its corners, sits the same
