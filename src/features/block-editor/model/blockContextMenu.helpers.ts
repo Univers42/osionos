@@ -12,11 +12,14 @@
 
 import type { ReactNode } from "react";
 import type { Block, BlockType } from "@/entities/block";
+import type { BlockEdges } from "./menuBesideBlock";
 
 export interface BlockContextMenuState {
   blockId: string;
   x: number;
   y: number;
+  /** The block's horizontal edges; the menu opens beside them when it can. */
+  blockEdges?: BlockEdges;
 }
 
 export interface BlockLocation {
