@@ -14,5 +14,5 @@ body {
 .status {
   margin: 12px;
   font: 13px system-ui, sans-serif;
-  color: var(--vscode-foreground, #888);
+  color: var(--vscode-foreground);
 }
