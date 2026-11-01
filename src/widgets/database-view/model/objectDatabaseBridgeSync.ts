@@ -18,6 +18,7 @@
 // session or an unreachable bridge degrades to local-only and retries on the
 // next flush — it never throws into the persist path and never loses data.
 
+import { LIVE_VIEWS_KEY_PREFIX } from "@/shared/notion-database-sys/src/store/live/liveViewSync";
 import type { NotionState } from "@notion-db/object-database";
 import { api, getActivePageJwt, API_BASE } from "@/shared/api/client";
 import { isObjectDatabaseServerSyncEnabled } from "@/shared/config/featureFlags";
@@ -84,7 +85,7 @@ async function fetchServerDatabases(jwt: string): Promise<Map<string, ServerObje
   const response = await api.get<ServerListResponse>("/api/object-databases", jwt);
   const map = new Map<string, ServerObjectDatabase>();
   for (const row of response.databases ?? []) {
-    if (!row?.dbKey) continue;
+    if (!row?.dbKey || row.dbKey.startsWith(LIVE_VIEWS_KEY_PREFIX)) continue;
     map.set(row.dbKey, row);
     // The bridge returns the workspace; remember it before any push can happen.
     rememberDatabaseWorkspace(row.dbKey, row.workspaceId);

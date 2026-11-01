@@ -4671,9 +4671,11 @@ async function handleObjectDatabasesGet(url, request, response, config, fetchImp
 	// Databases without a workspace predate the column: they stay listed in every
 	// workspace until claimed, or a filtered read would hide them from their owner.
 	const workspaceId = url.searchParams.get('workspaceId');
+	const dbKey = safeText(url.searchParams.get('dbKey'), OBJECT_DB_KEY_MAX);
+	const keyFilter = dbKey ? { db_key: `eq.${dbKey}` } : {};
 	const workspaceFilter = workspaceId ? { or: `(workspace_id.eq.${requireUuid(workspaceId, 'workspaceId')},workspace_id.is.null)` } : {};
 	const rows = await baasRest(config, fetchImpl,
-		`osionos_object_databases?${postgrestQuery({ ...workspaceFilter, owner_id: `eq.${authContext.userId}`, select: 'db_key,title,state,workspace_id,updated_at' })}`);
+		`osionos_object_databases?${postgrestQuery({ ...workspaceFilter, ...keyFilter, owner_id: `eq.${authContext.userId}`, select: 'db_key,title,state,workspace_id,updated_at' })}`);
 	const databases = Array.isArray(rows) ? rows.map((row) => ({
 		dbKey: row.db_key,
 		title: row.title ?? 'Untitled',
