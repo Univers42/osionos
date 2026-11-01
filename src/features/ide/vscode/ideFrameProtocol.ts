@@ -13,7 +13,7 @@
 // The postMessage contract between the app and the IDE page it frames (devil verdict 2026-10-30,
 // C0-F2). The IDE page runs on its own origin with a shell behind it, so this is the only thing
 // an app-origin XSS can reach: both directions check the exact origin, and the app may only hand
-// over a session token or ask to show a file. Nothing here types into a terminal, runs a task,
+// over a session token, ask to show a file, or say which known reason it refused the page for. Nothing here types into a terminal, runs a task,
 // starts a debugger, installs an extension or writes a setting. Free of `@/` imports so it runs
 // under the node canvas runner.
 //
@@ -24,10 +24,13 @@
 // produce it.
 import { isMachineId } from "../../machines/model/machineShape.ts";
 
+export type RefusalReason = "mismatch" | "unavailable" | "other-account";
+
 export type AppMessage =
   | { type: "osionos-ide/session"; token: string }
   | { type: "osionos-ide/hello"; nonce: string }
-  | { type: "osionos-ide/open"; path: string };
+  | { type: "osionos-ide/open"; path: string }
+  | { type: "osionos-ide/refused"; reason: RefusalReason };
 
 export type IdeState = "connecting" | "connected" | "reconnecting" | "error";
 
@@ -46,6 +49,7 @@ const NONCE = /^[A-Za-z0-9_-]{22,128}$/;
 const SIGNATURE = /^[A-Za-z0-9_-]{86}$/;
 const NODE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const STATES: ReadonlySet<string> = new Set(["connecting", "connected", "reconnecting", "error"]);
+const REFUSALS: ReadonlySet<string> = new Set(["mismatch", "unavailable", "other-account"]);
 // eslint-disable-next-line no-control-regex -- refusing control characters is the point
 const CONTROL = /[\u0000-\u001f\u007f\\]/;
 
@@ -83,6 +87,10 @@ export function readAppMessage(data: unknown, origin: string, appOrigins: readon
   if (type === "osionos-ide/open") {
     const record = shaped(data, ["type", "path"]);
     return record && isSafeRelativePath(record.path) ? { type, path: record.path } : null;
+  }
+  if (type === "osionos-ide/refused") {
+    const record = shaped(data, ["type", "reason"]);
+    return record && typeof record.reason === "string" && REFUSALS.has(record.reason) ? { type, reason: record.reason as RefusalReason } : null;
   }
   return null;
 }

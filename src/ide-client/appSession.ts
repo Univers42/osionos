@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/30 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/01 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,7 +17,7 @@
 // A paired machine is asked to prove itself first (devil verdict 2026-10-31, condition 5): the
 // app's hello nonce goes to the node's same-origin /api/machine/whoami, and the signed answer is
 // handed back. The page signs nothing itself; it only relays what the node on this origin said.
-import { readAppMessage, readIdeMessage, type AppMessage, type IdeMessage } from "../features/ide/vscode/ideFrameProtocol.ts";
+import { readAppMessage, readIdeMessage, type AppMessage, type IdeMessage, type RefusalReason } from "../features/ide/vscode/ideFrameProtocol.ts";
 
 // Ask for a new token this long before the current one ends, so the socket never sees the lease
 // run out while the owner is working.
@@ -26,6 +26,7 @@ const REFRESH_LEAD_S = 120;
 export type AppLink = {
   send(message: IdeMessage): void;
   onOpen(listener: (path: string) => void): void;
+  onRefused(listener: (reason: RefusalReason) => void): void;
   firstSession: Promise<void>;
 };
 
@@ -88,6 +89,7 @@ export function linkToApp(node: string, appOrigins: readonly string[]): AppLink 
     }
   };
   const openListeners: Array<(path: string) => void> = [];
+  const refusedListeners: Array<(reason: RefusalReason) => void> = [];
   let refresh: ReturnType<typeof setTimeout> | undefined;
   let settleFirst: { resolve: () => void; reject: (error: Error) => void } | undefined;
   const firstSession = new Promise<void>((resolve, reject) => { settleFirst = { resolve, reject }; });
@@ -120,7 +122,8 @@ export function linkToApp(node: string, appOrigins: readonly string[]): AppLink 
       void whoami(message.nonce).then((identity) => send(identity ?? { type: "osionos-ide/state", state: "error" }), () => send({ type: "osionos-ide/state", state: "error" }));
     }
     if (message?.type === "osionos-ide/open") for (const listener of openListeners) listener(message.path);
+    if (message?.type === "osionos-ide/refused") for (const listener of refusedListeners) listener(message.reason);
   });
   send({ type: "osionos-ide/ready", node });
-  return { send, onOpen: (listener) => openListeners.push(listener), firstSession };
+  return { send, onOpen: (listener) => openListeners.push(listener), onRefused: (listener) => refusedListeners.push(listener), firstSession };
 }

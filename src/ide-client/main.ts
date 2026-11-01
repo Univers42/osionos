@@ -6,79 +6,44 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/30 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/01 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 // The IDE page (ADR-006): one connected machine and one folder, drawn by osionos with VS Code's
 // services behind it. It is served by osionos-node on the IDE origin and framed by the app.
-import * as monaco from "@codingame/monaco-vscode-editor-api";
-import { ICommandService, IRemoteAgentService, ITerminalService, getService, initialize } from "@codingame/monaco-vscode-api";
-import "@codingame/monaco-vscode-theme-defaults-default-extension";
-
-import pin from "../../packages/osionos-node/server-pin.json";
-import { boundedCommand, machineOptions, readHomeFolder, readMachineTarget } from "../features/ide/vscode/machineSession.ts";
-import type { IdeState } from "../features/ide/vscode/ideFrameProtocol.ts";
-import { mountExplorer } from "./explorer.ts";
+//
+// This entry stays light: it names the machine and sends `ready` before the VS Code bundle
+// (workbench.ts) is even requested, so the app's no-node timeout measures the node, not a cold
+// bundle load. `/?local=1` is this computer's node, which names itself (GET /api/machine/self).
+import { isLocalOpen, readHomeFolder, readMachineTarget, readSelf, type MachineTarget } from "../features/ide/vscode/machineSession.ts";
 import { linkToApp, type AppLink } from "./appSession.ts";
-import { editorModeServices } from "./services.ts";
+import { REFUSAL_TEXT, report, show } from "./status.ts";
 import "./ide.css";
 
-const COMMAND_BOUND_MS = 15_000;
-const ConnectionGain = 4;
-const ReconnectionPermanentFailure = 3;
-
-const statusEl = document.getElementById("status") as HTMLElement;
-const editorEl = document.getElementById("editor") as HTMLElement;
-const terminalEl = document.getElementById("terminal") as HTMLElement;
-const STATUS_TEXT: Record<IdeState, string> = { connecting: "Connecting…", connected: "Connected", reconnecting: "Reconnecting…", error: "Not connected" };
-
-// Vite bundles a worker only from the literal `new Worker(new URL(…))` form; a bare URL is copied
-// as an asset, and a one-line re-export is inlined as a data: URL the CSP refuses.
-const workers: Record<string, () => Worker> = {
-  editorWorkerService: () => new Worker(new URL("@codingame/monaco-vscode-api/workers/editor.worker", import.meta.url), { type: "module" }),
-  TextMateWorker: () => new Worker(new URL("@codingame/monaco-vscode-textmate-service-override/worker", import.meta.url), { type: "module" }),
-};
-window.MonacoEnvironment = { getWorker: (_id, label) => workers[label]?.() };
-
-let editor: monaco.editor.IStandaloneCodeEditor | undefined;
-const showEditor = () => (editor ??= monaco.editor.create(editorEl, { automaticLayout: true }));
-
-function report(link: AppLink | null, state: IdeState, detail = "") {
-  statusEl.dataset.state = state;
-  statusEl.textContent = detail ? `${STATUS_TEXT[state]} · ${detail}` : STATUS_TEXT[state];
-  link?.send({ type: "osionos-ide/state", state });
+async function readJson(path: string): Promise<{ status: number; body: unknown }> {
+  const res = await fetch(path, { credentials: "same-origin" });
+  return { status: res.status, body: res.status === 200 ? await res.json().catch(() => null) : null };
 }
 
-async function watchConnection(link: AppLink | null) {
-  const connection = (await getService(IRemoteAgentService)).getConnection();
-  connection?.onDidStateChange((event) => {
-    if (event.type === ConnectionGain) report(link, "connected");
-    else if (event.type === ReconnectionPermanentFailure) report(link, "error", "the machine closed the connection");
-    else report(link, "reconnecting");
-  });
-  const environment = await (await getService(IRemoteAgentService)).getEnvironment();
-  report(link, environment ? "connected" : "error", environment ? "" : "the machine did not answer");
-}
-
-async function openTerminal(cwd: monaco.Uri) {
-  const terminals = await getService(ITerminalService);
-  // No views means no "last active folder" to fall back on: name the folder, or the shell starts in ~.
-  const terminal = await terminals.createTerminal({ cwd });
-  terminalEl.hidden = false;
-  terminal.attachToElement(terminalEl);
-  // xterm opens only for a visible instance; without views nothing else marks it visible.
-  terminal.setVisible(true);
-  terminal.layout({ width: terminalEl.clientWidth, height: terminalEl.clientHeight });
-  terminal.focus();
+async function resolveTarget(): Promise<MachineTarget> {
+  if (isLocalOpen(location.search)) {
+    const { status, body } = await readJson("/api/machine/self");
+    const node = readSelf(body);
+    if (!node) throw new Error(`this computer's osionos-node did not name its machine (${status})`);
+    return { node, folder: null };
+  }
+  const target = readMachineTarget(location.search);
+  if (!target) throw new Error("this address names no machine folder");
+  return target;
 }
 
 // A paired machine opened without a folder opens its home, which the node names once the session
 // cookie is set (own-machines plan §6): the app never sends a path for it.
 async function homeFolder(): Promise<string> {
-  const res = await fetch("/api/machine/home", { credentials: "same-origin" });
-  const folder = res.status === 200 ? readHomeFolder(await res.json().catch(() => null)) : null;
-  if (!folder) throw new Error(`the machine did not name its home folder (${res.status})`);
+  const { status, body } = await readJson("/api/machine/home");
+  const folder = readHomeFolder(body);
+  if (!folder) throw new Error(`the machine did not name its home folder (${status})`);
   return folder;
 }
 
@@ -87,40 +52,18 @@ async function homeFolder(): Promise<string> {
 let appLink: AppLink | null = null;
 
 async function main() {
-  const target = readMachineTarget(location.search);
   const appOrigins = (document.querySelector<HTMLMetaElement>('meta[name="osionos-app-origin"]')?.content ?? "").split(" ").filter(Boolean);
-  if (!target) return report(null, "error", "this address names no machine folder");
+  const target = await resolveTarget();
   document.title = target.node;
   const link = linkToApp(target.node, appOrigins);
   if (!link) return report(null, "error", "open this machine from osionos");
   appLink = link;
+  link.onRefused((reason) => show("error", REFUSAL_TEXT[reason]));
+  const workbench = import("./workbench.ts");
   report(link, "connecting");
   await link.firstSession;
   const folder = target.folder ?? await homeFolder();
-  document.title = `${folder.split("/").pop() || folder} · ${target.node}`;
-
-  const options = machineOptions({ host: location.host, node: target.node, folder, commit: pin.server.commit });
-  const folderUri = monaco.Uri.parse(options.workspaceProvider.workspace.folderUri);
-  await initialize(editorModeServices(async (modelRef) => {
-    showEditor().setModel(modelRef.object.textEditorModel);
-    // One runtime object; the editor API and the service override declare it in two type trees.
-    return showEditor() as never;
-  }), undefined, { ...options, workspaceProvider: { ...options.workspaceProvider, workspace: { folderUri } } } as never);
-  await watchConnection(link);
-
-  const commands = await getService(ICommandService);
-  const run = (id: string) => boundedCommand(() => commands.executeCommand(id), id, COMMAND_BOUND_MS);
-  document.getElementById("quick-open")?.addEventListener("click", () => void run("workbench.action.quickOpen"));
-  document.getElementById("new-terminal")?.addEventListener("click", () => {
-    boundedCommand(() => openTerminal(folderUri), "the terminal", COMMAND_BOUND_MS).catch((error: Error) => report(link, "connected", error.message));
-  });
-  const openFile = async (resource: monaco.Uri) => {
-    const ref = await monaco.editor.createModelReference(resource);
-    showEditor().setModel(ref.object.textEditorModel);
-  };
-  link.onOpen((path) => void openFile(monaco.Uri.joinPath(folderUri, path)));
-  const explorer = document.getElementById("explorer");
-  if (explorer) await mountExplorer(explorer, folderUri, (resource) => void openFile(resource));
+  await (await workbench).startWorkbench({ link, node: target.node, folder });
 }
 
 main().catch((error: Error) => report(appLink, "error", error.message));
