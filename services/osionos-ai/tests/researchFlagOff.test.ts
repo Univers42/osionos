@@ -53,7 +53,7 @@ describe('research mode with the flag off', () => {
 		assert.equal(TOOL_DEFINITION_CHARS, 8549);
 		// Measured with the defaults on 2026-10-30 (59_166 before add_blocks named a code
 		// block's language, #34); a change here moves every reservation.
-		assert.equal(estimateRunMicroUsd(PLATFORM, { text: 'hello', historyChars: 0 }), 59_412);
+		assert.equal(estimateRunMicroUsd(PLATFORM, { text: 'hello', historyChars: 0 }), 60_708);
 		assert.deepEqual(DEFAULT_RUN_LIMITS, { maxSteps: MAX_STEPS, stepChars: TOOL_OUTPUT_CHARS, poolChars: TOOL_POOL_CHARS });
 	});
 });

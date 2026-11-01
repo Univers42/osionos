@@ -32,7 +32,7 @@ test("grid and status bar render; sandbox state is named", async ({ page }) => {
   const errors = await bootWorkbench(page);
   await expect(page.getByTestId("workbench-grid")).toBeVisible();
   await expect(page.getByTestId("workbench-statusbar")).toBeVisible();
-  await expect(page.getByTestId("sandbox-chip")).toHaveText(/Sandbox: (checking|online|stopped|disabled|unavailable)/);
+  await expect(page.getByTestId("workbench-statusbar")).toContainText(/This computer|Machine: /);
   expect(errors).toEqual([]);
 });
 
