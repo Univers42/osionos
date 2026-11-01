@@ -40,6 +40,8 @@ import { STATUS_COLUMNS, statusOf } from './bridge-status.mjs';
 
 const PROFILE_PATH = '/api/account/profile';
 const USERS_PREFIX = '/api/users/';
+const LOOKUP_MISS_LIMIT = 30;
+const LOOKUP_MISS_WINDOW_MS = 60_000;
 const PROFILE_LIMIT = 60;
 const PROFILE_WINDOW_MS = 60_000;
 const PROFILE_BODY_LIMIT = 16 * 1024;
@@ -261,10 +263,19 @@ function decodeName(pathname) {
 	}
 }
 
-async function lookupUser({ config, pg, session }, rawName, response) {
+// Only a miss counts: a profile link or a mention nearly always hits, and a scan for
+// which names exist is mostly misses (#237).
+// Caveat: this slows enumeration by one account, it does not stop it. A hit still differs
+// from a miss, because a profile has to be findable by name.
+async function noSuchUser(kv, session) {
+	await rateLimit(kv, ['user-lookup-miss', session.userId], { limit: LOOKUP_MISS_LIMIT, windowMs: LOOKUP_MISS_WINDOW_MS });
+	throw accountError(404, 'user_not_found', 'No user carries that name.');
+}
+
+async function lookupUser({ config, pg, kv, session }, rawName, response) {
 	const name = safeText(rawName, 64);
 	// A name the migration would refuse is a name nobody holds, and it answers like one.
-	if (!USERNAME_SHAPE.test(name)) throw accountError(404, 'user_not_found', 'No user carries that name.');
+	if (!USERNAME_SHAPE.test(name)) return await noSuchUser(kv, session);
 	const params = new URLSearchParams({ username: `ilike.${escapeLike(name)}`, select: CARD_SELECT, limit: '5' });
 	const rows = await pg.asService().get(`osionos_profiles?${params}`);
 	const row = (Array.isArray(rows) ? rows : [])
@@ -273,7 +284,7 @@ async function lookupUser({ config, pg, session }, rawName, response) {
 		// A name held in the username history misses this lookup exactly like a name
 		// nobody ever took, and it answers like one: the route never reads the history,
 		// so there is no "this name was taken" oracle to leak.
-		throw accountError(404, 'user_not_found', 'No user carries that name.');
+		return await noSuchUser(kv, session);
 	}
 	const subject = safeText(row.user_id, 80).toLowerCase();
 	const reduced = subject !== session.userId
@@ -331,7 +342,7 @@ export function createAccountProfileRoutes({ config, pg, kv, verifySession }) {
 				if (method === 'GET') return await getOwnProfile(pg, session, response, config);
 				if (method === 'PATCH') return await patchOwnProfile({ pg, kv }, session, request, response, config);
 			} else if (method === 'GET') {
-				return await lookupUser({ config, pg, session }, decodeName(pathname), response);
+				return await lookupUser({ config, pg, kv, session }, decodeName(pathname), response);
 			}
 			throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
 		} catch (error) {
