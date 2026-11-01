@@ -269,6 +269,8 @@ export const usePageConfigStore = create<PageConfigStore>()(
       updateConfig: async (userId, pageId, updates) => {
         const key = pageConfigKey(userId, pageId);
         const nextConfig = resolvePageConfig(get().configs[key], updates);
+        // Opening a page re-announced its settings, and each one was a PATCH (#262).
+        if (JSON.stringify(nextConfig) === JSON.stringify(resolvePageConfig(get().configs[key]))) return;
 
         set((state) => ({
           configs: {
