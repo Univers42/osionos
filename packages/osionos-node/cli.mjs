@@ -61,6 +61,7 @@ function pairedIdentity(values, env, machine, listen) {
 }
 
 function sharedSecretIdentity(values, env) {
+	if (values.node === undefined) throw new Error(`this machine is not paired yet. Run: node ${process.argv[1]} pair --bridge <bridge url> --name <name>, and keep it running until you approve it in the app`);
 	if (!isNodeId(values.node)) throw new Error('--node must be a short lowercase name, e.g. laptop');
 	const secret = env.OSIONOS_IDE_TOKEN_SECRET;
 	if (typeof secret !== 'string' || Buffer.byteLength(secret) < 32) throw new Error('OSIONOS_IDE_TOKEN_SECRET must be set to the bridge\'s IDE secret (32+ bytes)');
