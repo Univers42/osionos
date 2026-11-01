@@ -31,3 +31,17 @@ test("a table row's drag grip never covers its first cell's text", async ({ page
   });
   expect(gap).toBeGreaterThanOrEqual(2);
 });
+
+test("a table row's drag grip satisfies WCAG 2.2 target size (24x24px) and keyboard focusability", async ({ page, baseURL }) => {
+  await stubBridge(page, () => undefined);
+  await seedPage(page, baseURL, [{ id: "tasks", type: "database_inline", content: "", databaseId: "db-tasks", viewId: "v-tasks-table" }]);
+  const row = page.locator(".osionos-page tr[data-page-id]").first();
+  await row.hover();
+  const grip = row.getByRole("button", { name: "Drag to reorder record" });
+  await expect(grip).toBeVisible();
+  const box = await grip.boundingBox();
+  expect(box).toBeDefined();
+  expect(box.width).toBeGreaterThanOrEqual(24);
+  expect(box.height).toBeGreaterThanOrEqual(24);
+  expect(await grip.getAttribute("tabindex")).toBe("0");
+});
