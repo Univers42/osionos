@@ -52,6 +52,12 @@ export type MachineFrameDeps = {
 export function linkMachineFrame({ frame, ideOrigin, listen, mint, onState, identity: known, claim, readyWithin }: MachineFrameDeps) {
   let identity = known;
   let pendingNonce: string | null = null;
+  // One session request at a time. The page's `ready` and `need-session` used to run the
+  // hello, identity and mint side by side, but the bridge mints once per identity check: the
+  // second mint got 428, and its refusal told the frame to drop the session the first had just
+  // received. The terminal then never opened, depending on which request won.
+  let requesting = false;
+  let requestAgain = false;
   const cancelDeadline = readyWithin?.schedule(() => onState("no-node"), readyWithin.ms) ?? (() => {});
 
   function refuse(reason: RefusalReason): void {
@@ -61,16 +67,17 @@ export function linkMachineFrame({ frame, ideOrigin, listen, mint, onState, iden
 
   async function sendSession(): Promise<void> {
     const target = frame();
-    if (!target) return;
+    if (!target) return finishRequest(false);
     const result = await mint();
     if (result.kind === "ok") target.postMessage({ type: "osionos-ide/session", token: result.token }, ideOrigin);
     else if (result.kind === "unavailable") refuse("unavailable");
     else onState(result.kind);
+    finishRequest(result.kind === "ok");
   }
 
   async function sayHello(): Promise<void> {
     const target = frame();
-    if (!target || !identity) return;
+    if (!target || !identity) return finishRequest(false);
     pendingNonce = identity.nonce();
     target.postMessage({ type: "osionos-ide/hello", nonce: pendingNonce }, ideOrigin);
   }
@@ -79,13 +86,40 @@ export function linkMachineFrame({ frame, ideOrigin, listen, mint, onState, iden
     const nonce = pendingNonce;
     if (!identity || nonce === null) return;
     pendingNonce = null;
-    if (machineId !== identity.machineId) return refuse("mismatch");
+    if (machineId !== identity.machineId) {
+      refuse("mismatch");
+      return finishRequest(false);
+    }
     const verdict = await identity.verify(nonce, sig);
-    if (verdict === "ok") await sendSession();
-    else refuse(verdict);
+    if (verdict === "ok") return sendSession();
+    refuse(verdict);
+    finishRequest(false);
   }
 
-  const requestSession = (): Promise<void> => (identity || claim ? sayHello() : sendSession());
+  function requestSession(): Promise<void> {
+    if (requesting) {
+      requestAgain = true;
+      return Promise.resolve();
+    }
+    requesting = true;
+    return identity || claim ? sayHello() : sendSession();
+  }
+
+  /** A request that waited runs only after a success: a refusal or a step-up would repeat. */
+  function finishRequest(succeeded: boolean): void {
+    requesting = false;
+    const again = requestAgain && succeeded;
+    requestAgain = false;
+    if (again) void requestSession();
+  }
+
+  /** The person's retry starts over: an identity answer that never came must not block it. */
+  function retry(): Promise<void> {
+    requesting = false;
+    requestAgain = false;
+    pendingNonce = null;
+    return requestSession();
+  }
 
   async function onReady(node: string): Promise<void> {
     cancelDeadline();
@@ -110,5 +144,5 @@ export function linkMachineFrame({ frame, ideOrigin, listen, mint, onState, iden
     cancelDeadline();
     stopListening();
   };
-  return { stop, retry: requestSession };
+  return { stop, retry };
 }
