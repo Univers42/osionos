@@ -12,6 +12,8 @@
   font-weight: var(--osio-font-weight-semibold);
   line-height: var(--osio-line-height-tight);
   letter-spacing: var(--osio-letter-spacing-heading);
+  text-transform: var(--osio-heading-transform);
+  font-style: var(--osio-heading-style);
 }
 
 @utility osio-h2 {
@@ -20,6 +22,8 @@
   font-weight: var(--osio-font-weight-semibold);
   line-height: var(--osio-line-height-tight);
   letter-spacing: var(--osio-letter-spacing-heading);
+  text-transform: var(--osio-heading-transform);
+  font-style: var(--osio-heading-style);
 }
 
 @utility osio-h3 {
@@ -28,6 +32,8 @@
   font-weight: var(--osio-font-weight-semibold);
   line-height: var(--osio-line-height-snug);
   letter-spacing: var(--osio-letter-spacing-heading);
+  text-transform: var(--osio-heading-transform);
+  font-style: var(--osio-heading-style);
 }
 
 @utility osio-h4 {
@@ -36,6 +42,8 @@
   font-weight: var(--osio-font-weight-semibold);
   line-height: var(--osio-line-height-snug);
   letter-spacing: var(--osio-letter-spacing-heading);
+  text-transform: var(--osio-heading-transform);
+  font-style: var(--osio-heading-style);
 }
 
 /* The page title and the styleguide's display sample share this. Size stays out:

@@ -67,6 +67,9 @@ const GRAMMAR: Record<ThemeTokenKind, { test: RegExp[]; property: string; expect
   number: { test: [new RegExp(`^${NUM}$`)], property: "line-height", expects: "a plain number such as 1.4 or 600" },
   font: { test: [/^(?=.*[a-z])[\w\s"',.-]+$/i], property: "font-family", expects: "a list of font names such as \"Inter\", sans-serif" },
   shadow: { test: [/^none$/, /^(?=.*\d)[0-9a-z.,%#\s()/+-]+$/i], property: "box-shadow", expects: "box-shadow syntax such as 0 1px 2px rgb(0 0 0 / 20%)" },
+  "line-style": { test: [/^(?:solid|dashed|dotted|double|groove|ridge)$/], property: "border-style", expects: "solid, dashed, dotted, double, groove or ridge" },
+  "letter-case": { test: [/^(?:none|uppercase|lowercase|capitalize)$/], property: "text-transform", expects: "none, uppercase, lowercase or capitalize" },
+  "font-style": { test: [/^(?:normal|italic|oblique)$/], property: "font-style", expects: "normal, italic or oblique" },
   duration: { test: [/^(?:\d+\.?\d*|\.\d+)(?:ms|s)$/], property: "transition-duration", expects: "a duration such as 120ms or .2s" },
   easing: {
     test: [

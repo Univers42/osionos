@@ -22,7 +22,7 @@ export async function localNetwork(): Promise<LocalNetworkState> {
   }
 }
 
-type FrameHooks = Pick<TerminalFrameDeps, "frame" | "probeOldNode"> & { colors: () => TerminalColors; onConnected: () => void };
+type FrameHooks = Pick<TerminalFrameDeps, "frame" | "probeOldNode" | "theme"> & { colors: () => TerminalColors; onConnected: () => void };
 
 type MachineFrameHooks = FrameHooks & {
   onPhase: (phase: TerminalFramePhase) => void;
@@ -31,10 +31,10 @@ type MachineFrameHooks = FrameHooks & {
 };
 
 /** One node-served frame linked to this app: the terminal's and the editor's are the same door. */
-export function startMachineFrame({ frame, probeOldNode, colors, onConnected, onPhase, mayPromptStepUp = () => true }: MachineFrameHooks): { stop(): void; retry(): void } {
+export function startMachineFrame({ frame, probeOldNode, colors, theme, onConnected, onPhase, mayPromptStepUp = () => true }: MachineFrameHooks): { stop(): void; retry(): void } {
   let current: TerminalFramePhase = "connecting";
   const controller = createTerminalFrame({
-    frame, probeOldNode, colors, localNetwork,
+    frame, probeOldNode, colors, theme, localNetwork,
     listen: (handler) => {
       const onMessage = (event: MessageEvent) => handler(event);
       globalThis.addEventListener("message", onMessage);

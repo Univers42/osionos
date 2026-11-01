@@ -414,6 +414,15 @@
   --osio-radius-lg: calc(12px * var(--osio-radius-scale, 1));
   --osio-radius-full: 9999px;
   --osio-border-width: 1px;
+  --osio-border-style: solid;
+  --osio-focus-ring-style: solid;
+  --osio-icon-stroke: 2;
+  --osio-disabled-opacity: 0.5;
+  --osio-scrollbar-size: 8px;
+  --osio-link-underline-offset: 2px;
+  --osio-heading-transform: none;
+  --osio-heading-style: normal;
+  --osio-button-transform: none;
 
   /* Semantic radius hierarchy — map intent onto the numeric scale so every
      surface picks a radius by ROLE, not an ad-hoc `rounded-*`. */
@@ -616,8 +625,8 @@ body {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: var(--osio-scrollbar-size);
+  height: var(--osio-scrollbar-size);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -1053,4 +1062,16 @@ body {
    (h-15 in AiPromptBar), so the bar never covers the next block. */
 [data-ai-prompt-host] {
   min-height: 3.75rem;
+}
+
+/* Theme tokens with no utility behind them. In base, so a utility such as
+   border-dashed still wins. Only icons left at lucide's default stroke follow
+   the token: a component that chose its own weight chose it for a reason. */
+@layer base {
+  *, ::before, ::after { border-style: var(--osio-border-style); }
+  :focus-visible { outline-style: var(--osio-focus-ring-style); }
+  .lucide[stroke-width="2"] { stroke-width: var(--osio-icon-stroke); }
+  button { text-transform: var(--osio-button-transform); }
+  button:disabled { opacity: var(--osio-disabled-opacity); }
+  a { text-underline-offset: var(--osio-link-underline-offset); }
 }
