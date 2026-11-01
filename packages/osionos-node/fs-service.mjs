@@ -61,7 +61,7 @@ export function createFsService({ ideOrigin, ownerId, verifySession, isRevoked, 
 	async function loadRoots(record) {
 		const listed = await roots.list(record.appOrigin);
 		record.roots = new Map(listed.map((root) => [root.id, root.realpath]));
-		return Promise.all(listed.map(async (root) => ({ id: root.id, label: await label(root) })));
+		return Promise.all(listed.map(async (root) => ({ id: root.id, label: await label(root), path: root.realpath })));
 	}
 
 	function rootOf(record, id) {
@@ -195,5 +195,10 @@ export function createFsService({ ideOrigin, ownerId, verifySession, isRevoked, 
 		gate.clear();
 	}
 
-	return { upgrade, attach, killAll, counts: () => ({ pending: pending.size, sockets: live.size, sessions: gate.size(), watches: hub.count() }) };
+	// `osionos <path>` added a folder for these origins: their open frames list it again.
+	const announceRoots = (origins) => {
+		for (const record of live) if (origins.includes(record.appOrigin)) send(record, { op: 'rootsChanged' });
+	};
+
+	return { upgrade, attach, killAll, announceRoots, counts: () => ({ pending: pending.size, sockets: live.size, sessions: gate.size(), watches: hub.count() }) };
 }

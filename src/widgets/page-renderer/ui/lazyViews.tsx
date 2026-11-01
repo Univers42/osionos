@@ -128,6 +128,10 @@ export function readyPageLibraryView(): ComponentType | undefined {
 // Deep import (never a barrel): the code editor pulls the Monaco core + its
 // language grammars, a large chunk that must never leak onto the warm pane path. Only reached
 // for surface==='code' pages.
+export const LazyMachineFileTab = lazy(() =>
+  import("@/features/machines/ui/MachineFileTab").then((m) => ({ default: m.MachineFileTab })),
+);
+
 export const LazyCodeFileView = lazy(() =>
   import("@/features/ide/ui/CodeFileView").then((m) => ({ default: m.CodeFileView })),
 );

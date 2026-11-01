@@ -23,8 +23,6 @@ import { joinFrontMatter, splitFrontMatter } from "./frontMatter";
 import { metaFromPage, patchFromMeta } from "./pageFileMeta";
 import { kindOfPage } from "./pagePaths";
 import {
-  FOLDER_META_NAME,
-  PAGE_FILE_SUFFIX,
   type BlockOverlay,
   type BlockOverlayEntry,
   type PageFileMeta,
@@ -95,13 +93,7 @@ export const KNOWN_LOSSY_KEYS: readonly string[] = Object.freeze([
 ]);
 
 /** Any `.omd` name, the folder meta file included. */
-export function isPageFileName(name: string): boolean {
-  return name.toLowerCase().endsWith(PAGE_FILE_SUFFIX);
-}
-
-export function isFolderMetaName(name: string): boolean {
-  return name === FOLDER_META_NAME;
-}
+export { isFolderMetaName, isPageFileName } from "../../ide/model/pageFileNames";
 
 /** The exact bytes a page is stored as: `.omd` text for block pages and folder
  *  meta, the raw code text (no front-matter) for `surface:"code"`. Deterministic:

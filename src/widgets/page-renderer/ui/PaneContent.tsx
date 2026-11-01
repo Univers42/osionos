@@ -31,6 +31,7 @@ import {
   LazyAiHubView,
   LazyChatShell,
   LazyCodeFileView,
+  LazyMachineFileTab,
   LazyOsionosPage,
   LazyPageLibraryView,
   readyPageLibraryView,
@@ -81,6 +82,15 @@ interface PaneContentProps {
 
 const PaneContentImpl: React.FC<PaneContentProps> = ({ tab, paneId, chrome }) => {
   if (tab.kind === "home") return <HomeTabView chrome={chrome} />;
+  if (tab.kind === "machine-file") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <LazyMachineFileTab fileKey={tab.fileKey ?? ""} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
 
   if (tab.kind === "folder") return <FolderTabView tab={tab} paneId={paneId} />;
 

@@ -41,6 +41,7 @@ export const DEFAULT_AUTOMATIONS: Automation[] = [
   // A CHORD (VSCode style): Ctrl+K then Ctrl+Z, keeping Ctrl held. Step 2 carries a
   // modifier on purpose — a bare "z" would collide with typing "z" into the Search
   // box that step 1 opens. mod+k keeps working as Search; the chord costs nothing.
+  shortcut("open-folder", "Open a folder from this computer", "mod+k mod+o", "openFolder", "always"),
   shortcut("toggle-zen", "Zen mode (focus)", "mod+k mod+z", "toggleZenMode", "always"),
   shortcut("split-pane", "Split pane right", "mod+\\", "splitPane", "always"),
   // Pane zoom takes over the browser's own zoom keys, but only while a pane is

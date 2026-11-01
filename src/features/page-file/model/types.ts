@@ -14,9 +14,7 @@ import type { Block } from "@/entities/block";
 import type { PageEntry, PagePropertyEntry, PageRecurrence, PageVisibility } from "@/entities/page";
 
 /** A block page on disk: osionos's Markdown dialect + front-matter (ADR-004). */
-export const PAGE_FILE_SUFFIX = ".omd";
-/** Front-matter-only file carrying a folder page's id/icon/cover/properties. */
-export const FOLDER_META_NAME = "_folder.omd";
+export { FOLDER_META_NAME, PAGE_FILE_SUFFIX } from "../../ide/model/pageFileNames";
 
 /** How a page occupies the workspace folder. */
 export type PageFileKind = "page" | "code" | "dir";

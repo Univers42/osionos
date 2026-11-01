@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { useMachineExplorer } from "@/features/machines/model/machineExplorerStore";
 import { useUIStore, type ActivePanel } from "@/shared/config/uiStore";
 
 /** Opens `panel` (docking the sidebar if it was hidden) and moves keyboard focus
@@ -19,6 +20,13 @@ export function openAndFocusPanel(panel: ActivePanel): void {
   if (ui.sidebarMode === "hidden") ui.toggleDocked();
   ui.expandToPanel(panel);
   focusWhenReady(panel, FOCUS_ATTEMPTS);
+}
+
+/** File > Open Folder, its shortcut and the palette: the Explorer opens on the machine section and
+ *  that section's frame shows the picker. */
+export function openMachineFolder(): void {
+  openAndFocusPanel("files");
+  useMachineExplorer.getState().requestOpenFolder();
 }
 
 /** Ponytail: a panel opened for the first time is a lazy chunk, so its first

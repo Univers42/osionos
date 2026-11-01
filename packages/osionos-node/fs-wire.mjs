@@ -51,7 +51,6 @@ const APP_ORIGIN = /^(?:https?:\/\/[A-Za-z0-9.-]{1,253}(?::\d{1,5})?|app:\/\/[a-
 const ROOT_ID = /^[a-f0-9]{16}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
-// eslint-disable-next-line no-control-regex -- a NUL in a path is refused, never truncated
 const NUL = /\u0000/;
 
 function parseObject(text) {
