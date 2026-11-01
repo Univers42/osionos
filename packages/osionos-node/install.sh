@@ -43,15 +43,19 @@ fi
 SRC=$HOME_DIR/src
 [ -f "$SRC/packages/osionos-node/cli.mjs" ] || fail "$SRC is not an osionos checkout"
 
-if [ ! -f "$SRC/dist-ide/index.html" ]; then
+# The IDE page and the in-place terminal page are two builds.
+build_page() {
+    [ ! -f "$SRC/$1/index.html" ] || return 0
     if command -v pnpm >/dev/null; then
-        (cd "$SRC" && pnpm install --frozen-lockfile && pnpm exec vite build --config vite.ide.config.ts)
+        (cd "$SRC" && pnpm install --frozen-lockfile && pnpm exec vite build --config "$2")
     elif command -v docker >/dev/null; then
-        (cd "$SRC" && bash scripts/docker-run.sh build-ide)
+        (cd "$SRC" && bash scripts/docker-run.sh "$3")
     else
-        fail "building the IDE page needs pnpm or docker"
+        fail "building the pages needs pnpm or docker"
     fi
-fi
+}
+build_page dist-ide vite.ide.config.ts build-ide
+build_page build/terminal vite.terminal.config.ts build-terminal
 
 pin() {
     node -e "const s=require('$SRC/packages/osionos-node/server-pin.json').server;console.log(eval(process.argv[1]))" "$1"
