@@ -13,6 +13,8 @@ import { LOCAL_NODE_ORIGIN, READY_TIMEOUT_MS } from "@/features/machines/model/m
 import { OLD_NODE_PROBE_URL, TERMINAL_PAGE_URL, terminalFramePanel, type TerminalFramePanel } from "@/features/machines/model/terminalFrame";
 import { startTerminalFrame, useTerminalFrameStore } from "@/features/machines/model/terminalFrameStore";
 import { openSettings } from "@/features/settings/model/settingsNav";
+import { SudoPrompt } from "@/features/settings/ui/sudo/SudoPrompt";
+import { useSudoPromptStore } from "@/features/settings/ui/sudo/sudoPromptModel";
 import { dockColors } from "./dockColors";
 import { CODE_BUTTON, StateBlock } from "./ExplorerStates";
 
@@ -41,6 +43,7 @@ function probeOldNode(): Promise<boolean> {
 
 const PanelActions: React.FC<{ panel: TerminalFramePanel; onTryAgain: () => void }> = ({ panel, onTryAgain }) => (
   <>
+    {panel.confirm && <Button size="sm" tone="primary" className={CODE_BUTTON} onClick={() => useSudoPromptStore.getState().show()}>Confirm it&rsquo;s me</Button>}
     {panel.download && (
       <Button size="sm" tone="primary" className={CODE_BUTTON} onClick={() => globalThis.open(panel.download ?? "", "_blank", "noopener")}>Download osionos Connector</Button>
     )}
@@ -83,7 +86,9 @@ export const NodeVsCodeTerminal: React.FC = () => {
         allow="local-network-access; clipboard-read; clipboard-write"
         className="absolute inset-0 h-full w-full border-0 bg-[var(--osio-code-bg)]"
       />
-      {panel && <FramePanel panel={panel} waiting={phase === "idle" || phase === "connecting" || phase === "step-up"} onTryAgain={() => setAttempt((n) => n + 1)} />}
+      {panel && <FramePanel panel={panel} waiting={phase === "idle" || phase === "connecting"} onTryAgain={() => setAttempt((n) => n + 1)} />}
+      {/* The store opens the emailed-code prompt on a step-up; it renders only where it is mounted. */}
+      {phase === "step-up" && <SudoPrompt />}
     </div>
   );
 };
