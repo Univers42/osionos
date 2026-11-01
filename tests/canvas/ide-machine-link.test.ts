@@ -299,3 +299,59 @@ test("stop cancels the deadline too", () => {
   w.link.stop();
   assert.equal(w.deadline()?.cancelled, true);
 });
+
+// The bridge mints once per identity check, so two runs side by side got 428 on the second,
+// whose refusal told the frame to drop the session the first had just delivered.
+function identityWorld() {
+  const posted: unknown[] = [];
+  const states: string[] = [];
+  let handler: (event: { data: unknown; origin: string; source: unknown }) => void = () => {};
+  let mints = 0;
+  let nextNonce = 0;
+  let active = 0;
+  let overlapped = false;
+  const frame = { postMessage: (message: unknown) => posted.push(message) };
+  const link = linkMachineFrame({
+    frame: () => frame,
+    ideOrigin: IDE,
+    listen: (next) => { handler = next; return () => {}; },
+    mint: async () => {
+      mints += 1;
+      active += 1;
+      overlapped ||= active > 1;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      active -= 1;
+      return { kind: "ok", token: TOKEN };
+    },
+    onState: (state) => states.push(state),
+    identity: { machineId: MACHINE, nonce: () => `n${(nextNonce += 1)}`, verify: async () => "ok" },
+  });
+  const deliver = (data: unknown) => handler({ data, origin: IDE, source: frame });
+  const answerHellos = async () => {
+    for (let step = 0; step < 8; step += 1) {
+      deliver({ type: "osionos-ide/identity", machineId: MACHINE, sig: SIG });
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+  };
+  const sessions = () => posted.filter((message) => (message as { type: string }).type === "osionos-ide/session").length;
+  const refusals = () => posted.filter((message) => (message as { type: string }).type === "osionos-ide/refused").length;
+  return { deliver, answerHellos, sessions, refusals, states, link, mints: () => mints, overlapped: () => overlapped };
+}
+
+test("ready and need-session together run one after the other, and nothing is refused", async () => {
+  const w = identityWorld();
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  w.deliver({ type: "osionos-ide/need-session" });
+  await w.answerHellos();
+  assert.equal(w.overlapped(), false);
+  assert.equal(w.refusals(), 0);
+  assert.equal(w.sessions(), 2);
+});
+
+test("retry starts over when an identity answer never came", async () => {
+  const w = identityWorld();
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.link.retry();
+  await w.answerHellos();
+  assert.equal(w.sessions(), 1);
+});
