@@ -16,6 +16,7 @@ import { framesIntersect } from "../model/geometry";
 import type { CanvasFrame } from "../model/types";
 import type { CanvasStoreApi } from "../store/canvasStore";
 import type { CanvasInteractionStore } from "./interactionStore";
+import { toCssPx } from "@/shared/lib/dom/cssZoom";
 
 function rectFromPoints(a: { x: number; y: number }, b: { x: number; y: number }): CanvasFrame {
   return {
@@ -43,8 +44,8 @@ export function useCanvasMarquee(
     const rect = stage.getBoundingClientRect();
     const startScrollY = globalThis.scrollY;
     const toFrame = (clientX: number, clientY: number) => ({
-      x: Math.max(0, (clientX - rect.left) / Math.max(scaleRef.current, 0.01)),
-      y: Math.max(0, clientY - rect.top + (globalThis.scrollY - startScrollY)),
+      x: Math.max(0, toCssPx(clientX - rect.left, stage) / Math.max(scaleRef.current, 0.01)),
+      y: Math.max(0, toCssPx(clientY - rect.top, stage) + (globalThis.scrollY - startScrollY)),
     });
     const origin = toFrame(event.clientX, event.clientY);
     const { dispatch } = store.getState();

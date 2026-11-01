@@ -36,6 +36,7 @@ import {
   applyBlockTypeChange,
   canEditBody,
 } from "./pageStore.helpers";
+import { blockUpdateIsNoop, persistedValueIsUnchanged } from "./pageStore.blockNoop";
 import { replacePage } from "./replacePage";
 import { patchActivePageSlice } from "./activePageMetadata";
 import {
@@ -249,6 +250,7 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
     timed("updateBlock", () => {
       const page = get().pageById(pageId);
       if (!canEditBody(page, getCurrentPageAccessContext())) return;
+      if (page?.content && blockUpdateIsNoop(page.content, blockId, updates)) return;
 
       set((s) => {
         const next = replacePage(s, pageId, withTimestamp(applyBlockUpdate(blockId, updates)));
@@ -373,6 +375,7 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
     timed("updatePageContent", () => {
       const page = get().pageById(pageId);
       if (!canEditBody(page, getCurrentPageAccessContext())) return;
+      if (page?.content && persistedValueIsUnchanged(page.content, blocks)) return;
 
       set((s) => {
         const next = replacePage(s, pageId, withTimestamp(applyPageContentUpdate(blocks)));

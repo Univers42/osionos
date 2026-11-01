@@ -759,10 +759,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       const sourceCaret = inlineSourceCaretOffset(root, caret);
       const auto = autoformatInlineMarkdown(source, sourceCaret);
       if (auto) {
-        canonicalSourceRef.current = auto.source;
         root.innerHTML = getRenderedInlineHtml(auto.source, true);
         setInlineCaretAfterStyledBoundary(root, auto.caret);
-        scheduleChange(auto.source);
+        // Emit what the DOM reads back, not auto.source: `ab` renders to the <code>
+        // that reads as [code]ab[/code], and that mismatch made the content effect
+        // re-render, wiping the caret's carrier so spaces typed INTO the code (#258).
+        const styledSource = normalizeInlineSource(readInlineEditorDomState(root).source);
+        canonicalSourceRef.current = styledSource;
+        scheduleChange(styledSource);
         inputHandledRef.current = true;
         requestAnimationFrame(updateSelectionSnapshot);
         return;

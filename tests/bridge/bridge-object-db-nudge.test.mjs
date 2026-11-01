@@ -48,7 +48,7 @@ describe('the object-database nudge', () => {
 	it('carries the id of the tab that pushed', async () => {
 		const mock = createPostgrestMock();
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			const answer = await send(base, '/api/object-databases', asB, post({ dbKey: 'db-1', title: 'Catalog', state: {}, origin: 'a1b2c3d4e5f6a1b2c3d4e5f6' }));
+			const answer = await send(base, '/api/object-databases', asB, post({ dbKey: 'db-1', title: 'Catalog', state: { databases: {} }, origin: 'a1b2c3d4e5f6a1b2c3d4e5f6' }));
 			assert.equal(answer.status, 200, answer.text);
 		});
 		const event = await nextPublish(1);
@@ -60,8 +60,8 @@ describe('the object-database nudge', () => {
 	it('publishes no origin for a push that names none, so every tab refetches as before', async () => {
 		const mock = createPostgrestMock();
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			await send(base, '/api/object-databases', asB, post({ dbKey: 'db-2', title: 'Catalog', state: {} }));
-			await send(base, '/api/object-databases', asB, post({ dbKey: 'db-3', title: 'Catalog', state: {}, origin: { not: 'text' } }));
+			await send(base, '/api/object-databases', asB, post({ dbKey: 'db-2', title: 'Catalog', state: { databases: {} } }));
+			await send(base, '/api/object-databases', asB, post({ dbKey: 'db-3', title: 'Catalog', state: { databases: {} }, origin: { not: 'text' } }));
 		});
 		assert.deepEqual((await nextPublish(2)).payload, { dbKey: 'db-2', userId: IDS.userB });
 		assert.deepEqual((await nextPublish(3)).payload, { dbKey: 'db-3', userId: IDS.userB });
@@ -70,7 +70,7 @@ describe('the object-database nudge', () => {
 	it('bounds the echoed id to 64 characters', async () => {
 		const mock = createPostgrestMock();
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			await send(base, '/api/object-databases', asB, post({ dbKey: 'db-4', title: 'Catalog', state: {}, origin: 'x'.repeat(500) }));
+			await send(base, '/api/object-databases', asB, post({ dbKey: 'db-4', title: 'Catalog', state: { databases: {} }, origin: 'x'.repeat(500) }));
 		});
 		assert.equal((await nextPublish(4)).payload.origin, 'x'.repeat(64));
 	});

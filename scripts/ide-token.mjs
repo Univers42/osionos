@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/30 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,6 +20,7 @@ import { isValidIdeUsername, usernameFromToken } from './ide-username.mjs';
 
 export const IDE_TOKEN_VERSION = 'osionos_ide1';
 export const PREVIEW_CAP_VERSION = 'pc1';
+export const NODE_CAP_VERSION = 'nc1';
 export const IDE_TOKEN_MAX_TTL_SECONDS = 900;
 export const IDE_SECRET_MIN_BYTES = 32;
 
@@ -29,6 +30,9 @@ const AUDIENCE = 'osionos-ide';
 const SECRET_MISSING = 'The IDE token secret is not configured.';
 const TOKEN_INVALID = 'IDE token is invalid.';
 const CAP_INVALID = 'Preview link is invalid.';
+const NODE_CAP_INVALID = 'Machine access is invalid.';
+// A node id lands in a URL path and a cookie name's scope: lowercase, no separators to misread.
+const NODE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 function fail(message, status) {
 	return Object.assign(new Error(message), { status });
@@ -52,6 +56,14 @@ function requireKey(secret) {
 
 function previewKey(secret) {
 	return createHmac('sha256', requireKey(secret)).update('osio-ide-preview-v1').digest();
+}
+
+function nodeKey(secret) {
+	return createHmac('sha256', requireKey(secret)).update('osio-ide-node-v1').digest();
+}
+
+export function isNodeId(value) {
+	return typeof value === 'string' && NODE_ID.test(value);
 }
 
 function requireIds(userId, workspaceId) {
@@ -97,8 +109,13 @@ export function ideTokenSecret(env) {
 	return value;
 }
 
-export function signIdeToken({ userId, workspaceId, secret, username, now = Date.now(), ttlSeconds = 900, jti = randomUUID() }) {
+// "node" is the only scope: a token that may open a connected machine (devil verdict
+// 2026-10-30, C10). The bridge grants it only to a session with a fresh step-up.
+const SCOPES = new Set(['node']);
+
+export function signIdeToken({ userId, workspaceId, secret, username, scope, now = Date.now(), ttlSeconds = 900, jti = randomUUID() }) {
 	requireIds(userId, workspaceId);
+	if (scope !== undefined && !SCOPES.has(scope)) throw fail('scope must be "node" or absent.', 400);
 	const key = requireKey(secret);
 	const iat = Math.floor(now / 1000);
 	const ttl = Number.isFinite(ttlSeconds)
@@ -107,19 +124,21 @@ export function signIdeToken({ userId, workspaceId, secret, username, now = Date
 	const exp = iat + ttl;
 	// `un` rides only when it is already valid; an old reader ignores it and a new reader falls back to coder.
 	const un = isValidIdeUsername(username) ? { un: username } : {};
-	const token = encode(IDE_TOKEN_VERSION, key, { iss: ISSUER, aud: AUDIENCE, sub: userId, ws: workspaceId, ...un, iat, exp, jti });
+	const scp = scope ? { scp: scope } : {};
+	const token = encode(IDE_TOKEN_VERSION, key, { iss: ISSUER, aud: AUDIENCE, sub: userId, ws: workspaceId, ...un, ...scp, iat, exp, jti });
 	return { token, expiresAt: new Date(exp * 1000).toISOString(), exp };
 }
 
 export function verifyIdeToken(token, { secret }, now = Date.now()) {
 	const nowSec = Math.floor(now / 1000);
 	const payload = decodeVerified(token, IDE_TOKEN_VERSION, requireKey(secret), TOKEN_INVALID);
-	const { iss, aud, sub, ws, iat, exp, un } = payload;
+	const { iss, aud, sub, ws, iat, exp, un, scp } = payload;
 	if (iss !== ISSUER || aud !== AUDIENCE || !isUuid(sub) || !isUuid(ws)) throw fail(TOKEN_INVALID, 401);
 	if (!Number.isInteger(iat) || !Number.isInteger(exp) || iat > nowSec) throw fail(TOKEN_INVALID, 401);
 	if (exp - iat < 1 || exp - iat > IDE_TOKEN_MAX_TTL_SECONDS) throw fail(TOKEN_INVALID, 401);
 	if (exp <= nowSec) throw fail('IDE token has expired.', 401);
-	return { userId: sub, workspaceIds: [ws], roles: {}, isAdmin: false, exp, username: usernameFromToken(un) };
+	if (scp !== undefined && !SCOPES.has(scp)) throw fail(TOKEN_INVALID, 401);
+	return { userId: sub, workspaceIds: [ws], roles: {}, isAdmin: false, iat, exp, username: usernameFromToken(un), scope: scp ?? null };
 }
 
 export function signPreviewCap({ userId, workspaceId, port, secret, parentExp, now = Date.now() }) {
@@ -139,4 +158,25 @@ export function verifyPreviewCap(cap, { secret }, now = Date.now()) {
 	if (!isUuid(sub) || !isUuid(ws) || !isPort(port) || !Number.isInteger(exp)) throw fail(CAP_INVALID, 401);
 	if (exp <= nowSec) throw fail('Preview link has expired.', 410);
 	return { userId: sub, workspaceId: ws, port, exp };
+}
+
+// The browser's credential for one connected machine (devil verdict 2026-10-30, C6): it rides an
+// HttpOnly cookie on the IDE origin, so it is bound to the user and the node and expires with the
+// IDE token that asked for it.
+export function signNodeCap({ userId, node, secret, parentExp, now = Date.now() }) {
+	if (!isUuid(userId)) throw fail('userId must be a UUID.', 400);
+	if (!isNodeId(node)) throw fail('node must be a short lowercase name.', 400);
+	const key = nodeKey(secret);
+	const nowSec = Math.floor(now / 1000);
+	const exp = Math.min(nowSec + IDE_TOKEN_MAX_TTL_SECONDS, parentExp);
+	if (!Number.isInteger(exp) || exp <= nowSec) throw fail('Machine access has expired.', 401);
+	return { cap: encode(NODE_CAP_VERSION, key, { sub: userId, node, iat: nowSec, exp }), exp };
+}
+
+export function verifyNodeCap(cap, { secret }, now = Date.now()) {
+	const nowSec = Math.floor(now / 1000);
+	const { sub, node, iat, exp } = decodeVerified(cap, NODE_CAP_VERSION, nodeKey(secret), NODE_CAP_INVALID);
+	if (!isUuid(sub) || !isNodeId(node) || !Number.isInteger(iat) || !Number.isInteger(exp)) throw fail(NODE_CAP_INVALID, 401);
+	if (exp <= nowSec) throw fail('Machine access has expired.', 401);
+	return { userId: sub, node, iat, exp };
 }

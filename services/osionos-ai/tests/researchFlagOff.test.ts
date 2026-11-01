@@ -50,10 +50,11 @@ describe('research mode with the flag off', () => {
 			emit: async () => {},
 		});
 		assert.ok(Object.keys(run.tools ?? {}).length > 4, 'the chat keeps its whole read set');
-		assert.equal(TOOL_DEFINITION_CHARS, 7710);
+		assert.equal(TOOL_DEFINITION_CHARS, 8549);
 		// Measured with the defaults on 2026-10-30 (59_166 before add_blocks named a code
-		// block's language, #34); a change here moves every reservation.
-		assert.equal(estimateRunMicroUsd(PLATFORM, { text: 'hello', historyChars: 0 }), 59_412);
+		// block's language, #34; 59_412 before update_page_settings, 4c64a630 #248); a change
+		// here moves every reservation.
+		assert.equal(estimateRunMicroUsd(PLATFORM, { text: 'hello', historyChars: 0 }), 60_708);
 		assert.deepEqual(DEFAULT_RUN_LIMITS, { maxSteps: MAX_STEPS, stepChars: TOOL_OUTPUT_CHARS, poolChars: TOOL_POOL_CHARS });
 	});
 });

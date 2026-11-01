@@ -1,0 +1,141 @@
+// The core behind VS Code's terminal on the desktop's local shell (groot ADR 0038, ADR 0039): it
+// starts the pty at VS Code's size, then carries keystrokes, resizes and render acknowledgements
+// (C7 flow control) on that pty's own port, straight to the pty host. A shell that exits, a refused
+// create or a failed one ends cleanly.
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { MAX_PTY_WRITE } from "../../src/features/ide/model/localPty.ts";
+import { createLocalPtyProcess } from "../../src/features/ide/model/localPtyProcess.ts";
+import { fakeTerminalPty } from "./support/local-pty-fakes.ts";
+
+function world(created: Array<string | null | Error> = ["p1"]) {
+  const pty = fakeTerminalPty(created);
+  const out: string[] = [];
+  const exits: number[] = [];
+  const proc = createLocalPtyProcess(pty.api, { data: (d) => out.push(d), exit: (c) => exits.push(c) });
+  return { pty, proc, out, exits };
+}
+
+test("starts the shell at the size VS Code asked for and streams its output", async () => {
+  const w = world();
+  assert.equal(await w.proc.start(120, 30), "started");
+  assert.deepEqual(w.pty.calls, [["create", 120, 30]]);
+  w.pty.emit("p1", "hello");
+  assert.deepEqual(w.out, ["hello"]);
+});
+
+test("keystrokes go on the pty's port in chunks the pty host accepts", async () => {
+  const w = world();
+  await w.proc.start(80, 24);
+  w.proc.input("ls\r");
+  w.proc.input("x".repeat(MAX_PTY_WRITE * 2 + 5));
+  assert.deepEqual(w.pty.of("write").map((c) => (c[2] as string).length), [3, MAX_PTY_WRITE, MAX_PTY_WRITE, 5]);
+});
+
+test("resize and acknowledgements reach the pty's port", async () => {
+  const w = world();
+  await w.proc.start(80, 24);
+  w.proc.resize(100, 40);
+  w.proc.ack(4096);
+  w.proc.ack(0);
+  assert.deepEqual(w.pty.calls.slice(1), [["resize", "p1", 100, 40], ["ack", "p1", 4096]]);
+});
+
+test("sizes reach the shell as integers from 1 to 1000", async () => {
+  const w = world();
+  await w.proc.start(80.6, 0);
+  w.proc.resize(1001, 12.4);
+  assert.deepEqual(w.pty.calls, [["create", 80, 1], ["resize", "p1", 1000, 12]]);
+});
+
+// VS Code marks the process ready on the next tick and sends keystrokes from then on, before the
+// desktop has answered create.
+test("what is typed and the size set while the shell starts reach it once it runs", async () => {
+  const w = world();
+  const started = w.proc.start(80, 24);
+  w.proc.input("e");
+  w.proc.input("cho hi\r");
+  w.proc.resize(100, 40);
+  w.proc.ack(10);
+  assert.deepEqual(w.pty.calls, [["create", 80, 24]]);
+  await started;
+  assert.deepEqual(w.pty.calls.slice(1), [["resize", "p1", 100, 40], ["write", "p1", "echo hi\r"]]);
+});
+
+test("a size set while starting that matches the created one sends no resize", async () => {
+  const w = world();
+  const started = w.proc.start(80, 24);
+  w.proc.resize(80, 24);
+  await started;
+  assert.deepEqual(w.pty.calls, [["create", 80, 24]]);
+});
+
+test("a refused create reports it and drops what was typed meanwhile", async () => {
+  const w = world([null]);
+  const started = w.proc.start(80, 24);
+  w.proc.input("typed early");
+  assert.equal(await started, "refused");
+  w.proc.input("x");
+  assert.equal(w.pty.calls.length, 1);
+});
+
+test("a create that fails reports it, never throws", async () => {
+  const w = world([new Error("pty host gone")]);
+  assert.equal(await w.proc.start(80, 24), "failed");
+  w.proc.input("x");
+  assert.equal(w.pty.calls.length, 1);
+});
+
+test("the shell's exit, sent on its port, ends the process once and closes the port", async () => {
+  const w = world();
+  await w.proc.start(80, 24);
+  w.pty.exit("p1", 0);
+  w.pty.exit("p1", 0);
+  assert.deepEqual(w.exits, [0]);
+  assert.equal(w.pty.listening(), 0);
+  w.proc.input("after");
+  w.proc.ack(10);
+  w.proc.shutdown();
+  assert.deepEqual(w.pty.calls, [["create", 80, 24], ["close", "p1"]]);
+});
+
+test("output that is not a string, and unknown ops, never reach VS Code", async () => {
+  const w = world();
+  await w.proc.start(80, 24);
+  w.pty.emit("p1", 42 as unknown as string);
+  w.pty.exit("p1", "0" as unknown as number);
+  assert.deepEqual([w.out, w.exits], [[], []]);
+});
+
+test("shutdown kills the shell and closes its port", async () => {
+  const w = world();
+  await w.proc.start(80, 24);
+  w.proc.shutdown();
+  assert.deepEqual(w.pty.calls.slice(1), [["kill", "p1"], ["close", "p1"]]);
+  assert.equal(w.pty.listening(), 0);
+  w.proc.shutdown();
+  assert.equal(w.pty.of("kill").length, 1);
+});
+
+test("a shell created after shutdown (VS Code closed it mid-start) is killed at once", async () => {
+  const w = world();
+  const answer = w.pty.deferCreate();
+  const started = w.proc.start(80, 24);
+  w.proc.shutdown();
+  answer("p7");
+  assert.equal(await started, "failed");
+  assert.deepEqual(w.pty.calls, [["create", 80, 24], ["kill", "p7"], ["close", "p7"]]);
+  assert.equal(w.pty.listening(), 0);
+});
+
+// T7: the shell (or a host behind ssh) asks for the clipboard; VS Code never sees the query, and the
+// pty host is acknowledged for what VS Code will not render, so flow control does not drift.
+test("an OSC 52 clipboard read in the shell's output never reaches VS Code", async () => {
+  const w = world();
+  await w.proc.start(80, 24);
+  w.pty.emit("p1", "a\x1b]52;c;?");
+  w.pty.emit("p1", "\x07b\x1b]52;c;aGk=\x07");
+  assert.deepEqual(w.out, ["a", "\x18b\x1b]52;c;aGk=\x07"]);
+  assert.deepEqual(w.pty.of("ack"), [["ack", "p1", 8]]);
+});

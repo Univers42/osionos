@@ -15,7 +15,9 @@ import { Folder, CornerDownRight, ArrowUpRight, Link2, AtSign, Sparkles, Link as
 
 import { usePageStore } from "@/store/usePageStore";
 import { useBacklinks } from "../model/useBacklinks";
+import { usePageActions } from "../model/usePageActions";
 import { useRelatedPages } from "../model/useRelatedPages";
+import { splitRelatedPages } from "../model/splitRelatedPages";
 import { backlinkRefs, childRefs, mergeRefs, parentRef, withPageMention, type PageRef } from "./pageConnections.helpers";
 
 interface Props {
@@ -39,6 +41,8 @@ export const PageConnections: React.FC<Props> = ({ pageId, workspaceId }) => {
   const wsPages = usePageStore((s) => s.pages[workspaceId]);
   const { linked, mentions } = useBacklinks(pageId);
   const { state: relatedState, related } = useRelatedPages(pageId);
+  // A suggestion's only action is an edit, which a locked page refuses (#265).
+  const pageLocked = usePageActions(pageId).config.locked;
   const data = useMemo(() => {
     const all = wsPages ?? [];
     const page = all.find((candidate) => candidate._id === pageId);
@@ -68,7 +72,7 @@ export const PageConnections: React.FC<Props> = ({ pageId, workspaceId }) => {
     });
   }
 
-  const suggestions = related.filter((page) => !page.linked);
+  const { related: linkedRelated, suggestions } = splitRelatedPages(related);
   const nothing =
     !data.parent &&
     data.children.length === 0 &&
@@ -83,23 +87,23 @@ export const PageConnections: React.FC<Props> = ({ pageId, workspaceId }) => {
       {data.parent ? <ConnRow icon={<Folder size={12} />} label="In folder" refs={[data.parent]} onGo={go} /> : null}
       {data.children.length ? <ConnRow icon={<CornerDownRight size={12} />} label="Contains" refs={data.children} onGo={go} /> : null}
       {data.backlinks.length ? <ConnRow icon={<Link2 size={12} />} label="Linked from" refs={data.backlinks} onGo={go} /> : null}
-      {data.mentionRefs.length ? <ConnRow icon={<AtSign size={12} />} label="Mentions" refs={data.mentionRefs} onGo={go} /> : null}
+      {data.mentionRefs.length ? <ConnRow icon={<AtSign size={12} />} label="Unlinked mentions" refs={data.mentionRefs} onGo={go} /> : null}
       {relatedState === "loading" ? (
         <ConnRow icon={<Sparkles size={12} />} label="Related pages" refs={[]} status="Looking for related pages…" />
       ) : null}
       {relatedState === "error" ? (
         <ConnRow icon={<Sparkles size={12} />} label="Related pages" refs={[]} status="Related pages are not available." />
       ) : null}
-      {related.length ? (
+      {linkedRelated.length ? (
         <ConnRow
           icon={<Sparkles size={12} />}
           label="Related pages"
-          refs={related.map((page) => ({ id: page.pageId, title: page.title }))}
+          refs={linkedRelated.map((page) => ({ id: page.pageId, title: page.title }))}
           onGo={go}
           onLink={(id) => link(id)}
         />
       ) : null}
-      {suggestions.length ? (
+      {suggestions.length && !pageLocked ? (
         <ConnRow
           icon={<LinkIcon size={12} />}
           label="Suggested links"
