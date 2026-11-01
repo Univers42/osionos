@@ -79,6 +79,8 @@ export type ThisComputerPanel = {
 };
 
 const PANEL_TITLE = "Terminal on this computer";
+const NO_NODE_DETAIL = "Start it on this computer, then check again. If it is running and still not found, it is older than this app: "
+  + "stop it, update ~/.osionos/src to the current osionos and rebuild its IDE page there (pnpm build:ide), then start it again.";
 const PANEL: Record<WindowPhase, ThisComputerPanel> = {
   idle: { title: PANEL_TITLE, detail: "Your terminal and your files run on this computer, through its osionos-node, in their own window.", action: "open", command: false },
   connecting: { title: PANEL_TITLE, detail: "Opening this computer's window…", action: "show", command: false },
@@ -89,7 +91,7 @@ const PANEL: Record<WindowPhase, ThisComputerPanel> = {
   mismatch: { title: PANEL_TITLE, detail: "The program on this computer's osionos-node port is not the machine it claims to be. Restart osionos-node, then check again.", action: "check-again", command: false },
   unavailable: { title: PANEL_TITLE, detail: "osionos could not check this computer's machine against your account. Check again in a moment.", action: "check-again", command: false },
   "other-account": { title: "This computer is paired to another account", detail: "This computer's osionos-node belongs to another osionos account. Pair this computer with yours in Settings > Machines.", action: "settings", command: false },
-  "no-node": { title: "osionos-node is not running on this computer", detail: "Start it on this computer, then check again.", action: "check-again", command: true },
+  "no-node": { title: "osionos-node is not running on this computer", detail: NO_NODE_DETAIL, action: "check-again", command: true },
 };
 
 /** What the terminal panel says while one click opens this computer's node (2026-11-01). */
@@ -120,6 +122,13 @@ export function pairCommand(bridgeUrl: string, name: string): string {
   return `osionos-node pair --bridge ${shellWord(bridgeUrl)} --name ${shellWord(name)}`;
 }
 
+// The layout of a computer set up by hand (~/.osionos: src is an osionos checkout with dist-ide
+// built, server/<VS Code version> the unpacked pinned server): no installer exists yet. The cli's
+// --client defaults to src/dist-ide, so the command does not name it.
+const LOCAL_CLI = "~/.osionos/src/packages/osionos-node/cli.mjs";
+const LOCAL_SERVER = "~/.osionos/server/1.138.0";
+
+/** Starts osionos-node from the ~/.osionos install; `~` stays unquoted so the shell expands it. */
 export function serveCommand(appOrigin: string): string {
-  return `osionos-node serve --server <lib dir> --app-origin ${shellWord(appOrigin)}`;
+  return `node ${LOCAL_CLI} serve --server ${LOCAL_SERVER} --app-origin ${shellWord(appOrigin)}`;
 }

@@ -16,6 +16,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import type { Machine } from "../../src/features/machines/api/machinesApi.ts";
 import {
@@ -70,7 +71,28 @@ test("the commands name this bridge and this app, and quote a name the shell wou
   assert.equal(pairCommand("https://b.example", "my laptop"), "osionos-node pair --bridge https://b.example --name 'my laptop'");
   assert.equal(shellWord("it's"), "'it'\\''s'");
   assert.equal(shellWord(""), "''");
-  assert.equal(serveCommand("https://app.example"), "osionos-node serve --server <lib dir> --app-origin https://app.example");
+});
+
+test("the start command is pasteable: the ~/.osionos install's real cli, server and the pinned VS Code", () => {
+  assert.equal(
+    serveCommand("https://app.example"),
+    "node ~/.osionos/src/packages/osionos-node/cli.mjs serve --server ~/.osionos/server/1.138.0 --app-origin https://app.example",
+  );
+  assert.doesNotMatch(serveCommand("https://app.example"), /[<>]/);
+  const pin = JSON.parse(readFileSync(new URL("../../packages/osionos-node/server-pin.json", import.meta.url), "utf8"));
+  assert.match(serveCommand("x"), new RegExp(`/server/${pin.server.vscode.replace(/\./g, "\\.")} `));
+});
+
+// For a node installed before local=1, whose page reads only `node`: the id it should name.
+test("the node hint is the machine /machine would open, else the default, else the only one", () => {
+  assert.equal(localNodeHint([A, B]), B.id);
+  assert.equal(localNodeHint([A]), A.id);
+  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false)]), "m-cccccccccccccccc");
+  assert.equal(localNodeHint([A, machine("m-cccccccccccccccc", false, true)]), A.id);
+  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false), machine("m-dddddddddddddddd", false, true)]), "m-dddddddddddddddd");
+  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false), machine("m-dddddddddddddddd", false)]), null);
+  assert.equal(localNodeHint([]), null);
+  assert.equal(localNodeHint(null), null);
 });
 
 // For a node installed before local=1, whose page reads only `node`: the id it should name.
@@ -109,7 +131,12 @@ test("the terminal panel speaks of this computer in every state of its window", 
 });
 
 test("no node shows the serve command and Check again; another account leads to pairing this computer", () => {
-  assert.deepEqual(thisComputerPanel("no-node"), { title: "osionos-node is not running on this computer", detail: "Start it on this computer, then check again.", action: "check-again", command: true });
+  assert.deepEqual(thisComputerPanel("no-node"), {
+    title: "osionos-node is not running on this computer",
+    detail: "Start it on this computer, then check again. If it is running and still not found, it is older than this app: "
+      + "stop it, update ~/.osionos/src to the current osionos and rebuild its IDE page there (pnpm build:ide), then start it again.",
+    action: "check-again", command: true,
+  });
   assert.deepEqual(thisComputerPanel("other-account"), { title: "This computer is paired to another account", detail: "This computer's osionos-node belongs to another osionos account. Pair this computer with yours in Settings > Machines.", action: "settings", command: false });
   assert.equal(thisComputerPanel("mismatch").action, "check-again");
   assert.equal(thisComputerPanel("unavailable").action, "check-again");
