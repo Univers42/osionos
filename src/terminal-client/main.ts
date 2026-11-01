@@ -1,8 +1,10 @@
-// The terminal page (groot ADR 0038, ADR 0039): VS Code's own terminal panel (tabs, toolbar, find,
-// splits, several terminals), drawn in the app's dock, on this computer's shells. It runs on app://terminal, in its own renderer process. It reaches
-// the shell only through the control port the panel hands to the iframe it rendered (devil amendment
-// A1), and each terminal talks to its pty host over that pty's own port. Framed anywhere else, or
-// never handed a port, it draws nothing and takes no focus.
+// The terminal page (groot ADR 0038, ADR 0039, ADR 0041): VS Code's own terminal panel (tabs,
+// toolbar, find, splits, several terminals), drawn in the app's dock, on this computer's shells.
+// In the desktop app it runs on app://terminal, in its own renderer process, and reaches the shell
+// only through the control port the panel hands to the iframe it rendered (devil amendment A1);
+// each terminal talks to its pty host over that pty's own port. On the web it is served by this
+// computer's osionos-node and each terminal is a WebSocket to that node (web.ts). Framed anywhere
+// else, or never handed a port or a token, it draws nothing and takes no focus.
 import { ITerminalGroupService, IWorkbenchLayoutService, getService, initialize } from "@codingame/monaco-vscode-api";
 import "@codingame/monaco-vscode-theme-defaults-default-extension";
 import { SimpleTerminalBackend, SimpleTerminalProcess } from "@codingame/monaco-vscode-terminal-service-override";
@@ -12,6 +14,7 @@ import { ProcessPropertyType } from "@codingame/monaco-vscode-api/vscode/vs/plat
 import { createLocalPtyProcess } from "../features/ide/model/localPtyProcess";
 import { acceptTerminalPort, ptyApiOverPort, terminalColorsFrom, type TerminalColors, type TerminalPtyApi } from "../features/ide/model/terminalPort";
 import { terminalModeServices, terminalWorkbenchOptions } from "./services";
+import { startOnTheWeb } from "./web";
 import "./terminal.css";
 
 const terminalEl = document.getElementById("terminal") as HTMLElement;
@@ -95,6 +98,8 @@ async function start(api: TerminalPtyApi, colors: TerminalColors) {
   await (await getService(ITerminalGroupService)).showPanel(true);
 }
 
+const showFailure = (error: Error) => { terminalEl.textContent = `The terminal did not start: ${error.message}`; };
+
 // Only a frame of the app's own top page, and only the first port it hands over (A1, A2).
 const framedByTheApp = window.parent !== window && window.parent === window.top;
 function onHandoff(event: MessageEvent) {
@@ -102,8 +107,10 @@ function onHandoff(event: MessageEvent) {
   if (!port) return;
   window.removeEventListener("message", onHandoff);
   const colors = terminalColorsFrom((event.data as { colors?: unknown }).colors);
-  void start(ptyApiOverPort(port), colors).catch((error: Error) => {
-    terminalEl.textContent = `The terminal did not start: ${error.message}`;
-  });
+  void start(ptyApiOverPort(port), colors).catch(showFailure);
 }
-if (framedByTheApp) window.addEventListener("message", onHandoff);
+if (location.protocol === "app:") {
+  if (framedByTheApp) window.addEventListener("message", onHandoff);
+} else {
+  void startOnTheWeb(start).catch(showFailure);
+}
