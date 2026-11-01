@@ -98,6 +98,12 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
   const storedPageConfig = usePageConfigStore((s) => s.configs[pageConfigKey(safeUserId, pageId)]);
   const pageConfig = useMemo(() => resolvePageConfig(storedPageConfig), [storedPageConfig]);
   const body = usePageBodyLoad(pageId);
+  const hydrateConfig = usePageConfigStore((s) => s.hydrateConfig);
+
+  // Settings live on the server too: a page opens as it was left in another browser (#253).
+  useEffect(() => {
+    if (activeUserId) void hydrateConfig(activeUserId, pageId);
+  }, [activeUserId, hydrateConfig, pageId]);
 
   // A page the bridge would refuse the PATCH opens read-only: a keystroke there is
   // dropped by the outbox and lost on the next reload. The selector returns a boolean,
