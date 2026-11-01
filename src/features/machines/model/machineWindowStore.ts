@@ -16,7 +16,7 @@
 import { create } from "zustand";
 
 import { newNonce } from "@/features/ide/vscode/ideFrameProtocol";
-import { useSudoPromptStore } from "@/features/settings/ui/sudo/sudoPromptModel";
+import { onSudoGranted, useSudoPromptStore } from "@/features/settings/ui/sudo/sudoPromptModel";
 import { mintMachineToken, verifyMachineIdentity, type Machine } from "../api/machinesApi";
 import { useMachinesStore } from "./machinesStore";
 import { createMachineWindow, type OpenOutcome, type WindowPhase } from "./machineWindow";
@@ -33,7 +33,7 @@ export const useMachineWindowStore = create<MachineWindowStore>()(() => ({ phase
 // only a loaded list may say the machine is not ours.
 const findCached = (machineId: string) => useMachinesStore.getState().machines?.find((machine) => machine.id === machineId);
 
-async function lookupOwnMachine(machineId: string): Promise<Machine | "other-account" | "unavailable"> {
+export async function lookupOwnMachine(machineId: string): Promise<Machine | "other-account" | "unavailable"> {
   const cached = findCached(machineId);
   if (cached) return cached;
   await useMachinesStore.getState().refresh();
@@ -63,10 +63,7 @@ const controller = createMachineWindow({
   },
 });
 
-let grantsSeen = useSudoPromptStore.getState().grants;
-useSudoPromptStore.subscribe((state) => {
-  if (state.grants <= grantsSeen) return;
-  grantsSeen = state.grants;
+onSudoGranted(() => {
   if (useMachineWindowStore.getState().phase === "step-up") controller.retry();
 });
 

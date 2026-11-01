@@ -24,6 +24,12 @@ import { join } from 'node:path';
 import { cookiePrefixFor, createIdeOriginServer } from '../../packages/osionos-node/ide-origin.mjs';
 import { signIdeToken } from '../../scripts/ide-token.mjs';
 
+import { createHostedFetch } from './support/host-fetch.mjs';
+
+// The node answers only its own origin's host (W1); every request names it.
+const hosted = createHostedFetch();
+const fetch = hosted.fetch;
+
 const SECRET = 'k'.repeat(32);
 const OWNER = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
 const STRANGER = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
@@ -61,6 +67,7 @@ async function world(t, { ttl, ideOrigin = IDE } = {}) {
 	});
 	await new Promise((resolve) => origin.server.listen(0, '127.0.0.1', resolve));
 	const base = `http://127.0.0.1:${origin.server.address().port}`;
+	hosted.bind(base, ideOrigin);
 	t.after(async () => { origin.close(); await upstream.close(); rmSync(dir, { recursive: true, force: true }); });
 	return { base, upstream, origin, ttl };
 }
@@ -165,7 +172,7 @@ test('no cookie, a foreign cookie or a refused route never reaches the server', 
 
 function upgrade(base, path, headers) {
 	return new Promise((resolve) => {
-		const req = http.request(`${base}${path}`, { headers: { connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-key': 'a2V5', 'sec-websocket-version': '13', ...headers } });
+		const req = http.request(`${base}${path}`, { headers: { host: hosted.hostOf(base), connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-key': 'a2V5', 'sec-websocket-version': '13', ...headers } });
 		req.on('upgrade', (res, socket) => resolve({ ok: true, socket }));
 		req.on('response', (res) => resolve({ ok: false, status: res.statusCode }));
 		req.on('error', () => resolve({ ok: false, status: 0 }));
