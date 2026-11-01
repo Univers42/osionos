@@ -19,7 +19,7 @@ import test from "node:test";
 
 import type { Machine } from "../../src/features/machines/api/machinesApi.ts";
 import {
-  chooseMachine, normalizePairCode, pairCommand, pairWarning, readMachineRoute, serveCommand, shellWord, thisComputerPanel,
+  chooseMachine, localNodeHint, normalizePairCode, pairCommand, pairWarning, readMachineRoute, serveCommand, shellWord, thisComputerPanel,
 } from "../../src/features/machines/model/machineChoice.ts";
 
 const machine = (id: string, online: boolean, isDefault = false): Machine => ({
@@ -71,6 +71,18 @@ test("the commands name this bridge and this app, and quote a name the shell wou
   assert.equal(shellWord("it's"), "'it'\\''s'");
   assert.equal(shellWord(""), "''");
   assert.equal(serveCommand("https://app.example"), "osionos-node serve --server <lib dir> --app-origin https://app.example");
+});
+
+// For a node installed before local=1, whose page reads only `node`: the id it should name.
+test("the node hint is the machine /machine would open, else the default, else the only one", () => {
+  assert.equal(localNodeHint([A, B]), B.id);
+  assert.equal(localNodeHint([A]), A.id);
+  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false)]), "m-cccccccccccccccc");
+  assert.equal(localNodeHint([A, machine("m-cccccccccccccccc", false, true)]), A.id);
+  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false), machine("m-dddddddddddddddd", false, true)]), "m-dddddddddddddddd");
+  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false), machine("m-dddddddddddddddd", false)]), null);
+  assert.equal(localNodeHint([]), null);
+  assert.equal(localNodeHint(null), null);
 });
 
 test("/machine with no node chooses; a machine id opens it with or without a folder; a free name is the legacy path", () => {

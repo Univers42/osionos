@@ -50,6 +50,17 @@ export function chooseMachine(machines: readonly Machine[], requestedId: string 
   return machines.length > 0 ? { kind: "none-online" } : { kind: "none" };
 }
 
+// Caveat: a guess, for a node installed before local=1 whose page reads only `node`. On a computer
+// that is not the default (or only) machine, the old page names the wrong id and the identity check
+// refuses it as a mismatch: the fix there is updating that node, never trusting the guess.
+/** The id an old page should name: the machine /machine would open, else the default, else the only one. */
+export function localNodeHint(machines: readonly Machine[] | null): string | null {
+  if (!machines) return null;
+  const choice = chooseMachine(machines, null);
+  if (choice.kind === "open") return choice.machine.id;
+  return (machines.find((machine) => machine.isDefault) ?? (machines.length === 1 ? machines[0] : null))?.id ?? null;
+}
+
 /** `/machine?…` in the app: choose, a paired machine (folder optional), or the legacy node and folder. */
 export function readMachineRoute(search: string): MachineRoute | null {
   const params = new URLSearchParams(search);

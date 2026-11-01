@@ -12,11 +12,13 @@
 
 // One click opens this computer's own node (own-machines plan §6, owner 2026-11-01). The window must
 // open inside the click (the only moment a browser allows a popup), so `open` is synchronous and
-// chooses no machine: every machine's IDE origin is the same loopback address, so an id chosen from
-// the account's list would be another computer's on this one. The node names itself in `ready`;
-// the account's list decides whether it is ours, then hello, identity, mint and session follow.
+// trusts no machine id up front: every machine's IDE origin is the same loopback address, so an id
+// chosen from the account's list may be another computer's. The address carries one only as a hint
+// for pages installed before local=1. The node names itself in `ready`; the account's list decides
+// whether it is ours, then hello, identity (signed by the node's own key), mint and session follow.
 import { linkMachineFrame, type IdentityVerdict, type MachineFrameDeps, type MachineViewState, type MintResult } from "../../ide/vscode/machineLink.ts";
 import type { Machine } from "../api/machinesApi.ts";
+import { localNodeHint } from "./machineChoice.ts";
 
 export type WindowPhase = "idle" | MachineViewState;
 export type OpenOutcome = "opened" | "focused" | "blocked";
@@ -37,6 +39,8 @@ type WindowLike = { closed: boolean; focus(): void; close(): void; postMessage(m
 
 export type MachineWindowDeps = {
   openWindow: (url: string, name: string) => WindowLike | null;
+  /** The account's cached machine list, read inside the click: null while it has not loaded. */
+  machines: () => readonly Machine[] | null;
   listen: MachineFrameDeps["listen"];
   lookup: (machineId: string) => Promise<Machine | "other-account" | "unavailable">;
   mint: (machineId: string) => Promise<MintResult>;
@@ -46,8 +50,10 @@ export type MachineWindowDeps = {
   onPhase: (phase: WindowPhase, machine: Machine | null) => void;
 };
 
-export function localWindowUrl(): string {
-  return `${LOCAL_NODE_ORIGIN}/?local=1`;
+/** `/?local=1`, plus `node=<hint>` for a page installed before local=1 (it reads only `node`). */
+export function localWindowUrl(hint: string | null = null): string {
+  const node = hint === null ? "" : `&node=${encodeURIComponent(hint)}`;
+  return `${LOCAL_NODE_ORIGIN}/?local=1${node}`;
 }
 
 export function createMachineWindow(deps: MachineWindowDeps) {
@@ -60,7 +66,7 @@ export function createMachineWindow(deps: MachineWindowDeps) {
     }
     current?.link.stop();
     current = null;
-    const win = deps.openWindow(localWindowUrl(), "osionos-machine-local");
+    const win = deps.openWindow(localWindowUrl(localNodeHint(deps.machines())), "osionos-machine-local");
     if (!win) {
       deps.onPhase("error", null);
       return "blocked";
