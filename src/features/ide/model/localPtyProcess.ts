@@ -1,7 +1,9 @@
 // The desktop's local shell behind one VS Code terminal (groot ADR 0038, ADR 0039): the desktop
 // owns the pty; this carries keystrokes, resizes and render acknowledgements on that pty's own port,
-// straight to the pty host, and never a command chosen by page content (C3).
+// straight to the pty host, and never a command chosen by page content (C3). The shell's output
+// reaches VS Code without OSC 52 clipboard reads (T7).
 import { chunkPtyInput, ptyDimension } from "./localPty";
+import { createOsc52ReadFilter } from "./osc52ReadFilter";
 import type { PtyConnection, TerminalPtyApi } from "./terminalPort";
 
 export interface LocalPtyEvents {
@@ -34,10 +36,14 @@ export function createLocalPtyProcess(api: TerminalPtyApi, events: LocalPtyEvent
   };
 
   const listen = (connection: PtyConnection) => {
+    const output = createOsc52ReadFilter();
     connection.port.onmessage = (event) => {
       const m = event.data as { op?: unknown; data?: unknown; exitCode?: unknown } | null;
-      if (m?.op === "data" && typeof m.data === "string") events.data(m.data);
-      else if (m?.op === "exit" && typeof m.exitCode === "number") {
+      if (m?.op === "data" && typeof m.data === "string") {
+        const { text, dropped } = output.push(m.data);
+        if (text) events.data(text);
+        if (dropped > 0) connection.port.postMessage({ op: "ack", chars: dropped });
+      } else if (m?.op === "exit" && typeof m.exitCode === "number") {
         end();
         events.exit(m.exitCode);
       }

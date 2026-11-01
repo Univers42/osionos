@@ -128,3 +128,14 @@ test("a shell created after shutdown (VS Code closed it mid-start) is killed at 
   assert.deepEqual(w.pty.calls, [["create", 80, 24], ["kill", "p7"], ["close", "p7"]]);
   assert.equal(w.pty.listening(), 0);
 });
+
+// T7: the shell (or a host behind ssh) asks for the clipboard; VS Code never sees the query, and the
+// pty host is acknowledged for what VS Code will not render, so flow control does not drift.
+test("an OSC 52 clipboard read in the shell's output never reaches VS Code", async () => {
+  const w = world();
+  await w.proc.start(80, 24);
+  w.pty.emit("p1", "a\x1b]52;c;?");
+  w.pty.emit("p1", "\x07b\x1b]52;c;aGk=\x07");
+  assert.deepEqual(w.out, ["a", "\x18b\x1b]52;c;aGk=\x07"]);
+  assert.deepEqual(w.pty.of("ack"), [["ack", "p1", 8]]);
+});
