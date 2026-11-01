@@ -22,8 +22,9 @@
 
 import { resolveCssColor } from "@/shared/lib/color/resolveCssColor";
 
-export const SYNTAX_KEYS = ["keyword", "string", "comment", "function", "number", "literal", "property", "type", "tag", "attr"] as const;
-export type SyntaxKey = (typeof SYNTAX_KEYS)[number];
+import { SYNTAX_KEYS, type SyntaxKey } from "../model/codeTheme";
+
+export { SYNTAX_KEYS, type SyntaxKey };
 
 /** Raw CSS strings as read from the host (empty string = token not defined). */
 export interface EditorTokenInput {
