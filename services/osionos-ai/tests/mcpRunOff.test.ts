@@ -22,7 +22,7 @@ after(async () => {
 	await bridge.close();
 });
 
-const SNAPSHOT_TOOLS = ['search_workspace', 'read_page', 'graph_neighbors', 'remember', 'open_page', 'open_panel', 'open_issue_report', 'suggest_agent', 'create_page', 'rename_page', 'archive_page', 'add_blocks'];
+const SNAPSHOT_TOOLS = ['search_workspace', 'read_page', 'graph_neighbors', 'remember', 'open_page', 'open_panel', 'open_issue_report', 'suggest_agent', 'create_page', 'rename_page', 'update_page_settings', 'archive_page', 'add_blocks'];
 const SNAPSHOT_RESERVED = 234;
 
 describe('C291 with the flag off, nothing differs from today', () => {

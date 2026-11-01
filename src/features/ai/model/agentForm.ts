@@ -26,6 +26,7 @@ export const AGENT_TOOL_CHOICES: readonly { id: string; label: string; writes: b
   { id: "create_page", label: "Create a page", writes: true },
   { id: "rename_page", label: "Rename a page", writes: true },
   { id: "archive_page", label: "Archive a page", writes: true },
+  { id: "update_page_settings", label: "Change page settings", writes: true },
   { id: "add_blocks", label: "Add blocks to a page", writes: true },
 ];
 
