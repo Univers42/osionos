@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/20 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/20 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,9 +16,12 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 
 import { useUserStore } from "@/features/auth";
+import { localPtyApi } from "@/features/ide/model/localPty";
 import { useIdeTerminal } from "@/features/ide/model/useIdeTerminal";
+import { useLocalTerminal } from "@/features/ide/model/useLocalTerminal";
 import { isSandboxReachable, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
 import { terminalFontFamily } from "@/features/ide/model/terminalFont";
+import { MachineTerminalLauncher } from "./MachineTerminalLauncher";
 import { SandboxUnavailable } from "./SandboxUnavailable";
 
 // Ponytail: read once when the terminal opens. The dock is always the dark code
@@ -37,14 +40,16 @@ function codeTheme(host: HTMLElement): ITheme {
   };
 }
 
-/** xterm.js terminal over the sandbox PTY (P3). Lazy-loaded from IdeBottomStrip
- *  so xterm never lands in the warm IDE chunk — it loads on first terminal open.
- *  The transport (WS + resize) is useIdeTerminal; this file owns the emulator. */
+/** xterm.js terminal: in the desktop app a shell on this computer (useLocalTerminal), else the
+ *  sandbox PTY (P3, useIdeTerminal). Lazy-loaded from the dock so xterm never lands in the warm
+ *  IDE chunk — it loads on first terminal open. This file owns the emulator. */
 export const IdeTerminal: React.FC<{ termId?: string; safe?: boolean }> = ({ termId = "0", safe = false }) => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const hostRef = React.useRef<HTMLDivElement>(null);
   const fitRef = React.useRef<FitAddon | null>(null);
   const [term, setTerm] = React.useState<Terminal | null>(null);
+  // The preload is fixed for the window's life, so it is read once.
+  const [localPty] = React.useState(localPtyApi);
 
   React.useEffect(() => {
     const host = hostRef.current;
@@ -74,8 +79,11 @@ export const IdeTerminal: React.FC<{ termId?: string; safe?: boolean }> = ({ ter
     return () => ro.disconnect();
   }, [term]);
 
-  const { closedReason, reconnect } = useIdeTerminal(term, workspaceId, termId, safe);
-  const reachable = useSandboxHealthStore((s) => isSandboxReachable(s.state));
+  useLocalTerminal(localPty ? term : null, localPty);
+  const { closedReason, reconnect } = useIdeTerminal(localPty ? null : term, workspaceId, termId, safe);
+  const health = useSandboxHealthStore((s) => s.state);
+  const sandboxed = localPty === null;
+  const reachable = isSandboxReachable(health);
 
   return (
     <div className="relative min-h-0 flex-1" data-osio-terminal>
@@ -83,7 +91,15 @@ export const IdeTerminal: React.FC<{ termId?: string; safe?: boolean }> = ({ ter
           is not cut by the dock's radius (a quarter of it below, half beside:
           enough for any roundness setting). Text padding lives on .xterm. */}
       <div ref={hostRef} className="absolute left-0 top-0 right-[calc(var(--osio-radius-pane)/2)] bottom-[calc(var(--osio-radius-pane)/4)]" />
-      {(!reachable || closedReason !== null) && (
+      {/* No hosted sandbox here: the terminal is the person's own machine. A self-hosted server
+          whose sandbox is only down keeps its one-line state under the offer. */}
+      {sandboxed && !reachable && (
+        <div className="absolute inset-0 flex flex-col">
+          <div className="min-h-0 flex-1"><MachineTerminalLauncher /></div>
+          {health !== "disabled" && <SandboxUnavailable compact onRetried={(next) => { if (isSandboxReachable(next)) reconnect(); }} />}
+        </div>
+      )}
+      {sandboxed && reachable && closedReason !== null && (
         <div className="absolute inset-0">
           <SandboxUnavailable onRetried={(next) => { if (isSandboxReachable(next)) reconnect(); }} />
         </div>

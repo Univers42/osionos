@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/01 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,8 @@ import { AlertCircle, GitBranch, PanelBottom } from "lucide-react";
 
 import { Tooltip } from "@/shared/ui";
 import { useDiagnosticsStore } from "@/features/ide/model/diagnosticsStore";
+import { hasLocalTerminal } from "@/features/ide/model/localPty";
+import { openOwnMachine, useMachineWindowStore } from "@/features/machines/model/machineWindowStore";
 import {
   isSandboxOnline,
   useSandboxHealthStore,
@@ -62,8 +64,48 @@ const BranchChip: React.FC = () => {
   );
 };
 
+/** Where no hosted sandbox runs, the code runs on this computer, through its own osionos-node: the
+ *  chip opens its window and shows the dock's panel, which says why when it cannot open. */
+const MachineChip: React.FC = () => {
+  const phase = useMachineWindowStore((s) => s.phase);
+  const openDock = useWorkbenchStore((s) => s.openDock);
+  const dot = phase === "connected" ? DOT_CLASS.online : phase === "idle" || phase === "connecting" ? DOT_CLASS.unknown : DOT_CLASS.stopped;
+  const open = () => {
+    openOwnMachine();
+    openDock("terminal");
+  };
+  return (
+    <Tooltip label="Open this computer's terminal and files" side="top">
+      <button type="button" data-testid="machine-chip" onClick={open} className={CHIP}>
+        <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
+        This computer
+      </button>
+    </Tooltip>
+  );
+};
+
+/** The desktop app's terminal is a shell on this computer: the chip opens it in the dock. */
+const LocalTerminalChip: React.FC = () => {
+  const openDock = useWorkbenchStore((s) => s.openDock);
+  return (
+    <Tooltip label="Open a terminal on this computer" side="top">
+      <button type="button" data-testid="local-terminal-chip" onClick={() => openDock("terminal")} className={CHIP}>
+        <span aria-hidden className={`h-2 w-2 rounded-full ${DOT_CLASS.online}`} />
+        This computer
+      </button>
+    </Tooltip>
+  );
+};
+
+/** With a hosted sandbox the desktop app shows both chips: the terminal is this computer, the
+ *  sandbox is still the server's. With none, the machine chip gives way to "This computer". */
 const SandboxChip: React.FC = () => {
   const state = useSandboxHealthStore((s) => s.state);
+  if (state !== "disabled") return <SandboxStateChip state={state} />;
+  return hasLocalTerminal() ? null : <MachineChip />;
+};
+
+const SandboxStateChip: React.FC<{ state: SandboxHealthState }> = ({ state }) => {
   const reason = useSandboxHealthStore((s) => s.reason);
   const retry = useSandboxHealthStore((s) => s.retry);
   const online = isSandboxOnline(state);
@@ -135,6 +177,7 @@ export const WorkbenchStatusBar: React.FC = () => (
   >
     <ConnectivityChip />
     <BranchChip />
+    {hasLocalTerminal() && <LocalTerminalChip />}
     <SandboxChip />
     <ProblemsChip />
     <span className="flex-1" />

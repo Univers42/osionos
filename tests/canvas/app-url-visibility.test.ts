@@ -25,7 +25,27 @@ test("isReachableUrl: empty hidden; loopback only reachable from loopback pages"
   assert.equal(isReachableUrl("http://127.0.0.1:3002", PUBLIC_HOST), false);
   assert.equal(isReachableUrl("https://localhost:3001/", "localhost"), true);
   assert.equal(isReachableUrl("https://mail.example.net", PUBLIC_HOST), true);
-  assert.equal(isReachableUrl("/", PUBLIC_HOST), true);
+  assert.equal(isReachableUrl("http://mail.example.net:8080/inbox", PUBLIC_HOST), true);
+});
+
+// C4 of the desktop local terminal verdict (2026-10-31): a launch or embed URL that is not http(s)
+// would run with the app's privileges once framed; before, one that did not parse counted as reachable.
+const NOT_HTTP = [
+  "javascript:alert(1)", " JavaScript:alert(1)", "data:text/html,<script>alert(1)</script>",
+  "http://[", "not a url", "/", "//apps.example.net/x", "app://osionos/", "blob:https://apps.example.net/1",
+];
+
+test("launch and embed URLs are http(s) only: any other scheme, or no URL, is refused (C4)", () => {
+  for (const bad of NOT_HTTP) {
+    assert.equal(isReachableUrl(bad, "localhost"), false, bad);
+    assert.equal(launchUrlFor("acme.notes", bad, null, "localhost"), "", bad);
+    assert.equal(launchUrlFor("osionos.mail", "https://localhost:3002", bad, "localhost"), "", bad);
+    assert.equal(launchUrlFor("osionos.draw", bad, null, "localhost"), "", bad);
+    assert.equal(effectiveLaunchUrl("acme.notes", bad, "localhost", ""), "", bad);
+    assert.equal(listableFor("acme.notes", bad, null, "localhost"), false, bad);
+    assert.equal(isTabRestorable(embed("__app__x__", bad), "localhost"), false, bad);
+  }
+  assert.equal(launchUrlFor("acme.notes", "http://apps.example.net", null, PUBLIC_HOST), "http://apps.example.net");
 });
 
 test("marketplace launch policy: Desktop loopback hidden publicly, shown locally", () => {

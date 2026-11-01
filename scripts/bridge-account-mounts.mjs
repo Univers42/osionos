@@ -52,6 +52,7 @@ import { createPasskeyRoutes } from './bridge-account-passkeys.mjs';
 import { createAccountIdentitiesRoutes } from './bridge-account-identities.mjs';
 import { createAccountSettingsRoutes } from './bridge-account-settings.mjs';
 import { createAccountEmailsRoutes } from './bridge-account-emails.mjs';
+import { createMachineRoutes } from './bridge-machines.mjs';
 
 export function createAccountHandler(deps) {
 	const modules = [
@@ -83,6 +84,8 @@ export function createAccountHandler(deps) {
 		createAccountIdentitiesRoutes({ config: deps.config, verifySession: deps.verifySession, fetchImpl: deps.mfaFetch ?? fetch }),
 		createAccountSettingsRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env }),
 		createAccountEmailsRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env, fetchImpl: deps.mfaFetch ?? fetch, now: deps.mfaNow ?? null, track: deps.emailTrack ?? undefined }),
+		// Own machines: the node's signed routes answer without CORS, the session ones with the app's.
+		createMachineRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.env ?? deps.mfaEnv ?? process.env, fetchImpl: deps.fetchImpl ?? deps.mfaFetch ?? fetch, now: deps.mfaNow ?? null }),
 	];
 	// Off unless OSIONOS_ACCOUNT_DELETION_EXECUTOR=1 (and, in production, a dry run or a verdict).
 	createAccountErasureRunner({ config: deps.config, pg: deps.pg, kv: deps.kv, fetchImpl: deps.erasureFetch ?? deps.mfaFetch ?? fetch, env: deps.erasureEnv ?? deps.mfaEnv ?? process.env }).start();
