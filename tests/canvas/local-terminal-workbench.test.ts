@@ -24,6 +24,7 @@ const { useWorkbenchStore } = await import("../../src/widgets/workbench/model/wo
 const { openWorkbenchTerminal } = await import("../../src/widgets/workbench/model/workbenchMenuActions.ts");
 const { WorkbenchStatusBar } = await import("../../src/widgets/workbench/ui/WorkbenchStatusBar.tsx");
 const { IdeTerminal } = await import("../../src/features/ide/ui/IdeTerminal.tsx");
+const { LocalVsCodeTerminal, TERMINAL_PAGE_SRC } = await import("../../src/features/ide/ui/LocalVsCodeTerminal.tsx");
 
 const LAPTOP = {
   id: "m-abcdefghijklmnop", name: "laptop", platform: "linux-x64", fingerprint: "ABCD-EFGH-IJKL-MNOP",
@@ -87,9 +88,33 @@ test("the status bar names this computer on the desktop and on the web", () => {
 });
 
 test("a desktop terminal panel shows no launcher or sandbox overlay", () => {
+  // The desktop dock renders LocalVsCodeTerminal, never IdeTerminal (WorkbenchDock TerminalPane).
   let desktop = "";
-  onDesktop(() => { desktop = renderToStaticMarkup(React.createElement(IdeTerminal)); });
+  onDesktop(() => { desktop = renderToStaticMarkup(React.createElement(LocalVsCodeTerminal, { api: fakePty().api })); });
   assert.doesNotMatch(desktop, /role="status"|Terminal on this computer|Open terminal/);
   const web = renderToStaticMarkup(React.createElement(IdeTerminal));
   assert.match(web, /Terminal on this computer/);
+});
+
+test("the desktop terminal panel frames VS Code's terminal page on its own origin", () => {
+  const desktop = renderToStaticMarkup(React.createElement(LocalVsCodeTerminal, { api: fakePty().api }));
+  assert.equal(TERMINAL_PAGE_SRC, "app://terminal/index.html");
+  // No `name` (a named frame can be targeted by window.open), and only the clipboard (T4).
+  assert.match(desktop, /<iframe src="app:\/\/terminal\/index.html" title="Terminal" allow="clipboard-read; clipboard-write"/);
+  assert.doesNotMatch(desktop, / name=/);
+  assert.doesNotMatch(desktop, /role="status"|Terminal on (laptop|this computer)|Open terminal/);
+  const web = renderToStaticMarkup(React.createElement(IdeTerminal));
+  assert.match(web, /Terminal on this computer/);
+});
+
+test("on the desktop the dock has no terminal buttons of its own: VS Code's panel carries them", async () => {
+  const { WorkbenchDock } = await import("../../src/widgets/workbench/ui/WorkbenchDock.tsx");
+  useWorkbenchStore.getInitialState().dockTab = "terminal";
+  let desktop = "";
+  onDesktop(() => { desktop = renderToStaticMarkup(React.createElement(WorkbenchDock)); });
+  assert.doesNotMatch(desktop, /aria-label="(New terminal|Split terminal|Close split|Safe terminal|Restart box)"/);
+  assert.match(desktop, /aria-label="Hide panel"/);
+  const web = renderToStaticMarkup(React.createElement(WorkbenchDock));
+  assert.match(web, /aria-label="New terminal"/);
+  assert.match(web, /aria-label="Split terminal"/);
 });

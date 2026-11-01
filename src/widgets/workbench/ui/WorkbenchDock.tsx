@@ -16,6 +16,7 @@ import { Columns2, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react"
 import { Tooltip } from "@/shared/ui";
 import { useUserStore } from "@/features/auth";
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
+import { hasLocalTerminal, localPtyApi } from "@/features/ide/model/localPty";
 import { restartSandbox } from "@/features/ide/model/restartSandbox";
 import { useIdeOutputBus } from "@/features/ide/model/ideOutputBus";
 import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
@@ -28,6 +29,12 @@ import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";
 // Lazy so xterm.js (~250KB) loads only when the terminal first opens.
 const IdeTerminal = React.lazy(() =>
   import("@/features/ide/ui/IdeTerminal").then((m) => ({ default: m.IdeTerminal })),
+);
+
+// In the desktop app the panel is VS Code's own terminal on this computer (groot ADR 0038); the
+// app's xterm never loads there.
+const LocalVsCodeTerminal = React.lazy(() =>
+  import("@/features/ide/ui/LocalVsCodeTerminal").then((m) => ({ default: m.LocalVsCodeTerminal })),
 );
 
 // Lazy like the terminal: the debug panel pulls the DAP controller chunk.
@@ -59,16 +66,29 @@ const TerminalPane: React.FC = () => {
   const primary = useIdeDockStore((s) => s.primary);
   const secondary = useIdeDockStore((s) => s.secondary);
   const safeTerms = useIdeDockStore((s) => s.safeTerms);
+  // The preload is fixed for the window's life, so it is read once.
+  const [localPty] = React.useState(localPtyApi);
+  const fallback = <div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Starting terminal…</div>;
+  // On the desktop, VS Code's page holds every terminal as its own tabs and splits, and its port
+  // router assumes one panel per window: one frame, never remounted by the dock's terminal ids.
+  if (localPty) {
+    return (
+      <React.Suspense fallback={fallback}>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <LocalVsCodeTerminal api={localPty} />
+        </div>
+      </React.Suspense>
+    );
+  }
+  const terminal = (termId: string) => <IdeTerminal key={termId} termId={termId} safe={safeTerms.includes(termId)} />;
   return (
-    <React.Suspense
-      fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Starting terminal…</div>}
-    >
+    <React.Suspense fallback={fallback}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <IdeTerminal key={primary} termId={primary} safe={safeTerms.includes(primary)} />
+        {terminal(primary)}
       </div>
       {secondary && (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-[var(--osio-code-border)]">
-          <IdeTerminal key={secondary} termId={secondary} safe={safeTerms.includes(secondary)} />
+          {terminal(secondary)}
         </div>
       )}
     </React.Suspense>
@@ -182,7 +202,8 @@ export const WorkbenchDock: React.FC = () => {
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-2 text-xs text-[var(--osio-code-fg-muted)]">
         <DockTabs active={active} conflicts={conflicts} />
         <span className="flex-1" />
-        {active === "terminal" && <TerminalActions />}
+        {/* On the desktop, VS Code's own panel carries new, split and kill; there is no box to restart. */}
+        {active === "terminal" && !hasLocalTerminal() && <TerminalActions />}
         {active === "output" && <OutputActions />}
         <Tooltip label="Hide panel" side="bottom">
           <button type="button" aria-label="Hide panel" onClick={closeDock} className={ICON_BTN}>
