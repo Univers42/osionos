@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import React, {
   useCallback,
   useEffect,
@@ -473,7 +474,11 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     const columnWidth = Math.max(1, (contentWidth - Math.max(0, config.columns - 1) * config.gap) / config.columns);
     const columnStep = columnWidth + config.gap;
     const rowStep = config.rowHeight + config.gap;
-    const startRect = cellElement.getBoundingClientRect();
+    const onScreenRect = cellElement.getBoundingClientRect();
+    const startRect = {
+      width: toCssPx(onScreenRect.width, cellElement),
+      height: toCssPx(onScreenRect.height, cellElement),
+    };
     const startOffset = normalizeLayoutOffset(cell.offset) ?? { x: 0, y: 0 };
     const spanWidth = (span: number) => span * columnWidth + Math.max(0, span - 1) * config.gap;
     const spanHeight = (span: number) => span * config.rowHeight + Math.max(0, span - 1) * config.gap;
@@ -509,8 +514,8 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     const previewFromPointer = (clientX: number, clientY: number) => {
       const scrollDeltaX = globalThis.scrollX - startScrollX + (scrollContainer?.scrollLeft ?? 0) - startContainerScrollLeft;
       const scrollDeltaY = globalThis.scrollY - startScrollY;
-      const deltaX = clientX - startX + scrollDeltaX;
-      const deltaY = clientY - startY + scrollDeltaY;
+      const deltaX = toCssPx(clientX - startX, cellElement) + scrollDeltaX;
+      const deltaY = toCssPx(clientY - startY, cellElement) + scrollDeltaY;
       const colDelta = Math.round(deltaX / columnStep);
       const rowDelta = Math.round(deltaY / rowStep);
       let nextColSpan = cell.colSpan;
@@ -665,8 +670,8 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     const rowStep = config.rowHeight + config.gap;
     const gridRect = grid.getBoundingClientRect();
     const startRect = cellElement.getBoundingClientRect();
-    const startLeftInGrid = startRect.left - gridRect.left - paddingLeft + (scrollContainer?.scrollLeft ?? 0);
-    const startTopInGrid = startRect.top - gridRect.top - paddingTop;
+    const startLeftInGrid = toCssPx(startRect.left - gridRect.left, cellElement) - paddingLeft + (scrollContainer?.scrollLeft ?? 0);
+    const startTopInGrid = toCssPx(startRect.top - gridRect.top, cellElement) - paddingTop;
 
     const startX = event.clientX;
     const startY = event.clientY;
@@ -685,8 +690,8 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     const moveFromPointer = (clientX: number, clientY: number) => {
       const scrollDeltaX = globalThis.scrollX - startScrollX + (scrollContainer?.scrollLeft ?? 0) - startContainerScrollLeft;
       const scrollDeltaY = globalThis.scrollY - startScrollY;
-      const deltaX = clientX - startX + scrollDeltaX;
-      const deltaY = clientY - startY + scrollDeltaY;
+      const deltaX = toCssPx(clientX - startX, cellElement) + scrollDeltaX;
+      const deltaY = toCssPx(clientY - startY, cellElement) + scrollDeltaY;
       const rawOffset = {
         x: Math.round(startOffset.x + deltaX),
         y: Math.round(startOffset.y + deltaY),
