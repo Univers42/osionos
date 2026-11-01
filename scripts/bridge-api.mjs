@@ -85,6 +85,7 @@ import { createModerationConsoleHandler } from './bridge-moderation-console.mjs'
 import { runWsCanary } from './bridge-realtime-ws-lane.mjs';
 import { createRecsHealthHandler } from './bridge-recs-health.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
+import { answerWithOrigin } from './bridge-cors-origin.mjs';
 import { createPageAccessRequestsHandler } from './bridge-page-access-requests.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
@@ -4178,9 +4179,11 @@ async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	let mentions = [];
 	if (title) {
 		const excluded = new Set([pageId, ...sourceIds]);
-		// Ponytail: limit=20 applies before the read filter, so mentions can under-report;
-		// every workspace chunk answers its own 20 and the list is cut back to 20 readable ones.
-		const hits = (await readInChunks(accessible, async (chunk) => {
+		// A title is usually a common word, so an unlinked mention only means something inside
+		// the page's own workspace: `Sales` used to list shell scripts from the owner's other
+		// workspaces (#261). The linked list above keeps every workspace: a link is explicit.
+		// Caveat: limit=20 applies before the read filter, so mentions can under-report.
+		const hits = (await readInChunks([row.workspace_id], async (chunk) => {
 			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('workspace_id', chunk)}&archived_at=is.null&search_doc=wfts(english).${encodeURIComponent(`"${title}"`)}&select=${BACKLINK_SELECT}&limit=20`).catch(() => []);
 			return Array.isArray(rows) ? rows : [];
 		})).flat();
@@ -4660,8 +4663,12 @@ const OBJECT_DB_KEY_MAX = 128;
 async function handleObjectDatabasesGet(url, request, response, config, fetchImpl) {
 	if (url.pathname !== '/api/object-databases') return false;
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	// Databases without a workspace predate the column: they stay listed in every
+	// workspace until claimed, or a filtered read would hide them from their owner.
+	const workspaceId = url.searchParams.get('workspaceId');
+	const workspaceFilter = workspaceId ? { or: `(workspace_id.eq.${requireUuid(workspaceId, 'workspaceId')},workspace_id.is.null)` } : {};
 	const rows = await baasRest(config, fetchImpl,
-		`osionos_object_databases?${postgrestQuery({ owner_id: `eq.${authContext.userId}`, select: 'db_key,title,state,workspace_id,updated_at' })}`);
+		`osionos_object_databases?${postgrestQuery({ ...workspaceFilter, owner_id: `eq.${authContext.userId}`, select: 'db_key,title,state,workspace_id,updated_at' })}`);
 	const databases = Array.isArray(rows) ? rows.map((row) => ({
 		dbKey: row.db_key,
 		title: row.title ?? 'Untitled',
@@ -5429,7 +5436,7 @@ export function createBridgeServer(options = {}) {
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl, createPageAccessLoader, pageLevelFor }),
 		accessRequests: createPageAccessRequestsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, createPageAccessLoader, pageLevelFor }),
-		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess }),
+		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess, kv }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
@@ -5497,6 +5504,7 @@ export function createBridgeServer(options = {}) {
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);
+			if (responseConfig.allowedOrigin !== config.allowedOrigin) answerWithOrigin(response, responseConfig.allowedOrigin);
 			try {
 				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env, patGate, whiteboard });
 			} catch (error) {

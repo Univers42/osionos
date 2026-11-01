@@ -23,8 +23,9 @@ import {
   registerDataSourceProvider,
   type LoadedDataSource,
 } from "@/shared/notion-database-sys/src/store/sources/dataSourceRegistry";
-import { registerCrossMountCatalog } from "@/shared/notion-database-sys/src/store/live/liveCrossMount";
+import { registerCrossMountCatalog, registerMountDirectory } from "@/shared/notion-database-sys/src/store/live/liveCrossMount";
 import { listAllDataSources } from "./allDataSources";
+import { listLiveMounts } from "./liveMountCatalog";
 import { listLiveSources } from "./liveMountTables";
 import { getLiveDatabaseAdapter, isLiveDatabaseId } from "./liveDatabaseAdapter";
 import { getKnownDatabaseAdapter } from "./knownDatabaseState";
@@ -65,6 +66,9 @@ registerDataSourceProvider({
 // All the user's live mounts + their tables, so the live adapter can resolve a
 // foreign key whose target table lives in ANOTHER mount (access-scoped by the
 // bridge, so this only exposes mounts the user may read).
+registerMountDirectory(async () =>
+  (await listLiveMounts()).map(({ dbId, name, engine }) => ({ dbId, name, engine, tables: [] })),
+);
 registerCrossMountCatalog(async () =>
   (await listLiveSources()).map((source) => ({
     dbId: source.mount.dbId,

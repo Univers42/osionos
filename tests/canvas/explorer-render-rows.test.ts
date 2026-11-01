@@ -110,3 +110,17 @@ test("a hint is not a keyboard stop, has its own key, and yields to a pending cr
   const creating = flattenForRender(dirs, expanded, { parent: "Private", kind: "file" }, HINTS).map(describe);
   assert.deepEqual(creating, ["1:Private", "2:create:Private"]);
 });
+
+test("a page with children is one row, the directory that knows its page (#251)", () => {
+  const rows = buildExplorerRows([
+    { name: "Journal", kind: "dir" },
+    { name: "Journal.omd", kind: "file" },
+    { name: "Notes.omd", kind: "file" },
+    { name: "Plain", kind: "dir" },
+  ]);
+  assert.deepEqual(rows.map((row) => [row.label, row.kind, row.pageFile]), [
+    ["Journal", "dir", "Journal.omd"],
+    ["Plain", "dir", undefined],
+    ["Notes", "page", undefined],
+  ]);
+});

@@ -157,11 +157,9 @@ for (const percent of ZOOMS) {
 // Selectors the "Pane zoom" rule in global.css keeps at 100%.
 const FIXED_SCALE = [
   ["data-osio-fixed-scale", ""],
-  ["data-database-id", "db"],
   ["data-osio-ide", ""],
   ["role", "application"],
   ["data-block-type", "whiteboard"],
-  ["data-block-type", "layout"],
 ];
 
 test.describe("surfaces that keep their own pixel grid", () => {
@@ -184,12 +182,12 @@ test.describe("surfaces that keep their own pixel grid", () => {
         read[surface.dataset.probe] = [surface.currentCSSZoom, inner.currentCSSZoom];
         surface.remove();
       }
-      // A database inside a layout cell: divided once, not twice.
-      const layout = make(host, ["data-block-type", "layout"]);
+      // A fixed surface inside a whiteboard: divided once, not twice.
+      const layout = make(host, ["data-block-type", "whiteboard"]);
       const cell = document.createElement("div");
       layout.append(cell);
-      const nested = make(cell, ["data-database-id", "db"]);
-      read.nested = [nested.currentCSSZoom, make(layout, ["data-database-id", "db"]).currentCSSZoom];
+      const nested = make(cell, ["data-osio-fixed-scale", ""]);
+      read.nested = [nested.currentCSSZoom, make(layout, ["data-osio-fixed-scale", ""]).currentCSSZoom];
       layout.remove();
       return read;
     }, FIXED_SCALE);

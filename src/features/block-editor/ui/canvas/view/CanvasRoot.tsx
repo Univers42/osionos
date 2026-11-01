@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "zustand";
 
 import type { Block } from "@/entities/block";
+import { usePageActions } from "@/entities/page/model/usePageActions";
 import { usePageStore } from "@/store/usePageStore";
 import { initFormulaEngine } from "@/shared/notion-database-sys/src/lib/engine/bridge";
 import type { SurfaceBlockEditorProps } from "../../BlockEditorSurface";
@@ -43,6 +44,8 @@ export interface CanvasRootProps {
  */
 export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateBlock, renderBlockEditor }) => {
   const updateBlock = usePageStore((state) => state.updateBlock);
+  // A page with Edit off reads as a dashboard: the tools come back with Edit (#265).
+  const pageLocked = usePageActions(pageId).config.locked;
   // The formula's context: the page's own properties, the same lookup the
   // header slots use. A property edit re-renders the canvas, and every cell
   // formula answers again against the new values.
@@ -167,12 +170,14 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
           </button>
         ) : null}
 
-        <CanvasToolbar
-          store={store}
-          onAddCell={cellOps.addCell}
-          onApplyTemplate={cellOps.applyTemplate}
-          onOpenInspector={openInspector}
-        />
+        {pageLocked ? null : (
+          <CanvasToolbar
+            store={store}
+            onAddCell={cellOps.addCell}
+            onApplyTemplate={cellOps.applyTemplate}
+            onOpenInspector={openInspector}
+          />
+        )}
 
         {hiddenCells.length > 0 ? (
           <div className="osio-canvas-hidden-cells" aria-label="Hidden cells">

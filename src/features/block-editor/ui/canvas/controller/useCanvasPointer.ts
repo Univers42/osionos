@@ -26,6 +26,7 @@ import {
   resizeDeltas,
   setGestureVars,
 } from "./useCanvasPointer.helpers";
+import { toCssPx } from "@/shared/lib/dom/cssZoom";
 
 export interface CanvasPointerHandlers {
   startMove: (event: React.PointerEvent<HTMLElement>, cellId: string) => void;
@@ -103,7 +104,7 @@ export function useCanvasPointer(
     const handlePointerMove = (moveEvent: PointerEvent) => {
       autoScroller.update(moveEvent.clientY);
       lastDelta = screenDeltaToFrame(
-        { x: moveEvent.clientX - startX, y: moveEvent.clientY - startY + (globalThis.scrollY - startScrollY) },
+        { x: toCssPx(moveEvent.clientX - startX, stage), y: toCssPx(moveEvent.clientY - startY, stage) + (globalThis.scrollY - startScrollY) },
         scaleRef.current,
       );
       if (!frame) frame = requestAnimationFrame(flushPreview);

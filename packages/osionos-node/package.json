@@ -1,0 +1,8 @@
+{
+  "name": "@osionos/node",
+  "private": true,
+  "type": "module",
+  "bin": { "osionos-node": "./cli.mjs" },
+  "description": "Connects a machine to osionos: installs and runs the pinned VS Code server, owns ssh forwards, and serves the IDE origin.",
+  "engines": { "node": ">=22" }
+}

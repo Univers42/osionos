@@ -84,6 +84,8 @@ export interface PageConfig {
   showOutline: boolean;
   /** The property rows under the title; on unless the page turns them off. */
   showProperties: boolean;
+  /** The In folder / Mentions / Related block under them; on unless turned off (#250). */
+  showConnections: boolean;
   locked: boolean;
   presentationMode: boolean;
   rawMode: boolean;
@@ -107,6 +109,8 @@ export interface PageConfig {
 interface PageConfigStore {
   configs: Record<string, PageConfig>;
   getConfig: (userId: string, pageId: string) => PageConfig;
+  /** Reads the page's settings saved from any browser (#253). */
+  hydrateConfig: (userId: string, pageId: string) => Promise<void>;
   updateConfig: (userId: string, pageId: string, updates: Partial<PageConfig>) => Promise<void>;
   recordAction: (
     userId: string,
@@ -127,6 +131,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
   fullWidth: false,
   showOutline: true,
   showProperties: true,
+  showConnections: true,
   locked: false,
   presentationMode: false,
   rawMode: false,
@@ -218,6 +223,17 @@ async function persistPageConfigToApi(pageId: string, config: PageConfig) {
   }
 }
 
+/** Server settings over the local copy: a save always reaches the server, so its
+ *  row is the newest. Version snapshots stay local, the server never stores them. */
+export function mergeServerPageConfig(
+  local: PageConfig | undefined,
+  server: Partial<PageConfig> | null | undefined,
+): PageConfig | null {
+  if (!server || Object.keys(server).length === 0) return null;
+  const merged = resolvePageConfig(local, server);
+  return JSON.stringify(merged) === JSON.stringify(resolvePageConfig(local)) ? null : merged;
+}
+
 const MAX_PERSISTED_VERSIONS = 10;
 
 /** Returns the persisted blob with each page's version snapshots capped to
@@ -266,9 +282,25 @@ export const usePageConfigStore = create<PageConfigStore>()(
     (set, get) => ({
       configs: {},
       getConfig: (userId, pageId) => resolvePageConfig(get().configs[pageConfigKey(userId, pageId)]),
+      hydrateConfig: async (userId, pageId) => {
+        const session = useUserStore.getState();
+        const jwt = session.activePageJwt() || session.activeJwt();
+        if (!jwt) return;
+        let server: Partial<PageConfig> | undefined;
+        try {
+          ({ config: server } = await api.get<{ config?: Partial<PageConfig> }>(`/api/pages/${pageId}/config`, jwt));
+        } catch {
+          return; // Offline: the local copy stands, as it does for a failed save.
+        }
+        const key = pageConfigKey(userId, pageId);
+        const merged = mergeServerPageConfig(get().configs[key], server);
+        if (merged) set((state) => ({ configs: { ...state.configs, [key]: merged } }));
+      },
       updateConfig: async (userId, pageId, updates) => {
         const key = pageConfigKey(userId, pageId);
         const nextConfig = resolvePageConfig(get().configs[key], updates);
+        // Opening a page re-announced its settings, and each one was a PATCH (#262).
+        if (JSON.stringify(nextConfig) === JSON.stringify(resolvePageConfig(get().configs[key]))) return;
 
         set((state) => ({
           configs: {
