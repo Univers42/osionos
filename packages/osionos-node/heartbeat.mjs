@@ -54,7 +54,9 @@ export function createHeartbeat({ file, keys, ideOrigin, fetchImpl = fetch, onGo
 	let timer = null;
 
 	// Caveat: an unreachable bridge is reported, never treated as a revocation; a removed machine
-	// keeps serving until the bridge answers again, bounded by its tokens' 900 s life.
+	// keeps serving until the bridge answers again. New sessions are bounded by their tokens' 900 s
+	// life, but a web terminal shell already open is not (ADR 0041: the token gates the opening,
+	// not the life): it lives until its socket closes, or until a 410 here stops the node.
 	async function once() {
 		const ts = Math.max(Date.now(), lastTs + 1);
 		lastTs = ts;
