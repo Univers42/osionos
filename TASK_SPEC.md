@@ -57,4 +57,4 @@ Upgrade the database view table row drag grip and sub-items chevron in `src/shar
 - [x] `MemoTableRow.tsx` updated with 24x24px dimensions, `tabIndex={0}`, `:focus-visible` rings, and `pl-8` lane padding.
 - [x] `tableRowGrip.spec.mjs` passes 2/2 in Docker.
 - [x] `npm run test:quality` passes (0 errors).
-- [ ] Commits created with `-s` signed by `DJSurgeon`.
+- [x] Commits created with `-s` signed by `DJSurgeon`.
