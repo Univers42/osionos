@@ -244,3 +244,5 @@ message is the bridge's public origin (`config.publicOrigin`, e.g. `https://baas
 - **`POST /api/machine/whoami {nonce}`**: same-origin only. It answers `{machineId, sig}` signed over
   `whoamiMessage`.
 - **`GET /api/machine/home`**: needs the node cookie. It answers `{folder: os.homedir()}`.
+- **`GET /api/machine/self`**: same-origin fetch metadata only, no CORS. It answers
+  `{paired: true, machineId}` so the page opened as `/?local=1` can name itself to the app.

@@ -113,8 +113,15 @@ export function createMachineSession({ machine, home }) {
 	}
 
 	// `/api/machine/whoami` lets the app check that this port is the machine it was told about
-	// (devil 2026-10-31, 5); `/api/machine/home` names the folder a window opens on.
-	async function machineRoutes(req, res, { ideOrigin, isSameOrigin, hasSession }) {
+	// (devil 2026-10-31, 5); `/api/machine/home` names the folder a window opens on;
+	// `/api/machine/self` names this machine to its own page, which opens without an id and
+	// relays it to the app only by postMessage. A plain GET carries no Origin, so its gate is the
+	// fetch metadata alone, and nothing here answers CORS: another site cannot read it.
+	async function machineRoutes(req, res, { ideOrigin, isSameOrigin, isSameOriginRead, hasSession }) {
+		if (req.url === '/api/machine/self' && req.method === 'GET') {
+			if (!isSameOriginRead(req)) return json(res, 403, { error: 'forbidden' });
+			return json(res, 200, { paired: true, machineId: machine.machineId });
+		}
 		if (req.url === '/api/machine/whoami' && req.method === 'POST') {
 			if (!isSameOrigin(req)) return json(res, 403, { error: 'forbidden' });
 			const nonce = await readNonce(req);

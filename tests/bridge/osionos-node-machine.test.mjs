@@ -144,3 +144,17 @@ test('home answers the folder only with a live session cookie', async (t) => {
 	assert.deepEqual(await res.json(), { folder: '/home/owner' });
 	assert.equal(existsSync('/nonexistent.sock'), false);
 });
+
+test('self names this machine to its own page only: same-origin fetch metadata, no CORS', async (t) => {
+	const { base } = await world(t);
+	const res = await fetch(`${base}/api/machine/self`, { headers: SAME });
+	assert.equal(res.status, 200);
+	assert.deepEqual(await res.json(), { paired: true, machineId: MACHINE });
+	assert.equal(res.headers.get('access-control-allow-origin'), null);
+	assert.equal(res.headers.get('cache-control'), 'no-store');
+	assert.equal((await fetch(`${base}/api/machine/self`, { headers: { ...SAME, origin: base } })).status, 200);
+	for (const headers of [{}, { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' }, { 'sec-fetch-site': 'same-site' }, { ...SAME, origin: 'https://evil.example' }]) {
+		assert.equal((await fetch(`${base}/api/machine/self`, { headers })).status, 403, JSON.stringify(headers));
+	}
+	assert.equal((await fetch(`${base}/api/machine/self`, { method: 'POST', headers: SAME })).status, 404);
+});

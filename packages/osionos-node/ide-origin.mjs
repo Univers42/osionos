@@ -126,6 +126,7 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 	const routeContext = {
 		ideOrigin,
 		isSameOrigin: (req) => checkNodeOrigin(req.headers, ideOrigin, false) && req.headers.origin === ideOrigin,
+		isSameOriginRead: (req) => checkNodeOrigin(req.headers, ideOrigin, false),
 		hasSession: (req) => Object.keys(nodes).some((node) => liveCap(req.headers.cookie, node) !== null),
 	};
 
