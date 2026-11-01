@@ -1,7 +1,8 @@
-// The desktop's local shell behind VS Code's terminal (groot ADR 0038): the desktop shell owns the
-// pty; this carries keystrokes, resizes and render acknowledgements only — never a command chosen
-// by page content (C3).
-import { chunkPtyInput, ptyDimension, type LocalPtyApi } from "./localPty";
+// The desktop's local shell behind one VS Code terminal (groot ADR 0038, ADR 0039): the desktop
+// owns the pty; this carries keystrokes, resizes and render acknowledgements on that pty's own port,
+// straight to the pty host, and never a command chosen by page content (C3).
+import { chunkPtyInput, ptyDimension } from "./localPty";
+import type { PtyConnection, TerminalPtyApi } from "./terminalPort";
 
 export interface LocalPtyEvents {
   data(data: string): void;
@@ -10,25 +11,38 @@ export interface LocalPtyEvents {
 
 /** One shell for one VS Code terminal. VS Code sends keystrokes and sizes as soon as it marks the
  *  process ready, which is before the desktop answers create: those wait for the shell. */
-export function createLocalPtyProcess(api: LocalPtyApi, events: LocalPtyEvents) {
-  let id: string | null = null;
-  let unsubscribe: Array<() => void> = [];
+export function createLocalPtyProcess(api: TerminalPtyApi, events: LocalPtyEvents) {
+  let shell: PtyConnection | null = null;
   let phase: "idle" | "starting" | "live" | "ended" = "idle";
   let typedWhileStarting = "";
   let size = { cols: 0, rows: 0 };
   // Read through a call: shutdown() may run while start() awaits the desktop.
   const isEnded = () => phase === "ended";
 
-  const send = (to: string, data: string) => {
-    for (const chunk of chunkPtyInput(data)) api.write(to, chunk);
+  const send = (data: string) => {
+    for (const chunk of chunkPtyInput(data)) shell?.port.postMessage({ op: "write", data: chunk });
   };
 
   const end = () => {
-    for (const off of unsubscribe) off();
-    unsubscribe = [];
-    id = null;
+    if (shell) {
+      shell.port.onmessage = null;
+      shell.port.close();
+    }
+    shell = null;
     phase = "ended";
     typedWhileStarting = "";
+  };
+
+  const listen = (connection: PtyConnection) => {
+    connection.port.onmessage = (event) => {
+      const m = event.data as { op?: unknown; data?: unknown; exitCode?: unknown } | null;
+      if (m?.op === "data" && typeof m.data === "string") events.data(m.data);
+      else if (m?.op === "exit" && typeof m.exitCode === "number") {
+        end();
+        events.exit(m.exitCode);
+      }
+    };
+    connection.port.start();
   };
 
   return {
@@ -36,7 +50,7 @@ export function createLocalPtyProcess(api: LocalPtyApi, events: LocalPtyEvents) 
       phase = "starting";
       size = { cols: ptyDimension(cols), rows: ptyDimension(rows) };
       const createdAt = size;
-      let created: string | null;
+      let created: PtyConnection | null;
       try {
         created = await api.create(createdAt.cols, createdAt.rows);
       } catch {
@@ -45,38 +59,38 @@ export function createLocalPtyProcess(api: LocalPtyApi, events: LocalPtyEvents) 
       }
       // VS Code closed the terminal while the shell started: nothing will ever show this one.
       if (isEnded()) {
-        if (created) api.kill(created);
+        if (created) {
+          api.kill(created.id);
+          created.port.close();
+        }
         return "failed";
       }
       if (!created) {
         end();
         return "refused";
       }
-      id = created;
+      shell = created;
       phase = "live";
-      unsubscribe = [
-        api.onData(created, events.data),
-        api.onExit(created, (exitCode) => { end(); events.exit(exitCode); }),
-      ];
-      if (size.cols !== createdAt.cols || size.rows !== createdAt.rows) api.resize(created, size.cols, size.rows);
-      if (typedWhileStarting) send(created, typedWhileStarting);
+      listen(created);
+      if (size.cols !== createdAt.cols || size.rows !== createdAt.rows) created.port.postMessage({ op: "resize", ...size });
+      if (typedWhileStarting) send(typedWhileStarting);
       typedWhileStarting = "";
       return "started";
     },
     input(data: string): void {
-      if (id) send(id, data);
+      if (shell) send(data);
       else if (phase === "starting") typedWhileStarting += data;
     },
     resize(cols: number, rows: number): void {
       size = { cols: ptyDimension(cols), rows: ptyDimension(rows) };
-      if (id) api.resize(id, size.cols, size.rows);
+      shell?.port.postMessage({ op: "resize", cols: size.cols, rows: size.rows });
     },
-    /** Characters VS Code finished rendering: the desktop shell resumes a paused pty on these. */
+    /** Characters VS Code finished rendering: the pty host resumes a paused pty on these. */
     ack(chars: number): void {
-      if (id && chars > 0) api.ack(id, chars);
+      if (chars > 0) shell?.port.postMessage({ op: "ack", chars });
     },
     shutdown(): void {
-      if (id) api.kill(id);
+      if (shell) api.kill(shell.id);
       end();
     },
   };

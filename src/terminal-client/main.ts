@@ -1,14 +1,14 @@
-// The terminal page (groot ADR 0038): VS Code's own terminal, drawn in the app's terminal panel, on
-// this computer's shell. The page reaches the shell only through the port the panel hands to the
-// iframe it rendered (devil amendment A1); framed anywhere else, or never handed a port, it draws
-// nothing and takes no focus.
+// The terminal page (groot ADR 0038, ADR 0039): VS Code's own terminal, drawn in the app's terminal
+// panel, on this computer's shell. It runs on app://terminal, in its own renderer process. It reaches
+// the shell only through the control port the panel hands to the iframe it rendered (devil amendment
+// A1), and each terminal talks to its pty host over that pty's own port. Framed anywhere else, or
+// never handed a port, it draws nothing and takes no focus.
 import { ITerminalService, getService, initialize } from "@codingame/monaco-vscode-api";
 import "@codingame/monaco-vscode-theme-defaults-default-extension";
 import { SimpleTerminalBackend, SimpleTerminalProcess } from "@codingame/monaco-vscode-terminal-service-override";
 import { Emitter } from "@codingame/monaco-vscode-api/vscode/vs/base/common/event";
-import type { LocalPtyApi } from "../features/ide/model/localPty";
 import { createLocalPtyProcess } from "../features/ide/model/localPtyProcess";
-import { acceptTerminalPort, ptyApiOverPort, terminalColorsFrom, type TerminalColors } from "../features/ide/model/terminalPort";
+import { acceptTerminalPort, ptyApiOverPort, terminalColorsFrom, type TerminalColors, type TerminalPtyApi } from "../features/ide/model/terminalPort";
 import { terminalModeServices } from "./services";
 import "./terminal.css";
 
@@ -20,7 +20,7 @@ class LocalShellProcess extends SimpleTerminalProcess {
   private readonly core;
   override onProcessExit = this.exited.event;
 
-  constructor(api: LocalPtyApi, private readonly size: { cols: number; rows: number }) {
+  constructor(api: TerminalPtyApi, private readonly size: { cols: number; rows: number }) {
     const output = new Emitter<string>();
     // VS Code queues every keystroke until the process reports a non-zero pid
     // (terminalProcessManager write()); the desktop keeps the real one, so this stands in for it.
@@ -43,7 +43,7 @@ class LocalShellProcess extends SimpleTerminalProcess {
 }
 
 class LocalShellBackend extends SimpleTerminalBackend {
-  constructor(private readonly api: LocalPtyApi) { super(); }
+  constructor(private readonly api: TerminalPtyApi) { super(); }
   getDefaultSystemShell = async () => "";
   createProcess = async (_launch: unknown, _cwd: unknown, cols: number, rows: number) => new LocalShellProcess(this.api, { cols, rows });
 }
@@ -69,7 +69,7 @@ function terminalTheme(colors: TerminalColors) {
   };
 }
 
-async function start(api: LocalPtyApi, colors: TerminalColors) {
+async function start(api: TerminalPtyApi, colors: TerminalColors) {
   if (colors.background) document.body.style.background = colors.background;
   await initialize(terminalModeServices(new LocalShellBackend(api) as never), undefined, {
     configurationDefaults: terminalTheme(colors),
@@ -88,7 +88,7 @@ async function start(api: LocalPtyApi, colors: TerminalColors) {
 // Only a frame of the app's own top page, and only the first port it hands over (A1, A2).
 const framedByTheApp = window.parent !== window && window.parent === window.top;
 function onHandoff(event: MessageEvent) {
-  const port = acceptTerminalPort(event, { parent: window.parent, origin: location.origin });
+  const port = acceptTerminalPort(event, { parent: window.parent, top: window.top, self: window });
   if (!port) return;
   window.removeEventListener("message", onHandoff);
   const colors = terminalColorsFrom((event.data as { colors?: unknown }).colors);

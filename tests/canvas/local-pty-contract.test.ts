@@ -1,6 +1,6 @@
 // The preload's `pty` contract (devil verdict 2026-10-31, desktop local terminal): the desktop
 // terminal exists only when every method is there, and writes and sizes stay inside the limits
-// the desktop shell enforces (C5).
+// the pty host enforces (C5, T2).
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -21,7 +21,7 @@ test("the local terminal exists only when the preload exposes every pty method",
   assert.equal(localPtyApi(), null);
   assert.equal(hasLocalTerminal(), false);
   withDesktop({ minimize() {}, toggleMaximize() {}, close() {} }, () => assert.equal(hasLocalTerminal(), false));
-  withDesktop({ pty: { ...api, ack: "not a function" } }, () => assert.equal(localPtyApi(), null));
+  withDesktop({ pty: { ...api, onExit: "not a function" } }, () => assert.equal(localPtyApi(), null));
   const withoutKill = Object.fromEntries(Object.entries(api).filter(([name]) => name !== "kill"));
   withDesktop({ pty: withoutKill }, () => assert.equal(hasLocalTerminal(), false));
   withDesktop({ pty: null }, () => assert.equal(hasLocalTerminal(), false));
@@ -29,6 +29,14 @@ test("the local terminal exists only when the preload exposes every pty method",
     assert.equal(localPtyApi(), api);
     assert.equal(hasLocalTerminal(), true);
   });
+});
+
+// T3: a desktop built before the direct port posts no pty port, so its terminal would never start.
+test("a preload that still carries write, resize, ack or onData shows no local terminal", () => {
+  const { api } = fakePty();
+  for (const retired of ["write", "resize", "ack", "onData"]) {
+    withDesktop({ pty: { ...api, [retired]: () => {} } }, () => assert.equal(hasLocalTerminal(), false, retired));
+  }
 });
 
 test("a paste over 64 KiB goes in chunks the preload accepts", () => {
