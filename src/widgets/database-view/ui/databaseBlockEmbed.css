@@ -74,9 +74,9 @@
   inset-block: 0;
   right: 2.125rem;
   padding-left: 1.5rem;
-  /* Blurs a long title behind the tools: a painted fade showed over a tinted callout. */
+  /* No paint and no backdrop-filter: a fade showed over a tinted callout, and a filter
+     would become the containing block of the template dropdown and clip it. */
   background: transparent;
-  backdrop-filter: blur(6px);
 }
 
 /* Floating beside the title only works while both fit: at 400 px the toolbar
