@@ -23,6 +23,8 @@ import { parseArgs } from 'node:util';
 
 import { isNodeId } from '../../scripts/ide-token.mjs';
 import { createHeartbeat } from './heartbeat.mjs';
+import { createRootStore } from './fs-roots.mjs';
+import { FS_LIMITS } from './fs-wire.mjs';
 import { createIdeOriginServer } from './ide-origin.mjs';
 import { createMachineSession, loadMachine } from './machine-identity.mjs';
 import { pairMachine } from './pair.mjs';
@@ -117,6 +119,16 @@ function assertPagesBuilt(config) {
 	}
 }
 
+// The editor's disk (devil verdict 2026-11-01 editor on disk): paired machines only, with its own
+// WebSocket server, so the pty's pre-auth bound stays the pty's (F6).
+function diskFor(config, home, env) {
+	if (!config.machine) return undefined;
+	const accept = serverSocketAcceptor(config.serverDir, FS_LIMITS.maxPayload);
+	if (!accept) return undefined;
+	const nodeHome = join(env.HOME ?? homedir(), '.osionos');
+	return { accept, home, appOrigins: config.appOrigins, roots: createRootStore({ file: join(nodeHome, 'roots.json'), home, nodeHome }) };
+}
+
 async function serve(argv, env) {
 	const config = readServeConfig(argv, env, loadMachine(machineFile(env)));
 	assertPagesBuilt(config);
@@ -131,6 +143,7 @@ async function serve(argv, env) {
 		nodes: { [config.node]: { socketPath: server.socketPath, extensionRoots: config.extensionRoots } },
 		client: createClientHandler({ root: config.client, terminalRoot: config.terminal, appOrigins: config.appOrigins }),
 		pty: terminal.pty,
+		fs: diskFor(config, home, env),
 	});
 	await new Promise((resolve, reject) => origin.server.once('error', reject).listen(config.listen.port, config.listen.host, resolve));
 	console.log(`osionos-node: ${config.node} on ${config.ideOrigin} (server ${server.reused ? 'reused' : `pid ${server.pid}`})`);

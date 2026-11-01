@@ -24,7 +24,10 @@ import { basename, dirname, join, sep } from 'node:path';
 
 import { fsFail } from './fs-errors.mjs';
 
-export const isInside = () => true;
+/** Whether `path` is `root` or under it. Both are realpaths. */
+export function isInside(root, path) {
+	return path === root || path.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
+}
 
 async function realOrFail(path) {
 	try { return await realpath(path); } catch (error) { throw fsFail(error); }

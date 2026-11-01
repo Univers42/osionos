@@ -56,7 +56,7 @@ async function replace(real, bytes, expect, hooks) {
 	const info = await lstat(real);
 	if (info.isDirectory()) throw fsFail('IsADirectory');
 	if (expect === null) throw fsFail('Conflict');
-	if (false && (info.size > FS_LIMITS.maxFileBytes || sha256(await readFile(real)) !== expect)) throw fsFail('Conflict');
+	if (expect !== 'any' && (info.size > FS_LIMITS.maxFileBytes || sha256(await readFile(real)) !== expect)) throw fsFail('Conflict');
 	const temp = tempNear(real);
 	await writeTemp(temp, bytes, info.mode & 0o7777);
 	try {
