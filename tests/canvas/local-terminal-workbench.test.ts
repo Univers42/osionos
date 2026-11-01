@@ -94,3 +94,15 @@ test("the desktop terminal panel frames VS Code's terminal page on its own origi
   const web = renderToStaticMarkup(React.createElement(IdeTerminal));
   assert.match(web, /Terminal on laptop/);
 });
+
+test("on the desktop the dock has no terminal buttons of its own: VS Code's panel carries them", async () => {
+  const { WorkbenchDock } = await import("../../src/widgets/workbench/ui/WorkbenchDock.tsx");
+  useWorkbenchStore.getInitialState().dockTab = "terminal";
+  let desktop = "";
+  onDesktop(() => { desktop = renderToStaticMarkup(React.createElement(WorkbenchDock)); });
+  assert.doesNotMatch(desktop, /aria-label="(New terminal|Split terminal|Close split|Safe terminal|Restart box)"/);
+  assert.match(desktop, /aria-label="Hide panel"/);
+  const web = renderToStaticMarkup(React.createElement(WorkbenchDock));
+  assert.match(web, /aria-label="New terminal"/);
+  assert.match(web, /aria-label="Split terminal"/);
+});
