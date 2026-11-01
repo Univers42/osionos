@@ -70,6 +70,7 @@ const GRAMMAR: Record<ThemeTokenKind, { test: RegExp[]; property: string; expect
   "line-style": { test: [/^(?:solid|dashed|dotted|double|groove|ridge)$/], property: "border-style", expects: "solid, dashed, dotted, double, groove or ridge" },
   "letter-case": { test: [/^(?:none|uppercase|lowercase|capitalize)$/], property: "text-transform", expects: "none, uppercase, lowercase or capitalize" },
   "font-style": { test: [/^(?:normal|italic|oblique)$/], property: "font-style", expects: "normal, italic or oblique" },
+  "text-line": { test: [/^(?:none|underline|overline)$/], property: "text-decoration-line", expects: "none, underline or overline" },
   duration: { test: [/^(?:\d+\.?\d*|\.\d+)(?:ms|s)$/], property: "transition-duration", expects: "a duration such as 120ms or .2s" },
   easing: {
     test: [

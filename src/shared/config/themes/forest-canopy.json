@@ -86,7 +86,11 @@
     "syntax-property": "#b1d8d1",
     "syntax-type": "#b0c298",
     "syntax-tag": "#7bc96f",
-    "syntax-attr": "#e5d08a"
+    "syntax-attr": "#e5d08a",
+    "selection-bg": "#2e4c2c",
+    "selection-fg": "#eef5ec",
+    "scrollbar-thumb": "#4c534e",
+    "scrollbar-thumb-hover": "#768174"
   },
   "layout": {
     "radius": "12px",
@@ -165,7 +169,8 @@
     "icon-stroke": "1.75",
     "disabled-opacity": ".55",
     "scrollbar-size": "10px",
-    "link-underline-offset": "2px"
+    "link-underline-offset": "2px",
+    "scrollbar-radius": "10px"
   },
   "fonts": {
     "font-ui": "Avenir Next, Segoe UI, Roboto, sans-serif",
@@ -193,6 +198,11 @@
     "font-weight-bold": "600",
     "heading-transform": "none",
     "heading-style": "normal",
-    "button-transform": "none"
+    "button-transform": "none",
+    "heading-decoration": "none",
+    "link-decoration": "underline",
+    "letter-spacing-ui": "0",
+    "letter-spacing-button": "0",
+    "font-weight-button": "600"
   }
 }
