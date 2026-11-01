@@ -31,9 +31,11 @@ import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/
 import { ActivitySidebar } from "@/widgets/activity-rail";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
+import { useDocumentTitle } from "@/widgets/workspace-grid/model/tabTitle";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
-import { LazyCanvasDebugRoute, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
+import { LazyCanvasDebugRoute, LazyMachineView, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
+import { startDrawnCaret } from "@/features/theme/model/drawnCaret";
 import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { applyStoredTheme } from "@/shared/config/themeApply";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
@@ -42,6 +44,7 @@ import { ThemeSafeModeBanner } from "@/features/theme/ui/ThemeSafeModeBanner";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
+import { useConnectivityNotices } from "@/features/connectivity/model/useConnectivityNotices";
 import { useVariablesSync } from "@/features/variables/model/useVariablesSync";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
 import { ToastViewport } from "@osionos/ui/primitives";
@@ -184,8 +187,10 @@ const App: React.FC = () => {
   // bridge (GET /api/graph/pages), so no separate note-mirror sync is needed.
   usePageSync();
   useLayoutPagePrune(); // close tab-bar tabs when their page is archived/deleted
+  useDocumentTitle();
   useUnreadSync(); // seed per-channel unread badges (mount + 60s + focus)
   useNotifyLive(); // seed + live in-app notifications (toasts + store)
+  useConnectivityNotices(); // offline / unstable / back online: a toast and the status-bar chip
 
   // Hydrate the per-user favorites set (bridge is source of truth) when the session changes.
   useEffect(() => {
@@ -235,6 +240,8 @@ const App: React.FC = () => {
       },
     );
   }, [objectDbActiveUser]);
+
+  useEffect(() => startDrawnCaret(), []);
 
   // Run once on mount
   useEffect(() => {
@@ -329,6 +336,9 @@ const App: React.FC = () => {
     );
   }
 
+  // A connected machine's folder (ADR-006): signed in, and nothing of the workbench around it.
+  if (globalThis.location?.pathname === "/machine") return <LazyMachineView />;
+
   return (
     <BindingSourcesProvider>
       <div
@@ -336,6 +346,14 @@ const App: React.FC = () => {
         data-zen={zen ? "1" : undefined}
         className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
       >
+        {/* First stop of the Tab order, shown only when focused: past the top bar and the sidebar (RGAA 12.7). */}
+        <a
+          href="#osio-main"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-[var(--osio-bg-page)] focus:px-3 focus:py-2 focus:text-sm focus:text-[var(--osio-fg-default)] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]"
+        >
+          Skip to content
+        </a>
+
         {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
         <TopBar onOpenSettings={openSettings} />
 
@@ -356,7 +374,7 @@ const App: React.FC = () => {
 
           {/* Content area — the unified workbench (grid + dock + status bar), or the
               no-access screen when a shared link pointed at an unreadable page. */}
-          <main className="flex-1 flex min-w-0 overflow-hidden relative">
+          <main id="osio-main" tabIndex={-1} className="flex-1 flex min-w-0 overflow-hidden relative outline-none">
             {deniedPageId ? (
               <React.Suspense fallback={null}>
                 <LazyNoAccessScreen />

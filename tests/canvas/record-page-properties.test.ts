@@ -108,6 +108,8 @@ const page = {
 const resolver: RecordValueResolver = {
   formula: (property) => (property.id === "weighted" ? 42 : null),
   rollup: (property) => (property.id === "tasks" ? 3 : null),
+  // row-2 was deleted from the related table.
+  title: (rowId) => (rowId === "row-1" ? "Ada Lovelace" : null),
 };
 
 function entry(key: string): PagePropertyEntry {
@@ -213,4 +215,49 @@ test("removing one tag keeps an unknown id", () => {
   assert.deepEqual(recordPropertyEdits(database, legacy, entries), [
     { propertyId: "products", value: ["prod-retired"] },
   ]);
+});
+
+// #162: the record page showed what the table could not keep — a second "Name" row,
+// related rows as "Untitled" chips, and computed values the page let you edit and then dropped.
+test("the title is the page's own title, not a second property row", () => {
+  const keys = projectRecordProperties(database, page, resolver).map((item) => item.key);
+  assert.ok(!keys.includes("title"), keys.join(", "));
+});
+
+test("relations show the related rows' titles, and a deleted row is dropped like the table does", () => {
+  const contacts = entry("contacts");
+  assert.deepEqual(contacts.value, ["Ada Lovelace"]);
+  assert.equal(contacts.relationTarget, "database");
+});
+
+test("values the table owns are shown read-only; the ones it stores stay editable", () => {
+  for (const key of ["weighted", "tasks", "createdTime", "editedTime", "contacts", "hq", "legacy"]) {
+    assert.equal(entry(key).readOnly, true, key);
+  }
+  for (const key of ["notes", "amount", "strategic", "stage", "products", "created", "website"]) {
+    assert.ok(!entry(key).readOnly, key);
+  }
+});
+
+test("people and attachments are one chip per value, not joined text or raw JSON", () => {
+  const team = {
+    ...database,
+    properties: {
+      owner: { id: "owner", name: "Owner", type: "person" },
+      by: { id: "by", name: "Created by", type: "created_by" },
+      files: { id: "files", name: "Files", type: "files_media" },
+    },
+  } as unknown as DatabaseSchema;
+  const row = {
+    ...page,
+    properties: {
+      owner: ["Ada Lovelace", "Alan Turing"],
+      by: "Grace Hopper",
+      files: [{ id: "f1", name: "brief.pdf", url: "https://files.example/brief.pdf", type: "pdf" }, "cover.png"],
+    },
+  } as unknown as DatabasePage;
+  const byKey = new Map(projectRecordProperties(team, row, resolver).map((item) => [item.key, item]));
+  assert.deepEqual(byKey.get("owner"), { key: "owner", label: "Owner", type: "person", value: ["Ada Lovelace", "Alan Turing"], options: undefined, relationTarget: undefined, readOnly: true });
+  assert.deepEqual(byKey.get("by")?.value, ["Grace Hopper"]);
+  assert.deepEqual([byKey.get("files")?.type, byKey.get("files")?.value], ["files", ["brief.pdf", "cover.png"]]);
 });

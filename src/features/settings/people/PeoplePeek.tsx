@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/28 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/30 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -82,7 +82,7 @@ const PRESENCE_DOT: Record<PresenceState, string> = {
 };
 
 /** The state is always written out: the dot alone would be colour-only. */
-const PresenceBadge: React.FC<{ state: PresenceState; note: string | null }> = ({ state, note }) => (
+export const PresenceBadge: React.FC<{ state: PresenceState; note: string | null }> = ({ state, note }) => (
   <span className="inline-flex items-center gap-1.5 text-xs text-[var(--osio-fg-muted)]" data-presence={state}>
     <span aria-hidden className={`h-2 w-2 rounded-full ${PRESENCE_DOT[state]}`} />
     {presenceLabel(state)}{note ? ` · ${note}` : ""}

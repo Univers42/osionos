@@ -251,4 +251,10 @@ describe('pageContentText', () => {
 	it('is still exported from bridge-api.mjs', () => {
 		assert.equal(pageContentText([{ type: 'paragraph', content: 'a page' }]), 'a page');
 	});
+
+	// #61: a published page carries its layouts, so the words in their cells are checked too.
+	it('reads the words inside layout cells: label, cell text and the blocks in the cell', () => {
+		const layout = { type: 'layout', content: '', layoutCells: [{ label: 'About', content: 'side note', blocks: [{ type: 'paragraph', content: BLOCKED }] }] };
+		assert.equal(pageContentText([layout]), `About side note ${BLOCKED}`);
+	});
 });

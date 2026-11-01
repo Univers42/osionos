@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { X } from "lucide-react";
+import { Paperclip, X } from "lucide-react";
 
 import { Dropdown, type DropdownOption } from "@/shared/ui";
 import type { PagePropertyEntry } from "../model/types";
@@ -41,8 +41,8 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
     return <MultiSelectField property={property} editable={editable} onChange={onChange} />;
   }
 
-  if (!editable) {
-    return <span className="text-sm text-[var(--osio-fg-muted)]">{stringValue(property.value) || "Empty"}</span>;
+  if ((property.type === "person" || property.type === "files") && Array.isArray(property.value)) {
+    return <ValueChips type={property.type} values={property.value} />;
   }
 
   if (property.type === "checkbox") {
@@ -51,10 +51,16 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
         type="checkbox"
         aria-label={property.label}
         checked={Boolean(property.value)}
+        disabled={!editable}
         onChange={(event) => onChange(event.target.checked)}
         className="h-4 w-4 accent-[var(--osio-accent)]"
       />
     );
+  }
+
+  // A blank value prints nothing: the row and its name stay, an "Empty" here was noise (#162).
+  if (!editable) {
+    return <span className="text-sm text-[var(--osio-fg-muted)]">{stringValue(property.value)}</span>;
   }
 
   if ((property.type === "select" || property.type === "status") && property.options?.length) {
@@ -121,6 +127,22 @@ const TextValueField: React.FC<Omit<Props, "editable">> = ({ property, onChange 
   );
 };
 
+/** People (an initial) and attachments (a clip), one read-only chip each, never joined text (#162). */
+const ValueChips: React.FC<{ type: "person" | "files"; values: string[] }> = ({ type, values }) => (
+  <div className="flex min-w-0 flex-wrap items-center gap-1">
+    {values.map((value, index) => (
+      <span key={`${index}:${value}`} className="osio-chip max-w-60">
+        {type === "person" ? (
+          <span aria-hidden className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--osio-accent)] text-3xs font-semibold text-[var(--osio-accent-fg)]">
+            {value.charAt(0).toUpperCase()}
+          </span>
+        ) : <Paperclip aria-hidden size={12} className="shrink-0" />}
+        <span className="truncate">{value}</span>
+      </span>
+    ))}
+  </div>
+);
+
 /** Chips for the chosen values; the unchosen options come from a dropdown, and a property with no options takes free text. */
 const MultiSelectField: React.FC<Props> = ({ property, editable, onChange }) => {
   const chosen = asStringArray(property.value);
@@ -140,7 +162,6 @@ const MultiSelectField: React.FC<Props> = ({ property, editable, onChange }) => 
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1">
-      {chosen.length === 0 && !editable ? <span className="text-sm text-[var(--osio-fg-muted)]">Empty</span> : null}
       {chosen.map((tag) => (
         <span key={tag} className="osio-chip">
           {tag}

@@ -19,6 +19,7 @@
 
 import { api, API_BASE, getActivePageJwt } from '@/shared/api/client';
 import type { Attachment } from '@/shared/chat/messageApi';
+import { postWithProgress } from '@/shared/lib/media/postWithProgress';
 
 export interface LinkPreview {
   title?: string;
@@ -39,8 +40,12 @@ function attachmentType(mime: string): 'image' | 'video' | 'audio' | 'file' {
   return 'file';
 }
 
-/** Upload raw bytes; returns the DRAFT descriptor (no row/url yet). */
-export async function uploadAttachment(channelId: string, file: File): Promise<Attachment> {
+/** Upload raw bytes, reporting the fraction sent; returns the DRAFT descriptor (no row/url yet). */
+export async function uploadAttachment(
+  channelId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<Attachment> {
   if (!API_BASE) throw new Error('VITE_API_URL is not configured.');
   const type = attachmentType(file.type);
   const params = new URLSearchParams({
@@ -51,19 +56,14 @@ export async function uploadAttachment(channelId: string, file: File): Promise<A
   const headers: Record<string, string> = { 'Content-Type': file.type || 'application/octet-stream' };
   const token = getActivePageJwt();
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}/api/chat/uploads?${params}`, {
-    method: 'POST',
-    headers,
-    body: file,
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`upload ${file.name} → ${res.status} ${res.statusText} ${detail}`.trim());
+  const res = await postWithProgress(`${API_BASE}/api/chat/uploads?${params}`, file, headers, onProgress);
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(`upload ${file.name} → ${res.status} ${res.text}`.trim());
   }
   // The bridge wraps the descriptor: { ok, attachment: { objectKey, type, sha256, … } }.
   // Unwrap it — the bare descriptor is what the composer drafts and sendMessage must
   // carry, or fanOutAttachments drops a file whose objectKey is missing.
-  const body = (await res.json()) as { ok?: boolean; attachment?: Attachment };
+  const body = JSON.parse(res.text) as { ok?: boolean; attachment?: Attachment };
   if (!body.attachment?.objectKey) throw new Error(`upload ${file.name} → malformed descriptor`);
   return body.attachment;
 }

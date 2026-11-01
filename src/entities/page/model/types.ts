@@ -24,7 +24,7 @@ export interface PageCollaborator {
   role: PageCollaboratorRole;
 }
 
-export type PagePropertyType = "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation" | "email" | "phone" | "person" | "multi_select" | "status";
+export type PagePropertyType = "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation" | "email" | "phone" | "person" | "files" | "multi_select" | "status";
 
 /** How often a template auto-creates a new page (Notion "Duplicate every…"). */
 export type PageRecurrenceEvery = "none" | "day" | "week" | "month";
@@ -45,6 +45,8 @@ export interface PagePropertyEntry {
   value: string | string[] | number | boolean | null;
   options?: string[];
   relationTarget?: "page" | "database" | "block" | "mixed";
+  /** The connected table owns this value (a computed column, a related row): shown, never edited here. */
+  readOnly?: boolean;
 }
 
 /** Entry representing a page in the workspace tree. */

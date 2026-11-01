@@ -81,6 +81,8 @@ export function synthesizeWorkspaceState(entries: PageEntry[]): NotionState {
   const pages: Record<string, Page> = {};
   const folderPages: Page[] = [];
   const filePages: Page[] = [];
+  const fileIds = new Set(files.map((file) => file._id));
+  const isLiveFile = (id: string): boolean => fileIds.has(id);
   let unfiledUsed = false;
 
   for (const folder of folders) {
@@ -96,7 +98,7 @@ export function synthesizeWorkspaceState(entries: PageEntry[]): NotionState {
     const theme = themeOf.get(folderId) ?? (folderId === UNFILED_FOLDER_ID ? UNFILED_FOLDER_TITLE : "—");
     const category = byId.get(folderId)?.title ?? UNFILED_FOLDER_TITLE;
     const page = fileEntryToNotionPage(file, {
-      theme, category, folderId, type: fileType(file.title), tags: readTags(file), related: readRelated(file),
+      theme, category, folderId, type: fileType(file.title), tags: readTags(file), related: readRelated(file, isLiveFile),
     });
     pages[page.id] = page;
     filePages.push(page);

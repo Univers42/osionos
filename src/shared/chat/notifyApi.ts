@@ -46,9 +46,38 @@ export async function fetchInbox(): Promise<{ notifyToken: string | null; unread
   return { notifyToken: res.notifyToken ?? null, unread: res.unread ?? 0 };
 }
 
+export async function markNotificationsRead(ids: readonly string[]): Promise<void> {
+  await api.post('/api/notifications/read', { ids }, getActivePageJwt() ?? undefined);
+}
+
 export async function markAllNotificationsRead(): Promise<void> {
   await api.post('/api/notifications/read-all', {}, getActivePageJwt() ?? undefined);
 }
+
+export async function deleteNotification(id: string): Promise<void> {
+  await api.delete(`/api/notifications/${encodeURIComponent(id)}`, getActivePageJwt() ?? undefined);
+}
+
+export async function clearNotifications(): Promise<void> {
+  await api.delete('/api/notifications', getActivePageJwt() ?? undefined);
+}
+
+/** What a stored notification is, for the inbox row: the row carries no actor name to build a sentence. */
+export const NOTIFICATION_TITLE: Record<NotificationType, string> = {
+  mention: 'Mention',
+  dm: 'Direct message',
+  reply: 'Reply',
+  reaction: 'Reaction',
+  connection: 'Connection request',
+  system: 'Notice',
+  feed_reaction: 'Reaction to your post',
+  feed_comment: 'Comment on your post',
+  feed_share: 'Share of your post',
+  page_comment: 'Comment on your page',
+  task_due: 'Task due',
+  page_access_request: 'Access request',
+  page_access_decision: 'Access decision',
+};
 
 /** Plain-text sentence for a notification, used by the inbox UI and toasts.
  *  A page title is never interpolated into the access-decision sentence, even

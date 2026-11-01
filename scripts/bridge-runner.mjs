@@ -189,7 +189,7 @@ export function createRunnerHandler({ config, verifySession, fetchImpl = fetch, 
           response.write(chunk);
         }
       }
-    } catch (error) {
+    } catch {
       if (!response.writableEnded) sse(response, 'error', { message: 'Runner unavailable.' });
     } finally {
       clearTimeout(upstreamTimer);

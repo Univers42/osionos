@@ -18,6 +18,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { caretBox, needsDrawnCaret } from "@/features/theme/model/drawnCaret";
+
 import {
   DEFAULT_APPEARANCE,
   applyAppearance,
@@ -140,4 +142,34 @@ test("updateAppearance merges with the live appearance instead of a caller's cop
     assert.equal(next.accent, "ember");
     assert.equal(next.urlPaste, "plain");
   });
+});
+
+test("the caret choices round-trip, fall back on their own, and ride their attributes", () => {
+  const value = { caretColor: "pink", caretShape: "thick", caretBlink: "off" };
+  assert.deepEqual(stored(value), { ...DEFAULT_APPEARANCE, ...value });
+  const bad = stored({ caretColor: "#ff0000", caretShape: "underscore", caretBlink: "sometimes" });
+  assert.equal(bad.caretColor, "accent");
+  assert.equal(bad.caretShape, "underscore");
+  assert.equal(bad.caretBlink, "on");
+  withRoot((root) => {
+    applyAppearance({ ...DEFAULT_APPEARANCE, caretColor: "text", caretShape: "underscore", caretBlink: "off" });
+    assert.equal(root.dataset.caretColor, "text");
+    assert.equal(root.dataset.caretShape, "underscore");
+    assert.equal(root.dataset.caretBlink, "off");
+    applyAppearance(DEFAULT_APPEARANCE);
+    assert.equal(root.dataset.caretColor, undefined);
+    assert.equal(root.dataset.caretShape, undefined);
+    assert.equal(root.dataset.caretBlink, undefined);
+  });
+});
+
+test("only a shape or a steady caret is drawn, and each shape sits on the caret's line", () => {
+  assert.equal(needsDrawnCaret({ caretShape: "bar", caretBlink: "on" }), false);
+  assert.equal(needsDrawnCaret({ caretShape: "bar", caretBlink: "off" }), true);
+  assert.equal(needsDrawnCaret({ caretShape: "thick", caretBlink: "on" }), true);
+  const line = { left: 100, top: 40, height: 20 };
+  assert.deepEqual(caretBox(line, "bar", 8), { x: 99.5, y: 40, width: 1, height: 20 });
+  assert.deepEqual(caretBox(line, "thick", 8), { x: 98.5, y: 40, width: 3, height: 20 });
+  assert.deepEqual(caretBox(line, "block", 8), { x: 100, y: 40, width: 8, height: 20 });
+  assert.deepEqual(caretBox(line, "underscore", 8), { x: 100, y: 58, width: 8, height: 2 });
 });

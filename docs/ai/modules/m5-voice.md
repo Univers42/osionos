@@ -112,6 +112,11 @@ docker run --rm -v "$PWD/infrastructure/tls":/etc/nginx/conf.d:ro nginx:1.27-alp
   `services/osionos-ai/spikes/a1/stt-bench.py`); full numbers in
   `services/osionos-ai/spikes/a1/results/stt/RESULTS.md`. Decision: small stays;
   turbo's WER is lower in fr/es but its p95 RTF is above 0.5 on this CPU.
+- **Caveat: cut-off words (measured, A1, same clips).** Reference words lost
+  at the start or the end of a clip, `faster-whisper-small`: en_us 8 of 2235
+  (0.004), fr_fr 15 of 2556 (0.006), es_419 0 of 2473. Nearly all at the start
+  of a clip. FLEURS clips are whole sentences, so the app's own recorder stop is
+  not measured. Table and definition in `results/stt/RESULTS.md` "Cut-off words".
 - **Caveat:** FLEURS is read speech, not dictation; the CPU was shared with
   other jobs during the measurement (load 6-14); the normaliser is NFKC +
   lowercase + punctuation removed, not Whisper's own, so the numbers are not

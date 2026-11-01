@@ -68,6 +68,8 @@ registerDataSourceProvider({
 registerCrossMountCatalog(async () =>
   (await listLiveSources()).map((source) => ({
     dbId: source.mount.dbId,
+    name: source.mount.name,
+    engine: source.mount.engine,
     tables: source.tables.map((table) => table.table),
   })),
 );

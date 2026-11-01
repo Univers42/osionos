@@ -41,7 +41,7 @@ test.describe("sys data sources", () => {
     await openFreshPage(page, "/");
     const editor = await activateFirstEditor(page);
     await openSlashMenuFromEditor(editor, "/my");
-    for (const label of ["My pages", "My tasks", "Published pages", "Connections", "My workspaces", "My sessions"]) {
+    for (const label of ["My pages", "My tasks", "Published pages", "Connections", "Followers", "My workspaces", "My sessions"]) {
       await expect(slashCommandEntry(page, label)).toBeVisible();
     }
     await slashCommandEntry(page, "My pages").click();
@@ -98,6 +98,24 @@ test.describe("sys data sources", () => {
     });
     await insertMyPages(page);
     await expect(block(page, "sys:my-pages").getByText("Showing your 200 most recent.")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("a my-followers block names each follower by their public card", async ({ page, baseURL }) => {
+    const rows = [
+      { follower_id: "u-ada", created_at: "2026-10-09T00:00:00Z", follower: { userId: "u-ada", name: "Ada Lovelace", username: "ada" } },
+      { follower_id: "u-quiet", created_at: "2026-10-08T00:00:00Z", follower: { userId: "u-quiet", name: "Quiet Peer" } },
+    ];
+    await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);
+    await stubRestOfTheBridge(page);
+    await page.route("**/api/account/self-data/my-followers", (route) => route.fulfill({
+      json: { ok: true, source: "my-followers", columns: ["follower_id", "created_at", "follower"], rows, truncated: false },
+    }));
+    await seedPage(page, "/", [{ id: "sys-followers", type: "database_inline", content: "", databaseId: "sys:my-followers", viewId: "my-followers-default" }]);
+    const inserted = block(page, "sys:my-followers");
+    await expect(inserted.getByText("Ada Lovelace")).toBeVisible({ timeout: 15_000 });
+    await expect(inserted.getByText("Quiet Peer")).toBeVisible();
+    await expect(inserted.getByText("u-ada")).toHaveCount(0);
+    await expect(inserted.getByText("{")).toHaveCount(0);
   });
 
   test("a my-activity block on the chart view draws a chart from the stubbed answer, not a table", async ({ page, baseURL }) => {

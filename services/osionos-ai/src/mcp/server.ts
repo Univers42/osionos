@@ -12,9 +12,9 @@ import { callTool, describeTool, toolsFor } from './tools.ts';
  * to hold a credential, and nothing to outlive a revocation.
  *
  * The listing follows the scopes of the token: the reads with `read`, the
- * three write tools with `write_approval`. A write tool only proposes an
- * approval; the user decides it in osionos (C117). There is no `build_plan`
- * and no content write.
+ * four write tools with `write_approval`. A write tool only proposes an
+ * approval; the user decides it in osionos (C117). There is no `build_plan`,
+ * and content is only added (`add_blocks`), never rewritten.
  */
 export function createMcpServer(db: Pool, redis: Redis, principal: PatPrincipal): Server {
 	const server = new Server(

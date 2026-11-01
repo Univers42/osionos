@@ -275,6 +275,8 @@ test.describe("database-inline-header", () => {
     const addBox = await addBtn.boundingBox();
     await addBtn.click();
     await expect(page.getByText("Select type")).toBeVisible();
+    // No AI service in this build, so no AI-filled column: it would stay "—" for good (#74).
+    await expect(page.getByTestId("add-ai-sentiment")).toHaveCount(0);
     // The panel pops in from scale(0.97): measured on its first frame, a 320px
     // panel sits 4.8px off its resting place (failed so under suite load).
     const panel = page.getByTestId("add-property-panel");

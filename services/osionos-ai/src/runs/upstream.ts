@@ -205,6 +205,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			skillIndex: input.skillIndex,
 			workspaceId: input.workspaceId,
 			...(input.userContext && input.userContext.skills.length > 0 ? { userSkills: input.userContext.skills } : {}),
+			...(input.userContext ? { promptItemIds: input.userContext.included } : {}),
 			...(input.mcpTools && input.mcpTools.length > 0 ? { mcp: { tools: input.mcpTools, redis } } : {}),
 			...(input.hooks ? { hooks: input.hooks } : {}),
 			...(web ? { web } : {}),

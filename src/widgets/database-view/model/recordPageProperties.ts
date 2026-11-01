@@ -15,7 +15,9 @@
  *
  * The engine stores option IDS, full ISO dates and computes formula/rollup
  * values on demand; the page editor renders LABELS, needs `YYYY-MM-DD` for its
- * date input and shows computed values as text. Projecting and editing go
+ * date input, shows computed values as text and related rows by title. A value
+ * the engine owns is projected read-only, so the page never offers an edit it
+ * would drop. Projecting and editing go
  * through the same table, so projecting a row is write-free for any stored
  * shape, not only clean data.
  */
@@ -36,6 +38,8 @@ export interface RecordValueResolver {
   formula(property: SchemaPropertyLike): unknown;
   /** Computed value of a rollup property for this row. */
   rollup(property: SchemaPropertyLike): unknown;
+  /** Title of a related row, or null when the row is gone (the table drops it too). */
+  title(rowId: string): string | null;
 }
 
 interface Codec {
@@ -180,9 +184,27 @@ const placeCodec: Codec = {
   },
 };
 
+/** People are names; one chip each (#162). */
+const personCodec: Codec = {
+  type: "person",
+  project: (value) => toStringArray(value),
+};
+
+/** An attachment is `{name, url, …}` or a bare name; the chip shows the name, not the JSON. */
+const filesCodec: Codec = {
+  type: "files",
+  project: (value) => (Array.isArray(value) ? value : [value]).map(fileName).filter(Boolean),
+};
+
+function fileName(value: unknown): string {
+  if (value && typeof value === "object" && "name" in value) return toSafeString((value as { name?: unknown }).name);
+  return toSafeString(value);
+}
+
 const relationCodec: Codec = {
   type: "relation",
-  project: (value) => toStringArray(value),
+  project: (value, _property, _page, resolve) =>
+    toStringArray(value).map((rowId) => resolve.title(rowId)).filter((title) => title !== null),
 };
 
 const formulaCodec: Codec = {
@@ -217,12 +239,12 @@ const CODECS: Readonly<Record<PropertyTypeKey, Codec>> = {
   status: selectCodec("status"),
   date: dateCodec(true),
   checkbox: checkboxCodec,
-  person: readOnly(fallbackCodec),
-  user: readOnly(fallbackCodec),
+  person: personCodec,
+  user: personCodec,
   url: urlCodec,
   email: emailCodec,
   phone: phoneCodec,
-  files_media: readOnly(fallbackCodec),
+  files_media: filesCodec,
   relation: relationCodec,
   formula: formulaCodec,
   rollup: rollupCodec,
@@ -231,9 +253,9 @@ const CODECS: Readonly<Record<PropertyTypeKey, Codec>> = {
   id: readOnly(fallbackCodec),
   created_time: readOnly(dateCodec(false)),
   last_edited_time: readOnly(dateCodec(false)),
-  created_by: readOnly(fallbackCodec),
-  last_edited_by: readOnly(fallbackCodec),
-  assigned_to: readOnly(fallbackCodec),
+  created_by: personCodec,
+  last_edited_by: personCodec,
+  assigned_to: personCodec,
   due_date: dateCodec(true),
   custom: readOnly(fallbackCodec),
 };
@@ -248,7 +270,8 @@ export function projectRecordProperties(
   page: DatabasePage,
   resolve: RecordValueResolver,
 ): PagePropertyEntry[] {
-  return Object.values(database.properties).map((property) => {
+  // The title column is the page's own title, not a property row under it.
+  return Object.values(database.properties).filter((property) => property.type !== "title").map((property) => {
     const codec = codecFor(property);
     return {
       key: property.id,
@@ -256,7 +279,8 @@ export function projectRecordProperties(
       type: codec.type,
       value: codec.project(page.properties[property.id], property, page, resolve),
       options: property.options?.map((option) => option.value),
-      relationTarget: property.type === "relation" ? "page" : undefined,
+      relationTarget: property.type === "relation" ? "database" : undefined,
+      readOnly: !codec.edit,
     };
   });
 }
@@ -264,6 +288,7 @@ export function projectRecordProperties(
 const NO_RESOLVE: RecordValueResolver = {
   formula: () => undefined,
   rollup: () => undefined,
+  title: () => null,
 };
 
 /** Page edits -> engine writes, using each property's CURRENT raw value. */

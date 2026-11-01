@@ -4,7 +4,7 @@ import { WRITE_TOOLS } from './writeTools.ts';
 import type { AnyWriteTool } from './types.ts';
 
 /**
- * The write tools of THIS deployment: the three page tools, plus `build_plan`
+ * The write tools of THIS deployment: the four of WRITE_TOOLS, plus `build_plan`
  * only when OSIONOS_AI_BUILDERS is on (devil C163). Every consumer reads the
  * list here; `buildersOn` is a parameter so a test can read both lists.
  */

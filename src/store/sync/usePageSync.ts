@@ -38,6 +38,7 @@ import { derivePageState, flushScheduledPagesCachePersist } from "@/store/pageSt
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useUserStore } from "@/features/auth";
 import { API_BASE } from "@/shared/api/client";
+import { connectivityStatus, useConnectivityStore } from "@/shared/api/connectivity";
 import { canEditPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { flushAllBlockDrafts } from "@/features/block-editor/model/blockDraftStore";
 import { buildDesiredPages, PAGE_OUTBOX_KEY, saveOutboxLedger } from "./pageStamp";
@@ -274,6 +275,13 @@ export function usePageSync(): void {
       guard.arm();
       schedule();
     });
+    // Back from offline or an unreachable bridge: send what waited now, not at the end of
+    // a backoff that may be two minutes long (#176).
+    const unsubscribeConnectivity = useConnectivityStore.subscribe((state, previous) => {
+      if (connectivityStatus(state) !== "online" || connectivityStatus(previous) === "online") return;
+      clearRetry();
+      void flush();
+    });
     schedule(); // publish whatever is already pending on mount
     return () => {
       disposed = true;
@@ -282,6 +290,7 @@ export function usePageSync(): void {
       guard.disarm();
       globalThis.removeEventListener("pagehide", flushOnUnload);
       unsubscribe();
+      unsubscribeConnectivity();
     };
   }, []);
 }

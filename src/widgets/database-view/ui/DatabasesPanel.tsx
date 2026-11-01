@@ -142,7 +142,7 @@ export const DatabasesPanel: React.FC = () => {
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 pb-5 pt-1">
+      <nav aria-label="Databases" className="flex-1 overflow-y-auto px-2 pb-5 pt-1">
         <CreatedDatabasesSection query={query} />
         {status === "loading" ? (
           <p className="flex items-center gap-2 px-2 py-10 text-center text-xs text-[var(--osio-fg-subtle)]">

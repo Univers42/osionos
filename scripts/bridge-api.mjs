@@ -20,7 +20,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
 import { writeJsonResponse } from './bridge-json-response.mjs';
-import { LINK_EDGES_RPC, PAGE_ROWS_RPC, readLinkEdges } from './bridge-graph-edges.mjs';
+import { readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { MARKETPLACE_WORKSPACE_ID, canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, ownerHoldsPage, pageVisibility, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
@@ -36,7 +36,8 @@ import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge-auth-exchange.mjs';
 import { resolveTurnstileToken, turnstileBootLine, turnstileSettingsFromEnv } from './bridge-turnstile.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller, writeSessionCutoff } from './bridge-session-cutoff.mjs';
-import { sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
+import { startSessionRevocationPoller } from './bridge-session-revocations.mjs';
+import { startModerationRetractPoller } from './bridge-moderation-retract.mjs';
 import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, deliveredAnswer, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
 import { createAccountHandler } from './bridge-account-mounts.mjs';
 import { mfaBootLine, mfaRequiredFor } from './bridge-account-mfa-state.mjs';
@@ -84,6 +85,7 @@ import { createModerationConsoleHandler } from './bridge-moderation-console.mjs'
 import { runWsCanary } from './bridge-realtime-ws-lane.mjs';
 import { createRecsHealthHandler } from './bridge-recs-health.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
+import { answerWithOrigin } from './bridge-cors-origin.mjs';
 import { createPageAccessRequestsHandler } from './bridge-page-access-requests.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
@@ -494,6 +496,16 @@ function assertPageWriteFitsEdge(path, method, payload) {
 	throw Object.assign(new Error('This page is too large to save (over 128 KB). Move pictures or long pasted text into files, then edit again.'), { status: 413, code: 'page_too_large' });
 }
 
+/**
+ * A failure that is the BaaS's, not the bridge's: an answered error (any `status`), our
+ * timeout, or a refused connection. A fail-closed catch swallows only these (#59).
+ * Caveat: fetch reports a refused connection as a TypeError, so a bridge TypeError
+ * ("x is not a function") inside the guarded call is swallowed too; keep the try narrow.
+ */
+function isBaasFailure(error) {
+	return Number.isInteger(error?.status) || error?.name === 'AbortError' || error instanceof TypeError;
+}
+
 async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer } = {}) {
 	requireBaasConfig(config);
 	const headers = {
@@ -596,21 +608,21 @@ async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIME
 	return readJsonBody(response, { service: 'query-router', empty: null, failureStatus: queryRouterStatus });
 }
 
-/** POST to the query-router and return its RAW {status, body} verbatim. WRITES
- *  (insert/update/delete/upsert/txn/ddl) must NOT be coerced — liveWriteClient
+/** POST (or PUT) to the query-router and return its RAW {status, body} verbatim. WRITES
+ *  (insert/update/delete/upsert/txn/ddl/automations) must NOT be coerced — liveWriteClient
  *  classifies each by status (200 ok / 409 conflict / 422 rejected / 5xx fail),
  *  so the upstream status + body pass straight through. */
-async function baasQueryPassthrough(config, fetchImpl, path, body, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
+async function baasQueryPassthrough(config, fetchImpl, path, body, method = 'POST') {
 	if (!config.queryRouterUrl || !config.baasApiKey) {
 		return { status: 503, body: { ok: false, message: 'osionos query-router access is not configured.' } };
 	}
 	let response;
 	try {
 		response = await fetchWithTimeout(fetchImpl, `${config.queryRouterUrl}${path}`, {
-			method: 'POST',
+			method,
 			headers: queryRouterHeaders(config, { 'Content-Type': 'application/json' }),
 			body: JSON.stringify(body),
-		}, timeoutMs);
+		}, BAAS_FETCH_TIMEOUT_MS);
 	} catch (error) {
 		return { status: 502, body: { ok: false, message: error instanceof Error ? error.message : String(error) } };
 	}
@@ -686,6 +698,30 @@ export async function baasTenantMountsGet(config, fetchImpl, timeoutMs = BAAS_FE
 	return Array.isArray(body) ? body : (body?.mounts ?? []);
 }
 
+/** GET one mount's descriptor from the same self-serve subtree as the list, with the tenant
+ *  key. A 404 is a mount tenant-control does not know, or a tenant-control that predates
+ *  the route: either way there is no label to show, which is not an outage. */
+async function baasTenantDescriptorGet(config, fetchImpl, dbId, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
+	if (!config.baasApiKey) {
+		throw Object.assign(new Error('osionos tenant api key is not configured (set OSIONOS_BAAS_API_KEY).'), { status: 503 });
+	}
+	const url = `${config.tenantMountsUrl}/${encodeURIComponent(dbId)}/descriptor`;
+	const response = await engineFetchOrUnavailable(() => fetchWithTimeout(fetchImpl, url, {
+		method: 'GET',
+		headers: { Accept: 'application/json', Authorization: `Bearer ${config.baasApiKey}` },
+	}, timeoutMs), timeoutMs, 'The mount descriptor');
+	if (response.status === 404) {
+		await response.body?.cancel().catch(() => {});
+		throw Object.assign(new Error('grobase has no descriptor for this mount.'), { status: 404 });
+	}
+	if (!response.ok) {
+		await response.body?.cancel().catch(() => {});
+		const failure = tenantMountsFailure(response.status, url);
+		throw Object.assign(new Error(failure.message), { status: failure.status });
+	}
+	return readJsonBody(response, { service: 'mount descriptor', empty: {}, failureStatus: responseStatusForBaasFailure });
+}
+
 function postgrestQuery(params) {
 	const searchParams = new URLSearchParams();
 	for (const [key, value] of Object.entries(params)) {
@@ -700,8 +736,7 @@ export function pageRowToEntry(row) {
 	// that feeds this mapper and carries content reads '*' (fetchPageRow, the search, the
 	// create's representation), so the column comes for free where it exists and is
 	// simply missing where it does not. The only select that names its columns is
-	// PAGE_LIST_SELECT — the metadata-only bulk hydrate, which carries no content and so
-	// has no version to give (a base without content cannot merge).
+	// PAGE_LIST_SELECT — the metadata-only bulk hydrate, which names `version` too (#82).
 	const contentVersion = pageVersionOf(row);
 	return {
 		_id: row.id,
@@ -1350,16 +1385,6 @@ async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImp
 	return workspaceAccessContext(token, workspaceId, member, permission);
 }
 
-/** The caller's own membership context in `workspaceId` holding `permission`, or null when they lack it. */
-async function memberAccessOrNull(request, workspaceId, permission, config, fetchImpl) {
-	try {
-		return await requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl);
-	} catch (error) {
-		if (error?.status === 403) return null;
-		throw error;
-	}
-}
-
 /**
  * The direct PATCH/DELETE route's decision for `row` as a boolean: readable, then owned
  * by the caller or reached through `memberAccess` (the caller's own membership holding
@@ -1561,6 +1586,28 @@ function requirePageWrite(context, permission) {
 }
 
 /**
+ * The caller's standing on a page for the #228 discussion routes: the read gate first
+ * (the 404 of a missing id), then `canWrite` — the page PATCH's gate, so accept agrees
+ * with it (C8, C9) — and `level`. pageLevelFor alone answers can_view for every member
+ * when no share rule decides the page, which would refuse a member who may edit it, so
+ * the rule's level wins when there is one, else the write gate: can_edit or can_view.
+ */
+export async function pageDiscussionAccess(request, pageId, config, fetchImpl) {
+	const context = await pageWriteContext(request, pageId, config, fetchImpl);
+	if (!context.owner) requireReadablePage(context.row, context.token.userId, context.level);
+	let canWrite = true;
+	try {
+		requirePageWrite(context, 'update');
+	} catch (error) {
+		if (error?.status !== 403) throw error;
+		canWrite = false;
+	}
+	const exempt = context.owner || context.level === null;
+	const level = exempt ? 'full_access' : (context.ruleLevel ?? (canWrite ? 'can_edit' : 'can_view'));
+	return { row: context.row, level, canWrite };
+}
+
+/**
  * The reads one collaboration event shares between its page-level check and its blocks
  * authorisation: the page row, the caller's membership and the share-rule map, each read
  * once. `scope` is created per request by the collab handler and dropped with it; nothing
@@ -1648,8 +1695,10 @@ async function requirePageScopeAccess(request, pageId, payload, permission, conf
 // Every field pageRowToEntry reads EXCEPT the heavy `content` JSONB (and the
 // generated search_doc tsvector `select:'*'` also pulls). Used for the bulk
 // /api/pages/all hydrate so a workspace boot ships metadata, not ~1MB of blocks;
-// content then loads lazily per page on open (fetchPageContent).
-const PAGE_LIST_SELECT = 'id,title,icon,cover,cover_position,updated_at,created_at,workspace_id,owner_id,visibility,collaborators,parent_page_id,sort_order,database_id,archived_at,properties,surface,is_template,is_default_template,template_surface,recurrence';
+// content then loads lazily per page on open (fetchPageContent). `version` rides along
+// (#82) so a hydrate learns another device's write without a clock comparison; it names
+// the column, so the list needs groot's osionos-page-version-migration.sql applied.
+const PAGE_LIST_SELECT = 'id,title,icon,cover,cover_position,updated_at,created_at,workspace_id,owner_id,visibility,collaborators,parent_page_id,sort_order,database_id,archived_at,properties,surface,is_template,is_default_template,template_surface,recurrence,version';
 
 // One chunk of the workspace-wide scan: small enough that no single response is the whole
 // workspace, large enough that an ordinary one is answered in a couple of requests.
@@ -3714,9 +3763,12 @@ async function handleRecordsPost(url, request, response, config, fetchImpl) {
 // tenant api-key. Gated by a valid app session.
 
 const DB_SCHEMA_PATH = /^\/api\/databases\/([^/]+)\/schema$/;
+const DB_PROBE_PATH = /^\/api\/databases\/([^/]+)\/probe$/;
 const DB_ROWS_PATH = /^\/api\/databases\/([^/]+)\/tables\/([^/]+)$/;
 const DB_DDL_PATH = /^\/api\/databases\/([^/]+)\/schema\/ddl$/;
 const DB_SQLRO_PATH = /^\/api\/databases\/([^/]+)\/sql-ro$/;
+const DB_DESCRIPTOR_PATH = /^\/api\/databases\/([^/]+)\/descriptor$/;
+const DB_AUTOMATIONS_PATH = /^\/api\/databases\/([^/]+)\/automations$/;
 // Full CRUD: reads (list/get/aggregate) + writes (insert/update/delete/upsert/
 // batch). The query-router enforces per-engine capability and owner-scopes every
 // write to the tenant; every route below ALSO enforces the per-user mount ACL
@@ -3777,6 +3829,110 @@ async function handleDatabaseSchema(match, request, response, config, fetchImpl)
 	const base = schema && typeof schema === 'object' ? schema : { tables: [], engine: 'unknown' };
 	json(response, 200, { dbId, ...base }, config);
 	return true;
+}
+
+/** GET /api/databases/:dbId/probe — live engine version + TLS posture via the query-router. */
+async function handleDatabaseProbe(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	if (!canReadDatabase(member)) throw databasePermissionError('read');
+	let probe;
+	try {
+		probe = await baasQueryGet(config, fetchImpl, `/${dbId}/probe`);
+	} catch (error) {
+		if (error?.status === 404) {
+			json(response, 200, { dbId, available: false }, config);
+			return true;
+		}
+		if (error?.status === 429) {
+			json(response, 200, { dbId, available: false, retryAfter: 1 }, config);
+			return true;
+		}
+		throw error;
+	}
+	const body = { dbId, available: true };
+	for (const key of ['engine', 'server_version', 'tls', 'tls_version']) {
+		if (typeof probe?.[key] === 'string') body[key] = probe[key];
+	}
+	json(response, 200, body, config);
+	return true;
+}
+
+// The keys grobase's mount descriptor may carry (tenant-control GET .../mounts/{id}/descriptor).
+// The bridge re-picks them so a future upstream field never reaches the browser unreviewed.
+const DESCRIPTOR_KEYS = ['id', 'name', 'engine', 'isolation', 'credential_mode', 'location', 'host', 'port', 'file', 'database', 'tls', 'created_at', 'last_healthy_at'];
+// The data plane's per-engine flags the UI may show (grobase data-plane-core capability.rs).
+const CAPABILITY_FLAGS = ['read', 'write', 'upsert', 'batch', 'aggregate', 'introspect', 'schema_ddl', 'transactions'];
+// Caveat: 5 min — a data plane redeployed with new engine features shows the old flags until
+// then. A failed fetch is not cached, so an outage costs one query-router call per descriptor.
+const CAPABILITIES_TTL_MS = 5 * 60 * 1000;
+const capabilitiesCache = new WeakMap();
+
+/** The closed boolean flag set the data plane advertises for `engine`, or null when it
+ *  advertises nothing for it. Throws when the query-router cannot answer. */
+async function engineCapabilities(config, fetchImpl, engine) {
+	const now = Date.now();
+	let cached = capabilitiesCache.get(config);
+	if (!cached || cached.expiresAt <= now) {
+		const payload = await baasQueryGet(config, fetchImpl, '/capabilities');
+		const byEngine = new Map((Array.isArray(payload?.engines) ? payload.engines : [])
+			.filter((entry) => typeof entry?.engine === 'string')
+			.map((entry) => [entry.engine, entry.capabilities]));
+		cached = { byEngine, expiresAt: now + CAPABILITIES_TTL_MS };
+		capabilitiesCache.set(config, cached);
+	}
+	const caps = cached.byEngine.get(engine);
+	if (!caps || typeof caps !== 'object') return null;
+	return Object.fromEntries(CAPABILITY_FLAGS.filter((flag) => typeof caps[flag] === 'boolean').map((flag) => [flag, caps[flag]]));
+}
+
+/** GET /api/databases/:dbId/descriptor — where the mount's data lives (engine, host or
+ *  file, database, requested TLS), credential-free. Gated like the schema: a READ. */
+async function handleDatabaseDescriptor(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	if (!canReadDatabase(member)) throw databasePermissionError('read');
+	const raw = config.tenantMountsUrl
+		? await baasTenantDescriptorGet(config, fetchImpl, dbId)
+		: await baasRegistryGet(config, fetchImpl, `/databases/${dbId}/descriptor`, config.baasTenantId);
+	const descriptor = Object.fromEntries(DESCRIPTOR_KEYS.filter((key) => raw && key in raw).map((key) => [key, raw[key]]));
+	if (typeof descriptor.engine === 'string') {
+		try {
+			const capabilities = await engineCapabilities(config, fetchImpl, descriptor.engine);
+			if (capabilities) descriptor.capabilities = capabilities;
+		} catch (error) {
+			console.warn(`[osionos-bridge] engine capabilities unavailable: ${error?.status ?? 'network'}`);
+		}
+	}
+	json(response, 200, { dbId, descriptor }, config);
+	return true;
+}
+
+/** GET|PUT /api/databases/:dbId/automations — the mount's server-side rules (O2).
+ *  One grobase tenant key serves every workspace, so this ACL is the only isolation.
+ *  Replacing the rules needs the DDL gate, not the row-write one: a rule fires on every
+ *  member's writes, and its webhook action sends rows off the platform. */
+async function handleDatabaseAutomations(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const replace = request.method === 'PUT';
+	if (replace ? !canRunDdl(member) : !canReadDatabase(member)) throw databasePermissionError(replace ? 'write' : 'read');
+	const path = `/${dbId}/automations`;
+	if (!replace) {
+		const answer = await baasQueryGet(config, fetchImpl, path);
+		json(response, 200, { rules: Array.isArray(answer?.rules) ? answer.rules : [] }, config);
+		return true;
+	}
+	const payload = await readJson(request).catch(() => null);
+	if (!Array.isArray(payload?.rules)) throw Object.assign(new Error('rules must be an array.'), { status: 422 });
+	const { status, body } = await baasQueryPassthrough(config, fetchImpl, path, { rules: payload.rules }, 'PUT');
+	json(response, status || 502, body ?? {}, config);
+	return true;
+}
+
+async function handleDatabasesPut(url, request, response, config, fetchImpl) {
+	const automationsMatch = DB_AUTOMATIONS_PATH.exec(url.pathname);
+	return automationsMatch ? handleDatabaseAutomations(automationsMatch, request, response, config, fetchImpl) : false;
 }
 
 /** POST /api/databases/:dbId/tables/:table — CRUD (list/get/aggregate/insert/
@@ -3857,6 +4013,12 @@ async function handleDatabasesGet(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/databases') return handleDatabaseList(url, request, response, config, fetchImpl);
 	const schemaMatch = DB_SCHEMA_PATH.exec(url.pathname);
 	if (schemaMatch) return handleDatabaseSchema(schemaMatch, request, response, config, fetchImpl);
+	const probeMatch = DB_PROBE_PATH.exec(url.pathname);
+	if (probeMatch) return handleDatabaseProbe(probeMatch, request, response, config, fetchImpl);
+	const descriptorMatch = DB_DESCRIPTOR_PATH.exec(url.pathname);
+	if (descriptorMatch) return handleDatabaseDescriptor(descriptorMatch, request, response, config, fetchImpl);
+	const automationsMatch = DB_AUTOMATIONS_PATH.exec(url.pathname);
+	if (automationsMatch) return handleDatabaseAutomations(automationsMatch, request, response, config, fetchImpl);
 	return false;
 }
 
@@ -3906,10 +4068,15 @@ async function favoriteAuthRows(favoriteIds, config, fetchImpl) {
 	}
 	const byId = new Map();
 	for (const chunk of idChunks([...new Set(ids)])) {
+		const path = `osionos_pages?${inFilter('id', chunk)}&select=${PAGE_AUTH_SELECT}`;
+		let rows;
 		try {
-			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&select=${PAGE_AUTH_SELECT}`);
-			for (const row of Array.isArray(rows) ? rows : []) byId.set(String(row.id).toLowerCase(), row);
-		} catch { /* fail closed: this chunk's pages stay absent */ }
+			rows = await baasRest(config, fetchImpl, path);
+		} catch (error) {
+			if (!isBaasFailure(error)) throw error;
+			continue; // fail closed: this chunk's pages stay absent
+		}
+		for (const row of Array.isArray(rows) ? rows : []) byId.set(String(row.id).toLowerCase(), row);
 	}
 	return byId;
 }
@@ -4730,7 +4897,7 @@ function oauthRedirect(response, config, returnTo, { error, connected } = {}) {
 	response.end();
 }
 
-async function handleAppConnectionsOAuthStart(url, request, response, config, fetchImpl) {
+async function handleAppConnectionsOAuthStart(url, request, response, config) {
 	const match = /^\/api\/app-connections\/oauth\/([^/]+)\/start$/.exec(url.pathname);
 	if (!match) return false;
 	const app = GOOGLE_OAUTH_APPS[match[1]];
@@ -4910,7 +5077,7 @@ async function handlePagesPost(url, request, response, config, fetchImpl, env = 
 	if (await handleMarketplacePost(url, request, response, config, fetchImpl, env)) return true;
 	if (await handleObjectDatabasesUpsert(url, request, response, config, fetchImpl)) return true;
 	if (await handleAppConnectionsUpsert(url, request, response, config, fetchImpl)) return true;
-	if (await handleAppConnectionsOAuthStart(url, request, response, config, fetchImpl)) return true;
+	if (await handleAppConnectionsOAuthStart(url, request, response, config)) return true;
 	if (await handleDatabasesPost(url, request, response, config, fetchImpl)) return true;
 	if (await handleRecordsPost(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/favorites') return handleFavoriteAdd(request, response, config, fetchImpl);
@@ -5216,6 +5383,7 @@ async function handleBridgeRequest(request, response, context) {
 		context.fetchImpl,
 		context.env,
 	)) return;
+	if (request.method === 'PUT' && await handleDatabasesPut(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'PATCH' && await handleMarketplacePatch(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'PATCH' && await handlePageConfigPatch(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'PATCH' && await handlePageUpdate(url, request, response, context.config, context.fetchImpl)) return;
@@ -5262,7 +5430,7 @@ export function createBridgeServer(options = {}) {
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl, createPageAccessLoader, pageLevelFor }),
 		accessRequests: createPageAccessRequestsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, createPageAccessLoader, pageLevelFor }),
-		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess }),
+		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess, kv }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
@@ -5272,7 +5440,10 @@ export function createBridgeServer(options = {}) {
 		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
+			comments: createCommentsHandler({
+				config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env,
+				pageAccess: (request, pageId) => pageDiscussionAccess(request, pageId, config, fetchImpl),
+			}),
 			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
 			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv, env, pageAccessFilter }),
@@ -5327,6 +5498,7 @@ export function createBridgeServer(options = {}) {
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);
+			if (responseConfig.allowedOrigin !== config.allowedOrigin) answerWithOrigin(response, responseConfig.allowedOrigin);
 			try {
 				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env, patGate, whiteboard });
 			} catch (error) {
@@ -5340,6 +5512,7 @@ export function createBridgeServer(options = {}) {
 	server.on('close', () => transport?.close());
 	let cutoffPoller = null;
 	let revocationPoller = null;
+	let retractPoller = null;
 	const activityConsent = createActivityConsent({ pg, now: options.now });
 	const consentGate = { isTracked: activityConsent.isTracked, awaitTracked: activityConsent.awaitTracked };
 	const activityEmitter = createActivityEmitter({ pg, env, now: options.now, log: (line) => console.warn(`[osionos-bridge] ${line}`), ...consentGate });
@@ -5351,8 +5524,10 @@ export function createBridgeServer(options = {}) {
 		cutoffPoller = startSessionCutoffPoller(sessionCutoffs, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionCutoffPoll);
 		revocationPoller = startSessionRevocationPoller(sessionRevocations, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionRevocationPoll);
 		server.sessionRevocationPoller = revocationPoller;
+		// `moderationRetract: false` keeps the background reads out of tests that count calls.
+		if (options.moderationRetract !== false) retractPoller = startModerationRetractPoller({ config, fetchImpl, env });
 	});
-	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); activityTimer?.stop(); if (!options.kv) kv.close(); });
+	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); retractPoller?.stop(); activityTimer?.stop(); if (!options.kv) kv.close(); });
 	Object.assign(server, { activityEmitter, sessionCutoffs, sessionRevocations, sessionRecords, kv, kvRequired });
 	return server;
 }

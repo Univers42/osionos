@@ -35,6 +35,7 @@ const envSchema = z.object({
 	OSIONOS_APP_SESSION_SECRET: z.string().min(1),
 	OSIONOS_APP_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 	OSIONOS_SESSION_CUTOFFS: z.string().optional(),
+	OSIONOS_SESSION_RECORDS: z.string().optional(),
 	OSIONOS_BAAS_URL: z.string().min(1).default('http://localhost:8000'),
 	SERVICE_ROLE_KEY: z.string().default(''),
 	OSIONOS_AI_UPSTREAM_BASE_URL: z.string().min(1),
@@ -119,6 +120,9 @@ const envSchema = z.object({
 	// the command kind. Needs osionos-ai-context-commands-migration.sql.
 	OSIONOS_AI_USER_COMMANDS: z.string().optional(),
 	OSIONOS_AI_USER_HOOKS: z.string().optional(),
+	// The `list_my_context` read tool (U5, C1140). OFF unless exactly "on", and
+	// only with OSIONOS_AI_USER_CONTEXT: off, no run is offered it.
+	OSIONOS_AI_CONTEXT_TOOL: z.string().optional(),
 	// The web tools, web_search and web_fetch (web C369). OFF unless exactly
 	// "on": the public overlay leaves it empty until C371 and C372 hold.
 	OSIONOS_AI_WEB: z.string().optional(),
@@ -207,6 +211,7 @@ const rawEnv = {
 	OSIONOS_APP_SESSION_SECRET: process.env.OSIONOS_APP_SESSION_SECRET,
 	OSIONOS_APP_SESSION_TTL_SECONDS: process.env.OSIONOS_APP_SESSION_TTL_SECONDS,
 	OSIONOS_SESSION_CUTOFFS: process.env.OSIONOS_SESSION_CUTOFFS,
+	OSIONOS_SESSION_RECORDS: process.env.OSIONOS_SESSION_RECORDS,
 	OSIONOS_BAAS_URL: firstEnv('OSIONOS_BAAS_URL', 'PUBLIC_BAAS_URL'),
 	SERVICE_ROLE_KEY: firstEnv('SERVICE_ROLE_KEY', 'KONG_SERVICE_API_KEY', 'BAAS_SERVICE_ROLE_KEY'),
 	OSIONOS_AI_UPSTREAM_BASE_URL: process.env.OSIONOS_AI_UPSTREAM_BASE_URL,
@@ -242,6 +247,7 @@ const rawEnv = {
 	OSIONOS_AI_USER_CONTEXT: process.env.OSIONOS_AI_USER_CONTEXT,
 	OSIONOS_AI_USER_COMMANDS: process.env.OSIONOS_AI_USER_COMMANDS,
 	OSIONOS_AI_USER_HOOKS: process.env.OSIONOS_AI_USER_HOOKS,
+	OSIONOS_AI_CONTEXT_TOOL: process.env.OSIONOS_AI_CONTEXT_TOOL,
 	OSIONOS_AI_WEB: process.env.OSIONOS_AI_WEB,
 	OSIONOS_AI_RESEARCH: process.env.OSIONOS_AI_RESEARCH,
 	OSIONOS_AI_RESEARCH_PLATFORM_DAILY: process.env.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,
@@ -378,6 +384,7 @@ export interface AiServiceConfig {
 	appSessionSecret: string;
 	sessionTtlSeconds: number;
 	sessionCutoffsMode: 'on' | 'off';
+	sessionRecordsMode: 'on' | 'off';
 	baasUrl: string;
 	serviceKey: string;
 	upstreamBaseUrl: string;
@@ -435,6 +442,8 @@ export interface AiServiceConfig {
 	userContextEnabled: boolean;
 	userCommandsEnabled: boolean;
 	userHooksEnabled: boolean;
+	/** `list_my_context` (C1140): its own flag AND the user context flag. */
+	contextToolEnabled: boolean;
 	webEnabled: boolean;
 	/** Whether research mode exists (C396, C415): exactly "on"; the run still needs the web. */
 	researchEnabled: boolean;
@@ -502,6 +511,8 @@ export const config: AiServiceConfig = Object.freeze({
 	sessionTtlSeconds: parsed.data.OSIONOS_APP_SESSION_TTL_SECONDS,
 	// The bridge's rule: anything but an explicit "off" keeps the check on.
 	sessionCutoffsMode: parsed.data.OSIONOS_SESSION_CUTOFFS?.trim().toLowerCase() === 'off' ? 'off' : 'on',
+	// The switch the bridge reads for the per-session revocation set (bridge-api.mjs).
+	sessionRecordsMode: parsed.data.OSIONOS_SESSION_RECORDS?.trim().toLowerCase() === 'off' ? 'off' : 'on',
 	baasUrl: parsed.data.OSIONOS_BAAS_URL,
 	serviceKey: parsed.data.SERVICE_ROLE_KEY,
 	upstreamBaseUrl: parsed.data.OSIONOS_AI_UPSTREAM_BASE_URL,
@@ -536,6 +547,7 @@ export const config: AiServiceConfig = Object.freeze({
 	userContextEnabled: parsed.data.OSIONOS_AI_USER_CONTEXT === 'on',
 	userCommandsEnabled: parsed.data.OSIONOS_AI_USER_COMMANDS === 'on',
 	userHooksEnabled: parsed.data.OSIONOS_AI_USER_HOOKS === 'on',
+	contextToolEnabled: parsed.data.OSIONOS_AI_CONTEXT_TOOL === 'on' && parsed.data.OSIONOS_AI_USER_CONTEXT === 'on',
 	webEnabled: parsed.data.OSIONOS_AI_WEB === 'on',
 	researchEnabled: parsed.data.OSIONOS_AI_RESEARCH === 'on',
 	researchPlatformDaily: parsed.data.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,

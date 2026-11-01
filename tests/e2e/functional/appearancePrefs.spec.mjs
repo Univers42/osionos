@@ -32,6 +32,61 @@ async function openAppearanceSettings(page) {
 }
 
 test.describe("appearance preferences", () => {
+  test("the caret is personal in every browser: colour, a drawn shape that follows typing, a reload", async ({ page, baseURL, browserName }) => {
+    await seed(page);
+    await openFreshPage(page, baseURL);
+    await openAppearanceSettings(page);
+    const tryIt = page.getByRole("textbox", { name: "Try the caret" });
+    const pink = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.style.color = "var(--osio-block-tint-pink-fg)";
+      document.body.append(probe);
+      const value = getComputedStyle(probe).color;
+      probe.remove();
+      return value;
+    });
+    await page.getByRole("button", { name: "Pink caret", exact: true }).click();
+    await expect(html(page)).toHaveAttribute("data-caret-color", "pink");
+    await expect(tryIt).toHaveCSS("caret-color", pink);
+    expect((await storedAppearance(page)).caretColor).toBe("pink");
+
+    // The native caret cannot be thick or a block in Firefox: the app draws it instead.
+    const drawn = page.locator(".osio-drawn-caret");
+    await page.getByRole("group", { name: "Caret shape" }).getByRole("tab", { name: "Block" }).click();
+    await expect(html(page)).toHaveAttribute("data-caret-shape", "block");
+    await tryIt.click();
+    await page.keyboard.press("End");
+    await expect(drawn).toBeVisible();
+    await expect(tryIt).toHaveCSS("caret-color", "rgba(0, 0, 0, 0)");
+    await expect(drawn).toHaveCSS("background-color", pink);
+    const before = (await drawn.boundingBox()).x;
+    await page.keyboard.type("abc");
+    await expect.poll(async () => (await drawn.boundingBox()).x).toBeGreaterThan(before + 5);
+    const box = await drawn.boundingBox();
+    const line = await tryIt.evaluate((element) => {
+      const range = document.getSelection().getRangeAt(0);
+      const rect = range.getClientRects()[0] ?? element.getBoundingClientRect();
+      return { x: rect.left, y: rect.top };
+    });
+    expect(Math.abs(box.x - line.x)).toBeLessThan(2);
+    expect(Math.abs(box.y - line.y)).toBeLessThan(2);
+    await page.getByRole("group", { name: "Caret shape" }).getByRole("tab", { name: "Thick" }).click();
+    await tryIt.click();
+    await expect.poll(async () => Math.round((await drawn.boundingBox())?.width ?? 0)).toBe(3);
+    await page.screenshot({ path: `test-results/caret-settings-${browserName}.png` });
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(html(page)).toHaveAttribute("data-caret-color", "pink");
+    await expect(html(page)).toHaveAttribute("data-caret-shape", "thick");
+
+    await openAppearanceSettings(page);
+    await page.getByRole("button", { name: "Accent caret", exact: true }).click();
+    await expect(html(page)).not.toHaveAttribute("data-caret-color", /.*/);
+    await page.getByRole("group", { name: "Caret shape" }).getByRole("tab", { name: "Thin" }).click();
+    await expect(html(page)).not.toHaveAttribute("data-caret-drawn", /.*/);
+    await expect(page.locator(".osio-drawn-caret")).toBeHidden();
+  });
+
   test("choosing an accent in Settings recolours the app and survives a reload", async ({ page, baseURL }) => {
     await seed(page);
     await openFreshPage(page, baseURL);

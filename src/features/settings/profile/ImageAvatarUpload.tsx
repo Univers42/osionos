@@ -20,8 +20,8 @@
  * (WebP or JPEG, each square at its size, under its cap) — the same shape the
  * route reads.
  *
- * Silent no-op when the bridge is unavailable (offline runs keep the emoji
- * avatar picker).
+ * A failure names its reason, an ended session included (#171): "Upload
+ * failed" alone left the owner unable to act on a cap, a type or an outage.
  */
 
 import React, { useRef, useState } from 'react';
@@ -29,6 +29,7 @@ import { Upload } from 'lucide-react';
 
 import { api, getActivePageJwt } from '@/shared/api/client';
 import { buildAvatarVariants, type EncodedAvatar } from './avatarVariants';
+import { SIGN_IN_TO_UPLOAD, uploadFailureMessage } from './uploadFailure';
 
 interface ImageAvatarUploadProps {
   onUploaded?: (avatarUrl: string) => void;
@@ -59,10 +60,17 @@ async function drawSquare(bitmap: ImageBitmap, size: number, type: string, quali
 export const ImageAvatarUpload: React.FC<ImageAvatarUploadProps> = ({ onUploaded }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
+  const [failure, setFailure] = useState('');
+
+  const fail = (reason: string) => {
+    setFailure(reason);
+    setStatus('error');
+  };
 
   const handleFile = async (file: File | undefined) => {
+    if (!file) return;
     const jwt = getActivePageJwt();
-    if (!file || !jwt) return;
+    if (!jwt) return fail(SIGN_IN_TO_UPLOAD);
     setStatus('busy');
     try {
       const bitmap = await createImageBitmap(file);
@@ -74,8 +82,8 @@ export const ImageAvatarUpload: React.FC<ImageAvatarUploadProps> = ({ onUploaded
       } finally {
         bitmap.close();
       }
-    } catch {
-      setStatus('error');
+    } catch (error) {
+      fail(uploadFailureMessage(error));
     }
   };
 
@@ -97,7 +105,7 @@ export const ImageAvatarUpload: React.FC<ImageAvatarUploadProps> = ({ onUploaded
         <Upload size={14} /> {status === 'busy' ? 'Uploading…' : 'Upload photo'}
       </button>
       {status === 'done' && <span className="text-xs text-[var(--osio-fg-muted)]">Saved ✓</span>}
-      {status === 'error' && <span className="text-xs text-[var(--osio-danger)]">Upload failed</span>}
+      {status === 'error' && <span role="alert" className="text-xs text-[var(--osio-danger)]">Upload failed: {failure}</span>}
     </div>
   );
 };

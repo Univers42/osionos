@@ -1,6 +1,7 @@
 /**
  * The personal half of Settings > Appearance: an accent row (the presets and a
- * free hue) and segmented controls for density, corners and text size. Every
+ * free hue), segmented controls for density, corners and text size, and the
+ * caret (colour, shape and blink; a shape or a steady caret is drawn by the app). Every
  * change is written to <html> and to storage at once (theme.ts).
  */
 
@@ -9,12 +10,16 @@ import React, { useId, useSyncExternalStore } from 'react';
 import { MiniTabs } from '@/shared/ui';
 import {
   ACCENT_PRESETS,
+  CARET_COLORS,
   CUSTOM_ACCENT,
   FIXED_ACCENT_PALETTES,
   readCurrentAppearance,
   subscribeAppearance,
   updateAppearance,
   type Appearance,
+  type CaretBlink,
+  type CaretColor,
+  type CaretShape,
   type Density,
   type Roundness,
   type UiScale,
@@ -167,3 +172,73 @@ export const ShapeControls: React.FC<{ appearance: Appearance; onChange: (patch:
     />
   </>
 );
+
+const CARET_INKS: Record<CaretColor, { label: string; ink: string }> = {
+  accent: { label: 'Accent', ink: 'var(--osio-accent-text)' },
+  text: { label: 'Text', ink: 'var(--osio-fg-default)' },
+  blue: { label: 'Blue', ink: 'var(--osio-block-tint-blue-fg)' },
+  green: { label: 'Green', ink: 'var(--osio-block-tint-green-fg)' },
+  purple: { label: 'Purple', ink: 'var(--osio-block-tint-purple-fg)' },
+  red: { label: 'Red', ink: 'var(--osio-block-tint-red-fg)' },
+  orange: { label: 'Orange', ink: 'var(--osio-block-tint-orange-fg)' },
+  pink: { label: 'Pink', ink: 'var(--osio-block-tint-pink-fg)' },
+};
+
+export const CaretControls: React.FC<{ appearance: Appearance; onChange: (patch: Partial<Appearance>) => void }> = ({
+  appearance,
+  onChange,
+}) => {
+  const headingId = useId();
+  return (
+    <>
+      <div>
+        <p id={headingId} className={LABEL}>
+          Caret
+        </p>
+        <div role="group" aria-labelledby={headingId} className="flex flex-wrap items-center gap-3">
+          {CARET_COLORS.map((color) => (
+            <Swatch
+              key={color}
+              label={`${CARET_INKS[color].label} caret`}
+              colours={{ light: CARET_INKS[color].ink, dark: CARET_INKS[color].ink }}
+              selected={appearance.caretColor === color}
+              onSelect={() => onChange({ caretColor: color })}
+            />
+          ))}
+          <span className="text-xs text-[var(--osio-fg-muted)]">{CARET_INKS[appearance.caretColor].label}</span>
+        </div>
+        {/* Editable text, not an input: the drawn caret follows text, and a block needs a letter under it. */}
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          role="textbox"
+          aria-label="Try the caret"
+          spellCheck={false}
+          className="mt-3 w-64 max-w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1.5 text-sm text-[var(--osio-fg-default)]"
+        >
+          Click here and type to try it
+        </div>
+      </div>
+      <Segmented<CaretShape>
+        label="Caret shape"
+        value={appearance.caretShape}
+        options={[
+          { value: 'bar', label: 'Thin' },
+          { value: 'thick', label: 'Thick' },
+          { value: 'block', label: 'Block' },
+          { value: 'underscore', label: 'Underline' },
+        ]}
+        onChange={(caretShape) => onChange({ caretShape })}
+      />
+      <Segmented<CaretBlink>
+        label="Caret blink"
+        value={appearance.caretBlink}
+        options={[
+          { value: 'on', label: 'Blink' },
+          { value: 'off', label: 'Steady' },
+        ]}
+        onChange={(caretBlink) => onChange({ caretBlink })}
+      />
+    </>
+  );
+};
