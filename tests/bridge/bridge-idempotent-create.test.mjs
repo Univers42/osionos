@@ -117,7 +117,7 @@ describe('creating an object database', () => {
 	it('C164.4 a create-only database never overwrites an existing key', async () => {
 		const mock = createPostgrestMock(seeded());
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			const answer = await send(base, '/api/object-databases', asB, post({ dbKey: 'db-abc', title: 'New', state: { y: 2 }, ifAbsent: true }));
+			const answer = await send(base, '/api/object-databases', asB, post({ dbKey: 'db-abc', title: 'New', state: { databases: {} }, ifAbsent: true }));
 			assert.equal(answer.status, 409, answer.text);
 			assert.deepEqual(answer.body, { error: 'db_exists' });
 			assert.deepEqual(mock.rows('osionos_object_databases')[0].state, { x: 1 });
@@ -128,7 +128,7 @@ describe('creating an object database', () => {
 	it('C164.4 a create-only database with a new key inserts it', async () => {
 		const mock = createPostgrestMock(seeded());
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			const answer = await send(base, '/api/object-databases', asB, post({ dbKey: 'db-new', title: 'New', state: { y: 2 }, ifAbsent: true }));
+			const answer = await send(base, '/api/object-databases', asB, post({ dbKey: 'db-new', title: 'New', state: { databases: {} }, ifAbsent: true }));
 			assert.equal(answer.status, 200, answer.text);
 			assert.equal(answer.body.ok, true);
 			assert.equal(answer.body.dbKey, 'db-new');
@@ -140,9 +140,9 @@ describe('creating an object database', () => {
 	it('C156 the upsert without ifAbsent is unchanged', async () => {
 		const mock = createPostgrestMock(seeded());
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			const answer = await send(base, '/api/object-databases', asB, post({ dbKey: 'db-abc', title: 'New', state: { y: 2 } }));
+			const answer = await send(base, '/api/object-databases', asB, post({ dbKey: 'db-abc', title: 'New', state: { databases: {} } }));
 			assert.equal(answer.status, 200, answer.text);
-			assert.deepEqual(mock.rows('osionos_object_databases')[0].state, { y: 2 });
+			assert.deepEqual(mock.rows('osionos_object_databases')[0].state, { databases: {} });
 			assert.equal(dbWrites(mock)[0].params.get('on_conflict'), 'owner_id,db_key');
 			assert.match(dbWrites(mock)[0].prefer, /merge-duplicates/);
 		});

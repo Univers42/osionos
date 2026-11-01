@@ -95,6 +95,7 @@ import { createRequestMeter } from './bridge-perf.mjs';
 import { createBaasTransport } from './bridge-baas-transport.mjs';
 import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 import { createEmbedHandler } from './bridge-embed.mjs';
+import { validatedDatabaseState, validatedPageContent } from './bridge-content-validation.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -833,7 +834,7 @@ function pageCreateRowFromPayload(payload, authContext) {
 		visibility,
 		collaborators: safeJsonArray(payload.collaborators),
 		properties: safeJsonArray(payload.properties),
-		content: safeJsonArray(payload.content),
+		content: validatedPageContent(payload.content),
 	};
 	// Only a create that carries an id gets one; without it the database mints it, as before.
 	if (clientId) row.id = clientId;
@@ -884,7 +885,7 @@ function pageUpdateRowFromPayload(payload) {
 	assignPayloadValue(row, payload, 'visibility', 'visibility', pageVisibility);
 	assignPayloadValue(row, payload, 'collaborators', 'collaborators', (value) => safeJsonArray(value));
 	assignPayloadValue(row, payload, 'properties', 'properties', (value) => safeJsonArray(value));
-	assignPayloadValue(row, payload, 'content', 'content', (value) => safeJsonArray(value));
+	assignPayloadValue(row, payload, 'content', 'content', validatedPageContent);
 	assignPayloadValue(row, payload, 'archivedAt', 'archived_at', (value) => safeTimestampOrNull(value, 'archivedAt'));
 	assignPayloadValue(row, payload, 'isTemplate', 'is_template', (value) => value === true);
 	assignPayloadValue(row, payload, 'isDefaultTemplate', 'is_default_template', (value) => value === true);
@@ -3727,7 +3728,7 @@ async function handleRecordSubitemCreate(match, request, response, config, fetch
 		title: safeText(safe.title, 200),
 		icon: safeText(safe.icon, 80),
 		properties: safeJsonArray(safe.properties),
-		content: safeJsonArray(safe.content),
+		content: validatedPageContent(safe.content),
 		now: new Date().toISOString(),
 	});
 	const created = await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', {
@@ -4708,7 +4709,7 @@ async function handleObjectDatabasesUpsert(url, request, response, config, fetch
 				workspace_id: workspaceId,
 				db_key: dbKey,
 				title: safeText(payload.title, 200) || 'Untitled',
-				state: safeJsonObject(payload.state, 'state'),
+				state: validatedDatabaseState(payload.state),
 				updated_at: new Date().toISOString(),
 			},
 			prefer: createOnly ? 'return=representation' : 'resolution=merge-duplicates,return=representation',
