@@ -112,21 +112,16 @@ const TerminalActions: React.FC = () => {
           <Plus size={14} />
         </button>
       </Tooltip>
-      {/* The hosted sandbox's controls: on this computer there is no box to restart. */}
-      {!hasLocalTerminal() && (
-        <>
-          <Tooltip label="Safe terminal (no ~/.bashrc or ~/.profile)" side="bottom">
-            <button type="button" aria-label="Safe terminal" onClick={() => dock().newSafeTerminal()} className={ICON_BTN}>
-              <ShieldCheck size={14} />
-            </button>
-          </Tooltip>
-          <Tooltip label="Restart box (clears /tmp; your files are kept)" side="bottom">
-            <button type="button" aria-label="Restart box" onClick={restartBox} className={ICON_BTN}>
-              <RotateCcw size={14} />
-            </button>
-          </Tooltip>
-        </>
-      )}
+      <Tooltip label="Safe terminal (no ~/.bashrc or ~/.profile)" side="bottom">
+        <button type="button" aria-label="Safe terminal" onClick={() => dock().newSafeTerminal()} className={ICON_BTN}>
+          <ShieldCheck size={14} />
+        </button>
+      </Tooltip>
+      <Tooltip label="Restart box (clears /tmp; your files are kept)" side="bottom">
+        <button type="button" aria-label="Restart box" onClick={restartBox} className={ICON_BTN}>
+          <RotateCcw size={14} />
+        </button>
+      </Tooltip>
       <Tooltip label={splitLabel} side="bottom">
         <button type="button" aria-label={splitLabel} onClick={() => (secondary ? dock().closeSecondary() : dock().splitTerminal())} className={ICON_BTN}>
           <Columns2 size={14} />
@@ -207,7 +202,8 @@ export const WorkbenchDock: React.FC = () => {
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-2 text-xs text-[var(--osio-code-fg-muted)]">
         <DockTabs active={active} conflicts={conflicts} />
         <span className="flex-1" />
-        {active === "terminal" && <TerminalActions />}
+        {/* On the desktop, VS Code's own panel carries new, split and kill; there is no box to restart. */}
+        {active === "terminal" && !hasLocalTerminal() && <TerminalActions />}
         {active === "output" && <OutputActions />}
         <Tooltip label="Hide panel" side="bottom">
           <button type="button" aria-label="Hide panel" onClick={closeDock} className={ICON_BTN}>
