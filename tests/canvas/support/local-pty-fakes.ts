@@ -1,11 +1,10 @@
-// Fakes for the desktop local terminal: a preload `pty` that records every call and lets a test
-// play the shell, and the xterm surface the session drives.
+// A preload `pty` for the desktop local terminal's tests: it records every call and lets a test
+// play the shell.
 import type { LocalPtyApi } from "../../../src/features/ide/model/localPty.ts";
-import type { LocalTerminalSurface } from "../../../src/features/ide/model/localTerminalSession.ts";
 
 type Call = [string, ...unknown[]];
 
-/** A preload `pty` that records every call and lets the test play the shell. */
+/** Each create answers with the next of `created`: an id, null (refused) or an Error (failed). */
 export function fakePty(created: Array<string | null | Error> = ["p1"]) {
   const calls: Call[] = [];
   const data = new Map<string, Set<(chunk: string) => void>>();
@@ -34,30 +33,11 @@ export function fakePty(created: Array<string | null | Error> = ["p1"]) {
   const exit = (id: string, code: number) => { for (const cb of exits.get(id) ?? []) cb(code); };
   const listeners = () => [...data.values(), ...exits.values()].reduce((n, set) => n + set.size, 0);
   const of = (kind: string) => calls.filter((call) => call[0] === kind);
-  return { api, calls, emit, exit, listeners, of };
-}
-
-/** The xterm surface the session needs; `render()` plays xterm finishing its queued writes. */
-export function fakeTerm(cols = 80, rows = 24) {
-  const shown: string[] = [];
-  const pendingRender: Array<() => void> = [];
-  const input = new Set<(data: string) => void>();
-  const resized = new Set<(size: { cols: number; rows: number }) => void>();
-  let focused = 0;
-  const term: LocalTerminalSurface & { cols: number; rows: number } = {
-    cols,
-    rows,
-    onData: (cb) => { input.add(cb); return { dispose: () => { input.delete(cb); } }; },
-    onResize: (cb) => { resized.add(cb); return { dispose: () => { resized.delete(cb); } }; },
-    write: (chunk, cb) => { shown.push(chunk); if (cb) pendingRender.push(cb); },
-    focus: () => { focused++; },
+  /** The next create waits until the test answers it: a desktop still starting the shell. */
+  const deferCreate = () => {
+    let answer: (id: string) => void = () => {};
+    api.create = () => new Promise((resolve) => { answer = resolve; });
+    return (id: string) => answer(id);
   };
-  const type = (data: string) => { for (const cb of input) cb(data); };
-  const resize = (nextCols: number, nextRows: number) => {
-    term.cols = nextCols;
-    term.rows = nextRows;
-    for (const cb of resized) cb({ cols: nextCols, rows: nextRows });
-  };
-  const render = () => { for (const cb of pendingRender.splice(0)) cb(); };
-  return { term, shown, type, resize, render, focused: () => focused, subscribers: () => input.size + resized.size };
+  return { api, calls, emit, exit, listeners, of, deferCreate };
 }

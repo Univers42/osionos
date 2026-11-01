@@ -24,6 +24,7 @@ const { useWorkbenchStore } = await import("../../src/widgets/workbench/model/wo
 const { openWorkbenchTerminal } = await import("../../src/widgets/workbench/model/workbenchMenuActions.ts");
 const { WorkbenchStatusBar } = await import("../../src/widgets/workbench/ui/WorkbenchStatusBar.tsx");
 const { IdeTerminal } = await import("../../src/features/ide/ui/IdeTerminal.tsx");
+const { LocalVsCodeTerminal, TERMINAL_PAGE_SRC } = await import("../../src/features/ide/ui/LocalVsCodeTerminal.tsx");
 
 const LAPTOP = {
   id: "m-abcdefghijklmnop", name: "laptop", platform: "linux-x64", fingerprint: "ABCD-EFGH-IJKL-MNOP",
@@ -83,9 +84,10 @@ test("the status bar names this computer on the desktop, the machine on the web"
   assert.doesNotMatch(web, /local-terminal-chip/);
 });
 
-test("a desktop terminal panel shows no launcher or sandbox overlay", () => {
-  let desktop = "";
-  onDesktop(() => { desktop = renderToStaticMarkup(React.createElement(IdeTerminal)); });
+test("the desktop terminal panel is VS Code's terminal page, with no launcher or sandbox overlay", () => {
+  const desktop = renderToStaticMarkup(React.createElement(LocalVsCodeTerminal, { api: fakePty().api }));
+  assert.equal(TERMINAL_PAGE_SRC, "/terminal/index.html");
+  assert.match(desktop, /<iframe src="\/terminal\/index.html" title="Terminal"/);
   assert.doesNotMatch(desktop, /role="status"|Terminal on laptop|Open terminal/);
   const web = renderToStaticMarkup(React.createElement(IdeTerminal));
   assert.match(web, /Terminal on laptop/);

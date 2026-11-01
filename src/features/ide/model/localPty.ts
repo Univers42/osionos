@@ -17,6 +17,34 @@ export interface LocalPtyApi {
   onExit(id: string, cb: (exitCode: number) => void): () => void;
 }
 
+/** The preload drops a write longer than this. */
+export const MAX_PTY_WRITE = 65536;
+const MAX_PTY_DIMENSION = 1000;
+
+const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
+
+/** `data` in pieces the preload accepts. A piece never ends on the first half of a surrogate
+ *  pair: the shell would receive two broken characters instead of one emoji. */
+export function chunkPtyInput(data: string): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < data.length) {
+    let end = Math.min(start + MAX_PTY_WRITE, data.length);
+    if (end < data.length && isHighSurrogate(data.charCodeAt(end - 1))) end -= 1;
+    chunks.push(data.slice(start, end));
+    start = end;
+  }
+  return chunks;
+}
+
+/** A terminal size the preload accepts: an integer from 1 to 1000.
+ *  Caveat: a terminal wider or taller than 1000 cells runs its shell at 1000, so full-screen
+ *  programs wrap early there. */
+export function ptyDimension(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(MAX_PTY_DIMENSION, Math.max(1, Math.trunc(value)));
+}
+
 const PTY_METHODS = ["create", "write", "resize", "kill", "ack", "onData", "onExit"] as const;
 
 /** The preload's pty, or null when any method of the contract is missing. */
