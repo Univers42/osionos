@@ -987,6 +987,9 @@ body {
    stay at 100% inside a zoomed pane. Draw and layout are matched at the block,
    not the canvas, because their resize and drag math also reads the wrapper
    around it. A new surface of this kind opts in with `data-osio-fixed-scale`.
+   Databases and layout blocks follow the pane like the text around them (#268):
+   their gestures convert through cssZoom, and only a database's ECharts or map
+   canvas stays fixed.
 
    The second rule stops a fixed-scale surface nested in another one (a
    database inside a layout cell) from being divided twice.
@@ -998,22 +1001,18 @@ body {
    and the same elements as the list form.
    ========================================================================== */
 [data-osio-pane] :where([data-osio-fixed-scale]),
-[data-osio-pane] :where([data-database-id]),
 [data-osio-pane] :where([data-osio-ide]),
 [data-osio-pane] :where([role="application"]),
 [data-osio-pane] :where([data-block-type="draw"]),
-[data-osio-pane] :where([data-block-type="whiteboard"]),
-[data-osio-pane] :where([data-block-type="layout"]) {
+[data-osio-pane] :where([data-block-type="whiteboard"]) {
   zoom: calc(1 / var(--osio-pane-zoom, 1));
 }
 
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-osio-fixed-scale]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-database-id]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-osio-ide]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([role="application"]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-block-type="draw"]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-block-type="whiteboard"]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-block-type="layout"]) {
+[data-osio-pane] :where([data-osio-fixed-scale], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"]) :where([data-osio-fixed-scale]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"]) :where([data-osio-ide]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"]) :where([role="application"]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"]) :where([data-block-type="draw"]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"]) :where([data-block-type="whiteboard"]) {
   --osio-pane-zoom: 1;
 }
 
@@ -1021,6 +1020,15 @@ body {
 [data-zen="1"] .osionos-page-toolbar,
 [data-zen="1"] .osionos-page-cover-controls {
   display: none;
+}
+
+/* A callout holding blocks works as a plain container (#266): its empty text line
+   takes no room, and comes back when the keyboard moves the caret onto it. */
+.osionos-callout-line--empty:not(:focus) {
+  height: 0;
+  min-height: 0;
+  padding-block: 0;
+  overflow: hidden;
 }
 
 /* An empty line the "Edit with AI" bar sits on grows to the bar's height

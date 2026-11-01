@@ -20,6 +20,7 @@ import { ideTokenSecret, signIdeToken } from './ide-token.mjs';
 import { jsonReply } from './bridge-ide-sandbox.mjs';
 import { lookupIdeUsername } from './ide-username.mjs';
 import { requireIdeApproval } from './ide-access.mjs';
+import { requireSudo } from './bridge-guard.mjs';
 
 const BODY_LIMIT_BYTES = 1024;
 
@@ -28,7 +29,7 @@ const BODY_LIMIT_BYTES = 1024;
 function refuse(response, error, requestConfig) {
 	const status = error?.status;
 	if (Number.isInteger(status) && status >= 400 && status < 600) {
-		jsonReply(response, status, { ok: false, message: error.message }, requestConfig);
+		jsonReply(response, status, { ok: false, message: error.message, ...(error.code ? { code: error.code } : {}) }, requestConfig);
 	} else {
 		jsonReply(response, 500, { ok: false, message: 'The IDE token could not be issued.' }, requestConfig);
 	}
@@ -44,7 +45,7 @@ function refuse(response, error, requestConfig) {
 // programming error, not a configuration: the handler refuses to exist rather than mint
 // without one. It is injected, never imported: bridge-api.mjs imports THIS module, so an
 // import back would be a cycle that loads the whole bridge inside the handler.
-export function createIdeTokenHandler({ config, verifySession, env = process.env, fetchImpl = fetch, requireWorkspaceAccess }) {
+export function createIdeTokenHandler({ config, verifySession, env = process.env, fetchImpl = fetch, requireWorkspaceAccess, kv }) {
 	if (typeof requireWorkspaceAccess !== 'function') {
 		throw new TypeError('createIdeTokenHandler needs a requireWorkspaceAccess check.');
 	}
@@ -64,7 +65,14 @@ export function createIdeTokenHandler({ config, verifySession, env = process.env
 			// handful of workspaces. A tab storm with many workspaces gets 429 and retries.
 			takeToken(`ide-token:${session.userId}`, { capacity: 10, refillPerSec: 0.2 });
 			const body = await readJsonBody(request, BODY_LIMIT_BYTES);
+			const scope = body?.scope;
+			if (scope !== undefined && scope !== 'node') throw Object.assign(new Error('scope must be "node" or absent.'), { status: 400 });
 			const { userId, workspaceId } = requireSandboxIdentity(session, body?.workspaceId, env);
+			// A machine is a shell as the owner: opening one needs a fresh step-up on THIS session (C10).
+			if (scope === 'node') {
+				if (!kv) throw Object.assign(new Error('Machine access is unavailable.'), { status: 503 });
+				await requireSudo(kv, session);
+			}
 			// approved / verified read a row here, after the mode check, so allowlist mode stays DB-free.
 			await requireIdeApproval(requestConfig, fetchImpl, userId, env);
 			// The app token may still list the workspace after removal (stale token): check the
@@ -74,7 +82,7 @@ export function createIdeTokenHandler({ config, verifySession, env = process.env
 			await requireWorkspaceAccess(request, workspaceId, 'read', requestConfig, fetchImpl);
 			// After the allowlist, so a refused account costs no query; a failed or slow lookup mints without a name.
 			const username = await lookupIdeUsername(requestConfig, fetchImpl, userId);
-			const { token, expiresAt } = signIdeToken({ userId, workspaceId, secret, username });
+			const { token, expiresAt } = signIdeToken({ userId, workspaceId, secret, username, scope });
 			jsonReply(response, 200, { ok: true, token, expiresAt }, requestConfig);
 			return true;
 		} catch (error) {

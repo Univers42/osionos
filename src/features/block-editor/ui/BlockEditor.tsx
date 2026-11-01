@@ -944,7 +944,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           <div className="min-w-0 max-w-full flex-1">
             <EditableContent
               content={block.content}
-              className={`py-0.5 break-words text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)}`}
+              className={`py-0.5 break-words text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)} ${hasChildren && !block.content ? "osionos-callout-line--empty" : ""}`}
               style={editableStyle}
               placeholder={getBlockPlaceholder(block, "Type… '/' for commands · Enter to add blocks inside")}
               onChange={onChange}

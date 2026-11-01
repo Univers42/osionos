@@ -45,10 +45,12 @@ export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
     >
       <IconValueView value={icon} size={20} className="mt-0.5 shrink-0 leading-none" />
       <div className="min-w-0 max-w-full flex-1">
-        <span
-          className={`block break-words ${getToggleHeadingClass(block.headingLevel)} py-0.5 text-[var(--osio-fg-default)]`}
-          dangerouslySetInnerHTML={content ?? undefined}
-        />
+        {content || !hasChildren ? (
+          <span
+            className={`block break-words ${getToggleHeadingClass(block.headingLevel)} py-0.5 text-[var(--osio-fg-default)]`}
+            dangerouslySetInnerHTML={content ?? undefined}
+          />
+        ) : null}
         {hasChildren ? (
           <div className="min-w-0 max-w-full">
             {block.children?.map((child, index) => (

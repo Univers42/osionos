@@ -27,6 +27,7 @@ import {
   useEscapeKey,
 } from "@/shared/ui";
 import { ColorProfilePanel, PROFILE_PANEL_WIDTH } from "./ColorProfilePanel";
+import { menuLeftBesideBlock } from "../model/menuBesideBlock";
 
 const SUBMENU_WIDTH = 224; // w-56 = 14rem = 224px
 const VIEWPORT_PAD = 12;
@@ -275,7 +276,10 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
   // fits and only slides up (then scrolls) when the viewport is genuinely short.
   const position = useMemo(() => {
     if (!menu) return null;
-    return clampViewportMenuPosition(menu.x, menu.y, {
+    const x = menu.blockEdges
+      ? menuLeftBesideBlock(menu.blockEdges, { width, viewportWidth: globalThis.innerWidth, margin: VIEWPORT_PAD })
+      : menu.x;
+    return clampViewportMenuPosition(x, menu.y, {
       width,
       maxHeight: naturalHeight ?? UNMEASURED_HEIGHT,
       margin: VIEWPORT_PAD,

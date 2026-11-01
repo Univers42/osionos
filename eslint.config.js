@@ -173,8 +173,9 @@ export default [
     // The root scripts/ (the bridge's ~180 modules, the IDE helpers, the seeders)
     // run under plain node, never in the browser bundle. `lint` and `quality`
     // reach them since #59: two release bugs were calls to removed functions
-    // that a fail-closed catch turned into empty results.
-    files: ["scripts/**/*.{mjs,js,cjs}"],
+    // that a fail-closed catch turned into empty results. osionos-node is the
+    // same kind of code, run on the owner's machines.
+    files: ["scripts/**/*.{mjs,js,cjs}", "packages/osionos-node/**/*.mjs"],
     rules: {
       // Input guards reject C0 control characters on purpose (`/[\x00-\x1f]/`).
       "no-control-regex": "off",

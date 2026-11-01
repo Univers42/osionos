@@ -90,6 +90,27 @@ describe('creating a page with a client id', () => {
 	});
 });
 
+describe('listing object databases', () => {
+	const seeded = () => ({ osionos_object_databases: [{ id: 'row-1', owner_id: IDS.userB, workspace_id: null, db_key: 'db-old', title: 'Old', state: {} }] });
+
+	it('#245 workspaceId narrows the read and keeps databases without a workspace', async () => {
+		const mock = createPostgrestMock(seeded());
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			await send(base, `/api/object-databases?workspaceId=${IDS.team}`, asB);
+			const read = mock.calls.find((call) => call.method === 'GET' && call.table === 'osionos_object_databases');
+			assert.equal(read.params.get('or'), `(workspace_id.eq.${IDS.team},workspace_id.is.null)`);
+		});
+	});
+
+	it('#245 a workspaceId that is not an id is refused, never spliced into the filter', async () => {
+		const mock = createPostgrestMock(seeded());
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const answer = await send(base, '/api/object-databases?workspaceId=x),owner_id.neq.(y', asB);
+			assert.ok(answer.status >= 400 && answer.status < 500, answer.text);
+		});
+	});
+});
+
 describe('creating an object database', () => {
 	const seeded = () => ({ osionos_object_databases: [{ id: 'row-1', owner_id: IDS.userB, workspace_id: null, db_key: 'db-abc', title: 'Old', state: { x: 1 } }] });
 

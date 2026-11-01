@@ -24,6 +24,12 @@ const CanvasDebugRouteImpl = lazy(() =>
   })),
 );
 
+const MachineViewImpl = lazy(() =>
+  import("@/features/ide/vscode/ui/MachineView").then((module) => ({
+    default: module.MachineView,
+  })),
+);
+
 const StyleGuideRouteImpl = lazy(() =>
   import("@/app/__styleguide__/StyleGuideRoute").then((module) => ({
     default: module.StyleGuideRoute,
@@ -90,7 +96,10 @@ if (globalThis.window !== undefined) {
 // A ?page=<id> link opens that page once the session resolves, or shows the
 // no-access screen when it cannot be read.
 if (globalThis.window !== undefined) {
-  void import("@/features/page-link/pageLinkBoot").then((module) => module.applyPageDeepLink());
+  void import("@/features/page-link/pageLinkBoot").then((module) => {
+    module.applyPageDeepLink();
+    module.applyTabUrlSync();
+  });
 }
 
 const contentFallback = (
@@ -105,6 +114,10 @@ export function LazyCanvasDebugRoute() {
 
 export function LazyStyleGuideRoute() {
   return <Suspense fallback={contentFallback}>{<StyleGuideRouteImpl />}</Suspense>;
+}
+
+export function LazyMachineView() {
+  return <Suspense fallback={contentFallback}>{<MachineViewImpl />}</Suspense>;
 }
 
 export function LazyWorkbench() {

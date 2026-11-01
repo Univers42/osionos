@@ -138,6 +138,13 @@
   padding-inline: 0;
 }
 
+/* The surface behind an inline database belongs to what holds it, a page or a
+ * callout (issue 266): a view's flex-1 body painted its own surface over a tinted
+ * callout. Sticky headers and cards keep their surface, they sit over content. */
+.osionos-database-block--inline .osionos-object-database-single-view .bg-surface-primary.flex-1:not(.sticky) {
+  background-color: transparent;
+}
+
 /* A collapsed embed must stay restorable: keep its toggle visible at rest. */
 .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar[data-collapsed] .odb-collapse-btn {
   opacity: 1;
