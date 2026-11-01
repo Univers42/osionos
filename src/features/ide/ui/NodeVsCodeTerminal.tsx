@@ -9,7 +9,10 @@ import { CONNECTOR_DOWNLOAD_URL } from "@/features/machines/model/connector";
 import { TERMINAL_PAGE_URL, terminalFramePanel } from "@/features/machines/model/terminalFrame";
 import { startTerminalFrame, useTerminalFrameStore } from "@/features/machines/model/terminalFrameStore";
 import { SudoPrompt } from "@/features/settings/ui/sudo/SudoPrompt";
-import { dockColors } from "./dockColors";
+import { LOCAL_NODE_ORIGIN } from "@/features/machines/model/machineWindow";
+import { TERMINAL_THEME_MESSAGE } from "@/features/machines/model/terminalFrame";
+import { dockColors, dockTheme } from "./dockColors";
+import { watchAppearance } from "./watchAppearance";
 import { MachineFramePanel } from "./MachineFramePanel";
 import { probeOldNode } from "@/features/machines/model/oldNodeProbe";
 
@@ -21,10 +24,21 @@ export const NodeVsCodeTerminal: React.FC = () => {
   React.useEffect(() => startTerminalFrame({
     frame: () => frameRef.current?.contentWindow ?? null,
     colors: () => (frameRef.current ? dockColors(frameRef.current) : {}),
+    theme: () => (frameRef.current ? dockTheme(frameRef.current) : null),
     probeOldNode,
     // The page focuses VS Code's terminal inside; the frame itself must hold the page's focus.
     onConnected: () => frameRef.current?.focus(),
   }), [attempt]);
+
+  // A theme picked in Settings repaints a running terminal; its shells keep running.
+  React.useEffect(() => {
+    const host = frameRef.current;
+    if (!host) return undefined;
+    return watchAppearance(host, () => {
+      const theme = dockTheme(host);
+      if (theme) host.contentWindow?.postMessage({ type: TERMINAL_THEME_MESSAGE, theme }, LOCAL_NODE_ORIGIN);
+    });
+  }, [attempt]);
 
   const panel = terminalFramePanel(phase === "idle" ? "connecting" : phase, CONNECTOR_DOWNLOAD_URL);
   return (

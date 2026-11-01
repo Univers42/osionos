@@ -3,6 +3,7 @@
 // to the app (W10), and opens one WebSocket per shell to its own node, with a token the app minted
 // for the first and the node's session secret for the next (U6). Framed by anything but the app's
 // top page, it draws nothing.
+import { readCodeTheme, type CodeTheme } from "../features/ide/model/codeTheme";
 import { readSelf } from "../features/ide/vscode/machineSession";
 import { whoami } from "../features/ide/vscode/machineWhoami";
 import type { TerminalColors, TerminalPtyApi } from "../features/ide/model/terminalPort";
@@ -34,7 +35,9 @@ function reporting(api: TerminalPtyApi, link: TerminalAppLink): TerminalPtyApi {
   };
 }
 
-export async function startOnTheWeb(start: (api: TerminalPtyApi, colors: TerminalColors) => Promise<void>): Promise<void> {
+const THEME_MESSAGE = "osionos-terminal/theme";
+
+export async function startOnTheWeb(start: (api: TerminalPtyApi, colors: TerminalColors) => Promise<void>, onTheme: (theme: CodeTheme) => void): Promise<void> {
   const node = await selfNode();
   if (!node) return;
   const link = linkTerminalToApp({
@@ -48,6 +51,13 @@ export async function startOnTheWeb(start: (api: TerminalPtyApi, colors: Termina
       return () => window.removeEventListener("message", onMessage);
     },
     whoami,
+    onAppMessage: (data) => {
+      const message = data as { type?: unknown; theme?: unknown } | null;
+      if (message?.type !== THEME_MESSAGE) return false;
+      const theme = readCodeTheme(message.theme);
+      if (theme) onTheme(theme);
+      return true;
+    },
   });
   if (!link) return;
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${PTY_SOCKET_PATH}`;

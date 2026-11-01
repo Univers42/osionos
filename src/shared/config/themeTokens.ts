@@ -18,7 +18,7 @@
 
 import { COLOR_TOKEN_ROWS } from "./themeTokens.colors";
 
-export type ThemeTokenKind = "color" | "length" | "number" | "font" | "shadow" | "duration" | "easing";
+export type ThemeTokenKind = "color" | "length" | "number" | "font" | "shadow" | "duration" | "easing" | "line-style" | "letter-case" | "font-style";
 export type ThemeGroup = "colors" | "layout" | "fonts";
 
 export interface ThemeToken {
@@ -31,7 +31,7 @@ export interface ThemeToken {
 /** Colours go in `colors`; families, sizes, weights, line heights and letter spacing in `fonts`; the rest in `layout`. */
 function groupOf(key: string, kind: ThemeTokenKind): ThemeGroup {
   if (kind === "color") return "colors";
-  if (kind === "font" || /^(font-size|font-weight|line-height|letter-spacing)-/.test(key)) return "fonts";
+  if (kind === "font" || kind === "letter-case" || kind === "font-style" || /^(font-size|font-weight|line-height|letter-spacing)-/.test(key)) return "fonts";
   return "layout";
 }
 
@@ -63,6 +63,12 @@ const LAYOUT_ROWS: Row[] = [
   ["field-radius", "length", "Text field corners"],
   ["border-width", "length", "Default border thickness"],
   ["dock-border-width", "length", "Bottom dock border thickness"],
+  ["border-style", "line-style", "Line of every border: solid, dashed, dotted, double"],
+  ["focus-ring-style", "line-style", "Line of the keyboard focus ring"],
+  ["icon-stroke", "number", "Stroke width of line icons"],
+  ["disabled-opacity", "number", "Opacity of disabled buttons"],
+  ["scrollbar-size", "length", "Thickness of scrollbars"],
+  ["link-underline-offset", "length", "Gap between a link and its underline"],
   ["dock-min-h", "length", "Smallest height of the bottom dock"],
   ["focus-ring-width", "length", "Thickness of the keyboard focus ring"],
   ["focus-ring-offset", "length", "Gap between a control and its focus ring"],
@@ -106,6 +112,9 @@ const FONT_ROWS: Row[] = [
   ["font-family-sans", "font", "Sans-serif font of page content"],
   ["font-family-serif", "font", "Serif font of page content"],
   ["font-family-mono", "font", "Monospace font of code"],
+  ["heading-transform", "letter-case", "Letter case of headings"],
+  ["heading-style", "font-style", "Upright or italic headings"],
+  ["button-transform", "letter-case", "Letter case of buttons"],
   ["font-size-ui", "length", "Interface text size"],
   ...SIZES.map((size): Row => [`font-size-${size}`, "length", `Text size ${size}`]),
   ...["normal", "medium", "semibold", "bold", "display"]
