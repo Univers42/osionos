@@ -167,17 +167,18 @@ test.describe("dock header", () => {
     expect(await style(header, "backgroundColor")).toBe(await tokenAt(dock, "background-color", "--osio-code-header-bg"));
   });
 
+  // The offline build has no hosted sandbox: the terminal is this computer's VS Code panel, in
+  // place, which carries its own new and split (de444432), so the header keeps only Hide panel.
   test("icon buttons are 24px targets with a visible focus ring", async ({ page, baseURL }) => {
     await openDock(page, baseURL);
     const dock = dockOf(page);
-    for (const name of ["New terminal", "Split terminal", "Hide panel"]) {
-      const button = dock.getByRole("button", { name });
-      const box = await rect(button);
-      expect(box.width).toBeGreaterThanOrEqual(24);
-      expect(box.height).toBeGreaterThanOrEqual(24);
-      expect(await style(button, "borderTopLeftRadius")).toBe(await tokenAt(dock, "border-top-left-radius", "--osio-control-radius"));
-    }
+    await expect(dock.locator("[data-osio-terminal]")).toHaveCount(1);
+    for (const name of ["New terminal", "Split terminal"]) await expect(dock.getByRole("button", { name })).toHaveCount(0);
     const hide = dock.getByRole("button", { name: "Hide panel" });
+    const box = await rect(hide);
+    expect(box.width).toBeGreaterThanOrEqual(24);
+    expect(box.height).toBeGreaterThanOrEqual(24);
+    expect(await style(hide, "borderTopLeftRadius")).toBe(await tokenAt(dock, "border-top-left-radius", "--osio-control-radius"));
     await hide.hover();
     await expect.poll(() => style(hide, "backgroundColor")).toBe(await tokenAt(dock, "background-color", "--osio-code-btn-hover"));
     await page.keyboard.press("Tab");
@@ -187,13 +188,17 @@ test.describe("dock header", () => {
     await expect(page.getByRole("tooltip", { name: "Hide panel" })).toBeVisible();
   });
 
+  // The terminal is this computer's page in a frame: a remount would reload it and drop its shells.
   test("the terminal stays mounted while another tab shows", async ({ page, baseURL }) => {
     await openDock(page, baseURL);
     const dock = dockOf(page);
-    await expect(dock.locator(".xterm")).toHaveCount(1);
+    const frame = dock.locator('[data-osio-terminal] iframe[title="Terminal"]');
+    await expect(frame).toHaveCount(1);
+    await frame.evaluate((el) => { el.dataset.mountMark = "first"; });
     await dock.getByRole("tab", { name: "Output" }).click();
     await expect(dock.locator("#dock-panel-terminal")).toBeHidden();
-    await expect(dock.locator(".xterm")).toHaveCount(1);
+    await expect(frame).toHaveCount(1);
+    expect(await frame.getAttribute("data-mount-mark")).toBe("first");
   });
 });
 
@@ -250,25 +255,31 @@ test.describe("editor title bar", () => {
   });
 });
 
+// Offline build: the dock frames this computer's terminal page (de444432). The text inside is the
+// page's own layout (VS Code's panel); the dock owns the frame, which is what is checked here.
 test.describe("terminal", () => {
-  test("keeps its text off the rounded corners and fits without a horizontal scrollbar", async ({ page, baseURL }) => {
+  test("the frame fills the panel inside the card, on the code surface, without a horizontal scrollbar", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openDock(page, baseURL);
     const dock = dockOf(page);
-    const screen = dock.locator(".xterm-screen").first();
-    await screen.waitFor({ state: "attached" });
+    const frame = dock.locator('[data-osio-terminal] iframe[title="Terminal"]');
+    await frame.waitFor({ state: "attached" });
     const edge = await rect(dock);
-    const text = await rect(screen);
-    expect(text.left - edge.left).toBeGreaterThanOrEqual(12);
-    expect(edge.bottom - text.bottom).toBeGreaterThanOrEqual(8);
-    // xterm's stylesheet paints its scroll viewport #000 over the theme colour; the theme's surface must show instead.
-    expect(await style(dock.locator(".xterm-viewport").first(), "backgroundColor")).toBe("rgba(0, 0, 0, 0)");
-    expect(await style(dock.locator(".xterm-scrollable-element").first(), "backgroundColor")).toBe(await tokenAt(dock, "background-color", "--osio-code-bg"));
-    const host = dock.locator(".xterm").first().locator("xpath=..");
+    const panel = await rect(dock.locator("#dock-panel-terminal"));
+    const box = await rect(frame);
+    expect(box.left).toBeGreaterThanOrEqual(edge.left);
+    expect(box.right).toBeLessThanOrEqual(edge.right);
+    expect(box.bottom).toBeLessThanOrEqual(edge.bottom);
+    expect(box.top).toBeGreaterThanOrEqual(panel.top);
+    expect(box.width).toBeGreaterThan(0);
+    expect(box.height).toBeGreaterThan(0);
+    // Before the page paints, the frame shows the dock's code surface, never a white flash.
+    expect(await style(frame, "backgroundColor")).toBe(await tokenAt(dock, "background-color", "--osio-code-bg"));
+    const host = dock.locator("[data-osio-terminal]");
     expect(await host.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-    const wide = (await rect(screen)).width;
+    const wide = box.width;
     await page.setViewportSize({ width: 900, height: 800 });
-    await expect.poll(async () => (await rect(screen)).width).toBeLessThan(wide);
+    await expect.poll(async () => (await rect(frame)).width).toBeLessThan(wide);
     expect(await host.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   });
 });

@@ -16,7 +16,7 @@ import { AlertCircle, GitBranch, PanelBottom } from "lucide-react";
 import { Tooltip } from "@/shared/ui";
 import { useDiagnosticsStore } from "@/features/ide/model/diagnosticsStore";
 import { hasLocalTerminal } from "@/features/ide/model/localPty";
-import { openOwnMachine, useMachineWindowStore } from "@/features/machines/model/machineWindowStore";
+import { useTerminalFrameStore } from "@/features/machines/model/terminalFrameStore";
 import {
   isSandboxOnline,
   useSandboxHealthStore,
@@ -64,19 +64,15 @@ const BranchChip: React.FC = () => {
   );
 };
 
-/** Where no hosted sandbox runs, the code runs on this computer, through its own osionos-node: the
- *  chip opens its window and shows the dock's panel, which says why when it cannot open. */
+/** Where no hosted sandbox runs, the terminal is this computer's own, in the dock: the chip opens it
+ *  there, and the dock says why when this computer does not answer. */
 const MachineChip: React.FC = () => {
-  const phase = useMachineWindowStore((s) => s.phase);
+  const phase = useTerminalFrameStore((s) => s.phase);
   const openDock = useWorkbenchStore((s) => s.openDock);
-  const dot = phase === "connected" ? DOT_CLASS.online : phase === "idle" || phase === "connecting" ? DOT_CLASS.unknown : DOT_CLASS.stopped;
-  const open = () => {
-    openOwnMachine();
-    openDock("terminal");
-  };
+  const dot = phase === "connected" ? DOT_CLASS.online : phase === "idle" || phase === "connecting" || phase === "step-up" ? DOT_CLASS.unknown : DOT_CLASS.stopped;
   return (
-    <Tooltip label="Open this computer's terminal and files" side="top">
-      <button type="button" data-testid="machine-chip" onClick={open} className={CHIP}>
+    <Tooltip label="Open a terminal on this computer" side="top">
+      <button type="button" data-testid="machine-chip" onClick={() => openDock("terminal")} className={CHIP}>
         <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
         This computer
       </button>
