@@ -240,7 +240,7 @@ describe('a run falls back to the next model', () => {
 		failing.always('mock-metered', 503);
 		const down = await runToEnd({ model: 'mock-metered' });
 		assert.deepEqual(typesOf(down.events).filter((type) => type !== 'run.started'), ['error']);
-		assert.equal((down.events.at(-1)?.data as { code: string }).code, 'upstream_error');
+		assert.equal((down.events.at(-1)?.data as { code: string }).code, 'provider_unavailable');
 		// The SDK's default of two retries: three requests, as before failover.
 		assert.equal(failing.countFor('mock-metered'), 1 + 3);
 		assert.equal((await runRow(down.runId)).usage?.attempts, undefined);
