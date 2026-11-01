@@ -33,7 +33,7 @@ export const CommandLine: React.FC<{ label: string; command: string }> = ({ labe
   }
   return (
     <li className="space-y-1">
-      <span className="block text-sm text-[var(--osio-fg-default)]">{label}</span>
+      <span className="block text-sm">{label}</span>
       <span className="flex items-start gap-1">
         <code className="min-w-0 flex-1 break-all rounded-[var(--osio-field-radius)] bg-[var(--osio-bg-subtle)] px-2 py-1.5 font-mono text-xs text-[var(--osio-fg-default)]">{command}</code>
         <IconButton label={`Copy: ${label}`} onClick={() => void copy()}><Copy size={14} /></IconButton>

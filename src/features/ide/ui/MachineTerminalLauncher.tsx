@@ -36,16 +36,18 @@ export const MachineTerminalLauncher: React.FC = () => {
   const actions = <Button size="sm" tone="primary" className={CODE_BUTTON} onClick={act}>{ACTION_LABEL[panel.action]}</Button>;
 
   return (
-    <div role="status" aria-live="polite" className="flex h-full w-full items-center justify-center overflow-auto bg-[var(--osio-code-bg)]">
+    <div role="status" aria-live="polite" className="flex h-full w-full overflow-auto bg-[var(--osio-code-bg)]">
+      <div className="m-auto w-full max-w-3xl">
       <StateBlock icon={Laptop} title={panel.title} tone="code" actions={actions}>
         <p>{panel.detail}</p>
         {panel.command && (
           <div className="mt-3 text-left">
-            <MachineCommands name="this-computer" />
-            <div className="mt-3"><PairCodeField onPaired={openThisComputer} /></div>
+            <PairCodeField onPaired={openThisComputer} />
+            <div className="mt-3"><MachineCommands name="this-computer" /></div>
           </div>
         )}
       </StateBlock>
+      </div>
     </div>
   );
 };

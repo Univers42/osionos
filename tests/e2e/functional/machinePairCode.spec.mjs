@@ -12,6 +12,7 @@ test("no node answering: the panel offers every step and a code field", async ({
   if (await open.isVisible().catch(() => false)) await open.click();
   await page.getByLabel("Enter the code it printed").waitFor({ timeout: 15_000 });
   await expect(page.getByText("install osionos-node (once)")).toBeVisible();
+  await expect(page.getByLabel("Enter the code it printed")).toBeInViewport();
   await page.screenshot({ path: "test-results/evidence/machine-pair-code.png" });
   const submit = page.getByRole("button", { name: "Continue" });
   await expect(submit).toBeDisabled();

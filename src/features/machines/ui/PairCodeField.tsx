@@ -34,7 +34,7 @@ export const PairCodeField: React.FC<{ onPaired: () => void }> = ({ onPaired }) 
   const closeReview = () => setClaim(null);
   return (
     <form onSubmit={submit} className="space-y-1 text-left">
-      <label htmlFor="machine-pair-code" className="block text-sm text-[var(--osio-fg-default)]">Enter the code it printed</label>
+      <label htmlFor="machine-pair-code" className="block text-sm">Enter the code it printed</label>
       <span className="flex gap-1">
         <Input
           id="machine-pair-code" value={code} maxLength={12} placeholder="BCDF-GHJK" autoComplete="off" autoCapitalize="characters"
