@@ -4637,7 +4637,11 @@ async function handlePageConfigPatch(url, request, response, config, fetchImpl) 
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const { authContext, workspaceId } = await requirePageScopeAccess(request, pageId, payload, 'update', config, fetchImpl);
 	// Version snapshots are local-only (devil ruling 2026-10-28): dropped so old builds stop storing them.
-	const { versions: _versions, ...pageConfig } = safeJsonObject(payload.config, 'config');
+	const { versions: _versions, ...sentConfig } = safeJsonObject(payload.config, 'config');
+	// A row is replaced whole: `merge` lets a caller holding one setting, the assistant,
+	// change it without resetting the others.
+	const stored = payload.merge === true ? await fetchPageConfigRow(pageId, authContext.userId, config, fetchImpl) : null;
+	const pageConfig = { ...stored?.config, ...sentConfig };
 	const rows = await baasRest(config, fetchImpl, 'osionos_page_configurations?on_conflict=user_id,page_id', {
 		method: 'POST',
 		body: {

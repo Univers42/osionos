@@ -90,6 +90,10 @@ export function bridgeWriteOf(row: ApprovalRow): BridgeWrite | null {
 		if (!UUID.test(pageId)) return null;
 		return { method: 'PATCH', path: `/api/pages/${pageId}`, body: { title } };
 	}
+	if (row.tool === 'update_page_settings') {
+		if (!UUID.test(pageId)) return null;
+		return { method: 'PATCH', path: `/api/pages/${pageId}/config`, body: { config: args.settings, merge: true } };
+	}
 	if (row.tool === 'archive_page') {
 		if (!UUID.test(pageId)) return null;
 		return {
@@ -191,6 +195,7 @@ function successSummary(row: ApprovalRow): string {
 	const title = typeof args.title === 'string' ? args.title : '';
 	if (row.tool === 'create_page') return `the page "${title}" was created`;
 	if (row.tool === 'rename_page') return `the page is now named "${title}"`;
+	if (row.tool === 'update_page_settings') return 'the page settings were changed';
 	if (row.tool === 'archive_page') return 'the page was archived';
 	return 'the write landed';
 }

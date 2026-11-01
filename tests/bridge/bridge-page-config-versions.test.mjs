@@ -35,6 +35,17 @@ function upsertBody(mock) {
 }
 
 describe('PATCH /api/pages/:id/config stops storing version snapshots', () => {
+	it('#248 merge changes one setting and keeps the others', async () => {
+		const mock = createPostgrestMock(teamWorld({ memberRole: 'editor' }), { realWorkspaceRpc: true });
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			await send(base, `/api/pages/${IDS.sharedA}/config`, asB, patch({ config: { font: 'serif', fullWidth: true } }));
+			const result = await send(base, `/api/pages/${IDS.sharedA}/config`, asB, patch({ config: { showProperties: false }, merge: true }));
+			assert.equal(result.status, 200, result.text);
+			const { font, fullWidth, showProperties } = mock.rows('osionos_page_configurations')[0].config;
+			assert.deepEqual({ font, fullWidth, showProperties }, { font: 'serif', fullWidth: true, showProperties: false });
+		});
+	});
+
 	it('answers 200 and stores the config without the versions key', async () => {
 		const mock = createPostgrestMock(teamWorld({ memberRole: 'editor' }), { realWorkspaceRpc: true });
 		await withBridge(config, mock.fetchImpl, async (base) => {

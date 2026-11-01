@@ -95,6 +95,22 @@ const renamePageArgs = z.object({
 	title: z.string().min(1).max(TITLE_MAX_CHARS),
 });
 
+/** The arguments of a page's settings: the display switches, strictly. `locked` and
+ *  sharing stay out: the assistant changes how a page reads, never who may touch it. */
+const pageSettingsArgs = z.object({
+	pageId: z.string().regex(UUID),
+	settings: z
+		.object({
+			showProperties: z.boolean(),
+			showConnections: z.boolean(),
+			showOutline: z.boolean(),
+			fullWidth: z.boolean(),
+			smallText: z.boolean(),
+		})
+		.partial()
+		.refine((settings) => Object.keys(settings).length > 0, { message: 'name at least one setting' }),
+});
+
 /** The arguments of the archive of a page: the page, and nothing else. */
 const archivePageArgs = z.object({
 	pageId: z.string().regex(UUID),
@@ -284,6 +300,31 @@ export const renamePage: WriteTool<z.infer<typeof renamePageArgs>> = {
 };
 
 /**
+ * The display settings of a page, the ones in its "..." menu (#248).
+ *
+ * Settings are per user: this changes the page for the person asking only.
+ */
+export const updatePageSettings: WriteTool<z.infer<typeof pageSettingsArgs>> = {
+	name: 'update_page_settings',
+	description:
+		"Ask the user to change how one of their pages displays: showProperties (the property rows under the title), showConnections (the In folder / Mentions / Related block), showOutline (table of contents), fullWidth, smallText. Name only the settings to change.",
+	kind: 'write',
+	verb: 'Change page settings',
+	input: pageSettingsArgs,
+	async run(ctx, args) {
+		const page = await writablePage(ctx, args.pageId);
+		if (!page) return { ok: false, error: 'no page with that id in your workspaces' };
+		const target: ApprovalTarget = {
+			pageId: String(page.id),
+			title: String(page.title ?? ''),
+			workspaceId: String(page.workspace_id),
+			workspaceName: await workspaceName(ctx.db, String(page.workspace_id)),
+		};
+		return { ok: true, data: { args: { ...args }, target, preview: { unit: 'none', count: 0 } } };
+	},
+};
+
+/**
  * The archive of a page.
  *
  * A SOFT archive: the page is stamped, not deleted, and it can be restored.
@@ -417,7 +458,7 @@ export const addBlocks: WriteTool<z.infer<typeof addBlocksArgs>> = {
 };
 
 /** The write tools, in the order the model sees them. */
-export const WRITE_TOOLS: readonly AnyWriteTool[] = Object.freeze([createPage, renamePage, archivePage, addBlocks]);
+export const WRITE_TOOLS: readonly AnyWriteTool[] = Object.freeze([createPage, renamePage, updatePageSettings, archivePage, addBlocks]);
 
 /** The verb of every write tool, by name: the card says it in plain words. */
 export const WRITE_VERBS: Readonly<Record<string, string>> = Object.freeze(
