@@ -4,6 +4,7 @@
 // shell's own port, on which it talks to the pty host directly. The page never posts to
 // window.parent, so a copy of the page framed by content gets no port and no shell.
 // The panel's side is ptyPortRouter.ts.
+import { HEX_COLOR } from "./codeTheme.ts";
 
 export type PortLike = Pick<MessagePort, "postMessage" | "close" | "start"> & {
   onmessage: ((event: MessageEvent) => void) | null;
@@ -38,7 +39,6 @@ export interface TerminalColors {
 }
 
 const COLOR_KEYS = ["background", "foreground", "cursor", "selection"] as const;
-const HEX_COLOR = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
 /** The hex colours of `value`: VS Code's colour customizations read hex only, and nothing else
  *  crosses into the page's configuration. */

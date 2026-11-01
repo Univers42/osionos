@@ -778,6 +778,24 @@ body {
 
 }
 
+/* The workbench dock: the app's own palette, light or dark, so the terminal it frames can be
+   painted in the same colours (features/ide/model/codeThemeFromTokens.ts reads these). */
+[data-code-theme="app"] {
+  --osio-code-bg: var(--osio-bg-surface);
+  --osio-code-header-bg: var(--osio-bg-surface);
+  --osio-code-border: var(--osio-border);
+  --osio-code-ring: var(--osio-border);
+  --osio-code-fg: var(--osio-fg-default);
+  --osio-code-fg-muted: var(--osio-fg-muted);
+  --osio-code-caret: var(--osio-caret);
+  --osio-code-selection: color-mix(in srgb, var(--osio-accent) 30%, transparent);
+  --osio-code-active-line: var(--osio-bg-hover);
+  --osio-code-bracket: color-mix(in srgb, var(--osio-accent) 22%, transparent);
+  --osio-code-chip-bg: var(--osio-bg-muted);
+  --osio-code-btn-hover: var(--osio-bg-hover);
+  --osio-code-btn-active: var(--osio-bg-muted);
+}
+
 .osio-code-card .hljs,
 .osio-code-card .hljs-subst {
   color: var(--osio-code-fg) !important;
