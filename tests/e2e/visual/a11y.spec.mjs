@@ -80,3 +80,30 @@ test("a11y: inline text selection toolbar surface", async ({ page, baseURL }) =>
   expect(results).toBeDefined();
   expect(results.violations).toEqual([]);
 });
+
+test("a11y: block drag handle satisfies WCAG 2.2 target size and focus visibility", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  const editor = await activateFirstEditor(page);
+  await editor.type("Test paragraph for block drag handle inspection.");
+  const block = page.locator('[data-testid="draggable-block"]').first();
+  await block.hover();
+  const handle = block.locator('> [data-testid="block-drag-handle"]');
+  await expect(handle).toBeVisible();
+  const box = await handle.boundingBox();
+  expect(box).toBeDefined();
+  expect(box.width).toBeGreaterThanOrEqual(24);
+  expect(box.height).toBeGreaterThanOrEqual(24);
+  await handle.focus();
+  await expect(handle).toBeVisible();
+});
+
+test("a11y: table add axis button satisfies WCAG 2.2 target size", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  await createBlockViaSlash(page, "table", "Table");
+  const addRowBtn = page.getByRole("button", { name: "Add row" });
+  await expect(addRowBtn).toBeAttached();
+  const box = await addRowBtn.boundingBox();
+  expect(box).toBeDefined();
+  expect(box.width).toBeGreaterThanOrEqual(24);
+  expect(box.height).toBeGreaterThanOrEqual(24);
+});
