@@ -67,8 +67,8 @@ test("the pairing code is read the way the bridge reads it: letters only, upper 
 });
 
 test("the commands name this bridge and this app, and quote a name the shell would split", () => {
-  assert.equal(pairCommand("https://baas.example:10000", "laptop"), "osionos-node pair --bridge https://baas.example:10000 --name laptop");
-  assert.equal(pairCommand("https://b.example", "my laptop"), "osionos-node pair --bridge https://b.example --name 'my laptop'");
+  assert.equal(pairCommand("https://baas.example:10000", "laptop"), "node ~/.osionos/src/packages/osionos-node/cli.mjs pair --bridge https://baas.example:10000 --name laptop");
+  assert.equal(pairCommand("https://b.example", "my laptop"), "node ~/.osionos/src/packages/osionos-node/cli.mjs pair --bridge https://b.example --name 'my laptop'");
   assert.equal(shellWord("it's"), "'it'\\''s'");
   assert.equal(shellWord(""), "''");
 });

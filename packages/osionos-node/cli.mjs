@@ -14,6 +14,7 @@
 // `osionos-node serve`: runs this machine's VS Code server on its private socket and the IDE
 // origin in front of it (ADR-006). Milestone 1 is the owner's own machine, owner-only. The secret
 // comes from the environment only, never argv, which other local users can read in ps.
+import { realpathSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { join } from 'node:path';
@@ -135,7 +136,9 @@ async function pair(argv, env) {
 	}
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// Real paths: node resolves this module through a symlink and argv[1] does not, so a
+// run through ~/.osionos/src did nothing at all and exited 0.
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
 	const [command, ...rest] = process.argv.slice(2);
 	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env) };
 	const run = commands[command]?.() ?? Promise.reject(new Error(USAGE));
