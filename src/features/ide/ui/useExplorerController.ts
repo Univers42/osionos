@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { PAGE_FILE_SUFFIX } from "@/features/page-file/model/types";
 import React from "react";
 
 import { flattenForRender, indexByRel } from "../model/explorerRows";
@@ -74,8 +75,9 @@ export function useExplorerController({ ops, onOpen, pageIdOf, onRowMenu, defaul
 
   const activate: ExplorerContextValue["activate"] = (rel, row) => {
     focusRow(rel);
-    if (row.kind === "dir") tree.setOpen(rel, !tree.expanded.has(rel));
-    else onOpen(rel, row.kind);
+    if (row.kind !== "dir") return onOpen(rel, row.kind);
+    tree.setOpen(rel, !tree.expanded.has(rel));
+    if (row.pageFile) onOpen(`${rel}${PAGE_FILE_SUFFIX}`, "page");
   };
   const cancelEdit = (): void => { setPending(null); focusRow(tabbableRel); };
   const newIn = (kind: "file" | "dir") => (): void => {

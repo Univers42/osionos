@@ -79,6 +79,7 @@ function argsFor(tool: string, pageId: string): Record<string, unknown> {
 	const args: Record<string, Record<string, unknown>> = {
 		create_page: { title: 'From agent', workspaceId: WORKSPACE_A },
 		rename_page: { pageId, title: 'Renamed by agent' },
+		update_page_settings: { pageId, settings: { showProperties: false } },
 		archive_page: { pageId },
 		add_blocks: { pageId, blocks: [{ type: 'paragraph', content: 'added by agent' }] },
 	};

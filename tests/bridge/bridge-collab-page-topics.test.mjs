@@ -494,7 +494,8 @@ describe('C571 — flag-on events are rate-limited', () => {
     const { publishes, okCount, limited } = await run(world(), ON, async (base) => {
       const body = (seq) => collab({ t: 'pages', actor: FLOOD_USER, seq, workspaceId: IDS.team });
       const realNow = Date.now;
-      Date.now = () => 1_800_000_000_000;
+      const frozen = realNow();
+      Date.now = () => frozen;
       try {
         const results = await Promise.all(Array.from({ length: 450 }, (_, index) => send(base, eventsPath, headersFor(FLOOD_USER), post(body(index + 1)))));
         const burstOk = results.filter((result) => result.status === 200).length;

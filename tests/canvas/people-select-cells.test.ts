@@ -28,9 +28,11 @@ test("a member's Role cell resolves to its option", async () => {
   assert.equal(optionValue(state, MEMBER.role, page.properties[MEMBER.role]), "member");
 });
 
-test("a guest's Role and Status cells resolve to their options", async () => {
+test("a guest's Role and Status cells resolve to their options", async (t) => {
+  // An invite is pending only until `expiresAt`: the clock is pinned before it.
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-15T00:00:00Z") });
   useWorkspaceInvitesStore.setState({ data: { [WS]: [{
-    _id: "i1", workspaceId: WS, email: "g@example.com", role: "guest", invitedBy: "u-ada", expiresAt: "2026-11-01T00:00:00Z",
+    _id: "i1", workspaceId: WS, email: "g@example.com", role: "guest", invitedBy: "u-ada", expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
     acceptedAt: null, revokedAt: null, createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-01T00:00:00Z",
   }] } });
   const state = await buildGuestsState(CTX);

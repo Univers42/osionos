@@ -194,7 +194,7 @@ export function verifyMessage(rawPublic, message, signature) {
 
 // The signed strings are NUL-joined with a domain tag, and every one carries the relay origin so a
 // signature is useless at another relay (contract 4, 5.1, 5.2).
-const signed = (domain, ...parts) => Buffer.concat([Buffer.from(domain), ...parts.flatMap((part) => [Buffer.alloc(1), Buffer.from(part)])]);
+export const signed = (domain, ...parts) => Buffer.concat([Buffer.from(domain), ...parts.flatMap((part) => [Buffer.alloc(1), Buffer.from(part)])]);
 export const authMessage = ({ origin, agentId, nonce, ts }) => signed('osio-agent-auth-v1', origin, agentId, nonce, String(ts));
 export const pairMessage = ({ origin, pubkey, name, ts }) => signed('osio-agent-pair-v1', origin, pubkey, name, String(ts));
 export const acceptMessage = ({ origin, pairId, subj }) => signed('osio-agent-accept-v1', origin, pairId, subj);

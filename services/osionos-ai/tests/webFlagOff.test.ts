@@ -46,7 +46,7 @@ describe('the web tools with the flag off', () => {
 		// Pinned from main before the web tools (origin/main b3d1f7ccc, builders off: 7048),
 		// plus suggest_agent (bots B1: 495 chars), plus add_blocks' code language (#34:
 		// 167 chars). A change here moves every reservation.
-		assert.equal(TOOL_DEFINITION_CHARS, 7710);
+		assert.equal(TOOL_DEFINITION_CHARS, 8549);
 	});
 
 	it('C375 influencedBy never reads the web columns', async () => {

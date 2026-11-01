@@ -12,7 +12,7 @@
 
 // The sidebar Explorer wears the Calm canvas row language: a file-tree row, a
 // Recents page row and a section label are one family, and the IDE states
-// (toolbar, empty, offline sandbox) use the kit controls.
+// (toolbar, empty, offline terminal) use the kit controls.
 
 import { expect, test } from "@playwright/test";
 
@@ -173,15 +173,17 @@ const codeToken = (el, property, token) =>
   }, [property, token]);
 
 for (const mode of ["light", "dark"]) {
-  test(`the offline sandbox state is a muted icon, a title and a kit Retry button on the code palette (${mode})`, async ({ page }) => {
+  // The offline build has no hosted sandbox, so the dock's terminal is this computer's (de444432);
+  // with no osionos Connector answering, its state block is what the dock shows.
+  test(`the offline terminal state is a muted icon, a title and a kit Try again button on the code palette (${mode})`, async ({ page }) => {
     test.setTimeout(120_000);
     await page.addInitScript((value) => localStorage.setItem("osionos:theme-mode", value), mode);
     await bootExplorer(page);
     await page.getByRole("button", { name: "Panel", exact: true }).click();
-    const state = page.getByTestId("workbench-dock").getByRole("status").filter({ hasText: /Sandbox (unavailable|disabled|stopped)/ });
+    const state = page.getByTestId("workbench-dock").getByRole("status").filter({ hasText: /this computer/, has: page.getByRole("button", { name: "Try again" }) });
     await expect(state).toBeVisible({ timeout: 30_000 });
     await expect(state.locator("svg").first()).toBeVisible();
-    const retry = state.getByRole("button", { name: "Retry" });
+    const retry = state.getByRole("button", { name: "Try again" });
     expect((await read(retry, ["height"])).height).toBe(await tokenValue(page, "height", "--osio-control-h-sm"));
     expect((await read(retry, ["borderTopLeftRadius"])).borderTopLeftRadius).toBe(await tokenValue(page, "border-top-left-radius", "--osio-control-radius"));
     // The dock is dark in both themes, so its button must not follow the page theme.
