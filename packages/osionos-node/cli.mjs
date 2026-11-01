@@ -28,7 +28,7 @@ import { createMachineSession, loadMachine } from './machine-identity.mjs';
 import { pairMachine } from './pair.mjs';
 import { SERVER_PIN } from './pin.mjs';
 import { createPtyHost, serverSocketAcceptor } from './pty-runtime.mjs';
-import { ensureServer, serverEnv } from './server-launch.mjs';
+import { ensureServer, preferredShell, serverEnv } from './server-launch.mjs';
 import { createClientHandler } from './static-client.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -120,7 +120,7 @@ function assertPagesBuilt(config) {
 async function serve(argv, env) {
 	const config = readServeConfig(argv, env, loadMachine(machineFile(env)));
 	assertPagesBuilt(config);
-	const loginShell = userInfo().shell ?? '/bin/sh';
+	const loginShell = preferredShell(env, userInfo().shell);
 	const home = env.HOME ?? homedir();
 	const server = await ensureServer({ ...config, loginShell, baseEnv: env });
 	const session = config.machine ? createMachineSession({ machine: config.machine, home }) : null;
@@ -147,7 +147,7 @@ async function serve(argv, env) {
 }
 
 const USAGE = [
-	'usage: osionos-node connect --bridge <url> --app-origin <origin>... [--name <name>]',
+	'usage: osionos-node connect --bridge <url> --app-origin <origin>... [--name <name>] [--pair-only]',
 	'       osionos-node pair --bridge <url> --name <name> [--accept-account <email>]',
 	'       osionos-node serve --server <lib dir> --app-origin <origin>... [--listen 127.0.0.1:4100] [--client <dist-ide>] [--terminal <build/terminal>]',
 	'       (unpaired, milestone 1: add --node <id> and OSIONOS_IDE_TOKEN_SECRET / OSIONOS_IDE_OWNER)',
@@ -179,6 +179,7 @@ const shortHostName = () => hostname().split('.')[0].replace(/[^a-zA-Z0-9._-]/g,
 async function connect(argv, env) {
 	const { values } = parseArgs({ args: argv, strict: true, options: {
 		bridge: { type: 'string' }, name: { type: 'string' }, 'app-origin': { type: 'string', multiple: true },
+		'pair-only': { type: 'boolean' },
 	} });
 	if (!values.bridge) throw new Error('--bridge must be the osionos bridge URL');
 	if (!values['app-origin']?.length) throw new Error('--app-origin must name the app');
@@ -190,6 +191,7 @@ async function connect(argv, env) {
 			console.log('That code expired. Here is a new one.');
 		}
 	}
+	if (values['pair-only']) return;
 	const server = join(env.HOME ?? homedir(), '.osionos', 'server', SERVER_PIN.server.vscode);
 	await serve(['--server', server, ...values['app-origin'].flatMap((origin) => ['--app-origin', origin])], env);
 }
