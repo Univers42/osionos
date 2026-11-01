@@ -18,7 +18,7 @@
 
 import { COLOR_TOKEN_ROWS } from "./themeTokens.colors";
 
-export type ThemeTokenKind = "color" | "length" | "number" | "font" | "shadow" | "duration" | "easing" | "line-style" | "letter-case" | "font-style";
+export type ThemeTokenKind = "color" | "length" | "number" | "font" | "shadow" | "duration" | "easing" | "line-style" | "letter-case" | "font-style" | "text-line";
 export type ThemeGroup = "colors" | "layout" | "fonts";
 
 export interface ThemeToken {
@@ -31,7 +31,7 @@ export interface ThemeToken {
 /** Colours go in `colors`; families, sizes, weights, line heights and letter spacing in `fonts`; the rest in `layout`. */
 function groupOf(key: string, kind: ThemeTokenKind): ThemeGroup {
   if (kind === "color") return "colors";
-  if (kind === "font" || kind === "letter-case" || kind === "font-style" || /^(font-size|font-weight|line-height|letter-spacing)-/.test(key)) return "fonts";
+  if (kind === "font" || kind === "letter-case" || kind === "font-style" || kind === "text-line" || /^(font-size|font-weight|line-height|letter-spacing)-/.test(key)) return "fonts";
   return "layout";
 }
 
@@ -68,6 +68,7 @@ const LAYOUT_ROWS: Row[] = [
   ["icon-stroke", "number", "Stroke width of line icons"],
   ["disabled-opacity", "number", "Opacity of disabled buttons"],
   ["scrollbar-size", "length", "Thickness of scrollbars"],
+  ["scrollbar-radius", "length", "Corners of scrollbar thumbs"],
   ["link-underline-offset", "length", "Gap between a link and its underline"],
   ["dock-min-h", "length", "Smallest height of the bottom dock"],
   ["focus-ring-width", "length", "Thickness of the keyboard focus ring"],
@@ -114,6 +115,11 @@ const FONT_ROWS: Row[] = [
   ["font-family-mono", "font", "Monospace font of code"],
   ["heading-transform", "letter-case", "Letter case of headings"],
   ["heading-style", "font-style", "Upright or italic headings"],
+  ["heading-decoration", "text-line", "Line under headings"],
+  ["link-decoration", "text-line", "Line under links"],
+  ["letter-spacing-ui", "length", "Letter spacing of interface text"],
+  ["letter-spacing-button", "length", "Letter spacing of buttons"],
+  ["font-weight-button", "number", "Font weight of buttons"],
   ["button-transform", "letter-case", "Letter case of buttons"],
   ["font-size-ui", "length", "Interface text size"],
   ...SIZES.map((size): Row => [`font-size-${size}`, "length", `Text size ${size}`]),

@@ -86,7 +86,11 @@
     "syntax-property": "#364122",
     "syntax-type": "#3e5c4e",
     "syntax-tag": "#8a1c1c",
-    "syntax-attr": "#243b53"
+    "syntax-attr": "#243b53",
+    "selection-bg": "#d5b1ab",
+    "selection-fg": "#0e0d0c",
+    "scrollbar-thumb": "#b0aea7",
+    "scrollbar-thumb-hover": "#888680"
   },
   "layout": {
     "radius": "1px",
@@ -165,7 +169,8 @@
     "icon-stroke": "1.25",
     "disabled-opacity": ".5",
     "scrollbar-size": "8px",
-    "link-underline-offset": "4px"
+    "link-underline-offset": "4px",
+    "scrollbar-radius": "1px"
   },
   "fonts": {
     "font-ui": "\"Newsreader\", Georgia, serif",
@@ -193,6 +198,11 @@
     "font-weight-bold": "600",
     "heading-transform": "none",
     "heading-style": "italic",
-    "button-transform": "none"
+    "button-transform": "none",
+    "heading-decoration": "underline",
+    "link-decoration": "underline",
+    "letter-spacing-ui": "0",
+    "letter-spacing-button": "0",
+    "font-weight-button": "600"
   }
 }

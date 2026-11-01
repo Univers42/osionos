@@ -415,6 +415,16 @@
   --osio-radius-full: 9999px;
   --osio-border-width: 1px;
   --osio-border-style: solid;
+  --osio-scrollbar-radius: 4px;
+  --osio-heading-decoration: none;
+  --osio-link-decoration: underline;
+  --osio-letter-spacing-ui: 0;
+  --osio-letter-spacing-button: 0;
+  --osio-font-weight-button: 500;
+  --osio-selection-bg: color-mix(in srgb, var(--osio-accent) 28%, transparent);
+  --osio-selection-fg: inherit;
+  --osio-scrollbar-thumb: var(--osio-border-strong);
+  --osio-scrollbar-thumb-hover: var(--osio-fg-subtle);
   --osio-focus-ring-style: solid;
   --osio-icon-stroke: 2;
   --osio-disabled-opacity: 0.5;
@@ -632,11 +642,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--osio-fg-subtle);
-  border-radius: 4px;
+  background: var(--osio-scrollbar-thumb);
+  border-radius: var(--osio-scrollbar-radius);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--osio-fg-muted);
+  background: var(--osio-scrollbar-thumb-hover);
 }
 
 .osio-scrollbar-hidden {
@@ -1071,7 +1081,16 @@ body {
   *, ::before, ::after { border-style: var(--osio-border-style); }
   :focus-visible { outline-style: var(--osio-focus-ring-style); }
   .lucide[stroke-width="2"] { stroke-width: var(--osio-icon-stroke); }
-  button { text-transform: var(--osio-button-transform); }
+  body { letter-spacing: var(--osio-letter-spacing-ui); }
+  ::selection { background-color: var(--osio-selection-bg); color: var(--osio-selection-fg); }
+  button {
+    text-transform: var(--osio-button-transform);
+    letter-spacing: var(--osio-letter-spacing-button);
+    font-weight: var(--osio-font-weight-button);
+  }
   button:disabled { opacity: var(--osio-disabled-opacity); }
-  a { text-underline-offset: var(--osio-link-underline-offset); }
+  a {
+    text-underline-offset: var(--osio-link-underline-offset);
+    text-decoration-line: var(--osio-link-decoration);
+  }
 }
