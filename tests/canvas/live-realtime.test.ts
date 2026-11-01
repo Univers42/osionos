@@ -222,3 +222,14 @@ test("reconnect after a drop schedules a catch-up refresh", async () => {
   assert.equal(h.fetchCount, 1);
   h.realtime.stop();
 });
+
+test("a live socket does not silence the poll: direct engine writes publish nothing (#255)", async () => {
+  const h = makeOrchestrator({ pollIntervalMs: 5 });
+  h.realtime.noteBaseline(h.rows);
+  h.realtime.start();
+  h.socketOpts?.onUp?.();
+  h.rows = [{ id: 1, name: "changed in the engine" }];
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  h.realtime.stop();
+  assert.ok(h.emitted.some((event) => event.type === "state-replaced"), "the open view reloads");
+});
