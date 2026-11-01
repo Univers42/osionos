@@ -10,8 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// Which of the person's machines /machine opens, what the terminal panel says while one click
-// opens this computer's node, and the words the pairing screen uses. Pure, so the canvas tests
+// Which of the person's machines /machine opens, and the words the pairing screen uses. Pure, so the canvas tests
 // cover every branch. The /machine rule (own-machines plan §6): the default machine if it is
 // online, else the first online one, else none. There is no hosted sandbox fallback: "none" is an
 // answer the view explains, never a reason to open something else.
@@ -19,7 +18,6 @@
 import type { Machine, PairClaim } from "../api/machinesApi";
 import { readMachineTarget } from "../../ide/vscode/machineSession";
 import { isMachineId } from "./machineShape";
-import type { WindowPhase } from "./machineWindow";
 
 export type MachineChoice =
   | { kind: "open"; machine: Machine }
@@ -69,34 +67,6 @@ export function readMachineRoute(search: string): MachineRoute | null {
   if (!target) return null;
   if (isMachineId(target.node)) return { kind: "machine", id: target.node, folder: target.folder };
   return target.folder === null ? null : { kind: "legacy", node: target.node, folder: target.folder };
-}
-
-export type ThisComputerPanel = {
-  title: string;
-  detail: string;
-  action: "open" | "show" | "check-again" | "settings";
-  command: boolean;
-};
-
-const PANEL_TITLE = "Terminal on this computer";
-const NO_NODE_DETAIL = "Start it on this computer, then check again. If it is running and still not found, it is older than this app: "
-  + "stop it, update ~/.osionos/src to the current osionos and rebuild its IDE page there (pnpm build:ide), then start it again.";
-const PANEL: Record<WindowPhase, ThisComputerPanel> = {
-  idle: { title: PANEL_TITLE, detail: "Your terminal and your files run on this computer, through its osionos-node, in their own window.", action: "open", command: false },
-  connecting: { title: PANEL_TITLE, detail: "Opening this computer's window…", action: "show", command: false },
-  "step-up": { title: PANEL_TITLE, detail: "Confirm it is you to open this computer's terminal.", action: "show", command: false },
-  connected: { title: PANEL_TITLE, detail: "This computer is open in its own window.", action: "show", command: false },
-  reconnecting: { title: PANEL_TITLE, detail: "Reconnecting to this computer…", action: "show", command: false },
-  error: { title: PANEL_TITLE, detail: "The window was blocked, or this computer's osionos-node did not answer.", action: "open", command: false },
-  mismatch: { title: PANEL_TITLE, detail: "The program on this computer's osionos-node port is not the machine it claims to be. Restart osionos-node, then check again.", action: "check-again", command: false },
-  unavailable: { title: PANEL_TITLE, detail: "osionos could not check this computer's machine against your account. Check again in a moment.", action: "check-again", command: false },
-  "other-account": { title: "This computer is paired to another account", detail: "This computer's osionos-node belongs to another osionos account. Pair this computer with yours in Settings > Machines.", action: "settings", command: false },
-  "no-node": { title: "osionos-node is not running on this computer", detail: NO_NODE_DETAIL, action: "check-again", command: true },
-};
-
-/** What the terminal panel says while one click opens this computer's node (2026-11-01). */
-export function thisComputerPanel(phase: WindowPhase): ThisComputerPanel {
-  return PANEL[phase];
 }
 
 // Caveat: the bridge compares IP prefixes (clientMeta ipPrefix), so two devices behind one NAT

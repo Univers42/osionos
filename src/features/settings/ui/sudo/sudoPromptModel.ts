@@ -39,6 +39,16 @@ export const useSudoPromptStore = create<SudoPromptStore>()((set) => ({
   granted: () => set((state) => ({ open: false, grants: state.grants + 1 })),
 }));
 
+/** Calls `listener` after each grant from now on, for a flow paused on a step-up. */
+export function onSudoGranted(listener: () => void): () => void {
+  let seen = useSudoPromptStore.getState().grants;
+  return useSudoPromptStore.subscribe((state) => {
+    if (state.grants <= seen) return;
+    seen = state.grants;
+    listener();
+  });
+}
+
 /** "Try again" is offered once the prompt granted sudo after the refusal; nothing re-sends by itself. */
 export function canRetryAfterSudo(needsSudo: boolean, grants: number, grantsAtRefusal: number): boolean {
   return !needsSudo || grants > grantsAtRefusal;

@@ -23,7 +23,8 @@ const { useSandboxHealthStore } = await import("../../src/features/ide/model/san
 const { useWorkbenchStore } = await import("../../src/widgets/workbench/model/workbenchStore.ts");
 const { openWorkbenchTerminal } = await import("../../src/widgets/workbench/model/workbenchMenuActions.ts");
 const { WorkbenchStatusBar } = await import("../../src/widgets/workbench/ui/WorkbenchStatusBar.tsx");
-const { IdeTerminal } = await import("../../src/features/ide/ui/IdeTerminal.tsx");
+const { LocalVsCodeTerminal, TERMINAL_PAGE_SRC } = await import("../../src/features/ide/ui/LocalVsCodeTerminal.tsx");
+const { NodeVsCodeTerminal } = await import("../../src/features/ide/ui/NodeVsCodeTerminal.tsx");
 
 const LAPTOP = {
   id: "m-abcdefghijklmnop", name: "laptop", platform: "linux-x64", fingerprint: "ABCD-EFGH-IJKL-MNOP",
@@ -66,11 +67,13 @@ test("Terminal menu on the desktop opens the dock's terminal, never a machine wi
   assert.equal(useWorkbenchStore.getState().dockTab, "terminal");
 });
 
-test("Terminal menu on the web opens this computer's node, and the dock's panel follows its window", () => {
+// Owner 2026-11-01: no second window. With no hosted sandbox the web dock is this computer's
+// terminal in place (groot ADR 0041); the menu opens the dock and never a window.
+test("Terminal menu on the web opens the dock's terminal in place, never a window", () => {
   for (const machines of [[LAPTOP], [], null]) {
     useMachinesStore.setState({ machines });
     useWorkbenchStore.setState({ dockOpen: false, dockTab: "problems" });
-    assert.equal(countWindowOpens(() => openWorkbenchTerminal("new")), 1, JSON.stringify(machines));
+    assert.equal(countWindowOpens(() => openWorkbenchTerminal("new")), 0, JSON.stringify(machines));
     assert.equal(useWorkbenchStore.getState().dockOpen, true);
     assert.equal(useWorkbenchStore.getState().dockTab, "terminal");
   }
@@ -87,9 +90,49 @@ test("the status bar names this computer on the desktop and on the web", () => {
 });
 
 test("a desktop terminal panel shows no launcher or sandbox overlay", () => {
+  // The desktop dock renders LocalVsCodeTerminal, never IdeTerminal (WorkbenchDock TerminalPane).
   let desktop = "";
-  onDesktop(() => { desktop = renderToStaticMarkup(React.createElement(IdeTerminal)); });
+  onDesktop(() => { desktop = renderToStaticMarkup(React.createElement(LocalVsCodeTerminal, { api: fakePty().api })); });
   assert.doesNotMatch(desktop, /role="status"|Terminal on this computer|Open terminal/);
-  const web = renderToStaticMarkup(React.createElement(IdeTerminal));
-  assert.match(web, /Terminal on this computer/);
+});
+
+test("the desktop terminal panel frames VS Code's terminal page on its own origin", () => {
+  const desktop = renderToStaticMarkup(React.createElement(LocalVsCodeTerminal, { api: fakePty().api }));
+  assert.equal(TERMINAL_PAGE_SRC, "app://terminal/index.html");
+  // No `name` (a named frame can be targeted by window.open), and only the clipboard (T4).
+  assert.match(desktop, /<iframe src="app:\/\/terminal\/index.html" title="Terminal" allow="clipboard-read; clipboard-write"/);
+  assert.doesNotMatch(desktop, / name=/);
+  assert.doesNotMatch(desktop, /role="status"|Terminal on (laptop|this computer)|Open terminal/);
+});
+
+test("the web terminal panel frames this computer's node terminal page, calm until it connects", () => {
+  const web = renderToStaticMarkup(React.createElement(NodeVsCodeTerminal));
+  // No `name`; local network access for the node, and the clipboard: paste needs clipboard-read
+  // (W13: measured refused without it; OSC 52 reads stay dropped by the page).
+  assert.match(web, /<iframe src="http:\/\/127.0.0.1:4100\/terminal\/index.html" title="Terminal" allow="local-network-access; clipboard-read; clipboard-write"/);
+  assert.doesNotMatch(web, / name=/);
+  assert.match(web, /role="status"[^]*Connecting to this computer…/, "never a blank frame");
+  assert.doesNotMatch(web, /osionos-node|~\/\.osionos|--app-origin/, "no command in the dock");
+});
+
+test("on the desktop the dock has no terminal buttons of its own: VS Code's panel carries them", async () => {
+  const { WorkbenchDock } = await import("../../src/widgets/workbench/ui/WorkbenchDock.tsx");
+  useWorkbenchStore.getInitialState().dockTab = "terminal";
+  let desktop = "";
+  onDesktop(() => { desktop = renderToStaticMarkup(React.createElement(WorkbenchDock)); });
+  assert.doesNotMatch(desktop, /aria-label="(New terminal|Split terminal|Close split|Safe terminal|Restart box)"/);
+  assert.match(desktop, /aria-label="Hide panel"/);
+  // Web, no hosted sandbox: VS Code's panel in place carries them too.
+  const inPlace = renderToStaticMarkup(React.createElement(WorkbenchDock));
+  assert.doesNotMatch(inPlace, /aria-label="(New terminal|Split terminal|Safe terminal|Restart box)"/);
+  // Web with a hosted sandbox: the sandbox terminals keep the dock's own buttons.
+  const initial = useSandboxHealthStore.getInitialState().state;
+  useSandboxHealthStore.getInitialState().state = "online";
+  try {
+    const sandboxed = renderToStaticMarkup(React.createElement(WorkbenchDock));
+    assert.match(sandboxed, /aria-label="New terminal"/);
+    assert.match(sandboxed, /aria-label="Split terminal"/);
+  } finally {
+    useSandboxHealthStore.getInitialState().state = initial;
+  }
 });

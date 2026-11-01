@@ -11,7 +11,8 @@
 // ************************************************************************** //
 
 // The unified workbench: grid + resizable dock + one
-// status bar. Offline build, so the sandbox chip shows its honest non-online state.
+// status bar. Offline build: no hosted sandbox is configured, so the status bar names this
+// computer, whose terminal the dock opens in place (33936941, de444432).
 
 import { expect, test } from "@playwright/test";
 
@@ -27,12 +28,17 @@ async function bootWorkbench(page) {
   return errors;
 }
 
-test("grid and status bar render; sandbox state is named", async ({ page }) => {
+test("grid and status bar render; the status bar names this computer", async ({ page }) => {
   test.setTimeout(120_000); // cold Vite compile of the workbench chunk
   const errors = await bootWorkbench(page);
   await expect(page.getByTestId("workbench-grid")).toBeVisible();
-  await expect(page.getByTestId("workbench-statusbar")).toBeVisible();
-  await expect(page.getByTestId("workbench-statusbar")).toContainText(/This computer|Machine: /);
+  const statusBar = page.getByTestId("workbench-statusbar");
+  await expect(statusBar).toBeVisible();
+  await expect(statusBar.getByTestId("machine-chip")).toHaveText("This computer");
+  // A disabled sandbox is not a state to show: the machine chip stands in its place.
+  await expect(statusBar.getByTestId("sandbox-chip")).toHaveCount(0);
+  await statusBar.getByTestId("machine-chip").click();
+  await expect(page.getByRole("tablist", { name: "Panel tabs" }).getByRole("tab", { name: "Terminal" })).toHaveAttribute("aria-selected", "true");
   expect(errors).toEqual([]);
 });
 

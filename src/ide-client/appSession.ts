@@ -17,7 +17,8 @@
 // A paired machine is asked to prove itself first (devil verdict 2026-10-31, condition 5): the
 // app's hello nonce goes to the node's same-origin /api/machine/whoami, and the signed answer is
 // handed back. The page signs nothing itself; it only relays what the node on this origin said.
-import { readAppMessage, readIdeMessage, type AppMessage, type IdeMessage, type RefusalReason } from "../features/ide/vscode/ideFrameProtocol.ts";
+import { readAppMessage, type AppMessage, type IdeMessage, type RefusalReason } from "../features/ide/vscode/ideFrameProtocol.ts";
+import { whoami } from "../features/ide/vscode/machineWhoami.ts";
 
 // Ask for a new token this long before the current one ends, so the socket never sees the lease
 // run out while the owner is working.
@@ -55,20 +56,6 @@ async function mintCookie(node: string, token: string): Promise<void> {
     body: JSON.stringify({ node }),
   });
   if (res.status !== 204) throw new Error(`the machine refused the session (${res.status})`);
-}
-
-// The node's answer is re-read with the app's own parser, so only a well-formed identity is sent.
-async function whoami(nonce: string): Promise<IdeMessage | null> {
-  const res = await fetch("/api/machine/whoami", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ nonce }),
-  });
-  if (res.status !== 200) return null;
-  const body = (await res.json().catch(() => null)) as { machineId?: unknown; sig?: unknown } | null;
-  const message = readIdeMessage({ type: "osionos-ide/identity", machineId: body?.machineId, sig: body?.sig }, location.origin, location.origin);
-  return message?.type === "osionos-ide/identity" ? message : null;
 }
 
 // `appOrigins` lists the web app and the desktop app. Until one answers, a message goes to each
