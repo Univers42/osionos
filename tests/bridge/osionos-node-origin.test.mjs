@@ -21,7 +21,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createIdeOriginServer } from '../../packages/osionos-node/ide-origin.mjs';
+import { cookiePrefixFor, createIdeOriginServer } from '../../packages/osionos-node/ide-origin.mjs';
 import { signIdeToken } from '../../scripts/ide-token.mjs';
 
 const SECRET = 'k'.repeat(32);
@@ -52,11 +52,11 @@ async function fakeServer(dir) {
 	return { seen, socketPath, close: () => new Promise((resolve) => { server.closeAllConnections?.(); server.close(resolve); }) };
 }
 
-async function world(t, { ttl } = {}) {
+async function world(t, { ttl, ideOrigin = IDE } = {}) {
 	const dir = mkdtempSync(join(tmpdir(), 'on-'));
 	const upstream = await fakeServer(dir);
 	const origin = createIdeOriginServer({
-		secret: SECRET, ownerId: OWNER, ideOrigin: IDE, appOrigin: 'https://app.example:3001',
+		secret: SECRET, ownerId: OWNER, ideOrigin,
 		commit: COMMIT, nodes: { laptop: { socketPath: upstream.socketPath, extensionRoots: [ROOT] } }, maxSocketsPerUser: 2,
 	});
 	await new Promise((resolve) => origin.server.listen(0, '127.0.0.1', resolve));
@@ -82,6 +82,49 @@ test('a node-scoped IDE token from the owner becomes a __Host- HttpOnly Strict c
 	assert.match(cookie, /^__Host-osio-node-laptop=nc1\./);
 	for (const flag of ['Path=/', 'Secure', 'HttpOnly', 'SameSite=Strict']) assert.ok(cookie.includes(flag), flag);
 	assert.match(cookie, /Max-Age=(8\d\d|900)/);
+});
+
+// Electron 32 (Chromium 128) stores no __Host- cookie on http://127.0.0.1 (measured 2026-10-31, C23);
+// a plain-http loopback IDE origin drops the prefix and keeps every attribute, and each origin reads
+// only its own name.
+test('a plain-http loopback IDE origin sets the same cookie without the __Host- prefix', async (t) => {
+	const LOOPBACK = 'http://127.0.0.1:4100';
+	const { base } = await world(t, { ideOrigin: LOOPBACK });
+	const { status, cookie, pair } = await openSession(base, { headers: { ...SAME, origin: LOOPBACK } });
+	assert.equal(status, 204);
+	assert.match(cookie, /^osio-node-laptop=nc1\./);
+	for (const flag of ['Path=/', 'Secure', 'HttpOnly', 'SameSite=Strict']) assert.ok(cookie.includes(flag), flag);
+	assert.doesNotMatch(cookie, /Domain=/i);
+	const read = (value) => fetch(resourceUrl(base), { headers: { ...SAME, cookie: value } }).then((r) => r.status);
+	assert.equal(await read(pair), 200);
+	assert.equal(await read(`__Host-${pair}`), 401, 'the loopback origin ignores the __Host- name');
+	const https = await world(t);
+	assert.equal(await fetch(resourceUrl(https.base), { headers: { ...SAME, cookie: pair } }).then((r) => r.status), 401, 'an https origin ignores the bare name');
+});
+
+test('only a plain-http 127.0.0.0/8 literal drops the prefix; every other origin keeps __Host-', () => {
+	for (const origin of ['http://127.0.0.1:4100', 'http://127.1.2.3:9000']) assert.equal(cookiePrefixFor(origin), 'osio-node-', origin);
+	for (const origin of ['http://localhost:4100', 'http://192.168.1.5:4100', 'http://10.0.0.2:4100', 'http://100.94.109.44:4100', 'https://127.0.0.1:4100', 'https://ide.example:4100', 'http://127.0.0.1.example:4100']) {
+		assert.equal(cookiePrefixFor(origin), '__Host-osio-node-', origin);
+	}
+});
+
+test('the Set-Cookie string is exact in both modes', async (t) => {
+	const SHAPE = (name) => new RegExp(`^${name}=nc1\\.[A-Za-z0-9._-]+; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=\\d+$`);
+	assert.match((await openSession((await world(t)).base)).cookie, SHAPE('__Host-osio-node-laptop'));
+	const LOOPBACK = 'http://127.0.0.1:4100';
+	const loop = await world(t, { ideOrigin: LOOPBACK });
+	assert.match((await openSession(loop.base, { headers: { ...SAME, origin: LOOPBACK } })).cookie, SHAPE('osio-node-laptop'));
+});
+
+test('a second cookie of the same name never shadows the real one', async (t) => {
+	const { base } = await world(t);
+	const { pair } = await openSession(base);
+	const name = pair.split('=')[0];
+	const read = (cookie) => fetch(resourceUrl(base), { headers: { ...SAME, cookie } }).then((r) => r.status);
+	assert.equal(await read(`${name}=nc1.forged; ${pair}`), 200, 'a forged value first');
+	assert.equal(await read(`${pair}; ${name}=nc1.forged`), 200, 'a forged value last');
+	assert.equal(await read(`${name}=nc1.forged; ${name}=junk`), 401, 'only forged values');
 });
 
 test('the session mint refuses a plain token, a stranger, an unknown node and a cross-site call', async (t) => {

@@ -17,16 +17,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { boundedCommand, machineOptions, readMachineTarget } from "../../src/features/ide/vscode/machineSession.ts";
+import { boundedCommand, isLocalOpen, machineOptions, readHomeFolder, readMachineTarget, readSelf } from "../../src/features/ide/vscode/machineSession.ts";
 
 const COMMIT = "59c988c744a240b05b039f57b856a5312f19d5b1";
 
-test("the page URL names one node and one absolute folder", () => {
+test("the legacy page URL names one node and one absolute folder", () => {
   assert.deepEqual(readMachineTarget("?node=laptop&folder=%2Fhome%2Fme%2Fproj"), { node: "laptop", folder: "/home/me/proj" });
   for (const search of ["?node=Laptop&folder=/x", "?node=laptop", "?node=laptop&folder=relative", "?node=laptop&folder=/a/../b", "?node=laptop&folder=/a%00b", "?node=a&node=b&folder=/x", "?folder=/x"]) {
     assert.equal(readMachineTarget(search), null, search);
   }
   assert.deepEqual(readMachineTarget("?node=vm&folder=/"), { node: "vm", folder: "/" });
+});
+
+// Own machines: the app sends no path, the node names its home after the session (plan §6).
+test("a paired machine id may leave the folder out; a folder it names is still checked", () => {
+  const node = "m-abcdefghijklmnop";
+  assert.deepEqual(readMachineTarget(`?node=${node}`), { node, folder: null });
+  assert.deepEqual(readMachineTarget(`?node=${node}&folder=%2Fsrv`), { node, folder: "/srv" });
+  for (const search of [`?node=${node}&folder=rel`, `?node=${node}&folder=/a&folder=/b`, `?node=${node}&folder=/a/../b`]) {
+    assert.equal(readMachineTarget(search), null, search);
+  }
+});
+
+test("the home the node answers must be an absolute, normal folder", () => {
+  assert.equal(readHomeFolder({ folder: "/home/me" }), "/home/me");
+  for (const body of [{ folder: "home/me" }, { folder: "/a/../b" }, { folder: 7 }, {}, null, "/"]) {
+    assert.equal(readHomeFolder(body), null, JSON.stringify(body));
+  }
 });
 
 test("the client connects through the node prefix with no connection token", () => {
@@ -45,4 +62,25 @@ test("a command that never settles fails with its name after the bound (C13)", a
   const never = new Promise<never>(() => {});
   await assert.rejects(boundedCommand(() => never, "git.checkout", 30), /git\.checkout did not finish within 30 ms/);
   assert.equal(await boundedCommand(async () => 7, "x", 30), 7);
+});
+
+// This computer's node (2026-11-01): the app opens `/?local=1` with no id, and the page asks its
+// own node who it is, so computer B never asks its loopback for computer A's machine.
+test("the local page URL is exactly local=1, and the node's self answer names one machine id", () => {
+  assert.equal(isLocalOpen("?local=1"), true);
+  for (const search of ["", "?local=0", "?local=1&local=1", "?local=1&folder=/x", "?local=1&node=a&node=b", "?node=m-abcdefghijklmnop"]) {
+    assert.equal(isLocalOpen(search), false, search);
+  }
+  assert.equal(readSelf({ paired: true, machineId: "m-abcdefghijklmnop" }), "m-abcdefghijklmnop");
+  for (const body of [null, {}, { paired: false, machineId: "m-abcdefghijklmnop" }, { paired: true, machineId: "laptop" }, { paired: true }]) {
+    assert.equal(readSelf(body), null, JSON.stringify(body));
+  }
+});
+
+// The app adds `node=<id>` for pages installed before local=1, which read only `node`. Under
+// local=1 this page still names itself, whatever id the app guessed.
+test("under local=1 the page ignores the node param the app adds for older pages", () => {
+  assert.equal(isLocalOpen("?local=1&node=m-abcdefghijklmnop"), true);
+  assert.equal(isLocalOpen("?node=m-zzzzzzzzzzzzzzzz&local=1"), true);
+  assert.equal(isLocalOpen("?local=1&node=not-an-id"), true);
 });
