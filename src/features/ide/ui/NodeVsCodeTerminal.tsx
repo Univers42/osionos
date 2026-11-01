@@ -17,6 +17,7 @@ import { SudoPrompt } from "@/features/settings/ui/sudo/SudoPrompt";
 import { useSudoPromptStore } from "@/features/settings/ui/sudo/sudoPromptModel";
 import { dockColors } from "./dockColors";
 import { CODE_BUTTON, StateBlock } from "./ExplorerStates";
+import { MachineCommands } from "@/features/machines/ui/MachineCommands";
 import { PairCodeField } from "@/features/machines/ui/PairCodeField";
 
 // The node's IDE page answers ready from its light entry, which READY_TIMEOUT_MS was measured on
@@ -57,7 +58,12 @@ const FramePanel: React.FC<{ panel: TerminalFramePanel; waiting: boolean; pairin
   <div role="status" aria-live="polite" className="absolute inset-0 flex items-center justify-center overflow-auto bg-[var(--osio-code-bg)]">
     <StateBlock icon={waiting ? LoaderCircle : Laptop} title={panel.title} tone="code" actions={<PanelActions panel={panel} onTryAgain={onTryAgain} />}>
       {panel.detail && <p>{panel.detail}</p>}
-      {pairing && <div className="mt-3 w-full max-w-md"><PairCodeField onPaired={onTryAgain} /></div>}
+      {pairing && (
+        <div className="mt-3 w-full max-w-2xl space-y-3 text-left">
+          <MachineCommands name="" />
+          <PairCodeField onPaired={onTryAgain} />
+        </div>
+      )}
     </StateBlock>
   </div>
 );

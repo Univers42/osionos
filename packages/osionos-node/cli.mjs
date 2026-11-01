@@ -14,8 +14,8 @@
 // `osionos-node serve`: runs this machine's VS Code server on its private socket and the IDE
 // origin in front of it (ADR-006). Milestone 1 is the owner's own machine, owner-only. The secret
 // comes from the environment only, never argv, which other local users can read in ps.
-import { realpathSync } from 'node:fs';
-import { homedir, userInfo } from 'node:os';
+import { existsSync, realpathSync } from 'node:fs';
+import { homedir, hostname, userInfo } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -107,8 +107,19 @@ function terminalFor(config, home, shellEnv) {
 	return { pty: { host, accept }, host };
 }
 
+// A page missing here used to surface as a 404 inside the app's terminal panel, with nothing
+// naming the build that had not run.
+function assertPagesBuilt(config) {
+	for (const [root, script] of [[config.client, 'build:ide'], [config.terminal ?? DEFAULT_TERMINAL, 'build:terminal']]) {
+		if (root && !existsSync(join(root, 'index.html'))) {
+			throw new Error(`${join(root, 'index.html')} is missing: run packages/osionos-node/install.sh, or pnpm ${script} in the checkout`);
+		}
+	}
+}
+
 async function serve(argv, env) {
 	const config = readServeConfig(argv, env, loadMachine(machineFile(env)));
+	assertPagesBuilt(config);
 	const loginShell = userInfo().shell ?? '/bin/sh';
 	const home = env.HOME ?? homedir();
 	const server = await ensureServer({ ...config, loginShell, baseEnv: env });
@@ -136,7 +147,8 @@ async function serve(argv, env) {
 }
 
 const USAGE = [
-	'usage: osionos-node pair --bridge <url> --name <name> [--accept-account <email>]',
+	'usage: osionos-node connect --bridge <url> --app-origin <origin>... [--name <name>]',
+	'       osionos-node pair --bridge <url> --name <name> [--accept-account <email>]',
 	'       osionos-node serve --server <lib dir> --app-origin <origin>... [--listen 127.0.0.1:4100] [--client <dist-ide>] [--terminal <build/terminal>]',
 	'       (unpaired, milestone 1: add --node <id> and OSIONOS_IDE_TOKEN_SECRET / OSIONOS_IDE_OWNER)',
 ].join('\n');
@@ -159,9 +171,32 @@ async function pair(argv, env) {
 
 // Real paths: node resolves this module through a symlink and argv[1] does not, so a
 // run through ~/.osionos/src did nothing at all and exited 0.
+const shortHostName = () => hostname().split('.')[0].replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 64) || userInfo().username;
+
+// Everything a person has to do, in order, in one command. A code lives 5 minutes, and an
+// expired one is a new code here, not a dead terminal: pairing then serving as two commands
+// left machines paired with nothing running, and interrupted pairings with no explanation.
+async function connect(argv, env) {
+	const { values } = parseArgs({ args: argv, strict: true, options: {
+		bridge: { type: 'string' }, name: { type: 'string' }, 'app-origin': { type: 'string', multiple: true },
+	} });
+	if (!values.bridge) throw new Error('--bridge must be the osionos bridge URL');
+	if (!values['app-origin']?.length) throw new Error('--app-origin must name the app');
+	while (!loadMachine(machineFile(env))) {
+		try {
+			await pair(['--bridge', values.bridge, '--name', values.name ?? shortHostName()], env);
+		} catch (error) {
+			if (!/code expired/.test(error.message)) throw error;
+			console.log('That code expired. Here is a new one.');
+		}
+	}
+	const server = join(env.HOME ?? homedir(), '.osionos', 'server', SERVER_PIN.server.vscode);
+	await serve(['--server', server, ...values['app-origin'].flatMap((origin) => ['--app-origin', origin])], env);
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
 	const [command, ...rest] = process.argv.slice(2);
-	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env) };
+	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env), connect: () => connect(rest, process.env) };
 	const run = commands[command]?.() ?? Promise.reject(new Error(USAGE));
 	run.catch((error) => { console.error(`osionos-node: ${error.message}`); process.exit(1); });
 }

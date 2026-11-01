@@ -88,25 +88,11 @@ export function shellWord(value: string): string {
   return SHELL_SAFE.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-// The layout packages/osionos-node/install.sh creates (~/.osionos: src is an osionos checkout
-// with dist-ide built, server/<VS Code version> the unpacked pinned server). The cli's --client
-// defaults to src/dist-ide, so the command does not name it.
-const LOCAL_CLI = "~/.osionos/src/packages/osionos-node/cli.mjs";
-const LOCAL_SERVER = "~/.osionos/server/1.138.0";
-
 const INSTALLER_URL = "https://raw.githubusercontent.com/Univers42/osionos/main/packages/osionos-node/install.sh";
 
-/** Creates the ~/.osionos install the two commands below run from. */
-export function installCommand(): string {
-  return `curl -fsSL ${INSTALLER_URL} | sh`;
+/** Installs or updates, pairs and starts, in one command that stays running. */
+export function connectCommand(bridgeUrl: string, appOrigin: string, name?: string): string {
+  const named = name ? ` --name ${shellWord(name)}` : "";
+  return `curl -fsSL ${INSTALLER_URL} | sh -s -- --bridge ${shellWord(bridgeUrl)} --app-origin ${shellWord(appOrigin)}${named}`;
 }
 
-/** `node <cli>`: an npm package named osionos-node is not published, so no such binary is on a PATH. */
-export function pairCommand(bridgeUrl: string, name: string): string {
-  return `node ${LOCAL_CLI} pair --bridge ${shellWord(bridgeUrl)} --name ${shellWord(name)}`;
-}
-
-/** Starts osionos-node from the ~/.osionos install; `~` stays unquoted so the shell expands it. */
-export function serveCommand(appOrigin: string): string {
-  return `node ${LOCAL_CLI} serve --server ${LOCAL_SERVER} --app-origin ${shellWord(appOrigin)}`;
-}

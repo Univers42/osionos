@@ -6,7 +6,20 @@ as its own window and hands it a node-scoped token that needs a fresh step-up (A
 verdict 2026-10-30). Not a frame: the app and a machine are two sites, and a cross-site frame
 never gets its `SameSite=Strict` cookie (C0-F1, measured by the second test in tests/machine).
 
-## Run it
+## Connect a computer
+
+The app shows one command, and it is the supported path:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Univers42/osionos/main/packages/osionos-node/install.sh \
+  | sh -s -- --bridge <bridge url> --app-origin <app origin>
+```
+
+It installs or updates osionos-node, pairs this machine, renewing a code that expires, and
+serves it. Leave it running. Enter the code in the app's Terminal panel. Running it again
+updates the checkout and rebuilds the pages, which is the fix for a node older than the app.
+
+## Run it by hand
 
 ```sh
 pnpm build:ide                                  # builds dist-ide/, the IDE page

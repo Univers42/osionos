@@ -19,7 +19,7 @@ import { Copy } from "lucide-react";
 import { IconButton } from "@/shared/ui";
 
 import { machinesBridgeUrl } from "../api/machinesApi";
-import { installCommand, pairCommand, serveCommand } from "../model/machineChoice";
+import { connectCommand } from "../model/machineChoice";
 
 export const CommandLine: React.FC<{ label: string; command: string }> = ({ label, command }) => {
   const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle");
@@ -43,10 +43,11 @@ export const CommandLine: React.FC<{ label: string; command: string }> = ({ labe
   );
 };
 
-export const MachineCommands: React.FC<{ name: string; pair?: boolean }> = ({ name, pair = true }) => (
-  <ol className="space-y-3">
-    <CommandLine label="1. On the machine, install osionos-node (once)" command={installCommand()} />
-    {pair && <CommandLine label="2. Pair it with your account" command={pairCommand(machinesBridgeUrl(), name || "my-machine")} />}
-    <CommandLine label={pair ? "3. Then start it" : "2. Then start it"} command={serveCommand(globalThis.location.origin)} />
-  </ol>
+export const MachineCommands: React.FC<{ name: string }> = ({ name }) => (
+  <ul>
+    <CommandLine
+      label="Run this on the machine and leave it running. It installs, then prints a code."
+      command={connectCommand(machinesBridgeUrl(), globalThis.location.origin, name || undefined)}
+    />
+  </ul>
 );

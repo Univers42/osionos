@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 
 import type { Machine } from "../../src/features/machines/api/machinesApi.ts";
 import {
-  chooseMachine, localNodeHint, normalizePairCode, pairCommand, pairWarning, readMachineRoute, serveCommand, shellWord,
+  chooseMachine, localNodeHint, normalizePairCode, connectCommand, pairWarning, readMachineRoute, shellWord,
 } from "../../src/features/machines/model/machineChoice.ts";
 
 const machine = (id: string, online: boolean, isDefault = false): Machine => ({
@@ -67,20 +67,16 @@ test("the pairing code is read the way the bridge reads it: letters only, upper 
 });
 
 test("the commands name this bridge and this app, and quote a name the shell would split", () => {
-  assert.equal(pairCommand("https://baas.example:10000", "laptop"), "node ~/.osionos/src/packages/osionos-node/cli.mjs pair --bridge https://baas.example:10000 --name laptop");
-  assert.equal(pairCommand("https://b.example", "my laptop"), "node ~/.osionos/src/packages/osionos-node/cli.mjs pair --bridge https://b.example --name 'my laptop'");
+  assert.match(connectCommand("https://baas.example:10000", "https://a", "laptop"), / --name laptop$/);
+  assert.match(connectCommand("https://b.example", "https://a", "my laptop"), / --name 'my laptop'$/);
   assert.equal(shellWord("it's"), "'it'\\''s'");
   assert.equal(shellWord(""), "''");
 });
 
-test("the start command is pasteable: the ~/.osionos install's real cli, server and the pinned VS Code", () => {
-  assert.equal(
-    serveCommand("https://app.example"),
-    "node ~/.osionos/src/packages/osionos-node/cli.mjs serve --server ~/.osionos/server/1.138.0 --app-origin https://app.example",
-  );
-  assert.doesNotMatch(serveCommand("https://app.example"), /[<>]/);
-  const pin = JSON.parse(readFileSync(new URL("../../packages/osionos-node/server-pin.json", import.meta.url), "utf8"));
-  assert.match(serveCommand("x"), new RegExp(`/server/${pin.server.vscode.replace(/\./g, "\\.")} `));
+test("the one command installs, pairs and serves, and pastes as it is", () => {
+  const command = connectCommand("https://baas.example:10000", "https://app.example");
+  assert.match(command, /^curl -fsSL https:\/\/\S+\/install\.sh \| sh -s -- --bridge https:\/\/baas\.example:10000 --app-origin https:\/\/app\.example$/);
+  assert.doesNotMatch(command, /[<>]/);
 });
 
 // For a node installed before local=1, whose page reads only `node`: the id it should name.
