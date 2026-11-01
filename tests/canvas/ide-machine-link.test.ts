@@ -152,7 +152,7 @@ test("a signature the bridge refuses is a mismatch: no token is minted or sent",
   w.deliver(identity);
   await w.settle();
   assert.equal(w.mints(), 0);
-  assert.equal(w.posted.length, 1, "only the hello went out");
+  assert.deepEqual(w.posted.slice(1), [{ message: { type: "osionos-ide/refused", reason: "mismatch" }, origin: IDE }], "the hello, then only the refusal");
   assert.equal(w.states.at(-1), "mismatch");
 });
 
@@ -161,7 +161,8 @@ test("another machine id on this port, or a ready for another node, is a mismatc
   w.deliver({ type: "osionos-ide/ready", node: "laptop" });
   await w.settle();
   assert.equal(w.states.at(-1), "mismatch");
-  assert.equal(w.posted.length, 0);
+  assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/refused", reason: "mismatch" }, origin: IDE }]);
+  w.posted.length = 0;
   w.link.retry();
   await w.settle();
   w.deliver({ ...identity, machineId: "m-zzzzzzzzzzzzzzzz" });
@@ -209,4 +210,92 @@ test("each mint follows its own identity check: a refresh says hello again befor
   await w.settle();
   assert.equal(w.checked.length, 2);
   assert.equal(w.mints(), 2);
+});
+
+// This computer's node (2026-11-01): the app opens it without an id; the node's ready names the
+// machine, and only a machine on this account's list gets a hello. No ready in time means no node.
+function localWorld(claimed: "own" | "other-account" | "unavailable", verdict: Verdict = "ok") {
+  const posted: Array<{ message: unknown; origin: string }> = [];
+  const states: string[] = [];
+  const claims: string[] = [];
+  const checked: string[] = [];
+  let handler: (event: { data: unknown; origin: string; source: unknown }) => void = () => {};
+  let deadline: { fn: () => void; ms: number; cancelled: boolean } | null = null;
+  const frame = { postMessage: (message: unknown, origin: string) => posted.push({ message, origin }) };
+  let mints = 0;
+  const link = linkMachineFrame({
+    frame: () => frame,
+    ideOrigin: IDE,
+    listen: (next) => { handler = next; return () => {}; },
+    mint: async () => { mints += 1; return { kind: "ok", token: MC1 }; },
+    onState: (state) => states.push(state),
+    claim: async (node) => {
+      claims.push(node);
+      if (claimed !== "own") return claimed;
+      return { machineId: node, nonce: () => NONCE, verify: async (nonce) => { checked.push(nonce); return verdict; } };
+    },
+    readyWithin: {
+      ms: 4000,
+      schedule: (fn, ms) => { const entry = { fn, ms, cancelled: false }; deadline = entry; return () => { entry.cancelled = true; }; },
+    },
+  });
+  const deliver = (data: unknown, origin = IDE) => handler({ data, origin, source: frame });
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const expire = () => { if (deadline && !deadline.cancelled) deadline.fn(); };
+  return { posted, states, claims, checked, deliver, settle, link, expire, deadline: () => deadline, mints: () => mints };
+}
+
+test("this computer's node names itself in ready; an own machine goes through hello, identity and token", async () => {
+  const w = localWorld("own");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  assert.deepEqual(w.claims, [MACHINE]);
+  assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/hello", nonce: NONCE }, origin: IDE }]);
+  w.deliver(identity);
+  await w.settle(); await w.settle();
+  assert.deepEqual(w.checked, [NONCE]);
+  assert.equal(w.mints(), 1);
+  assert.deepEqual(w.posted.at(-1), { message: { type: "osionos-ide/session", token: MC1 }, origin: IDE });
+});
+
+test("a node paired to another account is told so, and gets no hello and no token", async () => {
+  const w = localWorld("other-account");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  assert.equal(w.states.at(-1), "other-account");
+  assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/refused", reason: "other-account" }, origin: IDE }]);
+  w.deliver(identity);
+  await w.settle();
+  assert.equal(w.mints(), 0);
+});
+
+test("a machine list that cannot load is unavailable, never other-account", async () => {
+  const w = localWorld("unavailable");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  assert.equal(w.states.at(-1), "unavailable");
+  assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/refused", reason: "unavailable" }, origin: IDE }]);
+});
+
+test("no ready before the deadline means no node on this computer", () => {
+  const w = localWorld("own");
+  assert.equal(w.deadline()?.ms, 4000);
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE }, "https://evil.example");
+  w.expire();
+  assert.equal(w.states.at(-1), "no-node");
+});
+
+test("a ready from the node cancels the deadline", async () => {
+  const w = localWorld("own");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  assert.equal(w.deadline()?.cancelled, true);
+  w.expire();
+  assert.notEqual(w.states.at(-1), "no-node");
+});
+
+test("stop cancels the deadline too", () => {
+  const w = localWorld("own");
+  w.link.stop();
+  assert.equal(w.deadline()?.cancelled, true);
 });
