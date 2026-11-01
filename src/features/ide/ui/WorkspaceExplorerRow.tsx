@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { PAGE_FILE_SUFFIX } from "@/features/page-file/model/types";
 import React from "react";
 import { useDragSession } from "@/store/dragSession";
 import { useIsActivePage } from "@/store/activePageFlag";
@@ -93,7 +94,7 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
   const isDir = row.kind === "dir";
   const open = isDir && ctx.expanded.has(rel);
   const renaming = ctx.pending?.type === "rename" && ctx.pending.rel === rel;
-  const pageId = ctx.pageIdOf?.(rel, row.kind);
+  const pageId = row.pageFile ? ctx.pageIdOf?.(`${rel}${PAGE_FILE_SUFFIX}`, "page") : ctx.pageIdOf?.(rel, row.kind);
   const active = useIsActivePage(pageId ?? "");
   const dnd = useRowDnd(rel, isDir ? rel : item.parentRel, renaming, pageId);
   const line = placed(placement);
