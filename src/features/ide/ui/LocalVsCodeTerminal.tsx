@@ -2,21 +2,10 @@ import React from "react";
 
 import type { LocalPtyApi } from "@/features/ide/model/localPty";
 import { handOffTerminalPort, refusePtyPort, type PortOffer, type PtyPortRouter } from "@/features/ide/model/ptyPortRouter";
-import { terminalColorsFrom } from "@/features/ide/model/terminalPort";
+import { dockColors } from "./dockColors";
 
 /** The terminal page, on its own origin so it runs in its own renderer process (groot ADR 0039). */
 export const TERMINAL_PAGE_SRC = "app://terminal/index.html";
-
-function dockColors(host: HTMLElement) {
-  const css = getComputedStyle(host);
-  const read = (name: string) => css.getPropertyValue(name).trim();
-  return terminalColorsFrom({
-    background: read("--osio-code-bg"),
-    foreground: read("--osio-code-fg"),
-    cursor: read("--osio-code-caret"),
-    selection: read("--osio-code-selection"),
-  });
-}
 
 /** VS Code's own terminal on shells on this computer, in the desktop app's dock. The page gets a
  *  shell only through the control port handed to this frame (A1), and each shell's port only through
