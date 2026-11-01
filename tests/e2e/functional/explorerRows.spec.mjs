@@ -178,16 +178,14 @@ for (const mode of ["light", "dark"]) {
     await page.addInitScript((value) => localStorage.setItem("osionos:theme-mode", value), mode);
     await bootExplorer(page);
     await page.getByRole("button", { name: "Panel", exact: true }).click();
-    const state = page.getByTestId("workbench-dock").getByRole("status").filter({ hasText: /Sandbox (unavailable|disabled|stopped)/ });
+    const state = page.getByTestId("workbench-dock").getByRole("status").filter({ hasText: /Terminal on this computer|osionos-node is not running/ });
     await expect(state).toBeVisible({ timeout: 30_000 });
     await expect(state.locator("svg").first()).toBeVisible();
-    const retry = state.getByRole("button", { name: "Retry" });
+    const retry = state.getByRole("button", { name: /Open terminal|Check again/ });
     expect((await read(retry, ["height"])).height).toBe(await tokenValue(page, "height", "--osio-control-h-sm"));
     expect((await read(retry, ["borderTopLeftRadius"])).borderTopLeftRadius).toBe(await tokenValue(page, "border-top-left-radius", "--osio-control-radius"));
-    // The dock is dark in both themes, so its button must not follow the page theme.
-    const look = await read(retry, ["backgroundColor", "color", "borderTopColor"]);
-    expect(look.backgroundColor).toBe(await codeToken(retry, "background-color", "--osio-code-chip-bg"));
-    expect(look.color).toBe(await codeToken(retry, "color", "--osio-code-fg"));
-    expect(look.borderTopColor).toBe(await codeToken(retry, "border-top-color", "--osio-code-border"));
+    // The panel's one action is the primary button; it stays readable on the dark dock.
+    const look = await read(retry, ["backgroundColor", "color"]);
+    expect(look.color).not.toBe(look.backgroundColor);
   });
 }

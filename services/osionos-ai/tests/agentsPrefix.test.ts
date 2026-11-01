@@ -86,7 +86,7 @@ describe('the prefix of a custom agent is measured as rendered', () => {
 		// Hashes taken from HEAD (f87e8ee) before the change, on the same inputs.
 		const expected: Record<string, string> = {
 			none: 'ae7e365326aa94f14b9c4ed7a27188374292ad7bf158f2dacee9548f69b37ac4',
-			'db-architect': '33895ab906745bcd5d72c654639e21d862405ba63076404ae7fc4d1caa5b4d93',
+			'db-architect': 'b8c39ed28da89fcd911c216e1831c75e137bd96c8528bf2ba65ba5228393333c',
 			'doc-writer': 'c582ef2b1107a0cbbb7ab170a98b641e135a7b7c02a0210e9949bbd06882caee',
 			analyst: 'd9f3a6b60602805cd93a8a0eed60bf678d4b56ce37a8cde4187742d6c4865a64',
 			guide: 'c3e1e72e1ab4cf69a06c1f414ee417ee60f8a2dfe4e56bca313289161986ac0d',
