@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 
 import type { Machine } from "../../src/features/machines/api/machinesApi.ts";
 import {
-  chooseMachine, localNodeHint, normalizePairCode, pairCommand, pairWarning, readMachineRoute, serveCommand, shellWord, thisComputerPanel,
+  chooseMachine, localNodeHint, normalizePairCode, pairCommand, pairWarning, readMachineRoute, serveCommand, shellWord,
 } from "../../src/features/machines/model/machineChoice.ts";
 
 const machine = (id: string, online: boolean, isDefault = false): Machine => ({
@@ -115,29 +115,4 @@ test("/machine with no node chooses; a machine id opens it with or without a fol
   for (const search of ["?node=laptop", "?node=Laptop&folder=/x", "?node=m-aaaaaaaaaaaaaaaa&folder=rel", "?node=a&node=b"]) {
     assert.equal(readMachineRoute(search), null, search);
   }
-});
-
-// The terminal panel speaks of this computer (2026-11-01): one click opens this computer's node,
-// whatever the account's list says, and the panel follows that window's state.
-test("the terminal panel speaks of this computer in every state of its window", () => {
-  assert.deepEqual(thisComputerPanel("idle"), { title: "Terminal on this computer", detail: "Your terminal and your files run on this computer, through its osionos-node, in their own window.", action: "open", command: false });
-  assert.equal(thisComputerPanel("connected").action, "show");
-  assert.equal(thisComputerPanel("connecting").action, "show");
-  for (const phase of ["idle", "connecting", "step-up", "connected", "reconnecting", "error", "mismatch", "unavailable", "other-account", "no-node"] as const) {
-    const panel = thisComputerPanel(phase);
-    assert.match(`${panel.title} ${panel.detail}`, /this computer/i, phase);
-    assert.doesNotMatch(`${panel.title} ${panel.detail}`, /default machine|online machine/, phase);
-  }
-});
-
-test("no node shows the serve command and Check again; another account leads to pairing this computer", () => {
-  assert.deepEqual(thisComputerPanel("no-node"), {
-    title: "osionos-node is not running on this computer",
-    detail: "Start it on this computer, then check again. If it is running and still not found, it is older than this app: "
-      + "stop it, update ~/.osionos/src to the current osionos and rebuild its IDE page there (pnpm build:ide), then start it again.",
-    action: "check-again", command: true,
-  });
-  assert.deepEqual(thisComputerPanel("other-account"), { title: "This computer is paired to another account", detail: "This computer's osionos-node belongs to another osionos account. Pair this computer with yours in Settings > Machines.", action: "settings", command: false });
-  assert.equal(thisComputerPanel("mismatch").action, "check-again");
-  assert.equal(thisComputerPanel("unavailable").action, "check-again");
 });

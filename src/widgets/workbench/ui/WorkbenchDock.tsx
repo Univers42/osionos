@@ -17,12 +17,14 @@ import { Tooltip } from "@/shared/ui";
 import { useUserStore } from "@/features/auth";
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { hasLocalTerminal, localPtyApi } from "@/features/ide/model/localPty";
+import { isSandboxReachable, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
 import { restartSandbox } from "@/features/ide/model/restartSandbox";
 import { useIdeOutputBus } from "@/features/ide/model/ideOutputBus";
 import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
 import { IdeOutputPanel } from "@/features/ide/ui/IdeOutputPanel";
 import { IdePortsPanel } from "@/features/ide/ui/IdePortsPanel";
 import { IdeProblemsPanel } from "@/features/ide/ui/IdeProblemsPanel";
+import { SandboxUnavailable } from "@/features/ide/ui/SandboxUnavailable";
 import { DOCK_TABS, clampDockHeight, type DockTab } from "@/widgets/workbench/model/workbenchLayout";
 import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";
 
@@ -35,6 +37,12 @@ const IdeTerminal = React.lazy(() =>
 // app's xterm never loads there.
 const LocalVsCodeTerminal = React.lazy(() =>
   import("@/features/ide/ui/LocalVsCodeTerminal").then((m) => ({ default: m.LocalVsCodeTerminal })),
+);
+
+// On the web with no hosted sandbox the terminal is this computer's own, in place: VS Code's terminal
+// page served by its osionos-node (groot ADR 0041).
+const NodeVsCodeTerminal = React.lazy(() =>
+  import("@/features/ide/ui/NodeVsCodeTerminal").then((m) => ({ default: m.NodeVsCodeTerminal })),
 );
 
 // Lazy like the terminal: the debug panel pulls the DAP controller chunk.
@@ -69,13 +77,17 @@ const TerminalPane: React.FC = () => {
   // The preload is fixed for the window's life, so it is read once.
   const [localPty] = React.useState(localPtyApi);
   const fallback = <div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Starting terminal…</div>;
-  // On the desktop, VS Code's page holds every terminal as its own tabs and splits, and its port
-  // router assumes one panel per window: one frame, never remounted by the dock's terminal ids.
-  if (localPty) {
+  const health = useSandboxHealthStore((s) => s.state);
+  const sandboxReachable = isSandboxReachable(health);
+  // VS Code's page holds every terminal as its own tabs and splits: one frame, never remounted by
+  // the dock's terminal ids. On the desktop its port router assumes one panel per window.
+  if (localPty || !sandboxReachable) {
     return (
       <React.Suspense fallback={fallback}>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <LocalVsCodeTerminal api={localPty} />
+          {localPty ? <LocalVsCodeTerminal api={localPty} /> : <NodeVsCodeTerminal />}
+          {/* A self-hosted server whose sandbox is only down keeps its one-line state under it. */}
+          {!localPty && health === "unavailable" && <SandboxUnavailable compact />}
         </div>
       </React.Suspense>
     );
@@ -186,6 +198,8 @@ export const WorkbenchDock: React.FC = () => {
   const closeDock = useWorkbenchStore((s) => s.closeDock);
   const height = useWorkbenchStore((s) => s.dockHeight);
   const conflicts = useIdeSyncConflicts((s) => conflictCount(s.byPageId));
+  const sandboxReachable = isSandboxReachable(useSandboxHealthStore((s) => s.state));
+  const vsCodePanel = hasLocalTerminal() || !sandboxReachable;
 
   return (
     <section
@@ -202,8 +216,8 @@ export const WorkbenchDock: React.FC = () => {
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-2 text-xs text-[var(--osio-code-fg-muted)]">
         <DockTabs active={active} conflicts={conflicts} />
         <span className="flex-1" />
-        {/* On the desktop, VS Code's own panel carries new, split and kill; there is no box to restart. */}
-        {active === "terminal" && !hasLocalTerminal() && <TerminalActions />}
+        {/* VS Code's own panel carries new, split and kill; there is no box to restart. */}
+        {active === "terminal" && !vsCodePanel && <TerminalActions />}
         {active === "output" && <OutputActions />}
         <Tooltip label="Hide panel" side="bottom">
           <button type="button" aria-label="Hide panel" onClick={closeDock} className={ICON_BTN}>

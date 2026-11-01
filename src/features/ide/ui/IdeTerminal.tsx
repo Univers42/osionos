@@ -19,7 +19,6 @@ import { useUserStore } from "@/features/auth";
 import { useIdeTerminal } from "@/features/ide/model/useIdeTerminal";
 import { isSandboxReachable, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
 import { terminalFontFamily } from "@/features/ide/model/terminalFont";
-import { MachineTerminalLauncher } from "./MachineTerminalLauncher";
 import { SandboxUnavailable } from "./SandboxUnavailable";
 
 // Ponytail: read once when the terminal opens. The dock is always the dark code
@@ -76,8 +75,7 @@ export const IdeTerminal: React.FC<{ termId?: string; safe?: boolean }> = ({ ter
   }, [term]);
 
   const { closedReason, reconnect } = useIdeTerminal(term, workspaceId, termId, safe);
-  const health = useSandboxHealthStore((s) => s.state);
-  const reachable = isSandboxReachable(health);
+  const reachable = isSandboxReachable(useSandboxHealthStore((s) => s.state));
 
   return (
     <div className="relative min-h-0 flex-1" data-osio-terminal>
@@ -85,14 +83,7 @@ export const IdeTerminal: React.FC<{ termId?: string; safe?: boolean }> = ({ ter
           is not cut by the dock's radius (a quarter of it below, half beside:
           enough for any roundness setting). Text padding lives on .xterm. */}
       <div ref={hostRef} className="absolute left-0 top-0 right-[calc(var(--osio-radius-pane)/2)] bottom-[calc(var(--osio-radius-pane)/4)]" />
-      {/* No hosted sandbox here: the terminal is the person's own machine. A self-hosted server
-          whose sandbox is only down keeps its one-line state under the offer. */}
-      {!reachable && (
-        <div className="absolute inset-0 flex flex-col">
-          <div className="min-h-0 flex-1"><MachineTerminalLauncher /></div>
-          {health !== "disabled" && <SandboxUnavailable compact onRetried={(next) => { if (isSandboxReachable(next)) reconnect(); }} />}
-        </div>
-      )}
+      {/* With no reachable sandbox the dock shows this computer's terminal instead (WorkbenchDock). */}
       {reachable && closedReason !== null && (
         <div className="absolute inset-0">
           <SandboxUnavailable onRetried={(next) => { if (isSandboxReachable(next)) reconnect(); }} />
