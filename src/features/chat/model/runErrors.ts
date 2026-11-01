@@ -69,7 +69,13 @@ export function failureCode(error: unknown): string {
   return typeof code === "string" ? code : "internal";
 }
 
-/** Every code the service sends, and the sentence the pane says for it. */
+const UPSTREAM_FAILED = () => "The AI service failed — try again";
+
+/**
+ * Every code the service sends, and the sentence the pane says for it. The
+ * finer classes of a provider failure keep the sentence of `upstream_error`:
+ * they tell the logs and the reader of a frame, not the person, for now.
+ */
 const MESSAGES: Record<string, (retryAfter: number | null) => string> = {
   rate_limited: (retryAfter) => `Too many requests — try again in ${retryAfter ?? 60} s`,
   budget_exhausted: () => "Today's AI budget is used up",
@@ -78,7 +84,10 @@ const MESSAGES: Record<string, (retryAfter: number | null) => string> = {
   unsupported_file: () => "This file type can't be read yet — text, Markdown, CSV, JSON, code and images work",
   attachment_not_found: () => "An attachment could not be found",
   upstream_unavailable: () => "The AI service is unavailable — try again",
-  upstream_error: () => "The AI service failed — try again",
+  upstream_error: UPSTREAM_FAILED,
+  quota_exhausted: UPSTREAM_FAILED,
+  provider_unavailable: UPSTREAM_FAILED,
+  context_too_long: UPSTREAM_FAILED,
   network_error: () => "Connection lost — resuming",
   cancelled: () => "The run was cancelled",
   timeout: () => "The model took too long — try again",
@@ -104,7 +113,15 @@ const MESSAGES: Record<string, (retryAfter: number | null) => string> = {
 };
 
 /** The codes that may be retried, and the codes that wait first. */
-const RETRYABLE = new Set(["rate_limited", "upstream_unavailable", "upstream_error", "network_error"]);
+const RETRYABLE = new Set([
+  "rate_limited",
+  "upstream_unavailable",
+  "upstream_error",
+  "quota_exhausted",
+  "provider_unavailable",
+  "context_too_long",
+  "network_error",
+]);
 
 /**
  * What a failure says, and whether it may be tried again.
