@@ -1,0 +1,46 @@
+# The IDE and terminal pages osionos-node serves, prebuilt, so install.sh needs neither pnpm nor
+# docker on the machine it runs on. One rolling release: the newest main that built.
+name: osionos-node pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: node-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=3072
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vite build --config vite.ide.config.ts
+      - run: pnpm exec vite build --config vite.terminal.config.ts
+      - name: Pack
+        run: |
+          tar -czf osionos-node-pages.tar.gz dist-ide build/terminal
+          sha256sum osionos-node-pages.tar.gz | sed 's/  .*/  pages.tar.gz/' > osionos-node-pages.tar.gz.sha256
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view node-pages >/dev/null 2>&1 || \
+            gh release create node-pages --title "osionos-node pages" --notes "Built from main by CI." --prerelease
+          gh release upload node-pages osionos-node-pages.tar.gz osionos-node-pages.tar.gz.sha256 --clobber

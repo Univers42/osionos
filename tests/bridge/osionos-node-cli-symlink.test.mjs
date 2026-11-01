@@ -32,3 +32,13 @@ it('refuses to serve a page that was never built, and names the fix', () => {
 	assert.equal(run.status, 1);
 	assert.match(run.stderr, /index\.html is missing: run packages\/osionos-node\/install\.sh/);
 });
+
+it('terminals follow the person: their $SHELL, and not the hellish marker of whoever started the node', async () => {
+	const { preferredShell, serverEnv } = await import('../../packages/osionos-node/server-launch.mjs');
+	assert.equal(preferredShell({ SHELL: process.execPath }, '/bin/zsh'), process.execPath);
+	assert.equal(preferredShell({ SHELL: '/nonexistent/shell' }, '/bin/zsh'), '/bin/zsh');
+	assert.equal(preferredShell({}, undefined), '/bin/sh');
+	const env = serverEnv({ HELLISH_EXECD: '1', PATH: '/bin' }, '/bin/zsh');
+	assert.equal(env.HELLISH_EXECD, undefined);
+	assert.equal(env.SHELL, '/bin/zsh');
+});
