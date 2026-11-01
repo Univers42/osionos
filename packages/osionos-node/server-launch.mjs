@@ -14,6 +14,7 @@
 // on a Unix socket inside a 0700 directory with no connection token, so the directory's owner is
 // the only one who can reach it and no TCP port ever opens. Its terminals get the owner's login
 // shell and umask, as if the owner had opened them.
+import { accessSync, constants } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { lstatSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
@@ -50,8 +51,21 @@ export function serverArgv({ serverDir, socketPath, dataDir }) {
 }
 
 // The server reads VSCODE_SERVER_HOST/PORT as defaults, which would add a TCP listener (A3).
+/** The person's shell: $SHELL when it runs, for an account that cannot chsh to it, else passwd's. */
+export function preferredShell(env, passwdShell) {
+	try {
+		accessSync(env.SHELL ?? '', constants.X_OK);
+		return env.SHELL;
+	} catch {
+		return passwdShell ?? '/bin/sh';
+	}
+}
+
 export function serverEnv(baseEnv, loginShell) {
 	const env = { ...baseEnv, SHELL: loginShell };
+	// Marks "this process tree already handed over to hellish". Inherited from the shell that
+	// started the node, it told every terminal's zsh not to, so they stayed in zsh.
+	delete env.HELLISH_EXECD;
 	delete env.VSCODE_SERVER_HOST;
 	delete env.VSCODE_SERVER_PORT;
 	return env;
