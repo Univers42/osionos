@@ -114,6 +114,6 @@ test("a shell created after shutdown (VS Code closed it mid-start) is killed at 
   w.proc.shutdown();
   answer("p7");
   assert.equal(await started, "failed");
-  assert.deepEqual(w.pty.calls, [["kill", "p7"]]);
+  assert.deepEqual(w.pty.calls, [["create", 80, 24], ["kill", "p7"]]);
   assert.equal(w.pty.listeners(), 0);
 });
