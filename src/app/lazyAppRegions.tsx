@@ -96,7 +96,10 @@ if (globalThis.window !== undefined) {
 // A ?page=<id> link opens that page once the session resolves, or shows the
 // no-access screen when it cannot be read.
 if (globalThis.window !== undefined) {
-  void import("@/features/page-link/pageLinkBoot").then((module) => module.applyPageDeepLink());
+  void import("@/features/page-link/pageLinkBoot").then((module) => {
+    module.applyPageDeepLink();
+    module.applyTabUrlSync();
+  });
 }
 
 const contentFallback = (
