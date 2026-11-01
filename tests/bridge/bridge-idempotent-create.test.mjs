@@ -102,6 +102,18 @@ describe('listing object databases', () => {
 		});
 	});
 
+	it('#252 dbKey reads one row of the caller, not the whole list', async () => {
+		const mock = createPostgrestMock({ osionos_object_databases: [
+			{ id: 'r1', owner_id: IDS.userB, workspace_id: null, db_key: 'liveviews:baas:a:t', title: 'Live views', state: { views: { v: {} } } },
+			{ id: 'r2', owner_id: IDS.userB, workspace_id: null, db_key: 'db-old', title: 'Old', state: {} },
+			{ id: 'r3', owner_id: IDS.userA, workspace_id: null, db_key: 'liveviews:baas:a:t', title: 'Theirs', state: {} },
+		] });
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const answer = await send(base, `/api/object-databases?dbKey=${encodeURIComponent('liveviews:baas:a:t')}`, asB);
+			assert.deepEqual(answer.body.databases.map((row) => row.title), ['Live views']);
+		});
+	});
+
 	it('#245 a workspaceId that is not an id is refused, never spliced into the filter', async () => {
 		const mock = createPostgrestMock(seeded());
 		await withBridge(config, mock.fetchImpl, async (base) => {
