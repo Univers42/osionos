@@ -16,9 +16,10 @@
 // Milestone 1 is owner-only: every subject but `ownerId` is refused.
 import http from 'node:http';
 
-import { checkNodeOrigin, classifyNodeRequest } from '../../scripts/ide-node-policy.mjs';
+import { checkNodeOrigin, classifyNodeRequest, isNodeHost } from '../../scripts/ide-node-policy.mjs';
 import { isNodeId, signNodeCap, verifyIdeToken, verifyNodeCap } from '../../scripts/ide-token.mjs';
 import { createSocketRegistry, forwardHttp, forwardUpgrade, refuseRaw } from './node-proxy.mjs';
+import { createPtyService } from './pty-service.mjs';
 
 const PREFIX = '/api/node/';
 const COOKIE_NAME = 'osio-node-';
@@ -90,13 +91,16 @@ function legacyVerifier(secret) {
 	};
 }
 
-// A paired machine passes `capSecret`, `verifySession` and `machineRoutes` (machine-identity.mjs);
-// the shared-secret mode passes `secret` alone.
-export function createIdeOriginServer({ secret, capSecret = secret, verifySession = legacyVerifier(secret), machineRoutes = null, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null }) {
+// A paired machine passes `capSecret`, `verifySession` and `machineRoutes` (machine-identity.mjs),
+// and `pty` ({ host, accept }) for the web terminal; the shared-secret mode passes `secret` alone,
+// and opens no shell (W3).
+export function createIdeOriginServer({ secret, capSecret = secret, verifySession = legacyVerifier(secret), machineRoutes = null, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null, pty: ptyOptions = undefined }) {
 	const sockets = createSocketRegistry({ maxPerUser: maxSocketsPerUser });
 	const cookiePrefix = cookiePrefixFor(ideOrigin);
 	const revokedAt = new Map();
 	const isRevoked = (userId, iat) => iat <= (revokedAt.get(userId) ?? -1);
+	const paired = machineRoutes !== null;
+	const pty = paired && ptyOptions ? createPtyService({ ...ptyOptions, ideOrigin, ownerId, verifySession, isRevoked }) : null;
 
 	async function openSession(req, res) {
 		if (req.method !== 'POST') throw fail(405);
@@ -151,6 +155,7 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 
 	async function onRequest(req, res) {
 		try {
+			if (!isNodeHost(req.headers, ideOrigin)) throw fail(403);
 			if (req.url === `${PREFIX}session`) return await openSession(req, res);
 			if (machineRoutes && req.url.startsWith('/api/machine/')) return await machineRoutes(req, res, routeContext);
 			if (!req.url.startsWith(PREFIX)) return client ? client(req, res) : reply(res, 404);
@@ -163,6 +168,8 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 
 	async function onUpgrade(req, socket, head) {
 		socket.on('error', () => socket.destroy());
+		if (!isNodeHost(req.headers, ideOrigin)) return refuseRaw(socket, 403, TEXT[403]);
+		if (req.url === '/api/pty') return pty ? pty.upgrade(req, socket, head) : refuseRaw(socket, 404, TEXT[404]);
 		let grant;
 		try {
 			grant = authorize(req, true);
@@ -182,12 +189,16 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 	server.on('upgrade', onUpgrade);
 	return {
 		server,
-		// Cuts every open socket of a user at once and voids every credential issued until now.
+		pty,
+		// Cuts every open socket of a user at once, kills the owner's shells, and voids every
+		// credential issued until now.
 		revoke(userId) {
 			revokedAt.set(userId, Math.floor(Date.now() / 1000));
 			sockets.cut(userId);
+			if (userId === ownerId) pty?.killAll();
 		},
 		close() {
+			pty?.killAll();
 			sockets.closeAll();
 			server.closeAllConnections?.();
 			server.close();

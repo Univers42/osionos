@@ -75,3 +75,8 @@ test('a paired machine refuses the shared secret, a --node of its own, and a non
 	assert.throws(() => readServeConfig([...PAIRED_ARGS, '--node', 'laptop'], { HOME: '/home/me' }, MACHINE), /--node/);
 	assert.throws(() => readServeConfig([...PAIRED_ARGS, '--listen', '192.168.1.5:4100'], { HOME: '/home/me' }, MACHINE), /127/);
 });
+
+test('the terminal page comes from the checkout\'s build/terminal unless --terminal names another', () => {
+	assert.match(readServeConfig(ARGS, ENV).terminal, /\/build\/terminal$/);
+	assert.equal(readServeConfig([...ARGS, '--terminal', '/srv/terminal'], ENV).terminal, '/srv/terminal');
+});

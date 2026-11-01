@@ -93,3 +93,9 @@ export function checkNodeOrigin(headers, ideOrigin, isUpgrade) {
 	if (site !== 'same-origin') return false;
 	return headers.origin === undefined || headers.origin === ideOrigin;
 }
+
+// W1 (devil verdict 2026-11-01): a DNS-rebound page reaches this port under its own name, and its
+// requests say so in Host. Every request and upgrade must name the IDE origin's own host:port.
+export function isNodeHost(headers, ideOrigin) {
+	return typeof headers.host === 'string' && headers.host === new URL(ideOrigin).host;
+}
