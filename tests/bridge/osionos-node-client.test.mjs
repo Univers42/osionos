@@ -24,7 +24,7 @@ import { createClientHandler } from '../../packages/osionos-node/static-client.m
 
 const APP = 'https://app.example:3001';
 
-async function serve(t, appOrigin = APP) {
+async function serve(t, appOrigins = [APP]) {
 	const root = mkdtempSync(join(tmpdir(), 'ide-dist-'));
 	mkdirSync(join(root, 'assets'));
 	writeFileSync(join(root, 'index.html'), '<meta name="osionos-app-origin" content="%OSIONOS_APP_ORIGIN%"><script type="module" src="/assets/main.js"></script>');
@@ -32,7 +32,7 @@ async function serve(t, appOrigin = APP) {
 	writeFileSync(join(root, 'assets', 'textmate.wasm'), 'wasm');
 	writeFileSync(join(root, 'assets', '_commonjsHelpers-x1.js'), 'export {}');
 	writeFileSync(join(root, 'secret.txt'), 'nope');
-	const server = http.createServer(createClientHandler({ root, appOrigin }));
+	const server = http.createServer(createClientHandler({ root, appOrigins }));
 	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 	t.after(() => { server.close(); rmSync(root, { recursive: true, force: true }); });
 	return `http://127.0.0.1:${server.address().port}`;
@@ -66,7 +66,16 @@ test('assets are served with their type; anything outside assets/ or escaping it
 });
 
 test('an app origin that is not a bare origin is refused at start', () => {
-	for (const bad of ['', 'app.example', 'https://app.example/', 'https://app.example/path', "https://a.example 'unsafe-inline'", 'javascript:alert(1)']) {
-		assert.throws(() => createClientHandler({ root: tmpdir(), appOrigin: bad }), /app origin/, bad);
+	for (const bad of ['', 'app.example', 'https://app.example/', 'https://app.example/path', "https://a.example 'unsafe-inline'", 'javascript:alert(1)', 'app://', 'app://osionos/', 'app://osionos x', 'app://OSIONOS', 'file://osionos']) {
+		assert.throws(() => createClientHandler({ root: tmpdir(), appOrigins: [bad] }), /app origin/, bad);
 	}
+	assert.throws(() => createClientHandler({ root: tmpdir(), appOrigins: [] }), /app origin/, 'no origin at all');
+});
+
+// The desktop edition's page origin is app://osionos (F13); the same node serves it and the web app.
+test('the web app and the desktop app may both open the page', async (t) => {
+	const base = await serve(t, [APP, 'app://osionos']);
+	const res = await fetch(`${base}/?node=laptop&folder=/x`);
+	assert.match(await res.text(), /content="https:\/\/app\.example:3001 app:\/\/osionos"/);
+	assert.match(res.headers.get('content-security-policy'), /frame-ancestors https:\/\/app\.example:3001 app:\/\/osionos(;|$)/);
 });

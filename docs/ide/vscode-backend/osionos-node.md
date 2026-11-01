@@ -16,12 +16,13 @@ node packages/osionos-node/cli.mjs serve \
   --node laptop \
   --server <unpacked code-server-4.138.0>/lib \
   --app-origin https://<the app's origin> \
+  --app-origin app://osionos \
   --listen 127.0.0.1:4100                       # loopback, RFC 1918 or tailnet only
 ```
 
 The app looks for the IDE origin at `http://127.0.0.1:4100`, osionos-node's default; set
 `VITE_OSIONOS_MACHINE_URL` at build time for another address (`--ide-origin` when a reverse proxy
-fronts it). The server bundle is the one pinned in `packages/osionos-node/server-pin.json`;
+fronts it). `--app-origin` repeats: the second one above is the desktop app. The server bundle is the one pinned in `packages/osionos-node/server-pin.json`;
 check its sha256 against that file before unpacking.
 
 ## What is verified
@@ -37,11 +38,23 @@ cookie is HttpOnly; and the page reports no CSP violation. It needs `OSIONOS_SER
 OSIONOS_SERVER_LIB=<.../lib> OSIONOS_E2E_CHROME=<chrome> node --test tests/machine/ide-machine.e2e.test.mjs
 ```
 
+A debug launch (F5) in an untrusted folder asks for trust and runs nothing when declined; once
+trusted, the same launch runs (C11).
+
+Live, 2026-10-31: the deployed app at `https://baas.tail10f2ea.ts.net:8443/machine` signed in as
+the owner, passed the emailed step-up, opened this laptop's folder in its own window, saved an
+edit to disk and ran the owner's shell in the folder. The step-up needs grobase's email OTP
+(`EMAIL_OTP_ENABLED=true` on tenant-control); without it the bridge answers 503.
+
+Desktop, 2026-10-31 (C23): the real `main.js` (Electron 32.2.7, in the groot smoke container) did
+the same. It signed in, passed the emailed step-up and opened the IDE as a child window of
+`app://osionos`. The editor connected, saved to disk, and the terminal wrote its probe. No node
+cookie or connection token is readable by script or recorded in the HAR, and the node refuses
+`app://osionos` itself. The node then needs `--app-origin app://osionos` beside the web origin.
+
 ## Not done yet
 
-- **C11, the debug half:** that a debug launch is refused while untrusted is not tested yet.
-- **The app side:** `/machine` was not run against the live bridge as dev.pro.photo@gmail.com.
-  It needs a running osionos-node and `VITE_OSIONOS_MACHINE_URL` in the deployed app.
-- **Desktop app:** its edition is blocked (C21, C23).
+- **Remote machines** (SSH, tunnel) are Phase 3 and Phase 6. A non-loopback http node in the desktop
+  app is not ruled on (C6 amendment, condition 7).
 - **Connection token:** VS Code appends an empty `tkn=` to resource URLs when it has no token.
   The proxy drops the parameter.

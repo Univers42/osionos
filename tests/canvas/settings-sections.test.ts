@@ -41,7 +41,7 @@ function srcFiles(base = SRC_ROOT): string[] {
   return files;
 }
 
-test("the registry lists exactly the 19 legacy section ids, the 2 AI ones, moderation and developer, all unique", () => {
+test("the registry lists exactly the 19 legacy section ids, the 2 AI ones, moderation, developer and machines, all unique", () => {
   const ids = SETTINGS_SECTIONS.map((section) => section.id);
   assert.equal(new Set(ids).size, ids.length, "a section id appears twice");
   const LEGACY_IDS = [
@@ -53,6 +53,8 @@ test("the registry lists exactly the 19 legacy section ids, the 2 AI ones, moder
     "ai_connections", "accessibility_voice",
     // P5-1-e: personal access tokens.
     "developer",
+    // Own machines (docs/ide/vscode-backend/own-machines-plan.md §6).
+    "machines",
   ];
   for (const id of LEGACY_IDS) assert.ok(ids.includes(id), `${id} left the registry`);
   assert.equal(ids.length, LEGACY_IDS.length + 1);

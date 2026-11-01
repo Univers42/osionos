@@ -65,8 +65,11 @@ test('the IDE window edits, saves and runs a terminal on this machine, across si
 	await until(() => page.evaluate(() => window.__ide.states.includes('connected')), 90_000, 'the machine to connect');
 	await frame.locator('#status[data-state="connected"]').waitFor({ timeout: 5_000 });
 
-	// The app may show a file; the editor then holds the machine's copy.
-	await page.evaluate(() => window.__ideOpen('app.py'));
+	// The file tree lists the folder; a folder expands in place, a file opens in the editor.
+	const tree = frame.locator('#explorer');
+	await tree.getByRole('treeitem', { name: '.vscode' }).click();
+	await tree.getByRole('treeitem', { name: 'tasks.json' }).waitFor({ timeout: 15_000 });
+	await tree.getByRole('treeitem', { name: 'app.py' }).click();
 	await frame.locator('.monaco-editor .view-lines').filter({ hasText: 'def add' }).waitFor({ timeout: 30_000 });
 
 	// Edit and save land on this machine's disk.
@@ -80,9 +83,17 @@ test('the IDE window edits, saves and runs a terminal on this machine, across si
 	await new Promise((resolve) => setTimeout(resolve, 3000));
 	assert.equal(existsSync(join(folder, 'untrusted-task-ran')), false, 'an untrusted folder task ran');
 
+	// C11: a debug launch while untrusted asks for trust first; declined, nothing runs.
+	const trust = frame.locator('.monaco-dialog-box .monaco-button').filter({ hasText: /trust/i }).filter({ hasNotText: /don.t|not/i }).first();
+	await frame.locator('.monaco-editor .view-lines').click();
+	await frame.keyboard.press('F5');
+	await trust.waitFor({ timeout: 30_000 });
+	await frame.keyboard.press('Escape');
+	await new Promise((resolve) => setTimeout(resolve, 3000));
+	assert.equal(existsSync(join(folder, 'debug-ran')), false, 'an untrusted debug launch ran');
+
 	// A terminal process runs code, so VS Code asks whether the owner trusts the folder; yes.
 	await frame.locator('#new-terminal').click();
-	const trust = frame.locator('.monaco-dialog-box .monaco-button').filter({ hasText: /trust/i }).filter({ hasNotText: /don.t|not/i }).first();
 	await trust.waitFor({ timeout: 30_000 }).catch(async (error) => {
 		await frame.screenshot({ path: '/tmp/ide-machine-fail.png' });
 		throw new Error(`${error.message}\nstatus: ${await frame.locator('#status').textContent()}\nconsole errors:\n${errors.slice(-8).join('\n')}`);
@@ -102,6 +113,11 @@ test('the IDE window edits, saves and runs a terminal on this machine, across si
 		throw error;
 	});
 	assert.equal(readFileSync(join(folder, 'terminal-probe'), 'utf8').trim(), folder);
+
+	// Trusted now, the same launch runs: the refusal above was trust, not a dead F5.
+	await frame.locator('.monaco-editor .view-lines').click();
+	await frame.keyboard.press('F5');
+	await until(() => existsSync(join(folder, 'debug-ran')), 60_000, 'the trusted debug launch');
 
 	// C0-F2: a message asking to type into a terminal changes nothing.
 	await page.evaluate(() => window.__ideSend({ type: 'osionos-ide/terminal', text: 'touch injected\n' }));

@@ -177,6 +177,22 @@ scripts, Playwright for the browser. Each is green in CI before the phase is cal
 - **C6. The browser credential is a node capability in a cookie.**
   - It is minted by a `POST` carrying a valid `osionos_ide1` bearer and the exact Origin.
   - Cookie attributes: `__Host-` prefix, `HttpOnly`, `Secure`, `SameSite=Strict`.
+  - **Amended 2026-10-31 (devil, PROCEED-WITH-CONDITIONS).** Electron 32.2.7 (Chromium 128) stores no
+    `__Host-` cookie on `http://127.0.0.1`. Measured in the C23 run: 0 cookies after a 204 mint,
+    then 401 on every request. A `document.cookie` probe stored `Secure`, `SameSite=Strict` and plain
+    cookies, but not the `__Host-` one.
+    - When the configured IDE origin is plain http on a 127.0.0.0/8 literal, the name drops the
+      prefix (`osio-node-<id>`). Every other attribute stays.
+    - Every other origin keeps `__Host-`: `localhost`, RFC 1918, tailnet and https.
+    - The mode comes from the configured origin only. Each origin reads only its own name.
+    - Every value under that name is verified, so a second cookie set from another local port
+      cannot shadow the real one.
+    - Why it loses nothing: an IP literal has no subdomains, and cookies ignore ports, so the
+      prefix never isolated anything there. The MAC is what protects the value.
+    - A non-loopback http node in the desktop app stays unsupported until it is ruled on.
+  - **TEST:** `cookiePrefixFor` per origin kind, both `Set-Cookie` strings exactly, the other
+    mode's name gets 401, and a forged duplicate never shadows the real cookie
+    (`tests/bridge/osionos-node-origin.test.mjs`).
   - The value is MAC'd with a key derived from the IDE secret under a new label, and binds `sub`, `node_id` and `exp ≤ 900 s`.
   - **TEST:** the capability, `osionos_ide1` and `pc1` do not verify as one another, in all 6 directions.
   - **TEST:** an expired capability gets 401.
@@ -284,9 +300,14 @@ scripts, Playwright for the browser. Each is green in CI before the phase is cal
   - It covers any machine or session belonging to anyone but the owner.
   - It opens only with D3 extensible (owner-signed OPEN), isolation, and its own ruling.
   - **TEST:** the node mint answers `not-allowed` for the exempt test account.
+  - **Amended 2026-10-31 (own-machines verdict, groot ADR 0037):** BLOCKED for any machine the viewer does not own. A user opens their own paired machine when the row's owner = the token `sub` = the node's `ownerId`. **TEST:** `tests/bridge/bridge-machines.test.mjs` "a second account gets 403 not_allowed (condition 1)".
 - **C23. Desktop edition (F13).** No `/api/node` from `app://osionos` until a measured run shows, from the desktop app:
   - resource GETs and the WebSocket both working;
   - the C5 and C7 tests passing.
+  - **Met 2026-10-31.** groot `apps/osionos-electron/test/smoke/machine-smoke.mjs` ran 9/9, exit 0,
+    with the emailed step-up. The machine window is a child of `app://osionos`. The editor connected,
+    and a save and a terminal probe reached disk. No token was in storage or the HAR (C5). Direct
+    fetch and WebSocket from `app://osionos` were refused (C7). It needed the C6 amendment.
 
 ## Records owed
 
