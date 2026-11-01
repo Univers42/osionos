@@ -101,13 +101,15 @@ export type TerminalFramePanel = {
   download: string | null;
   tryAgain: boolean;
   pair: boolean;
+  /** The step-up: a button that opens the emailed-code prompt. */
+  confirm: boolean;
 };
 
 const ALLOW_LOCAL = "If your browser asked to connect to apps on this device and it was blocked, allow it in the site settings (the icon left of the address), then try again.";
 
-const PANELS: Record<Exclude<TerminalFramePhase, "connected">, Omit<TerminalFramePanel, "download"> & { offersDownload: boolean }> = {
+const PANELS: Record<Exclude<TerminalFramePhase, "connected">, Omit<TerminalFramePanel, "download" | "confirm"> & { offersDownload: boolean }> = {
   connecting: { title: "Connecting to this computer…", detail: "Your browser may ask to let osionos connect to apps on this device. Allow it to open your terminal here.", tryAgain: false, pair: false, offersDownload: false },
-  "step-up": { title: "Confirm it's you", detail: "Confirm it's you to open this computer's terminal.", tryAgain: false, pair: false, offersDownload: false },
+  "step-up": { title: "Confirm it's you", detail: "We email you a six-digit code. Enter it, and your terminal opens right here.", tryAgain: false, pair: false, offersDownload: false },
   "no-node": { title: "osionos Connector isn't running on this computer.", detail: ALLOW_LOCAL, tryAgain: true, pair: false, offersDownload: true },
   "lna-blocked": { title: "Your browser is blocking osionos from this computer.", detail: "Allow apps on this device for this site in the browser's site settings (the icon left of the address), then try again.", tryAgain: true, pair: false, offersDownload: false },
   "old-node": { title: "osionos Connector needs an update.", detail: null, tryAgain: true, pair: false, offersDownload: true },
@@ -121,5 +123,5 @@ const PANELS: Record<Exclude<TerminalFramePhase, "connected">, Omit<TerminalFram
 export function terminalFramePanel(phase: TerminalFramePhase, downloadUrl: string): TerminalFramePanel | null {
   if (phase === "connected") return null;
   const { offersDownload, ...panel } = PANELS[phase];
-  return { ...panel, download: offersDownload && downloadUrl ? downloadUrl : null };
+  return { ...panel, download: offersDownload && downloadUrl ? downloadUrl : null, confirm: phase === "step-up" };
 }

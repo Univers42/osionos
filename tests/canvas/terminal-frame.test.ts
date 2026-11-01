@@ -141,6 +141,16 @@ test("W14: every panel is plain words and buttons: no command, no path, no flag"
   assert.match(terminalFramePanel("lna-blocked", "").detail ?? "", /site settings/);
 });
 
+// Owner 2026-11-01: the dock said "Confirm it's you" and offered nothing to click.
+test("the step-up panel says what happens and offers the button that opens the code prompt", () => {
+  const panel = terminalFramePanel("step-up", "");
+  assert.ok(panel);
+  assert.equal(panel.confirm, true);
+  assert.match(panel.detail ?? "", /email/i, "it says a code comes by email");
+  const others: TerminalFramePhase[] = ["connecting", "no-node", "lna-blocked", "old-node", "other-account", "mismatch", "unavailable", "error"];
+  for (const phase of others) assert.equal(terminalFramePanel(phase, "")?.confirm, false, phase);
+});
+
 test("the download button appears only when its address is set; try again is always there on a failure", () => {
   assert.equal(terminalFramePanel("no-node", "").download, null);
   assert.equal(terminalFramePanel("no-node", "https://example.test/connector").download, "https://example.test/connector");
