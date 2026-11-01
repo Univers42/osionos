@@ -515,3 +515,13 @@ describe('the legacy profile route', () => {
 		assert.equal(identity.profile.headline, 'Analyst');
 	});
 });
+
+it('#237 misses are limited per account and hits never are', async (t) => {
+	const { base, token, config } = await world(t, { kv: kvStub() });
+	for (let index = 0; index < 30; index += 1) {
+		assert.equal((await send(base, `/api/users/nobody${index}`, { token })).status, 404);
+	}
+	assert.equal((await send(base, '/api/users/nobody-more', { token })).status, 429);
+	assert.equal((await send(base, '/api/users/ada', { token })).status, 200);
+	assert.equal((await send(base, '/api/users/nobody-else', { token: sessionToken(config, USER_B) })).status, 404);
+});
