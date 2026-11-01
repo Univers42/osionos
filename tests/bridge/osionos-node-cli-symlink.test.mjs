@@ -23,3 +23,12 @@ it('prints its usage through a symlinked checkout', () => {
 		rmSync(dir, { recursive: true, force: true });
 	}
 });
+
+it('refuses to serve a page that was never built, and names the fix', () => {
+	const run = spawnSync(process.execPath, [join(packageDir, 'cli.mjs'), 'serve', '--node', 'probe', '--server', '/nonexistent', '--app-origin', 'https://a.example', '--client', '/nonexistent/client'], {
+		encoding: 'utf8',
+		env: { ...process.env, HOME: mkdtempSync(join(tmpdir(), 'osionos-home-')), OSIONOS_IDE_TOKEN_SECRET: 'x'.repeat(40), OSIONOS_IDE_OWNER: '00000000-0000-4000-8000-000000000001' },
+	});
+	assert.equal(run.status, 1);
+	assert.match(run.stderr, /index\.html is missing: run packages\/osionos-node\/install\.sh/);
+});

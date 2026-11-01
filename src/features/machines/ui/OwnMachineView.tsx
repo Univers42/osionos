@@ -95,7 +95,7 @@ export const OwnMachineView: React.FC<{ requestedId: string | null; folder: stri
   const name = choice.kind === "offline" || choice.kind === "open" ? choice.machine.name : "";
   return (
     <Explain title={name ? `${name} is offline` : "None of your machines is online"} hint="Start osionos-node on the machine, then check again." onRetry={retry}>
-      <MachineCommands name="" pair={false} />
+      <MachineCommands name="" />
     </Explain>
   );
 };

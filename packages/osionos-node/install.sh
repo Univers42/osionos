@@ -1,21 +1,28 @@
 #!/bin/sh
-# Puts ~/.osionos in the layout the app's start command names: src (an osionos
-# checkout with dist-ide built) and server/<VS Code version> (the pinned server's lib).
-# The app handed out that command with nothing to create the layout, so a machine not
-# set up by hand failed with MODULE_NOT_FOUND.
+# Installs or updates osionos-node, then connects this computer: what the app's one command
+# runs. Arguments go to `osionos-node connect`; without any it only installs.
 #
-# OSIONOS_DATA   where the heavy files go, linked from ~/.osionos. The server alone is
-#                over 400 MB, and a school home has less than that free.
-# OSIONOS_SRC    an existing checkout to link instead of cloning.
+# ~/.osionos: src (an osionos checkout with its two pages built) and server/<VS Code version>
+# (the pinned server's lib).
 #
-# Caveat: re-running keeps an existing server and dist-ide; it does not update them.
-# Delete them to upgrade. The tarball is checked against server-pin.json, its contents
-# are trusted from there on.
+# OSIONOS_DATA   where the heavy files go, linked from ~/.osionos. The server alone is over
+#                600 MB unpacked. Defaults to /sgoinfre/students/$USER where that exists: a
+#                42 home has less than that free.
+# OSIONOS_SRC    an existing checkout to link instead of cloning; it is not updated.
+#
+# Caveat: re-running updates a clone and rebuilds its pages only when the commit changed. The
+# pages need pnpm or docker, and building them takes minutes. The tarball is checked against
+# server-pin.json; its contents are trusted from there on. The free-space check is a floor,
+# not a measure of what this checkout will need.
 set -eu
 
 REPO=https://github.com/Univers42/osionos.git
 HOME_DIR=$HOME/.osionos
+if [ -z "${OSIONOS_DATA:-}" ] && [ -d "/sgoinfre/students/${USER:-}" ]; then
+    OSIONOS_DATA=/sgoinfre/students/$USER/.osionos-data
+fi
 DATA=${OSIONOS_DATA:-$HOME_DIR}
+NEEDED_KB=2000000
 
 fail() {
     echo "osionos install: $1" >&2
@@ -26,6 +33,11 @@ command -v node >/dev/null || fail "node 22 or newer is required"
 command -v git >/dev/null || fail "git is required"
 mkdir -p "$HOME_DIR" "$DATA"
 chmod 700 "$HOME_DIR"
+
+FREE_KB=$(df -Pk "$DATA" | awk 'NR == 2 { print $4 }')
+if [ ! -d "$DATA/src" ] && [ "${FREE_KB:-0}" -lt "$NEEDED_KB" ]; then
+    fail "$DATA has $((FREE_KB / 1024)) MB free and needs 2 GB: set OSIONOS_DATA to a bigger disk"
+fi
 
 # A symlink only when the data lives elsewhere: ln onto itself would nest a loop.
 link_home() {
@@ -38,6 +50,12 @@ elif [ ! -d "$DATA/src/.git" ]; then
     git clone --depth 1 --branch main --recurse-submodules --shallow-submodules "$REPO" "$DATA/src"
     link_home src
 else
+    # A node older than the app answers but cannot open a terminal: an update rebuilds the pages.
+    before=$(git -C "$DATA/src" rev-parse HEAD)
+    git -C "$DATA/src" pull --ff-only --recurse-submodules
+    if [ "$before" != "$(git -C "$DATA/src" rev-parse HEAD)" ]; then
+        rm -rf "$DATA/src/dist-ide" "$DATA/src/build/terminal"
+    fi
     link_home src
 fi
 SRC=$HOME_DIR/src
@@ -87,6 +105,8 @@ if [ ! -x "$SERVER/node" ]; then
 fi
 link_home server
 
+if [ "$#" -gt 0 ]; then
+    # curl | sh gives this script the pipe as stdin; the pairing question needs the terminal.
+    exec node "$SRC/packages/osionos-node/cli.mjs" connect "$@" </dev/tty
+fi
 echo "osionos-node is installed in $HOME_DIR"
-echo "Pair this machine once:  node $SRC/packages/osionos-node/cli.mjs pair --bridge <bridge url> --name <name>"
-echo "Then run the start command the app shows."
