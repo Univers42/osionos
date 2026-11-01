@@ -30,4 +30,5 @@ test("an inline database paints no background of its own", async ({ page, baseUR
   await waitForViewSettled(block);
   const body = block.locator(".odb-view-body").first();
   await expect(body).toHaveCSS("background-color", TRANSPARENT);
+  await expect(block.locator(".odb-topbar-actions, .odb-topbar-row [class*='actions']").first()).toHaveCSS("background-image", "none");
 });
