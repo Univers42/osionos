@@ -47,4 +47,4 @@ Upgrade the universal block drag handle (`[data-testid="block-drag-handle"]`) re
 - [x] `npm run test:quality` passes (0 errors).
 - [x] Drag handle and hover E2E tests pass.
 - [x] A11y visual tests pass with 0 violations.
-- [ ] Both micro-commits created with `-s` signed by `DJSurgeon`.
+- [x] Both micro-commits created with `-s` signed by `DJSurgeon`.
