@@ -16,6 +16,7 @@ import { Columns2, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react"
 import { Tooltip } from "@/shared/ui";
 import { useUserStore } from "@/features/auth";
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
+import { hasLocalTerminal, localPtyApi } from "@/features/ide/model/localPty";
 import { restartSandbox } from "@/features/ide/model/restartSandbox";
 import { useIdeOutputBus } from "@/features/ide/model/ideOutputBus";
 import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
@@ -28,6 +29,12 @@ import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";
 // Lazy so xterm.js (~250KB) loads only when the terminal first opens.
 const IdeTerminal = React.lazy(() =>
   import("@/features/ide/ui/IdeTerminal").then((m) => ({ default: m.IdeTerminal })),
+);
+
+// In the desktop app the panel is VS Code's own terminal on this computer (groot ADR 0038); the
+// app's xterm never loads there.
+const LocalVsCodeTerminal = React.lazy(() =>
+  import("@/features/ide/ui/LocalVsCodeTerminal").then((m) => ({ default: m.LocalVsCodeTerminal })),
 );
 
 // Lazy like the terminal: the debug panel pulls the DAP controller chunk.
@@ -59,16 +66,20 @@ const TerminalPane: React.FC = () => {
   const primary = useIdeDockStore((s) => s.primary);
   const secondary = useIdeDockStore((s) => s.secondary);
   const safeTerms = useIdeDockStore((s) => s.safeTerms);
+  // The preload is fixed for the window's life, so it is read once.
+  const [localPty] = React.useState(localPtyApi);
+  const terminal = (termId: string) =>
+    localPty ? <LocalVsCodeTerminal key={termId} api={localPty} /> : <IdeTerminal key={termId} termId={termId} safe={safeTerms.includes(termId)} />;
   return (
     <React.Suspense
       fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Starting terminal…</div>}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <IdeTerminal key={primary} termId={primary} safe={safeTerms.includes(primary)} />
+        {terminal(primary)}
       </div>
       {secondary && (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-[var(--osio-code-border)]">
-          <IdeTerminal key={secondary} termId={secondary} safe={safeTerms.includes(secondary)} />
+          {terminal(secondary)}
         </div>
       )}
     </React.Suspense>
@@ -92,16 +103,21 @@ const TerminalActions: React.FC = () => {
           <Plus size={14} />
         </button>
       </Tooltip>
-      <Tooltip label="Safe terminal (no ~/.bashrc or ~/.profile)" side="bottom">
-        <button type="button" aria-label="Safe terminal" onClick={() => dock().newSafeTerminal()} className={ICON_BTN}>
-          <ShieldCheck size={14} />
-        </button>
-      </Tooltip>
-      <Tooltip label="Restart box (clears /tmp; your files are kept)" side="bottom">
-        <button type="button" aria-label="Restart box" onClick={restartBox} className={ICON_BTN}>
-          <RotateCcw size={14} />
-        </button>
-      </Tooltip>
+      {/* The hosted sandbox's controls: on this computer there is no box to restart. */}
+      {!hasLocalTerminal() && (
+        <>
+          <Tooltip label="Safe terminal (no ~/.bashrc or ~/.profile)" side="bottom">
+            <button type="button" aria-label="Safe terminal" onClick={() => dock().newSafeTerminal()} className={ICON_BTN}>
+              <ShieldCheck size={14} />
+            </button>
+          </Tooltip>
+          <Tooltip label="Restart box (clears /tmp; your files are kept)" side="bottom">
+            <button type="button" aria-label="Restart box" onClick={restartBox} className={ICON_BTN}>
+              <RotateCcw size={14} />
+            </button>
+          </Tooltip>
+        </>
+      )}
       <Tooltip label={splitLabel} side="bottom">
         <button type="button" aria-label={splitLabel} onClick={() => (secondary ? dock().closeSecondary() : dock().splitTerminal())} className={ICON_BTN}>
           <Columns2 size={14} />

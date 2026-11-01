@@ -1,7 +1,8 @@
 // C3 of the desktop local terminal verdict (2026-10-31): a workspace page's tasks.json reaches the
 // sandbox PTY as `cd /workspace && ${command}`, where a `;` runs even when the cd fails. On this
-// computer that would run a collaborator's command in $HOME, so the local pty carries xterm input
-// and resize only: the run bus, tasks and the debugger never write to it. The page store, the api
+// computer that would run a collaborator's command in $HOME, so the local pty carries what is typed
+// into VS Code's terminal page and its resizes only: the run bus, tasks and the debugger never write
+// to it. The page store, the api
 // client and the user store do not load under node, so they are stubbed with one workspace.
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
@@ -27,8 +28,9 @@ registerHooks({
   },
 });
 
-const { fakePty, fakeTerm } = await import("./support/local-pty-fakes.ts");
-const { createLocalTerminalSession } = await import("../../src/features/ide/model/localTerminalSession.ts");
+const { fakePty } = await import("./support/local-pty-fakes.ts");
+const { handOffTerminalPort, ptyApiOverPort } = await import("../../src/features/ide/model/terminalPort.ts");
+const { createLocalPtyProcess } = await import("../../src/features/ide/model/localPtyProcess.ts");
 const { runDefaultTask, runInTerminal } = await import("../../src/features/ide/model/ideTasks.ts");
 const { useTerminalRunBus } = await import("../../src/features/ide/model/terminalRunBus.ts");
 
@@ -45,14 +47,16 @@ Reflect.set(globalThis, "__c3PageStore", {
   pageById: (id: string) => (id === TASKS_PAGE._id ? TASKS_PAGE : undefined),
 });
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 test("a default task from tasks.json makes 0 writes to the local pty", async () => {
   const pty = fakePty();
-  const view = fakeTerm();
   Reflect.set(globalThis, "osionosDesktop", { pty: pty.api });
-  const session = createLocalTerminalSession({ api: pty.api, term: view.term });
-  await settle();
+  // The desktop chain as it runs: the panel hands the page a port, VS Code's process drives it.
+  let pagePort: MessagePort | undefined;
+  const stop = handOffTerminalPort({ postMessage: (_m, _o, ports) => { pagePort = ports[0] as MessagePort; } }, pty.api, "app://osionos", {});
+  const shell = createLocalPtyProcess(ptyApiOverPort(pagePort as MessagePort), { data: () => {}, exit: () => {} });
+  assert.equal(await shell.start(80, 24), "started");
   const seq = useTerminalRunBus.getState().seq;
 
   await runDefaultTask("build");
@@ -67,8 +71,10 @@ test("a default task from tasks.json makes 0 writes to the local pty", async () 
   assert.equal(useTerminalRunBus.getState().seq, seq + 3);
   assert.deepEqual(pty.of("write"), []);
 
-  view.type("echo typed\r");
+  shell.input("echo typed\r");
+  await settle();
   assert.deepEqual(pty.of("write"), [["write", "p1", "echo typed\r"]]);
-  session.dispose();
+  stop();
+  pagePort?.close();
   Reflect.deleteProperty(globalThis, "osionosDesktop");
 });

@@ -13,6 +13,7 @@
     "mcp:claude": "bash scripts/docker-run.sh mcp-claude",
     "build": "bash scripts/docker-run.sh build",
     "build:ide": "bash scripts/docker-run.sh build-ide",
+    "build:terminal": "bash scripts/docker-run.sh build-terminal",
     "tokens": "bash scripts/docker-run.sh tokens",
     "preview": "bash scripts/docker-run.sh preview",
     "typecheck": "bash scripts/docker-run.sh typecheck",
