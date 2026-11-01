@@ -65,4 +65,4 @@ Upgrade the table edge add button and quick-count flyout in `src/features/block-
 - [x] `TableAddButton.tsx` updated with 24x24px dimensions and `:focus-visible` styling.
 - [x] `npm run test:quality` passes (0 errors).
 - [x] A11y tests pass with 0 violations.
-- [ ] Both micro-commits created with `-s` signed by `DJSurgeon`.
+- [x] Both micro-commits created with `-s` signed by `DJSurgeon`.
