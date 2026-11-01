@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/31 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/01 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,7 +21,7 @@ import { IconButton } from "@/shared/ui";
 import { machinesBridgeUrl } from "../api/machinesApi";
 import { pairCommand, serveCommand } from "../model/machineChoice";
 
-const CommandLine: React.FC<{ label: string; command: string }> = ({ label, command }) => {
+export const CommandLine: React.FC<{ label: string; command: string }> = ({ label, command }) => {
   const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle");
   async function copy() {
     try {

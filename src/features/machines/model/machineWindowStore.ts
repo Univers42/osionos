@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/31 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/01 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,12 +16,10 @@
 import { create } from "zustand";
 
 import { newNonce } from "@/features/ide/vscode/ideFrameProtocol";
-import { openSettings } from "@/features/settings/model/settingsNav";
 import { useSudoPromptStore } from "@/features/settings/ui/sudo/sudoPromptModel";
-import { mintMachineToken, verifyMachineIdentity } from "../api/machinesApi";
-import { chooseMachine } from "./machineChoice";
+import { mintMachineToken, verifyMachineIdentity, type Machine } from "../api/machinesApi";
 import { useMachinesStore } from "./machinesStore";
-import { createMachineWindow, type WindowPhase } from "./machineWindow";
+import { createMachineWindow, type OpenOutcome, type WindowPhase } from "./machineWindow";
 
 interface MachineWindowStore {
   phase: WindowPhase;
@@ -30,8 +28,26 @@ interface MachineWindowStore {
 
 export const useMachineWindowStore = create<MachineWindowStore>()(() => ({ phase: "idle", machineName: null }));
 
+// The node's id against this account's list. The cached list may predate a pairing made since, so
+// a miss reloads it once before saying "other-account"; a list that cannot load is "unavailable":
+// only a loaded list may say the machine is not ours.
+const findCached = (machineId: string) => useMachinesStore.getState().machines?.find((machine) => machine.id === machineId);
+
+async function lookupOwnMachine(machineId: string): Promise<Machine | "other-account" | "unavailable"> {
+  const cached = findCached(machineId);
+  if (cached) return cached;
+  await useMachinesStore.getState().refresh();
+  if (useMachinesStore.getState().machines === null) return "unavailable";
+  return findCached(machineId) ?? "other-account";
+}
+
 const controller = createMachineWindow({
   openWindow: (url, name) => globalThis.open(url, name),
+  lookup: lookupOwnMachine,
+  schedule: (fire, ms) => {
+    const timer = setTimeout(fire, ms);
+    return () => clearTimeout(timer);
+  },
   listen: (handler) => {
     const onMessage = (event: MessageEvent) => handler(event);
     globalThis.addEventListener("message", onMessage);
@@ -53,23 +69,7 @@ useSudoPromptStore.subscribe((state) => {
   if (useMachineWindowStore.getState().phase === "step-up") controller.retry();
 });
 
-export type OwnMachineOutcome = "opened" | "focused" | "blocked" | "pair" | "start" | "loading";
-
-/**
- * Call it inside the click. Opens the default online machine, or Settings › Machines when none is
- * paired; "start" means machines exist but none is online, for the caller to say so.
- */
-export function openOwnMachine(): OwnMachineOutcome {
-  const machines = useMachinesStore.getState().machines;
-  if (machines === null) {
-    globalThis.open("/machine", "osionos-machine");
-    return "loading";
-  }
-  const choice = chooseMachine(machines, null);
-  if (choice.kind === "open") return controller.open(choice.machine);
-  if (machines.length === 0) {
-    openSettings("machines");
-    return "pair";
-  }
-  return "start";
+/** Call it inside the click: it opens this computer's node, which names its machine itself. */
+export function openOwnMachine(): OpenOutcome {
+  return controller.open();
 }

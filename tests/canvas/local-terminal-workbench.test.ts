@@ -66,27 +66,30 @@ test("Terminal menu on the desktop opens the dock's terminal, never a machine wi
   assert.equal(useWorkbenchStore.getState().dockTab, "terminal");
 });
 
-test("Terminal menu on the web still opens the online machine's window", () => {
-  useMachinesStore.setState({ machines: [LAPTOP] });
-  useWorkbenchStore.setState({ dockOpen: false, dockTab: "problems" });
-  assert.equal(countWindowOpens(() => openWorkbenchTerminal("new")), 1);
-  assert.equal(useWorkbenchStore.getState().dockOpen, false);
+test("Terminal menu on the web opens this computer's node, and the dock's panel follows its window", () => {
+  for (const machines of [[LAPTOP], [], null]) {
+    useMachinesStore.setState({ machines });
+    useWorkbenchStore.setState({ dockOpen: false, dockTab: "problems" });
+    assert.equal(countWindowOpens(() => openWorkbenchTerminal("new")), 1, JSON.stringify(machines));
+    assert.equal(useWorkbenchStore.getState().dockOpen, true);
+    assert.equal(useWorkbenchStore.getState().dockTab, "terminal");
+  }
 });
 
-test("the status bar names this computer on the desktop, the machine on the web", () => {
+test("the status bar names this computer on the desktop and on the web", () => {
   let desktop = "";
   onDesktop(() => { desktop = renderToStaticMarkup(React.createElement(WorkbenchStatusBar)); });
   assert.match(desktop, /data-testid="local-terminal-chip"[^>]*>.*This computer/);
   assert.doesNotMatch(desktop, /machine-chip|sandbox-chip/);
   const web = renderToStaticMarkup(React.createElement(WorkbenchStatusBar));
-  assert.match(web, /data-testid="machine-chip"/);
+  assert.match(web, /data-testid="machine-chip"[^>]*>.*This computer/);
   assert.doesNotMatch(web, /local-terminal-chip/);
 });
 
 test("a desktop terminal panel shows no launcher or sandbox overlay", () => {
   let desktop = "";
   onDesktop(() => { desktop = renderToStaticMarkup(React.createElement(IdeTerminal)); });
-  assert.doesNotMatch(desktop, /role="status"|Terminal on laptop|Open terminal/);
+  assert.doesNotMatch(desktop, /role="status"|Terminal on this computer|Open terminal/);
   const web = renderToStaticMarkup(React.createElement(IdeTerminal));
-  assert.match(web, /Terminal on laptop/);
+  assert.match(web, /Terminal on this computer/);
 });

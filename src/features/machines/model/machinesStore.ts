@@ -6,16 +6,16 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/31 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/01 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-// The last machine list this tab saw, so a click (the Terminal action) can decide without a
-// request: a popup opens only inside the click itself. Settings > Machines and /machine write it
-// whenever they load; the workbench loads it once at start.
+// The last machine list this tab saw. Settings > Machines and /machine write it whenever they
+// load; the workbench loads it once at start; this computer's window checks the node it opened
+// against it, reloading it once on a miss.
 //
 // Caveat: this is a cache. A machine paired or removed in another tab or device is not seen here
-// until the next refresh, and a click before the first load finishes takes the dock's terminal.
+// until the next refresh: /machine can offer a machine removed since, and Settings can list it.
 
 import { create } from "zustand";
 
