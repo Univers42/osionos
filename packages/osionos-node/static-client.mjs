@@ -28,6 +28,8 @@ const ASSET_NAME = '([A-Za-z0-9_][A-Za-z0-9._-]*)';
 const ASSET = new RegExp(`^/assets/${ASSET_NAME}$`);
 const TERMINAL_ASSET = new RegExp(`^/terminal/assets/${ASSET_NAME}$`);
 const TERMINAL_PAGES = new Set(['/terminal/', '/terminal/index.html']);
+const EDITOR_ASSET = new RegExp(`^/editor/assets/${ASSET_NAME}$`);
+const EDITOR_PAGES = new Set(['/editor/', '/editor/index.html']);
 
 // 'wasm-unsafe-eval' is the TextMate grammar engine (oniguruma); 'unsafe-inline' is for styles
 // only, which the library injects at run time. Built-in extensions fetch their manifests as
@@ -50,6 +52,9 @@ export function terminalCsp(appOrigins) {
 		"connect-src 'self'", "frame-src 'none'", "base-uri 'none'", "form-action 'none'", `frame-ancestors ${appOrigins.join(' ')}`,
 	].join('; ');
 }
+
+/** The editor page's policy (editor on disk, F3): the terminal's, and the same reasons. */
+export const editorCsp = terminalCsp;
 
 // The desktop app's scheme: WHATWG gives a non-special scheme the origin "null", so it is matched
 // whole rather than parsed.
@@ -90,7 +95,7 @@ function sendAsset(req, res, dir, name, headers = {}) {
 }
 
 /** `terminalRoot` is the terminal page's build; without one, /terminal/ is a 404 like any path. */
-export function createClientHandler({ root, terminalRoot = null, appOrigins }) {
+export function createClientHandler({ root, terminalRoot = null, editorRoot = null, appOrigins }) {
 	if (!appOrigins?.length) throw new Error('at least one app origin is required');
 	for (const value of appOrigins) {
 		if (!exactOrigin(value)) throw new Error(`app origin must be a bare http(s) or app:// origin: ${JSON.stringify(value)}`);
@@ -104,6 +109,14 @@ export function createClientHandler({ root, terminalRoot = null, appOrigins }) {
 		return sendAsset(req, res, terminalRoot, TERMINAL_ASSET.exec(pathname)?.[1], terminalPolicy);
 	}
 
+	// A node without the page answers 404, and the app says to update (F16).
+	function serveEditor(req, res, pathname) {
+		const policy = { 'content-security-policy': editorCsp(appOrigins) };
+		if (!editorRoot) return notFound(res, policy);
+		if (EDITOR_PAGES.has(pathname)) return sendDocument(req, res, page(editorRoot), editorCsp(appOrigins));
+		return sendAsset(req, res, editorRoot, EDITOR_ASSET.exec(pathname)?.[1], policy);
+	}
+
 	return function serveClient(req, res) {
 		if (req.method !== 'GET' && req.method !== 'HEAD') {
 			res.writeHead(405, { 'content-type': 'text/plain' });
@@ -111,6 +124,7 @@ export function createClientHandler({ root, terminalRoot = null, appOrigins }) {
 		}
 		const pathname = req.url.split('?')[0];
 		if (pathname === '/terminal' || pathname.startsWith('/terminal/')) return serveTerminal(req, res, pathname);
+		if (pathname === '/editor' || pathname.startsWith('/editor/')) return serveEditor(req, res, pathname);
 		if (pathname === '/' || pathname === '/index.html') return sendDocument(req, res, page(root), documentCsp(appOrigins));
 		return sendAsset(req, res, root, ASSET.exec(pathname)?.[1]);
 	};

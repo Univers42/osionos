@@ -29,6 +29,7 @@ import { useIdeRevealBus } from "../model/ideRevealBus";
 import { useIdeSyncConflicts } from "../model/ideSyncConflicts";
 import { useTerminalRunBus } from "../model/terminalRunBus";
 import type { IDisposable } from "../model/monacoRuntime";
+import { attachBreakpoints } from "./monacoBreakpoints";
 import { replaceEditorText, useMonacoEditor, type EditorStatus } from "./useMonacoEditor";
 import { RunConsole } from "./RunConsole";
 import "./monacoEditor.css";
@@ -98,6 +99,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const runRef = React.useRef<() => void>(() => undefined);
   const formatRef = React.useRef<() => void>(() => undefined);
   const editorRef = useMonacoEditor(hostRef, {
+    attachGutter: attachBreakpoints,
     pageId,
     blockId,
     monacoId: lang.monacoId,

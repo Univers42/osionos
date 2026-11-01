@@ -14,6 +14,7 @@
     "build": "bash scripts/docker-run.sh build",
     "build:ide": "bash scripts/docker-run.sh build-ide",
     "build:terminal": "bash scripts/docker-run.sh build-terminal",
+    "build:editor": "bash scripts/docker-run.sh build-editor",
     "tokens": "bash scripts/docker-run.sh tokens",
     "preview": "bash scripts/docker-run.sh preview",
     "typecheck": "bash scripts/docker-run.sh typecheck",

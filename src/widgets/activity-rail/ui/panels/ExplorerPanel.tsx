@@ -16,6 +16,7 @@ import { FolderRail } from "@/widgets/home-variants/ui/HomeWorkspaceParts";
 import { WorkspaceExplorer } from "@/features/ide/ui/WorkspaceExplorer";
 import { useWorkspaceFileOps } from "@/features/ide/model/useWorkspaceFileOps";
 import { ExplorerRecents } from "./ExplorerRecents";
+import { ExplorerSources } from "./ExplorerSources";
 import { ExplorerViewSwitch } from "./ExplorerViewSwitch";
 import { useExplorerView } from "../../model/explorerView";
 import { useFetchActiveWorkspacePages } from "../../model/useFetchActiveWorkspacePages";
@@ -26,6 +27,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { useToastStore } from "@osionos/ui/primitives";
 import { ExplorerRowMenu } from "./ExplorerRowMenu";
+import { APP_EXPLORER_HOST } from "../../model/explorerHost";
 import type { ExplorerRowKind } from "@/features/ide/model/explorerRows";
 import type { ExplorerMenuRequest } from "@/features/ide/ui/useExplorerController";
 import { useCanInviteMembers } from "@/features/settings/people/useCanInviteMembers";
@@ -113,6 +115,7 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <ExplorerSources cloudName={workspaceName}>
       <ExplorerViewSwitch />
       {/* touch-action: pan-y keeps vertical scroll but reserves the drag gesture
           for our HTML5 DnD — without it, a draggable row low in this
@@ -134,10 +137,12 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
               onImportFolder={() => importRef.current?.click()}
               onExportZip={onExportZip}
               onRowMenu={setMenu}
+              host={APP_EXPLORER_HOST}
             />
           </>
         )}
       </nav>
+      </ExplorerSources>
       <SidebarFooter
         onOpenSettings={onOpenSettings}
         onOpenTrash={onOpenTrash}

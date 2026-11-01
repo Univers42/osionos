@@ -20,6 +20,8 @@ export interface TerminalAppLinkDeps {
   post: (message: IdeMessage, origin: string) => void;
   listen: (handler: (event: FrameEvent) => void) => () => void;
   whoami: (nonce: string) => Promise<IdeMessage | null>;
+  /** The editor page's own vocabulary from the app (editorFrameProtocol.ts); true when it was one. */
+  onAppMessage?: (data: unknown) => boolean;
 }
 
 export interface TerminalAppLink {
@@ -27,9 +29,13 @@ export interface TerminalAppLink {
   /** The dock's colours, when it sends them. */
   colors: Promise<TerminalColors>;
   report(state: IdeState): void;
+  /** The app's origin, once it has spoken. */
+  appOrigin(): string | null;
+  /** Posts to the pinned app only; before it has spoken, there is nobody to tell. */
+  tell(message: unknown): void;
 }
 
-export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami }: TerminalAppLinkDeps): TerminalAppLink | null {
+export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami, onAppMessage }: TerminalAppLinkDeps): TerminalAppLink | null {
   if (page.parent === page.self || page.parent !== page.top || appOrigins.length === 0) return null;
   let pinned: string | null = null;
   const send = (message: IdeMessage) => {
@@ -46,6 +52,10 @@ export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami
   listen((event) => {
     if (event.source !== page.parent) return;
     if (pinned ? event.origin !== pinned : !appOrigins.includes(event.origin)) return;
+    if (onAppMessage?.(event.data)) {
+      pinned ??= event.origin;
+      return;
+    }
     const data = event.data as { type?: unknown; colors?: unknown } | null;
     if (data?.type === TERMINAL_COLORS_MESSAGE) {
       if (colorsTaken) return;
@@ -64,5 +74,11 @@ export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami
     }
   });
   send({ type: "osionos-ide/ready", node });
-  return { credentials, colors, report: (state) => send({ type: "osionos-ide/state", state }) };
+  return {
+    credentials,
+    colors,
+    report: (state) => send({ type: "osionos-ide/state", state }),
+    appOrigin: () => pinned,
+    tell: (message) => { if (pinned) post(message as IdeMessage, pinned); },
+  };
 }

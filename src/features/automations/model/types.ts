@@ -27,6 +27,7 @@ export type CommandId =
   | "focusConversations"
   | "splitPane"
   | "toggleZenMode"
+  | "openFolder"
   | "zoomPaneIn"
   | "zoomPaneOut"
   | "zoomPaneReset"

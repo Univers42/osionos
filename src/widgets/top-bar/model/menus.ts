@@ -24,6 +24,8 @@ import { whiteboardAppUrl } from "@/shared/config/appUrls";
 import { consoleTab, homeTab, trashTab, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { hasLocalTerminal } from "@/features/ide/model/localPty";
+import { openMachineFolder } from "@/widgets/activity-rail/model/panelFocus";
 import { usePalette } from "./usePalette";
 import { whiteboardViewItems } from "./whiteboardMenuItems";
 import { openWorkbenchTerminal, workbenchViewMenu } from "@/widgets/workbench/model/workbenchMenuActions";
@@ -99,6 +101,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
         ...(isQuickCaptureEnabled()
           ? [{ id: "file.capture", label: "Quick capture", run: () => useQuickCapture.getState().setOpen(true), separatorAfter: true }]
           : []),
+        ...(hasLocalTerminal() ? [] : [{ id: "file.open-folder", label: "Open Folder…", accelerator: "⌘K ⌘O", run: openMachineFolder, separatorAfter: true }]),
         { id: "file.search", label: "Search…", accelerator: "⌘K", run: () => palette().openSearch(), separatorAfter: true },
         { id: "file.settings", label: "Settings", run: ctx.openSettings },
       ],

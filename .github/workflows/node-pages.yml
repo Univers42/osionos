@@ -1,4 +1,4 @@
-# The IDE and terminal pages osionos-node serves, prebuilt, so install.sh needs neither pnpm nor
+# The IDE, terminal and editor pages osionos-node serves, prebuilt, so install.sh needs neither pnpm nor
 # docker on the machine it runs on. One rolling release: the newest main that built.
 name: osionos-node pages
 
@@ -33,9 +33,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec vite build --config vite.ide.config.ts
       - run: pnpm exec vite build --config vite.terminal.config.ts
+      - run: pnpm exec vite build --config vite.editor.config.ts
       - name: Pack
         run: |
-          tar -czf osionos-node-pages.tar.gz dist-ide build/terminal
+          tar -czf osionos-node-pages.tar.gz dist-ide build/terminal build/editor
           sha256sum osionos-node-pages.tar.gz | sed 's/  .*/  pages.tar.gz/' > osionos-node-pages.tar.gz.sha256
       - name: Publish
         env:

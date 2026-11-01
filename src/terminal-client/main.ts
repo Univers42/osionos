@@ -5,6 +5,8 @@
 // each terminal talks to its pty host over that pty's own port. On the web it is served by this
 // computer's osionos-node and each terminal is a WebSocket to that node (web.ts). Framed anywhere
 // else, or never handed a port or a token, it draws nothing and takes no focus.
+import { EDITOR_CHANNEL } from "../features/machines/model/editorFrameProtocol";
+import { cdCommand } from "./cdCommand";
 import { ITerminalGroupService, IWorkbenchLayoutService, getService, initialize } from "@codingame/monaco-vscode-api";
 import "@codingame/monaco-vscode-theme-defaults-default-extension";
 import { SimpleTerminalBackend, SimpleTerminalProcess } from "@codingame/monaco-vscode-terminal-service-override";
@@ -21,8 +23,25 @@ const terminalEl = document.getElementById("terminal") as HTMLElement;
 const PLACEHOLDER_PID = 1;
 let nextProcessId = 0;
 
+// Caveat: the line goes to the newest shell whatever it is running; with vim or a build in the
+// foreground it lands there as keystrokes instead of moving the shell.
+let newestShell: { input(data: string): void } | null = null;
+let waitingLine: string | null = null;
+
+function typeInNewestShell(line: string): void {
+  if (newestShell) newestShell.input(line);
+  else waitingLine = line;
+}
+
+new BroadcastChannel(EDITOR_CHANNEL).addEventListener("message", (event) => {
+  if (event.data?.type !== "open-terminal" || typeof event.data.path !== "string") return;
+  const line = cdCommand(event.data.path);
+  if (line) typeInNewestShell(line);
+});
+
 class LocalShellProcess extends SimpleTerminalProcess {
   private readonly exited = new Emitter<number>();
+  private readonly typing = { input: (data: string) => this.input(data) };
   private readonly core;
   override onProcessExit = this.exited.event;
 
@@ -37,11 +56,18 @@ class LocalShellProcess extends SimpleTerminalProcess {
   async start() {
     const started = await this.core.start(this.size.cols, this.size.rows);
     if (started === "refused") return { message: "8 terminals are already open in this window. Close one to open another." };
-    return started === "failed" ? { message: "The shell on this computer could not start." } : undefined;
+    if (started === "failed") return { message: "The shell on this computer could not start." };
+    newestShell = this.typing;
+    if (waitingLine) this.input(waitingLine);
+    waitingLine = null;
+    return undefined;
   }
   input(data: string) { this.core.input(data); }
   resize(cols: number, rows: number) { this.core.resize(cols, rows); }
-  shutdown() { this.core.shutdown(); }
+  shutdown() {
+    if (newestShell === this.typing) newestShell = null;
+    this.core.shutdown();
+  }
   // VS Code passes the characters it rendered; the base class declares no parameter.
   override acknowledgeDataEvent(charCount?: number) { this.core.ack(charCount ?? 0); }
   // The desktop picks the cwd ($HOME) and does not report it; VS Code wants a string, not undefined.
