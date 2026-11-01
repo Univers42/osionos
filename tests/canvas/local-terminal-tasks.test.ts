@@ -28,8 +28,9 @@ registerHooks({
   },
 });
 
-const { fakePty } = await import("./support/local-pty-fakes.ts");
-const { handOffTerminalPort, ptyApiOverPort } = await import("../../src/features/ide/model/terminalPort.ts");
+const { fakePty, fakePtyHost } = await import("./support/local-pty-fakes.ts");
+const { APP_ORIGIN, PTY_PORT_MESSAGE, ptyApiOverPort } = await import("../../src/features/ide/model/terminalPort.ts");
+const { handOffTerminalPort } = await import("../../src/features/ide/model/ptyPortRouter.ts");
 const { createLocalPtyProcess } = await import("../../src/features/ide/model/localPtyProcess.ts");
 const { runDefaultTask, runInTerminal } = await import("../../src/features/ide/model/ideTasks.ts");
 const { useTerminalRunBus } = await import("../../src/features/ide/model/terminalRunBus.ts");
@@ -51,10 +52,19 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 test("a default task from tasks.json makes 0 writes to the local pty", async () => {
   const pty = fakePty();
+  const host = fakePtyHost(pty.calls);
   Reflect.set(globalThis, "osionosDesktop", { pty: pty.api });
-  // The desktop chain as it runs: the panel hands the page a port, VS Code's process drives it.
+  // The desktop chain as it runs: the panel hands the page a control port, the preload posts the
+  // pty's own port to the window, the panel routes it, VS Code's process writes on it.
+  const self = {};
   let pagePort: MessagePort | undefined;
-  const stop = handOffTerminalPort({ postMessage: (_m, _o, ports) => { pagePort = ports[0] as MessagePort; } }, pty.api, "app://osionos", {});
+  const router = handOffTerminalPort({ postMessage: (_m, _o, ports) => { pagePort = ports[0] as MessagePort; } }, pty.api, {}, self);
+  const create = pty.api.create;
+  pty.api.create = async (cols, rows) => {
+    const id = await create(cols, rows);
+    if (id) setTimeout(() => router.offer({ source: self, origin: APP_ORIGIN, data: { type: PTY_PORT_MESSAGE, id }, ports: [host.open(id)] }), 0);
+    return id;
+  };
   const shell = createLocalPtyProcess(ptyApiOverPort(pagePort as MessagePort), { data: () => {}, exit: () => {} });
   assert.equal(await shell.start(80, 24), "started");
   const seq = useTerminalRunBus.getState().seq;
@@ -72,9 +82,11 @@ test("a default task from tasks.json makes 0 writes to the local pty", async () 
   assert.deepEqual(pty.of("write"), []);
 
   shell.input("echo typed\r");
-  await settle();
+  for (let waited = 0; pty.of("write").length === 0 && waited < 2000; waited += 5) await settle();
   assert.deepEqual(pty.of("write"), [["write", "p1", "echo typed\r"]]);
-  stop();
+  shell.shutdown();
+  router.stop();
   pagePort?.close();
+  host.closeAll();
   Reflect.deleteProperty(globalThis, "osionosDesktop");
 });

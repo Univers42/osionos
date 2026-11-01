@@ -84,10 +84,12 @@ test("the status bar names this computer on the desktop, the machine on the web"
   assert.doesNotMatch(web, /local-terminal-chip/);
 });
 
-test("the desktop terminal panel is VS Code's terminal page, with no launcher or sandbox overlay", () => {
+test("the desktop terminal panel frames VS Code's terminal page on its own origin", () => {
   const desktop = renderToStaticMarkup(React.createElement(LocalVsCodeTerminal, { api: fakePty().api }));
-  assert.equal(TERMINAL_PAGE_SRC, "/terminal/index.html");
-  assert.match(desktop, /<iframe src="\/terminal\/index.html" title="Terminal"/);
+  assert.equal(TERMINAL_PAGE_SRC, "app://terminal/index.html");
+  // No `name` (a named frame can be targeted by window.open), and only the clipboard (T4).
+  assert.match(desktop, /<iframe src="app:\/\/terminal\/index.html" title="Terminal" allow="clipboard-read; clipboard-write"/);
+  assert.doesNotMatch(desktop, / name=/);
   assert.doesNotMatch(desktop, /role="status"|Terminal on laptop|Open terminal/);
   const web = renderToStaticMarkup(React.createElement(IdeTerminal));
   assert.match(web, /Terminal on laptop/);

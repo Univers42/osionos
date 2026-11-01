@@ -68,12 +68,21 @@ const TerminalPane: React.FC = () => {
   const safeTerms = useIdeDockStore((s) => s.safeTerms);
   // The preload is fixed for the window's life, so it is read once.
   const [localPty] = React.useState(localPtyApi);
-  const terminal = (termId: string) =>
-    localPty ? <LocalVsCodeTerminal key={termId} api={localPty} /> : <IdeTerminal key={termId} termId={termId} safe={safeTerms.includes(termId)} />;
+  const fallback = <div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Starting terminal…</div>;
+  // On the desktop, VS Code's page holds every terminal as its own tabs and splits, and its port
+  // router assumes one panel per window: one frame, never remounted by the dock's terminal ids.
+  if (localPty) {
+    return (
+      <React.Suspense fallback={fallback}>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <LocalVsCodeTerminal api={localPty} />
+        </div>
+      </React.Suspense>
+    );
+  }
+  const terminal = (termId: string) => <IdeTerminal key={termId} termId={termId} safe={safeTerms.includes(termId)} />;
   return (
-    <React.Suspense
-      fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Starting terminal…</div>}
-    >
+    <React.Suspense fallback={fallback}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {terminal(primary)}
       </div>
