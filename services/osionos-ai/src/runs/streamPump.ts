@@ -252,6 +252,9 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			maxRetries: input.maxRetries ?? SDK_DEFAULT_RETRIES,
 			// The SDK must never fetch a URL: the images are bytes we fetched.
 			experimental_download: refuseDownload,
+			// The failure comes back as an `error` part. The SDK's default also
+			// prints it whole: the body of the provider and our prompt, in the logs.
+			onError: () => undefined,
 			...(input.providerOptions ? { providerOptions: input.providerOptions } : {}),
 			// The tools, and the ceiling of the loop: the model may call a
 			// tool, and the answer comes after the tool.
