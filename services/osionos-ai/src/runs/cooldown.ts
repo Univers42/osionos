@@ -59,7 +59,7 @@ export function restSeconds(asked: number | undefined): number {
 	return asked === undefined ? DEFAULT_REST_SECONDS : Math.min(asked, MAX_REST_SECONDS);
 }
 
-function headerOf(headers: Record<string, string> | undefined, name: string): string | undefined {
+export function headerOf(headers: Record<string, string> | undefined, name: string): string | undefined {
 	if (!headers) return undefined;
 	for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === name) return value;
 	return undefined;
