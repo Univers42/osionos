@@ -138,7 +138,13 @@ link_home server
 # curl | sh gives this script the pipe as stdin; pairing asks its question on the terminal.
 NODE=$(command -v node)
 CLI=$SRC/packages/osionos-node/cli.mjs
-"$NODE" "$CLI" connect --pair-only "$@" </dev/tty
+if [ -f "$HOME_DIR/machine.json" ]; then
+    : # Paired already: nothing to ask, and a run from cron or a service has no terminal.
+elif ! (: </dev/tty) 2>/dev/null; then
+    fail "pairing needs a terminal to confirm in: run this from one"
+else
+    "$NODE" "$CLI" connect --pair-only "$@" </dev/tty
+fi
 
 # The start command, with each argument quoted, so a login can run it with nobody at a terminal.
 START=$HOME_DIR/start.sh
