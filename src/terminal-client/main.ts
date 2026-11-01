@@ -1,19 +1,22 @@
-// The terminal page (groot ADR 0038, ADR 0039): VS Code's own terminal, drawn in the app's terminal
-// panel, on this computer's shell. It runs on app://terminal, in its own renderer process. It reaches
+// The terminal page (groot ADR 0038, ADR 0039): VS Code's own terminal panel (tabs, toolbar, find,
+// splits, several terminals), drawn in the app's dock, on this computer's shells. It runs on app://terminal, in its own renderer process. It reaches
 // the shell only through the control port the panel hands to the iframe it rendered (devil amendment
 // A1), and each terminal talks to its pty host over that pty's own port. Framed anywhere else, or
 // never handed a port, it draws nothing and takes no focus.
-import { ITerminalService, getService, initialize } from "@codingame/monaco-vscode-api";
+import { ITerminalGroupService, IWorkbenchLayoutService, getService, initialize } from "@codingame/monaco-vscode-api";
 import "@codingame/monaco-vscode-theme-defaults-default-extension";
 import { SimpleTerminalBackend, SimpleTerminalProcess } from "@codingame/monaco-vscode-terminal-service-override";
+import { Parts, attachPart, onPartVisibilityChange } from "@codingame/monaco-vscode-views-service-override";
 import { Emitter } from "@codingame/monaco-vscode-api/vscode/vs/base/common/event";
+import { ProcessPropertyType } from "@codingame/monaco-vscode-api/vscode/vs/platform/terminal/common/terminal";
 import { createLocalPtyProcess } from "../features/ide/model/localPtyProcess";
 import { acceptTerminalPort, ptyApiOverPort, terminalColorsFrom, type TerminalColors, type TerminalPtyApi } from "../features/ide/model/terminalPort";
-import { terminalModeServices } from "./services";
+import { terminalModeServices, terminalWorkbenchOptions } from "./services";
 import "./terminal.css";
 
 const terminalEl = document.getElementById("terminal") as HTMLElement;
 const PLACEHOLDER_PID = 1;
+let nextProcessId = 0;
 
 class LocalShellProcess extends SimpleTerminalProcess {
   private readonly exited = new Emitter<number>();
@@ -24,7 +27,7 @@ class LocalShellProcess extends SimpleTerminalProcess {
     const output = new Emitter<string>();
     // VS Code queues every keystroke until the process reports a non-zero pid
     // (terminalProcessManager write()); the desktop keeps the real one, so this stands in for it.
-    super(1, PLACEHOLDER_PID, "", output.event);
+    super(++nextProcessId, PLACEHOLDER_PID, "", output.event);
     this.core = createLocalPtyProcess(api, { data: (data) => output.fire(data), exit: (code) => this.exited.fire(code) });
   }
 
@@ -38,6 +41,10 @@ class LocalShellProcess extends SimpleTerminalProcess {
   shutdown() { this.core.shutdown(); }
   // VS Code passes the characters it rendered; the base class declares no parameter.
   override acknowledgeDataEvent(charCount?: number) { this.core.ack(charCount ?? 0); }
+  // The desktop picks the cwd ($HOME) and does not report it; VS Code wants a string, not undefined.
+  // (The base class declares it without the property it is asked for.)
+  override refreshProperty = (async (property: ProcessPropertyType) =>
+    property === ProcessPropertyType.Cwd || property === ProcessPropertyType.InitialCwd ? "" : undefined) as unknown as SimpleTerminalProcess["refreshProperty"];
   sendSignal() { /* the shell gets Ctrl+C as input, as in a real terminal */ }
   clearBuffer() { /* VS Code clears its own view; the shell keeps no buffer */ }
 }
@@ -57,32 +64,35 @@ const isLight = (hex: string): boolean => {
   return 0.299 * r + 0.587 * g + 0.114 * b > 128;
 };
 
-function terminalTheme(colors: TerminalColors) {
+function terminalSettings(colors: TerminalColors) {
   const customizations: Record<string, string> = {};
-  if (colors.background) customizations["terminal.background"] = colors.background;
+  if (colors.background) {
+    customizations["terminal.background"] = colors.background;
+    customizations["panel.background"] = colors.background;
+  }
   if (colors.foreground) customizations["terminal.foreground"] = colors.foreground;
   if (colors.cursor) customizations["terminalCursor.foreground"] = colors.cursor;
   if (colors.selection) customizations["terminal.selectionBackground"] = colors.selection;
   return {
     "workbench.colorTheme": colors.background && isLight(colors.background) ? "Default Light Modern" : "Default Dark Modern",
     "workbench.colorCustomizations": customizations,
+    // The dock owns closing; the last terminal closed leaves VS Code's panel with its "+" in place.
+    "terminal.integrated.hideOnLastClosed": false,
   };
 }
 
 async function start(api: TerminalPtyApi, colors: TerminalColors) {
   if (colors.background) document.body.style.background = colors.background;
-  await initialize(terminalModeServices(new LocalShellBackend(api) as never), undefined, {
-    configurationDefaults: terminalTheme(colors),
-    workspaceProvider: { trusted: false, workspace: undefined, open: async () => false },
-  } as never);
-  const terminals = await getService(ITerminalService);
-  const terminal = await terminals.createTerminal({});
-  terminal.attachToElement(terminalEl);
-  terminal.setVisible(true);
-  const layout = () => terminal.layout({ width: terminalEl.clientWidth, height: terminalEl.clientHeight });
-  new ResizeObserver(layout).observe(terminalEl);
-  layout();
-  terminal.focus();
+  await initialize(terminalModeServices(new LocalShellBackend(api) as never), undefined, terminalWorkbenchOptions(terminalSettings(colors)) as never);
+  const layout = await getService(IWorkbenchLayoutService);
+  // VS Code's panel is the whole page: hiding it would leave the dock blank.
+  onPartVisibilityChange(Parts.PANEL_PART, (visible) => {
+    if (!visible) layout.setPartHidden(false, Parts.PANEL_PART);
+  });
+  attachPart(Parts.PANEL_PART, terminalEl);
+  layout.setPartHidden(false, Parts.PANEL_PART);
+  // Showing the terminal view with no terminal starts one, as in VS Code.
+  await (await getService(ITerminalGroupService)).showPanel(true);
 }
 
 // Only a frame of the app's own top page, and only the first port it hands over (A1, A2).
