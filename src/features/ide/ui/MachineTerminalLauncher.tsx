@@ -21,6 +21,7 @@ import { Button } from "@/shared/ui";
 import { thisComputerPanel } from "@/features/machines/model/machineChoice";
 import { openOwnMachine, useMachineWindowStore } from "@/features/machines/model/machineWindowStore";
 import { MachineCommands } from "@/features/machines/ui/MachineCommands";
+import { PairCodeField } from "@/features/machines/ui/PairCodeField";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { CODE_BUTTON, StateBlock } from "./ExplorerStates";
 
@@ -41,6 +42,7 @@ export const MachineTerminalLauncher: React.FC = () => {
         {panel.command && (
           <div className="mt-3 text-left">
             <MachineCommands name="this-computer" />
+            <div className="mt-3"><PairCodeField onPaired={openThisComputer} /></div>
           </div>
         )}
       </StateBlock>
