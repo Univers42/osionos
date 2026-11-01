@@ -75,11 +75,15 @@ export function createPtyService({ ideOrigin, ownerId, verifySession, isRevoked,
 		conn.on('message', (data, isBinary) => apply(record, data, isBinary));
 		conn.on('close', () => end(record));
 		const send = (message) => { if (!record.ended) conn.send(JSON.stringify(message)); };
+		// The frame reads nothing before `opened`, and a shell writes as soon as it starts (its prompt,
+		// a cursor-position query it then waits on), so its output waits here until `opened` has gone.
+		let early = [];
+		const toFrame = (message) => { if (early) early.push(message); else send(message); };
 		let shell;
 		try {
 			shell = await host.spawn({ cols: auth.cols, rows: auth.rows }, {
-				data: (data) => send({ op: 'data', data }),
-				exit: (exitCode) => { send({ op: 'exit', exitCode }); conn.close(1000); },
+				data: (data) => toFrame({ op: 'data', data }),
+				exit: (exitCode) => { toFrame({ op: 'exit', exitCode }); if (!early) conn.close(1000); },
 			});
 		} catch { shell = null; }
 		if (record.ended) return shell?.kill();
@@ -89,6 +93,10 @@ export function createPtyService({ ideOrigin, ownerId, verifySession, isRevoked,
 		record.session = found;
 		found.conns.add(conn);
 		send(auth.kind === 'token' ? { op: 'opened', secret: found.secret } : { op: 'opened' });
+		const held = early;
+		early = null;
+		for (const message of held) send(message);
+		if (held.some((message) => message.op === 'exit')) conn.close(1000);
 	}
 
 	/** A socket that passed the upgrade: it has 5 s and 4 KiB to open a shell. */

@@ -290,3 +290,19 @@ test('a host that cannot start a shell closes the socket with 4503 and frees the
 	assert.equal((await open(origin, { token: mint(base) })).closeCode, 4503);
 	assert.equal(origin.pty.counts().shells, 0);
 });
+
+// Owner 2026-11-01: the shell opened but sat stuck. The frame ignores everything before `opened`, and
+// the node sent the shell's first output (its prompt, its terminal queries) before it: lost, so a
+// shell that waits on its terminal's answer never got one.
+test('the frame gets opened before any output, and the shell\'s first output is not lost', async (t) => {
+	const { base, origin, host } = await world(t);
+	const spawn = host.spawn;
+	host.spawn = async (size, events) => {
+		const shell = await spawn(size, events);
+		events.data('\u001b[6nPROMPT> ');
+		return shell;
+	};
+	const conn = await open(origin, { token: mint(base) });
+	assert.deepEqual(conn.sent.map((message) => message.op), ['opened', 'data']);
+	assert.equal(conn.sent[1].data, '\u001b[6nPROMPT> ');
+});
