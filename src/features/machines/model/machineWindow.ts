@@ -24,10 +24,14 @@ export type OpenOutcome = "opened" | "focused" | "blocked";
 /** osionos-node's default listen address (packages/osionos-node/cli.mjs), a loopback IDE origin. */
 export const LOCAL_NODE_ORIGIN = "http://127.0.0.1:4100";
 
-// Caveat: a node that is up but slow (a cold disk, a loaded machine) can miss this and read as
-// "not running"; "Check again" opens it once more. The page sends `ready` from its light entry,
-// before the VS Code bundle is requested, so the bundle's size is not in this number.
-export const READY_TIMEOUT_MS = 4000;
+// Caveat: a slow cold load (a cold disk, a loaded machine, a slow popup) can miss this and read as
+// "not running" while the node is up; "Check again" opens it once more. The page sends `ready` from
+// its light entry, before the VS Code bundle is requested, which is what makes a short bound safe.
+// Measured 2026-11-01, window.open to ready, fresh browser context each run (cold HTTP cache),
+// 20 runs, headless Chromium on the owner's laptop against a loopback node: light entry p50 62-74
+// ms, max 80-113 ms; the page that sent ready after the bundle, p50 838 ms, max 1037 ms. 3 s is
+// ~25x the light entry's worst run and ~3x the old page's. A headed popup was not measured.
+export const READY_TIMEOUT_MS = 3000;
 
 type WindowLike = { closed: boolean; focus(): void; close(): void; postMessage(message: unknown, origin: string): void };
 
