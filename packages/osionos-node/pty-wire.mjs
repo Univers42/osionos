@@ -20,6 +20,9 @@ export const PTY_LIMITS = Object.freeze({
 	maxPending: 4,
 	maxWrite: 65536,
 	maxSize: 1000,
+	// Caveat: checked on the first message once it has arrived. ws's maxPayload is one per server,
+	// so before that check an unauthenticated socket may make the node buffer one frame of up to
+	// maxPayload (~384 KiB); with at most 4 pending sockets that is ~1.5 MiB, then a 4401.
 	maxAuthBytes: 4096,
 	// Every character of the largest write JSON-escaped to six bytes (`\u0000`), plus the envelope.
 	maxPayload: 65536 * 6 + 64,
