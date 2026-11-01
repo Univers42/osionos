@@ -18,9 +18,9 @@ import React from "react";
 import { Laptop } from "lucide-react";
 import { Button } from "@/shared/ui";
 
-import { serveCommand, thisComputerPanel } from "@/features/machines/model/machineChoice";
+import { thisComputerPanel } from "@/features/machines/model/machineChoice";
 import { openOwnMachine, useMachineWindowStore } from "@/features/machines/model/machineWindowStore";
-import { CommandLine } from "@/features/machines/ui/MachineCommands";
+import { MachineCommands } from "@/features/machines/ui/MachineCommands";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { CODE_BUTTON, StateBlock } from "./ExplorerStates";
 
@@ -39,9 +39,9 @@ export const MachineTerminalLauncher: React.FC = () => {
       <StateBlock icon={Laptop} title={panel.title} tone="code" actions={actions}>
         <p>{panel.detail}</p>
         {panel.command && (
-          <ul className="mt-3 text-left">
-            <CommandLine label="Start osionos-node on this computer" command={serveCommand(globalThis.location.origin)} />
-          </ul>
+          <div className="mt-3 text-left">
+            <MachineCommands name="this-computer" />
+          </div>
         )}
       </StateBlock>
     </div>

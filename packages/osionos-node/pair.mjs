@@ -53,6 +53,7 @@ export async function pairMachine({ bridge, name, file, platform, fetchImpl = fe
 	if (start.status !== 200) throw new Error(`the bridge refused to start pairing (${start.status} ${start.body.code ?? ''})`.trim());
 	say(`Open osionos → Settings → Machines → Add a machine, and enter: ${start.body.code}`);
 	say(`Check that the app shows this fingerprint: ${fingerprint(publicKeyRaw)}`);
+	say('Keep this running: it finishes here once you approve it in the app.');
 	const approved = await pollUntilApproved({ fetchImpl, bridge: origin, pairId: start.body.pairId, privateKey, interval: start.body.interval ?? 5, sleep });
 	say(`Approved by the account ${approved.accountEmail}.`);
 	if (acceptAccount !== undefined) {
