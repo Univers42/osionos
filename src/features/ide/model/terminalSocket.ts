@@ -66,10 +66,15 @@ const readMessage = (data: unknown): Record<string, unknown> | null => {
 
 // After the opening, the socket is this shell's port. A drop the node never explained (it stopped,
 // the tab lost the network) still ends the terminal, as an exit, so VS Code does not sit on it.
+// The handler lives behind an accessor: with a plain `onmessage: null` field, Rollup folded the
+// field to null and deleted both calls below, so the bundled page dropped every byte the shell sent
+// (2026-11-01; tests/canvas/terminal-socket-bundled.test.ts).
 function portOver(socket: SocketLike): PortLike {
   let exited = false;
+  let deliver: PortLike["onmessage"] = null;
   const port: PortLike = {
-    onmessage: null,
+    get onmessage() { return deliver; },
+    set onmessage(handler) { deliver = handler; },
     postMessage: (message: unknown) => socket.send(JSON.stringify(message)),
     close: () => socket.close(),
     start: () => {},
@@ -78,10 +83,10 @@ function portOver(socket: SocketLike): PortLike {
     const message = readMessage(event.data);
     if (!message) return;
     if (message.op === "exit") exited = true;
-    port.onmessage?.({ data: message } as MessageEvent);
+    deliver?.({ data: message } as MessageEvent);
   };
   socket.onclose = () => {
-    if (!exited) port.onmessage?.({ data: { op: "exit", exitCode: 1 } } as MessageEvent);
+    if (!exited) deliver?.({ data: { op: "exit", exitCode: 1 } } as MessageEvent);
   };
   return port;
 }
