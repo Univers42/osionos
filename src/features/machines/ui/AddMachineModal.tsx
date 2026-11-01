@@ -74,7 +74,7 @@ const ClaimForm: React.FC<{ onClaimed: (claim: PairClaim) => void; onClose: () =
   );
 };
 
-const ClaimReview: React.FC<{ claim: PairClaim; onApproved: () => void; onClose: () => void }> = ({ claim, onApproved, onClose }) => {
+export const ClaimReview: React.FC<{ claim: PairClaim; onApproved: () => void; onClose: () => void }> = ({ claim, onApproved, onClose }) => {
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const warning = pairWarning(claim);
