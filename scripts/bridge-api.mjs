@@ -4179,9 +4179,11 @@ async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	let mentions = [];
 	if (title) {
 		const excluded = new Set([pageId, ...sourceIds]);
-		// Ponytail: limit=20 applies before the read filter, so mentions can under-report;
-		// every workspace chunk answers its own 20 and the list is cut back to 20 readable ones.
-		const hits = (await readInChunks(accessible, async (chunk) => {
+		// A title is usually a common word, so an unlinked mention only means something inside
+		// the page's own workspace: `Sales` used to list shell scripts from the owner's other
+		// workspaces (#261). The linked list above keeps every workspace: a link is explicit.
+		// Caveat: limit=20 applies before the read filter, so mentions can under-report.
+		const hits = (await readInChunks([row.workspace_id], async (chunk) => {
 			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('workspace_id', chunk)}&archived_at=is.null&search_doc=wfts(english).${encodeURIComponent(`"${title}"`)}&select=${BACKLINK_SELECT}&limit=20`).catch(() => []);
 			return Array.isArray(rows) ? rows : [];
 		})).flat();
