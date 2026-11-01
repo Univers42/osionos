@@ -84,6 +84,8 @@ export interface PageConfig {
   showOutline: boolean;
   /** The property rows under the title; on unless the page turns them off. */
   showProperties: boolean;
+  /** The In folder / Mentions / Related block under them; on unless turned off (#250). */
+  showConnections: boolean;
   locked: boolean;
   presentationMode: boolean;
   rawMode: boolean;
@@ -127,6 +129,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
   fullWidth: false,
   showOutline: true,
   showProperties: true,
+  showConnections: true,
   locked: false,
   presentationMode: false,
   rawMode: false,
