@@ -41,10 +41,12 @@ function documentCsp(appOrigins) {
 }
 
 /** The terminal page's policy (W12): its own origin only, no gallery, no frame, no form. Styles
- *  are injected by VS Code at run time; its icons and font are files of the build. */
+ *  are injected by VS Code at run time; its icons and font are files of the build. VS Code starts
+ *  its own module workers through a blob: bootstrap (measured 2026-11-01, Chromium 156: one
+ *  worker-src violation without it), as on the desktop's terminal origin. */
 export function terminalCsp(appOrigins) {
 	return [
-		"default-src 'none'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", "font-src 'self'", "img-src 'self' data: blob:",
+		"default-src 'none'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", "font-src 'self'", "img-src 'self' data: blob:", "worker-src 'self' blob:",
 		"connect-src 'self'", "frame-src 'none'", "base-uri 'none'", "form-action 'none'", `frame-ancestors ${appOrigins.join(' ')}`,
 	].join('; ');
 }
