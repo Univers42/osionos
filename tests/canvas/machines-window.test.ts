@@ -18,12 +18,13 @@ const MC1 = "osionos_mc1.abcdefgh.p.s";
 
 type Lookup = Machine | "other-account" | "unavailable";
 
-function world({ blocked = false, mint = { kind: "ok", token: MC1 } as const, lookup = LAPTOP as Lookup } = {}) {
+function world({ blocked = false, mint = { kind: "ok", token: MC1 } as const, lookup = LAPTOP as Lookup, machines = [] as Machine[] | null } = {}) {
   const posted: Array<{ message: unknown; origin: string }> = [];
   const opened: Array<{ url: string; name: string }> = [];
   const phases: Array<{ phase: string; name: string | null }> = [];
   const minted: string[] = [];
   const verified: string[] = [];
+  const looked: string[] = [];
   const timers: Array<{ fn: () => void; ms: number; cancelled: boolean }> = [];
   let handler: ((event: { data: unknown; origin: string; source: unknown }) => void) | null = null;
   const win = {
@@ -35,7 +36,8 @@ function world({ blocked = false, mint = { kind: "ok", token: MC1 } as const, lo
   const controller = createMachineWindow({
     openWindow: (url, name) => { opened.push({ url, name }); return blocked ? null : win; },
     listen: (next) => { handler = next; return () => { handler = null; }; },
-    lookup: async () => lookup,
+    machines: () => machines,
+    lookup: async (id) => { looked.push(id); return lookup; },
     mint: async (id) => { minted.push(id); return minted.length === 1 ? mint : { kind: "ok", token: MC1 }; },
     verify: async (id) => { verified.push(id); return "ok"; },
     nonce: () => NONCE,
@@ -46,7 +48,7 @@ function world({ blocked = false, mint = { kind: "ok", token: MC1 } as const, lo
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
   const expire = () => { for (const timer of timers) if (!timer.cancelled) timer.fn(); };
   const last = () => phases.at(-1)?.phase;
-  return { controller, win, posted, opened, phases, minted, verified, timers, fromWindow, settle, expire, last };
+  return { controller, win, posted, opened, phases, minted, verified, looked, timers, fromWindow, settle, expire, last };
 }
 
 test("the window opens this computer's node, with no machine id in the address", () => {
@@ -56,6 +58,30 @@ test("the window opens this computer's node, with no machine id in the address",
   assert.equal(w.controller.open(), "opened");
   assert.deepEqual(w.opened, [{ url: "http://127.0.0.1:4100/?local=1", name: "osionos-machine-local" }]);
   assert.equal(w.last(), "connecting");
+});
+
+// A node installed before local=1 serves a page that reads only `node`; without it, it never sends
+// ready. The app names the account's machine for it; the claim and identity checks still decide.
+test("with a machine on the account the address also names it, for nodes installed before local=1", () => {
+  assert.equal(localWindowUrl(LAPTOP.id), `http://127.0.0.1:4100/?local=1&node=${LAPTOP.id}`);
+  const w = world({ machines: [LAPTOP] });
+  w.controller.open();
+  assert.deepEqual(w.opened, [{ url: `http://127.0.0.1:4100/?local=1&node=${LAPTOP.id}`, name: "osionos-machine-local" }]);
+  for (const machines of [[], null]) {
+    const none = world({ machines });
+    none.controller.open();
+    assert.equal(none.opened[0].url, "http://127.0.0.1:4100/?local=1", String(machines));
+  }
+});
+
+test("a node naming another machine than the hint is still checked by its own id", async () => {
+  const w = world({ machines: [LAPTOP], lookup: "other-account" });
+  w.controller.open();
+  w.fromWindow({ type: "osionos-ide/ready", node: "m-zzzzzzzzzzzzzzzz" });
+  await w.settle(); await w.settle();
+  assert.deepEqual(w.looked, ["m-zzzzzzzzzzzzzzzz"]);
+  assert.equal(w.last(), "other-account");
+  assert.deepEqual(w.minted, []);
 });
 
 test("one click carries the whole handshake for the machine the node names", async () => {

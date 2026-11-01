@@ -68,11 +68,19 @@ test("a command that never settles fails with its name after the bound (C13)", a
 // own node who it is, so computer B never asks its loopback for computer A's machine.
 test("the local page URL is exactly local=1, and the node's self answer names one machine id", () => {
   assert.equal(isLocalOpen("?local=1"), true);
-  for (const search of ["", "?local=0", "?local=1&node=m-abcdefghijklmnop", "?local=1&local=1", "?local=1&folder=/x", "?node=m-abcdefghijklmnop"]) {
+  for (const search of ["", "?local=0", "?local=1&local=1", "?local=1&folder=/x", "?local=1&node=a&node=b", "?node=m-abcdefghijklmnop"]) {
     assert.equal(isLocalOpen(search), false, search);
   }
   assert.equal(readSelf({ paired: true, machineId: "m-abcdefghijklmnop" }), "m-abcdefghijklmnop");
   for (const body of [null, {}, { paired: false, machineId: "m-abcdefghijklmnop" }, { paired: true, machineId: "laptop" }, { paired: true }]) {
     assert.equal(readSelf(body), null, JSON.stringify(body));
   }
+});
+
+// The app adds `node=<id>` for pages installed before local=1, which read only `node`. Under
+// local=1 this page still names itself, whatever id the app guessed.
+test("under local=1 the page ignores the node param the app adds for older pages", () => {
+  assert.equal(isLocalOpen("?local=1&node=m-abcdefghijklmnop"), true);
+  assert.equal(isLocalOpen("?node=m-zzzzzzzzzzzzzzzz&local=1"), true);
+  assert.equal(isLocalOpen("?local=1&node=not-an-id"), true);
 });

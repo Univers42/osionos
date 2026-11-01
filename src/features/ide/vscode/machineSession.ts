@@ -45,10 +45,13 @@ export function readMachineTarget(search: string): MachineTarget | null {
   return isAbsoluteFolder(folders[0]) ? { node, folder: folders[0] } : null;
 }
 
-/** `/?local=1` and nothing else: this computer's node, which names itself (GET /api/machine/self). */
+// `/?local=1`: this computer's node, which names itself (GET /api/machine/self). The app also adds
+// one `node=<id>` for pages installed before local=1, which read only `node`; this page ignores it,
+// so a guess from the account's list never decides which machine this node is.
 export function isLocalOpen(search: string): boolean {
   const params = new URLSearchParams(search);
-  return [...params.keys()].length === 1 && params.getAll("local").length === 1 && params.get("local") === "1";
+  const known = [...params.keys()].every((key) => key === "local" || key === "node");
+  return known && params.getAll("local").length === 1 && params.get("local") === "1" && params.getAll("node").length <= 1;
 }
 
 /** The machine id `GET /api/machine/self` names, or null when the answer is not a paired machine. */

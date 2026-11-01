@@ -43,6 +43,7 @@ async function lookupOwnMachine(machineId: string): Promise<Machine | "other-acc
 
 const controller = createMachineWindow({
   openWindow: (url, name) => globalThis.open(url, name),
+  machines: () => useMachinesStore.getState().machines,
   lookup: lookupOwnMachine,
   schedule: (fire, ms) => {
     const timer = setTimeout(fire, ms);
