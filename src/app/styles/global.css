@@ -1023,6 +1023,15 @@ body {
   display: none;
 }
 
+/* A callout holding blocks works as a plain container (#266): its empty text line
+   takes no room, and comes back when the keyboard moves the caret onto it. */
+.osionos-callout-line--empty:not(:focus) {
+  height: 0;
+  min-height: 0;
+  padding-block: 0;
+  overflow: hidden;
+}
+
 /* An empty line the "Edit with AI" bar sits on grows to the bar's height
    (h-15 in AiPromptBar), so the bar never covers the next block. */
 [data-ai-prompt-host] {
