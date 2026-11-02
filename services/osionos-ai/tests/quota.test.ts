@@ -134,3 +134,30 @@ describe('what rests the account', () => {
 		assert.equal(await accountRestSeconds(app.redis), undefined);
 	});
 });
+
+describe('the continuation of an approval', () => {
+	const start = async (continuation: boolean) => {
+		const resolved = await resolveTarget(app.db, app.redis, { userId: USER_A } as never, undefined, FREE_TIER_FIRST.id);
+		if (resolved.kind === 'refused') throw new Error('no target');
+		return startRun({
+			db: app.db,
+			redis: app.redis,
+			runId: randomUUID(),
+			conversationId: await createConversation(),
+			ownerId: USER_A,
+			text: 'approved',
+			target: resolved.target,
+			emit: () => undefined,
+			...(continuation ? { continuation } : {}),
+		} as never);
+	};
+
+	it('tries once through a closed quota: the approved work gets its answer or its error', async () => {
+		await app.redis.set(ACCOUNT_KEY, String(Date.now() + 30_000), 'EX', 30);
+		assert.equal((await start(false)).kind, 'refused');
+		const started = await start(true);
+		assert.equal(started.kind, 'started');
+		if (started.kind === 'started') await started.execute();
+		assert.equal(failing.requests.length, 1);
+	});
+});

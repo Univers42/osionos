@@ -290,8 +290,12 @@ async function continueRun(
 		workspaceId: conversation.workspace_id,
 		agent: pinned.agent,
 		emit: () => {},
+		continuation: true,
 	});
-	if (started.kind !== 'started') return undefined;
+	if (started.kind !== 'started') {
+		console.warn(JSON.stringify({ event: 'continuation_refused', approvalId: row.id, outcome: started.kind, code: started.kind === 'refused' ? started.code : null }));
+		return undefined;
+	}
 	// The continuation runs on its own: the request that decided answers with
 	// the outcome, and the run is followed through its own events.
 	void started.execute().catch((error: Error) => {

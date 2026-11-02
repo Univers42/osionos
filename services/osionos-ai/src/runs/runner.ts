@@ -36,7 +36,7 @@ import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
 import { memoriesForRun } from '../memory/runMemories.ts';
 import { recordMemoryPins } from '../memory/repo.ts';
 import { chainSteps, reservationOf } from './chain.ts';
-import { orderByRest } from './cooldown.ts';
+import { accountRestSeconds, orderByRest, quotaClosedSeconds } from './cooldown.ts';
 import { sourceChars } from './sources.ts';
 import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
@@ -140,6 +140,12 @@ export interface StartRunInput {
 	 */
 	thread?: ThreadRun;
 	emit: (event: RunEvent) => void;
+	/**
+	 * The run that follows an approval: the approved work already happened, so
+	 * it is not refused while the account rests. It tries once, and its answer
+	 * or its error is what the user reads.
+	 */
+	continuation?: boolean;
 }
 
 export type StartRunOutcome =
@@ -238,7 +244,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		}
 		const refused = existing.error ? PREFLIGHT_ERRORS[existing.error] : undefined;
 		if (existing.status !== 'running' && refused) {
-			return { kind: 'refused', status: refused, code: existing.error as string };
+			const seconds = existing.error === 'rate_limited' ? await accountRestSeconds(redis) : undefined;
+			return { kind: 'refused', status: refused, code: existing.error as string, ...(seconds === undefined ? {} : { retryAfterSeconds: seconds }) };
 		}
 		return { kind: 'reattach', run: existing };
 	}
@@ -262,6 +269,13 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		await markRun(db, runId, 'failed', 'rate_limited');
 		// The client counts the seconds down before it offers the retry.
 		return { kind: 'refused', status: 429, code: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
+	}
+	// Before anything is deleted: the Retry of a failed turn carries
+	// `replaceFromRunId`, and a refusal must leave that turn where it is.
+	const closedFor = input.continuation ? undefined : await quotaClosedSeconds(redis, [target, ...(input.fallbacks ?? [])]);
+	if (closedFor !== undefined) {
+		await markRun(db, runId, 'failed', 'rate_limited');
+		return { kind: 'refused', status: 429, code: 'rate_limited', retryAfterSeconds: closedFor };
 	}
 	// The attachments are fetched through the bridge with the caller's token of
 	// THIS request. They are validated and stripped before the money moves.

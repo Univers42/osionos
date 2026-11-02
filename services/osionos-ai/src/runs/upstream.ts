@@ -280,7 +280,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				await emit('error', { code: 'budget_exhausted' });
 				return;
 			}
-			index += 1;
+			index = move.index;
 			current = move.attempt;
 			outcome = await callModel(current);
 		}
