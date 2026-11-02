@@ -11,6 +11,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { wouldBlankDatabase } from './bridge-object-db-guard.mjs';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
@@ -4706,16 +4707,27 @@ async function handleObjectDatabasesUpsert(url, request, response, config, fetch
 	// answers 409 `db_exists` too, on purpose: the builder reads `db_exists` on a key it
 	// minted itself as "already done". Do not turn it into a 200 that echoes the stored state.
 	const createOnly = payload.ifAbsent === true;
+	const incoming = validatedDatabaseState(payload.state);
+	if (!createOnly) {
+		const owner = encodeURIComponent(authContext.userId);
+		const key = encodeURIComponent(dbKey);
+		const found = await baasRest(config, fetchImpl, `osionos_object_databases?owner_id=eq.${owner}&db_key=eq.${key}&select=state&limit=1`, { method: 'GET' });
+		if (wouldBlankDatabase(dbKey, incoming, found?.[0]?.state)) {
+			json(response, 409, { error: 'db_exists' }, config);
+			return true;
+		}
+	}
 	let rows;
 	try {
 		rows = await baasRest(config, fetchImpl, createOnly ? 'osionos_object_databases' : 'osionos_object_databases?on_conflict=owner_id,db_key', {
 			method: 'POST',
 			body: {
 				owner_id: authContext.userId,
-				workspace_id: workspaceId,
+				// A push that names no workspace must not clear the one the row has.
+				...(workspaceId ? { workspace_id: workspaceId } : {}),
 				db_key: dbKey,
 				title: safeText(payload.title, 200) || 'Untitled',
-				state: validatedDatabaseState(payload.state),
+				state: incoming,
 				updated_at: new Date().toISOString(),
 			},
 			prefer: createOnly ? 'return=representation' : 'resolution=merge-duplicates,return=representation',
