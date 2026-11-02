@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated `zustand/middleware` for `localStorage` persistence (`ui-storage`), ensuring the sidebar state is remembered across browser sessions.
 
 ### Changed
+- **Honest Callout Fields & Legacy Color Adapter**: Refactored callout block data model to separate honest fields `calloutIcon` (display emoji or icon) and `calloutTone` (semantic tone), deprecated the legacy `color` field with backward-compatible resolution via `resolveCalloutProps`, and updated callout renderers, editors, slash commands, and seed helpers for issue #247.
 - **Database Select Option Semantic Colors**: Migrated select and status option colors in notion-database-sys (`TAG_COLORS`) to semantic color names (`red`, `blue`, `green`, `yellow`, `purple`, `pink`, `cyan`, `orange`), added `tagColorClass` backward-compatible adapter resolving both semantic keys and legacy Tailwind strings, and updated pill badge renderers across table cells, editors, and feed cards for issue #247.
 - Enhanced `MediaAssetPicker` (`src/shared/ui/molecules/MediaAssetPicker`) with search query debouncing (300ms), a one-click clear search button, strict `CoverPickerAsset[]` typing, and accessible `role="search"`/`role="searchbox"` semantics with live status announcements.
 - Enhanced `EquationView` (`src/shared/ui/atoms/EquationView`) with WCAG-compliant `role="math"` semantics, accessible formula aria labels, and a 1-click raw LaTeX copy button with temporary checkmark feedback.
