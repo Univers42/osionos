@@ -84,7 +84,7 @@ const RootTree: React.FC<{ session: EditorSession; root: Root; host: ExplorerHos
   const pageIdOf = React.useCallback((rel: string, kind: string) => (kind === "dir" ? undefined : `${root.id}:${rel}`), [root.id]);
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col">
+    <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto overflow-x-hidden">
       <WorkspaceExplorer ops={ops} plainFiles copy={DISK_COPY} host={host} onOpen={openFile} pageIdOf={pageIdOf} onRowMenu={setMenu} />
       {menu && <RowMenu request={menu} onTerminal={() => openTerminal(menu.rel)} onClose={() => setMenu(null)} />}
     </div>
