@@ -26,9 +26,6 @@ export const IDLE_TIMEOUT_MS = 30_000;
 /** Two minutes for the whole call. */
 export const TOTAL_TIMEOUT_MS = 120_000;
 
-/** What the SDK does when no value is passed (ai 7.0.139, index.js:2658), spelled out. */
-const SDK_DEFAULT_RETRIES = 2;
-
 /** The abort of a timeout: the reason of the signal says so. */
 export class UpstreamTimeout extends Error {
 	constructor() {
@@ -117,8 +114,6 @@ export interface PumpInput {
 	onToolCall?: (call: { toolCallId: string; toolName: string; input: unknown }) => Promise<void>;
 	/** A tool failed before it ran: the model never gets an answer of it. */
 	onToolError?: (failure: { toolCallId: string; toolName: string }) => Promise<void>;
-	/** The SDK's retries on a 429 or 5xx; 0 when a next model waits (devil C250). */
-	maxRetries?: number;
 	/** A step is about to run; `hasTools` is false when it is the answer (research C412). */
 	onStepStart?: (step: { stepNumber: number; hasTools: boolean }) => Promise<void>;
 	/** A step ended, after its tool calls and its text (research C402, C407). */
@@ -235,7 +230,9 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			messages,
 			maxOutputTokens: config.maxOutputTokens,
 			abortSignal: controller.signal,
-			maxRetries: input.maxRetries ?? SDK_DEFAULT_RETRIES,
+			// The SDK retries each STEP, unseen by the quota: 5 steps were 15
+			// calls of a 20-a-minute key. The chain is the only retry.
+			maxRetries: 0,
 			// The SDK must never fetch a URL: the images are bytes we fetched.
 			experimental_download: refuseDownload,
 			// The failure comes back as an `error` part. The SDK's default also

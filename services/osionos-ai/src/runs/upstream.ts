@@ -243,9 +243,6 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				system,
 				messages,
 				controller: attempt.controller,
-				// In a chain no attempt retries: the chain is the retry, and 3 models
-				// must be 3 requests, not 9 (devil C250).
-				...(steps.length > 1 ? { maxRetries: 0 } : {}),
 				...(tools ? { tools } : {}),
 				...(providerOptions ? { providerOptions } : {}),
 				// The ceiling of the loop: the money the run holds, and the cost
