@@ -1,6 +1,6 @@
 import { StreamProviderError } from 'ai';
 import { apiCallOf, classifyFailure, isOwnFailure } from './failover.ts';
-import { headerOf, MAX_REST_SECONDS, retryAfterSeconds } from './cooldown.ts';
+import { headerOf, MAX_REST_SECONDS, resetSeconds, retryAfterSeconds } from './cooldown.ts';
 
 /**
  * What a provider failure is called: a closed set of codes for the browser,
@@ -85,8 +85,12 @@ function classOf(status: number, report: ProviderReport, nowMs: number): Upstrea
 	if (status === 402) return { code: 'quota_exhausted', status };
 	if (status === 429) {
 		if (DAILY_CAP.test(report.text)) return { code: 'quota_exhausted', status };
+		// A reset past the longest rest is the day's cap, whatever the text says:
+		// the frame must not promise seconds a retry would not get.
 		const asked = retryAfterSeconds(headerOf(report.headers, 'retry-after'), nowMs);
-		return { code: 'rate_limited', status, ...(asked === undefined ? {} : { retryAfterSeconds: Math.min(asked, MAX_REST_SECONDS) }) };
+		const reset = resetSeconds(headerOf(report.headers, 'x-ratelimit-reset'), nowMs);
+		if (asked === undefined && reset !== undefined && reset > MAX_REST_SECONDS) return { code: 'quota_exhausted', status };
+		return { code: 'rate_limited', status, ...(asked === undefined && reset === undefined ? {} : { retryAfterSeconds: Math.min(asked ?? reset ?? 0, MAX_REST_SECONDS) }) };
 	}
 	if (status >= 500) return { code: 'provider_unavailable', status };
 	if (status === 400 && CONTEXT_WINDOW.test(report.text)) return { code: 'context_too_long', status };
