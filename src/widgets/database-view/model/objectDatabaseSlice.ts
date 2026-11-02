@@ -100,6 +100,9 @@ export function serverSliceFor(
   return slice;
 }
 
+const isBlankPage = (page: NotionState["pages"][string]): boolean =>
+  !page.content?.length && Object.values(page.properties ?? {}).every((value) => value === "" || value == null);
+
 /** Union of one database's local slice with the server's copy so NEITHER side
  *  loses a record. Used when local is dirty/untracked and can't be trusted to
  *  replace the server wholesale — it may be genuine offline edits, OR a fresh
@@ -123,6 +126,11 @@ export function unionSliceFor(
   const definition = base.databases[dbKey] ?? fill.databases[dbKey];
   if (definition) slice.databases[dbKey] = definition;
   slice.pages = { ...fill.pages, ...base.pages };
+  // A block can render before hydration and invent the starter row; it must not join a database the
+  // server already holds. Caveat: a row a person left blank, unsaved, on the same key goes with it.
+  const starterId = `${dbKey}-row-1`;
+  const starter = slice.pages[starterId];
+  if (starter && !serverSlice.pages[starterId] && Object.keys(serverSlice.pages).length > 0 && isBlankPage(starter)) delete slice.pages[starterId];
   slice.views = { ...fill.views, ...base.views };
   return slice;
 }
