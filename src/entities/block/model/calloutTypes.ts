@@ -90,3 +90,46 @@ export function calloutSurface(type: CalloutType): CSSProperties {
 export function calloutAccent(type: CalloutType): string {
   return `var(--osio-block-tint-${type.tone}-fg)`;
 }
+
+export interface ResolvedCallout {
+  icon: string;
+  tone: CalloutTone;
+  type: CalloutType;
+}
+
+/**
+ * Resolves a callout block's honest fields (calloutIcon, calloutTone) with
+ * fallback to the legacy `color` field.
+ */
+export function resolveCalloutProps(block?: {
+  calloutIcon?: string | null;
+  calloutTone?: CalloutTone | null;
+  color?: string | null;
+} | null): ResolvedCallout {
+  if (!block) {
+    return {
+      icon: NOTE.icon,
+      tone: NOTE.tone,
+      type: NOTE,
+    };
+  }
+
+  if (block.calloutTone) {
+    const type = CALLOUT_TYPES.find((t) => t.tone === block.calloutTone) ?? NOTE;
+    const icon = block.calloutIcon && block.calloutIcon.trim() !== "" ? block.calloutIcon.trim() : type.icon;
+    return {
+      icon,
+      tone: block.calloutTone,
+      type,
+    };
+  }
+
+  const raw = (block.calloutIcon || block.color || "").trim();
+  const type = resolveCalloutType(raw);
+  const icon = calloutDisplayIcon(raw);
+  return {
+    icon,
+    tone: type.tone,
+    type,
+  };
+}

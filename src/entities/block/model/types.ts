@@ -13,6 +13,7 @@
 import type { EmbedSnapshot } from '@/shared/lib/embed/embedInfo';
 import type { ButtonProgram } from './buttonProgram';
 import type { BlockStyle } from './blockStyle';
+import type { CalloutTone } from './calloutTypes';
 
 /**
  * Standalone Block types for the playground application.
@@ -156,7 +157,9 @@ export interface Block {
   lineNumbers?: boolean;				/** Show a line-number gutter in a code block */
   sqlMountId?: string;		/** Live-DB mount a `sql` code block runs against (read-only) */
   heightLines?: number;					/** Persisted height in lines for code blocks */
-  color?: string;			/** Color for callouts, etc. */
+	calloutIcon?: string;     /** Display emoji or icon for a callout block */
+	calloutTone?: CalloutTone; /** Semantic tint tone for the callout block */
+  color?: string;			/** @deprecated Legacy callout color field (kept for read backward compatibility) */
   textColor?: string;		/** Optional block text color */
   backgroundColor?: string; /** Optional block background color */
   style?: BlockStyle;		/** Typed style overrides (SB-1a); wins over flat fields */

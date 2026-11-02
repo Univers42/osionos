@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { Block } from '@/entities/block';
+import { resolveCalloutType, type Block, type CalloutTone } from '@/entities/block';
 import type { PageEntry } from '@/entities/page';
 
 let _counter = 0;
@@ -45,8 +45,15 @@ export function code(text: string, language = 'typescript'): Block {
 export function quote(text: string): Block {
   return { id: bid(), type: 'quote', content: text };
 }
-export function callout(text: string, icon = '💡'): Block {
-  return { id: bid(), type: 'callout', content: text, color: icon };
+export function callout(text: string, icon = '💡', tone?: CalloutTone): Block {
+  return {
+    id: bid(),
+    type: 'callout',
+    content: text,
+    calloutIcon: icon,
+    calloutTone: tone ?? resolveCalloutType(icon).tone,
+    color: icon,
+  };
 }
 export function divider(): Block {
   return { id: bid(), type: 'divider', content: '' };

@@ -49,6 +49,7 @@ import {
   isEffectivelyEmpty,
   enterCreatesChild,
   findBlockInTree,
+  resolveCalloutType,
 } from "@/entities/block";
 import { createTableBlockFromData } from "@/entities/block/model/tableBlocks";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
@@ -1066,13 +1067,16 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       // away. Children are their own blocks, so a shortcut typed in one still converts
       // it in place. (Code fences are owned by tryHandleCodeOrTable and excluded.)
       const target = findBlockInTree(contentRef.current, blockId);
+      const calloutIcon = detection.type === "callout" ? getCalloutIconForKind(detection.kind ?? "note") : undefined;
+      const calloutTone = calloutIcon ? resolveCalloutType(detection.kind ?? calloutIcon).tone : undefined;
+
       if (target && (target.type === "callout" || target.type === "quote") && detection.type !== "code") {
         const child: Block = {
           id: crypto.randomUUID(),
           type: detection.type,
           content: detection.remainingContent,
           ...(detection.type === "to_do" ? { checked: Boolean(detection.checked) } : {}),
-          ...(detection.type === "callout" ? { color: getCalloutIconForKind(detection.kind ?? "note") } : {}),
+          ...(detection.type === "callout" ? { calloutIcon, calloutTone, color: calloutIcon } : {}),
           ...(detection.type === "toggle" ? { collapsed: false } : {}),
           ...(detection.headingLevel ? { headingLevel: detection.headingLevel } : {}),
         };
@@ -1092,7 +1096,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
           ? { checked: Boolean(detection.checked) }
           : { checked: undefined }),
         ...(detection.type === "callout"
-          ? { color: getCalloutIconForKind(detection.kind ?? "note") }
+          ? { calloutIcon, calloutTone, color: calloutIcon }
           : {}),
         ...(detection.type === "code"
           ? { language: detection.language ?? "plaintext" }
