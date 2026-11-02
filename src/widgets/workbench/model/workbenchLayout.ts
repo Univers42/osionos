@@ -55,3 +55,11 @@ export const DOCK_TABS: readonly DockTab[] = Object.freeze(["terminal", "problem
 export function isDockTab(value: unknown): value is DockTab {
   return typeof value === "string" && DOCK_TABS.includes(value as DockTab);
 }
+
+/** Whether the dock is in the page. Where it keeps a shell on this computer (the desktop app),
+ *  closing it hides it so the shell and its scrollback live on, as in VS Code; elsewhere it
+ *  unmounts, and the sandbox session reconnects on the next open. */
+export function dockPresence({ open, everOpened, keepsShell }: { open: boolean; everOpened: boolean; keepsShell: boolean }): "shown" | "hidden" | "absent" {
+  if (open) return "shown";
+  return keepsShell && everOpened ? "hidden" : "absent";
+}

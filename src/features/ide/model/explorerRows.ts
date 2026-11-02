@@ -10,8 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { isFolderMetaName, isPageFileName } from "../../page-file/model/pageFileCodec";
-import { titleFromFileName } from "../../page-file/model/pagePaths";
+import { isFolderMetaName, isPageFileName, PAGE_FILE_SUFFIX, titleFromFileName } from "./pageFileNames";
 import type { ListedEntry } from "../vfs/types";
 import { joinRel } from "./workspacePath";
 
@@ -22,6 +21,9 @@ export type ExplorerRow = {
   kind: ExplorerRowKind;
   /** What the tree shows: the title for `.omd` pages, the file name otherwise. */
   label: string;
+  /** On a dir: the sibling `.omd` page that owns it. The VFS models a page with
+   *  children as a file plus a directory; the tree shows that one page once (#251). */
+  pageFile?: string;
 };
 
 /** `.omd` opens as a block page; every other file opens as code. */
@@ -82,12 +84,27 @@ function sortNatural(rows: readonly ExplorerRow[]): ExplorerRow[] {
 /** One directory listing → display rows: folders first, natural-order names,
  *  `_folder.omd` hidden (it is a folder page's metadata, not a file to the user).
  *  O(n log n). */
-export function buildExplorerRows(entries: readonly ListedEntry[]): ExplorerRow[] {
+function plainRows(entries: readonly ListedEntry[]): ExplorerRow[] {
+  const rows = entries.map(({ name, kind }): ExplorerRow => ({ name, kind: kind === "dir" ? "dir" : "code", label: name }));
+  return sortNatural(rows.filter((row) => row.kind === "dir")).concat(sortNatural(rows.filter((row) => row.kind !== "dir")));
+}
+
+function isDirOwningPage(name: string, dirNames: ReadonlySet<string>): boolean {
+  return isPageFileName(name) && dirNames.has(name.slice(0, -PAGE_FILE_SUFFIX.length));
+}
+
+export function buildExplorerRows(entries: readonly ListedEntry[], { plainFiles = false }: { plainFiles?: boolean } = {}): ExplorerRow[] {
+  // A folder on a computer has no pages: a `.omd` there is a file like any other.
+  if (plainFiles) return plainRows(entries);
   const dirs: ExplorerRow[] = [];
   const files: ExplorerRow[] = [];
+  const names = new Set(entries.map((entry) => entry.name));
+  const dirNames = new Set(entries.filter((entry) => entry.kind === "dir").map((entry) => entry.name));
   for (const { name, kind } of entries) {
-    if (kind === "dir") dirs.push({ name, kind: "dir", label: name });
-    else if (!isFolderMetaName(name)) {
+    if (kind === "dir") {
+      const pageFile = `${name}${PAGE_FILE_SUFFIX}`;
+      dirs.push({ name, kind: "dir", label: name, ...(names.has(pageFile) ? { pageFile } : {}) });
+    } else if (!isFolderMetaName(name) && !isDirOwningPage(name, dirNames)) {
       const fileKind = fileKindOf(name);
       files.push({ name, kind: fileKind, label: fileKind === "page" ? titleFromFileName(name) : name });
     }

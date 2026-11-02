@@ -44,7 +44,7 @@ function definedTokens(): Set<string> {
 
 function expectedGroup(key: string, kind: string): string {
   if (kind === "color") return "colors";
-  if (kind === "font" || /^(font-size|font-weight|line-height|letter-spacing)-/.test(key)) return "fonts";
+  if (kind === "font" || kind === "letter-case" || kind === "font-style" || kind === "text-line" || /^(font-size|font-weight|line-height|letter-spacing)-/.test(key)) return "fonts";
   return "layout";
 }
 

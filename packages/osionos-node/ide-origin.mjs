@@ -16,12 +16,14 @@
 // Milestone 1 is owner-only: every subject but `ownerId` is refused.
 import http from 'node:http';
 
-import { checkNodeOrigin, classifyNodeRequest } from '../../scripts/ide-node-policy.mjs';
+import { checkNodeOrigin, classifyNodeRequest, isNodeHost } from '../../scripts/ide-node-policy.mjs';
 import { isNodeId, signNodeCap, verifyIdeToken, verifyNodeCap } from '../../scripts/ide-token.mjs';
 import { createSocketRegistry, forwardHttp, forwardUpgrade, refuseRaw } from './node-proxy.mjs';
+import { createPtyService } from './pty-service.mjs';
+import { createFsService } from './fs-service.mjs';
 
 const PREFIX = '/api/node/';
-const COOKIE_PREFIX = '__Host-osio-node-';
+const COOKIE_NAME = 'osio-node-';
 const MAX_SESSION_BODY = 1024;
 const TEXT = { 401: 'Machine access is invalid.', 403: 'Forbidden.', 404: 'Not found.', 405: 'Method not allowed.', 429: 'Too many machine connections.' };
 
@@ -32,12 +34,28 @@ function reply(res, status, text = TEXT[status]) {
 	res.end(text);
 }
 
-function readCookie(header, name) {
+// C6 as amended 2026-10-31: `__Host-` everywhere except a plain-http IP-literal loopback origin,
+// whose cookie keeps every attribute but the prefix. An IP literal has no subdomains and cookies
+// ignore ports, so the prefix adds nothing there, and Electron 32 (Chromium 128) stores no
+// `__Host-` cookie on http://127.0.0.1 (measured, C23). The mode comes from the configured origin
+// only, never from a request header.
+// Caveat: assumes Chromium keeps storing unprefixed Secure cookies on http loopback (measured on
+// Electron 32.2.7 only); a browser that refuses them fails closed with a 401, never opens.
+export function cookiePrefixFor(ideOrigin) {
+	const url = new URL(ideOrigin);
+	const loopbackLiteral = url.protocol === 'http:' && /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(url.hostname);
+	return loopbackLiteral ? COOKIE_NAME : `__Host-${COOKIE_NAME}`;
+}
+
+// Every value under `name`: a second cookie of the same name (set by another local port, which
+// cookies do not isolate) must not shadow the real one, so each is checked, never the first only.
+function readCookies(header, name) {
+	const values = [];
 	for (const part of String(header ?? '').split(';')) {
 		const at = part.indexOf('=');
-		if (at !== -1 && part.slice(0, at).trim() === name) return part.slice(at + 1).trim();
+		if (at !== -1 && part.slice(0, at).trim() === name) values.push(part.slice(at + 1).trim());
 	}
-	return null;
+	return values;
 }
 
 function readSmallJson(req) {
@@ -64,30 +82,60 @@ function splitNodePath(url) {
 	return isNodeId(id) ? { id } : { id: null };
 }
 
-export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null }) {
+// The shared-secret mode of milestone 1: an `osionos_ide1` token with the node scope.
+function legacyVerifier(secret) {
+	return (bearer) => {
+		let token;
+		try { token = verifyIdeToken(bearer, { secret }); } catch { throw fail(401); }
+		if (token.scope !== 'node') throw fail(403);
+		return token;
+	};
+}
+
+// A paired machine passes `capSecret`, `verifySession` and `machineRoutes` (machine-identity.mjs),
+// `pty` ({ host, accept }) for the web terminal, and `fs` ({ accept, roots, home, appOrigins }) for
+// the editor on disk (ADR 0044); the shared-secret mode passes `secret` alone, and opens no shell
+// and no folder (W3, F5).
+export function createIdeOriginServer({ secret, capSecret = secret, verifySession = legacyVerifier(secret), machineRoutes = null, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null, pty: ptyOptions = undefined, fs: fsOptions = undefined }) {
 	const sockets = createSocketRegistry({ maxPerUser: maxSocketsPerUser });
+	const cookiePrefix = cookiePrefixFor(ideOrigin);
 	const revokedAt = new Map();
 	const isRevoked = (userId, iat) => iat <= (revokedAt.get(userId) ?? -1);
+	const paired = machineRoutes !== null;
+	const pty = paired && ptyOptions ? createPtyService({ ...ptyOptions, ideOrigin, ownerId, verifySession, isRevoked }) : null;
+	const disk = paired && fsOptions ? createFsService({ ...fsOptions, ideOrigin, ownerId, verifySession, isRevoked }) : null;
 
 	async function openSession(req, res) {
 		if (req.method !== 'POST') throw fail(405);
 		if (!checkNodeOrigin(req.headers, ideOrigin, false) || req.headers.origin !== ideOrigin) throw fail(403);
 		const bearer = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')?.[1];
-		let token;
-		try { token = verifyIdeToken(bearer, { secret }); } catch { throw fail(401); }
-		if (token.scope !== 'node' || token.userId !== ownerId) throw fail(403);
+		const token = verifySession(bearer, { ideOrigin });
+		if (token.userId !== ownerId) throw fail(403);
 		if (isRevoked(token.userId, token.iat)) throw fail(401);
 		const { node } = await readSmallJson(req);
 		if (!isNodeId(node) || !Object.hasOwn(nodes, node)) throw fail(404);
-		const { cap, exp } = signNodeCap({ userId: token.userId, node, secret, parentExp: token.exp });
+		const { cap, exp } = signNodeCap({ userId: token.userId, node, secret: capSecret, parentExp: token.exp });
 		sockets.extend(token.userId, node, exp);
 		const maxAge = exp - Math.floor(Date.now() / 1000);
 		res.writeHead(204, {
-			'set-cookie': `${COOKIE_PREFIX}${node}=${cap}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`,
+			'set-cookie': `${cookiePrefix}${node}=${cap}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`,
 			'cache-control': 'no-store',
 		});
 		res.end();
 	}
+
+	function liveCap(cookieHeader, node) {
+		return readCookies(cookieHeader, `${cookiePrefix}${node}`).map((value) => {
+			try { return verifyNodeCap(value, { secret: capSecret }); } catch { return null; }
+		}).find((candidate) => candidate && candidate.node === node && candidate.userId === ownerId && !isRevoked(candidate.userId, candidate.iat)) ?? null;
+	}
+
+	const routeContext = {
+		ideOrigin,
+		isSameOrigin: (req) => checkNodeOrigin(req.headers, ideOrigin, false) && req.headers.origin === ideOrigin,
+		isSameOriginRead: (req) => checkNodeOrigin(req.headers, ideOrigin, false),
+		hasSession: (req) => Object.keys(nodes).some((node) => liveCap(req.headers.cookie, node) !== null),
+	};
 
 	// Order matters for C6: an unknown node and a known one without its cookie both answer 401,
 	// so an unauthenticated caller cannot list the owner's machines.
@@ -95,10 +143,8 @@ export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, node
 		if (!checkNodeOrigin(req.headers, ideOrigin, isUpgrade)) throw fail(403);
 		const route = splitNodePath(req.url);
 		if (!route?.id) throw fail(404);
-		const value = readCookie(req.headers.cookie, `${COOKIE_PREFIX}${route.id}`);
-		let cap;
-		try { cap = verifyNodeCap(value, { secret }); } catch { throw fail(401); }
-		if (cap.node !== route.id || isRevoked(cap.userId, cap.iat)) throw fail(401);
+		const cap = liveCap(req.headers.cookie, route.id);
+		if (!cap) throw fail(401);
 		if (cap.userId !== ownerId) throw fail(403);
 		// C7c: the id is only ever a registry key.
 		if (!Object.hasOwn(nodes, route.id)) throw fail(404);
@@ -112,7 +158,9 @@ export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, node
 
 	async function onRequest(req, res) {
 		try {
+			if (!isNodeHost(req.headers, ideOrigin)) throw fail(403);
 			if (req.url === `${PREFIX}session`) return await openSession(req, res);
+			if (machineRoutes && req.url.startsWith('/api/machine/')) return await machineRoutes(req, res, routeContext);
 			if (!req.url.startsWith(PREFIX)) return client ? client(req, res) : reply(res, 404);
 			const { machine, verdict } = authorize(req, false);
 			forwardHttp(req, res, { socketPath: machine.socketPath, upstreamPath: verdict.upstreamPath });
@@ -123,6 +171,9 @@ export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, node
 
 	async function onUpgrade(req, socket, head) {
 		socket.on('error', () => socket.destroy());
+		if (!isNodeHost(req.headers, ideOrigin)) return refuseRaw(socket, 403, TEXT[403]);
+		if (req.url === '/api/pty') return pty ? pty.upgrade(req, socket, head) : refuseRaw(socket, 404, TEXT[404]);
+		if (req.url === '/api/fs') return disk ? disk.upgrade(req, socket, head) : refuseRaw(socket, 404, TEXT[404]);
 		let grant;
 		try {
 			grant = authorize(req, true);
@@ -142,12 +193,22 @@ export function createIdeOriginServer({ secret, ownerId, ideOrigin, commit, node
 	server.on('upgrade', onUpgrade);
 	return {
 		server,
-		// Cuts every open socket of a user at once and voids every credential issued until now.
+		pty,
+		fs: disk,
+		// Cuts every open socket of a user at once, kills the owner's shells, closes the editor's
+		// sockets and watches, forgets the folders it opened (F9, F17), and voids every credential
+		// issued until now.
 		revoke(userId) {
 			revokedAt.set(userId, Math.floor(Date.now() / 1000));
 			sockets.cut(userId);
+			if (userId !== ownerId) return;
+			pty?.killAll();
+			disk?.killAll();
+			void fsOptions?.roots.forget();
 		},
 		close() {
+			pty?.killAll();
+			disk?.killAll();
 			sockets.closeAll();
 			server.closeAllConnections?.();
 			server.close();

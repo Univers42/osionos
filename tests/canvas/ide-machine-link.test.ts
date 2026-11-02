@@ -89,3 +89,269 @@ test("the node mint asks for scope node and reads a step-up refusal", async () =
   assert.deepEqual(await mintNodeToken({ fetch: reply(403, {}), app }, "ws-1"), { kind: "unavailable", reason: "not-allowed" });
   assert.deepEqual(await mintNodeToken({ fetch: reply(200, {}), app: async () => ({ apiBase: "x", token: null }) }, "ws-1"), { kind: "unavailable", reason: "signed-out" });
 });
+
+// Own machines (devil verdict 2026-10-31, condition 5): the app sends a nonce first and mints a
+// token only once the bridge says the signature over it is the paired machine's.
+const MACHINE = "m-abcdefghijklmnop";
+const NONCE = "AAAAAAAAAAAAAAAAAAAAAA";
+const SIG = "s".repeat(86);
+const MC1 = "osionos_mc1.abcdefgh.eyJleHAiOjF9.c2ln";
+
+type Verdict = "ok" | "mismatch" | "unavailable";
+
+function ownWorld(verdict: Verdict, mint: MintResult = { kind: "ok", token: MC1 }) {
+  const posted: Array<{ message: unknown; origin: string }> = [];
+  const states: string[] = [];
+  const checked: Array<{ nonce: string; sig: string }> = [];
+  let handler: (event: { data: unknown; origin: string; source: unknown }) => void = () => {};
+  const frame = { postMessage: (message: unknown, origin: string) => posted.push({ message, origin }) };
+  let mints = 0;
+  let nonces = 0;
+  const link = linkMachineFrame({
+    frame: () => frame,
+    ideOrigin: IDE,
+    listen: (next) => { handler = next; return () => {}; },
+    mint: async () => { mints += 1; return mint; },
+    onState: (state) => states.push(state),
+    identity: {
+      machineId: MACHINE,
+      nonce: () => `${NONCE.slice(0, -1)}${nonces++}`,
+      verify: async (nonce, sig) => { checked.push({ nonce, sig }); return verdict; },
+    },
+  });
+  const deliver = (data: unknown) => handler({ data, origin: IDE, source: frame });
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  return { posted, states, checked, deliver, settle, link, mints: () => mints };
+}
+
+const identity = { type: "osionos-ide/identity", machineId: MACHINE, sig: SIG };
+
+test("ready on a paired machine gets a hello with a nonce, and no token yet", async () => {
+  const w = ownWorld("ok");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/hello", nonce: `${NONCE.slice(0, -1)}0` }, origin: IDE }]);
+  assert.equal(w.mints(), 0);
+});
+
+test("a verified identity is the only way to a token, and the nonce checked is the one sent", async () => {
+  const w = ownWorld("ok");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  w.deliver(identity);
+  await w.settle();
+  assert.deepEqual(w.checked, [{ nonce: `${NONCE.slice(0, -1)}0`, sig: SIG }]);
+  assert.equal(w.mints(), 1);
+  assert.deepEqual(w.posted.at(-1), { message: { type: "osionos-ide/session", token: MC1 }, origin: IDE });
+});
+
+test("a signature the bridge refuses is a mismatch: no token is minted or sent", async () => {
+  const w = ownWorld("mismatch");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  w.deliver(identity);
+  await w.settle();
+  assert.equal(w.mints(), 0);
+  assert.deepEqual(w.posted.slice(1), [{ message: { type: "osionos-ide/refused", reason: "mismatch" }, origin: IDE }], "the hello, then only the refusal");
+  assert.equal(w.states.at(-1), "mismatch");
+});
+
+test("another machine id on this port, or a ready for another node, is a mismatch with no check", async () => {
+  const w = ownWorld("ok");
+  w.deliver({ type: "osionos-ide/ready", node: "laptop" });
+  await w.settle();
+  assert.equal(w.states.at(-1), "mismatch");
+  assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/refused", reason: "mismatch" }, origin: IDE }]);
+  w.posted.length = 0;
+  w.link.retry();
+  await w.settle();
+  w.deliver({ ...identity, machineId: "m-zzzzzzzzzzzzzzzz" });
+  await w.settle();
+  assert.deepEqual(w.checked, []);
+  assert.equal(w.mints(), 0);
+});
+
+test("an identity with no hello pending, or replayed, is ignored", async () => {
+  const w = ownWorld("ok");
+  w.deliver(identity);
+  await w.settle();
+  assert.deepEqual(w.checked, []);
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  w.deliver(identity);
+  w.deliver(identity);
+  await w.settle();
+  assert.equal(w.checked.length, 1, "the nonce is spent by the first answer");
+});
+
+test("retry after a step-up starts again from a fresh hello", async () => {
+  const w = ownWorld("ok", { kind: "step-up" });
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  w.deliver(identity);
+  await w.settle();
+  assert.equal(w.states.at(-1), "step-up");
+  await w.link.retry();
+  assert.deepEqual(w.posted.at(-1), { message: { type: "osionos-ide/hello", nonce: `${NONCE.slice(0, -1)}1` }, origin: IDE });
+});
+
+// The bridge answers 428 identity_required unless one fresh identity check precedes each mint.
+test("each mint follows its own identity check: a refresh says hello again before minting", async () => {
+  const w = ownWorld("ok");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  w.deliver(identity);
+  await w.settle();
+  w.deliver({ type: "osionos-ide/need-session" });
+  await w.settle();
+  assert.equal(w.mints(), 1, "the refresh does not reuse the first check");
+  assert.deepEqual(w.posted.at(-1), { message: { type: "osionos-ide/hello", nonce: `${NONCE.slice(0, -1)}1` }, origin: IDE });
+  w.deliver(identity);
+  await w.settle();
+  assert.equal(w.checked.length, 2);
+  assert.equal(w.mints(), 2);
+});
+
+// This computer's node (2026-11-01): the app opens it without an id; the node's ready names the
+// machine, and only a machine on this account's list gets a hello. No ready in time means no node.
+function localWorld(claimed: "own" | "other-account" | "unavailable", verdict: Verdict = "ok") {
+  const posted: Array<{ message: unknown; origin: string }> = [];
+  const states: string[] = [];
+  const claims: string[] = [];
+  const checked: string[] = [];
+  let handler: (event: { data: unknown; origin: string; source: unknown }) => void = () => {};
+  let deadline: { fn: () => void; ms: number; cancelled: boolean } | null = null;
+  const frame = { postMessage: (message: unknown, origin: string) => posted.push({ message, origin }) };
+  let mints = 0;
+  const link = linkMachineFrame({
+    frame: () => frame,
+    ideOrigin: IDE,
+    listen: (next) => { handler = next; return () => {}; },
+    mint: async () => { mints += 1; return { kind: "ok", token: MC1 }; },
+    onState: (state) => states.push(state),
+    claim: async (node) => {
+      claims.push(node);
+      if (claimed !== "own") return claimed;
+      return { machineId: node, nonce: () => NONCE, verify: async (nonce) => { checked.push(nonce); return verdict; } };
+    },
+    readyWithin: {
+      ms: 4000,
+      schedule: (fn, ms) => { const entry = { fn, ms, cancelled: false }; deadline = entry; return () => { entry.cancelled = true; }; },
+    },
+  });
+  const deliver = (data: unknown, origin = IDE) => handler({ data, origin, source: frame });
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const expire = () => { if (deadline && !deadline.cancelled) deadline.fn(); };
+  return { posted, states, claims, checked, deliver, settle, link, expire, deadline: () => deadline, mints: () => mints };
+}
+
+test("this computer's node names itself in ready; an own machine goes through hello, identity and token", async () => {
+  const w = localWorld("own");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  assert.deepEqual(w.claims, [MACHINE]);
+  assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/hello", nonce: NONCE }, origin: IDE }]);
+  w.deliver(identity);
+  await w.settle(); await w.settle();
+  assert.deepEqual(w.checked, [NONCE]);
+  assert.equal(w.mints(), 1);
+  assert.deepEqual(w.posted.at(-1), { message: { type: "osionos-ide/session", token: MC1 }, origin: IDE });
+});
+
+test("a node paired to another account is told so, and gets no hello and no token", async () => {
+  const w = localWorld("other-account");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  assert.equal(w.states.at(-1), "other-account");
+  assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/refused", reason: "other-account" }, origin: IDE }]);
+  w.deliver(identity);
+  await w.settle();
+  assert.equal(w.mints(), 0);
+});
+
+test("a machine list that cannot load is unavailable, never other-account", async () => {
+  const w = localWorld("unavailable");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  assert.equal(w.states.at(-1), "unavailable");
+  assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/refused", reason: "unavailable" }, origin: IDE }]);
+});
+
+test("no ready before the deadline means no node on this computer", () => {
+  const w = localWorld("own");
+  assert.equal(w.deadline()?.ms, 4000);
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE }, "https://evil.example");
+  w.expire();
+  assert.equal(w.states.at(-1), "no-node");
+});
+
+test("a ready from the node cancels the deadline", async () => {
+  const w = localWorld("own");
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.settle();
+  assert.equal(w.deadline()?.cancelled, true);
+  w.expire();
+  assert.notEqual(w.states.at(-1), "no-node");
+});
+
+test("stop cancels the deadline too", () => {
+  const w = localWorld("own");
+  w.link.stop();
+  assert.equal(w.deadline()?.cancelled, true);
+});
+
+// The bridge mints once per identity check, so two runs side by side got 428 on the second,
+// whose refusal told the frame to drop the session the first had just delivered.
+function identityWorld() {
+  const posted: unknown[] = [];
+  const states: string[] = [];
+  let handler: (event: { data: unknown; origin: string; source: unknown }) => void = () => {};
+  let mints = 0;
+  let nextNonce = 0;
+  let active = 0;
+  let overlapped = false;
+  const frame = { postMessage: (message: unknown) => posted.push(message) };
+  const link = linkMachineFrame({
+    frame: () => frame,
+    ideOrigin: IDE,
+    listen: (next) => { handler = next; return () => {}; },
+    mint: async () => {
+      mints += 1;
+      active += 1;
+      overlapped ||= active > 1;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      active -= 1;
+      return { kind: "ok", token: TOKEN };
+    },
+    onState: (state) => states.push(state),
+    identity: { machineId: MACHINE, nonce: () => `n${(nextNonce += 1)}`, verify: async () => "ok" },
+  });
+  const deliver = (data: unknown) => handler({ data, origin: IDE, source: frame });
+  const answerHellos = async () => {
+    for (let step = 0; step < 8; step += 1) {
+      deliver({ type: "osionos-ide/identity", machineId: MACHINE, sig: SIG });
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+  };
+  const sessions = () => posted.filter((message) => (message as { type: string }).type === "osionos-ide/session").length;
+  const refusals = () => posted.filter((message) => (message as { type: string }).type === "osionos-ide/refused").length;
+  return { deliver, answerHellos, sessions, refusals, states, link, mints: () => mints, overlapped: () => overlapped };
+}
+
+test("ready and need-session together run one after the other, and nothing is refused", async () => {
+  const w = identityWorld();
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  w.deliver({ type: "osionos-ide/need-session" });
+  await w.answerHellos();
+  assert.equal(w.overlapped(), false);
+  assert.equal(w.refusals(), 0);
+  assert.equal(w.sessions(), 2);
+});
+
+test("retry starts over when an identity answer never came", async () => {
+  const w = identityWorld();
+  w.deliver({ type: "osionos-ide/ready", node: MACHINE });
+  await w.link.retry();
+  await w.answerHellos();
+  assert.equal(w.sessions(), 1);
+});

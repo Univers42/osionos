@@ -118,7 +118,7 @@ describe('what a token sees (C117)', () => {
 		assert.ok(!writeNames.includes('build_plan'));
 		assert.deepEqual(
 			WRITE_TOOLS.map((tool) => tool.name).sort(),
-			['add_blocks', 'archive_page', 'create_page', 'rename_page'],
+			['add_blocks', 'archive_page', 'create_page', 'rename_page', 'update_page_settings'],
 		);
 	});
 

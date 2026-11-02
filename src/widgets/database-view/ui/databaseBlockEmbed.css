@@ -74,7 +74,9 @@
   inset-block: 0;
   right: 2.125rem;
   padding-left: 1.5rem;
-  background: linear-gradient(to right, transparent, var(--color-surface-primary) 1.5rem);
+  /* No paint and no backdrop-filter: a fade showed over a tinted callout, and a filter
+     would become the containing block of the template dropdown and clip it. */
+  background: transparent;
 }
 
 /* Floating beside the title only works while both fit: at 400 px the toolbar
@@ -136,6 +138,13 @@
 .osionos-database-block--inline .osionos-object-database-single-view .odb-view-body,
 .osionos-database-block--inline .osionos-object-database-single-view .odb-pager {
   padding-inline: 0;
+}
+
+/* The surface behind an inline database belongs to what holds it, a page or a
+ * callout (issue 266): a view's flex-1 body painted its own surface over a tinted
+ * callout. Sticky headers and cards keep their surface, they sit over content. */
+.osionos-database-block--inline .osionos-object-database-single-view .bg-surface-primary.flex-1:not(.sticky) {
+  background-color: transparent;
 }
 
 /* A collapsed embed must stay restorable: keep its toggle visible at rest. */

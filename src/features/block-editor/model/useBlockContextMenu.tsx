@@ -266,10 +266,13 @@ export function useBlockContextMenu({
   const openContextMenu = useCallback(
     (event: React.MouseEvent, blockId: string) => {
       event.preventDefault();
+      const blockEl = (event.target as Element).closest?.(`[data-block-id="${blockId}"]`);
+      const edges = blockEl?.getBoundingClientRect();
       setContextMenu({
         blockId,
         x: event.clientX,
         y: event.clientY,
+        blockEdges: edges ? { left: edges.left, right: edges.right } : undefined,
       });
     },
     [],

@@ -96,6 +96,11 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
       expandToPanel();
     }
   }, [collapseToRail, expandToPanel, hide, setSidebarWidth]);
+  // Dragging to close is slow for a toggle done all day (#273).
+  const onResizeDoubleClick = useCallback(() => {
+    if (useUIStore.getState().sidebarMode === "panel") collapseToRail();
+    else expandToPanel();
+  }, [collapseToRail, expandToPanel]);
   const startResize = useSidebarResize({
     getStartWidth: () => {
       draggingRef.current = true;
@@ -142,6 +147,7 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
           tabIndex={0}
           className={styles.resizeHandle}
           onPointerDown={startResize}
+          onDoubleClick={onResizeDoubleClick}
           onKeyDown={onResizeKeyDown}
         />
       )}

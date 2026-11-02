@@ -260,3 +260,13 @@ describe('GET /api/account/sessions', () => {
 		assert.equal(after.body.sessions[0].id, tokenClaims(consumed.body.session.accessToken).jti);
 	});
 });
+
+describe('publicIpPrefix (#236)', () => {
+	it('hides what maps the deployment and keeps a public prefix', async () => {
+		const { publicIpPrefix } = await import('../../scripts/bridge-sessions.mjs');
+		for (const hidden of ['172.24.0.0/24', '10.0.2.0/24', '192.168.1.0/24', '127.0.0.0/24', '100.97.49.0/24', 'fd7a:115c:a1e0::/48', null]) {
+			assert.equal(publicIpPrefix(hidden), null, String(hidden));
+		}
+		for (const shown of ['83.44.12.0/24', '172.32.1.0/24', '2a00:dd80:3e::/48']) assert.equal(publicIpPrefix(shown), shown);
+	});
+});

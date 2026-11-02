@@ -1,0 +1,18 @@
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--vscode-terminal-background, var(--vscode-panel-background, transparent));
+}
+
+.terminal {
+  position: absolute;
+  inset: 0;
+}
+
+.status {
+  margin: 12px;
+  font: 13px system-ui, sans-serif;
+  color: var(--vscode-foreground);
+}

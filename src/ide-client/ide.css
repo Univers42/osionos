@@ -16,5 +16,13 @@ body { display: flex; flex-direction: column; background: var(--osio-bg-canvas);
 .actions button { font: inherit; color: inherit; background: transparent; border: 1px solid var(--osio-border); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
 .actions button:hover { background: var(--osio-accent-subtle); }
 .actions button:focus-visible { outline: 2px solid var(--osio-accent); outline-offset: 1px; }
-.editor { flex: 1 1 auto; min-height: 0; }
+.workbench { display: flex; flex: 1 1 auto; min-height: 0; }
+.explorer { flex: 0 0 240px; overflow: auto; padding: 6px 0; border-right: 1px solid var(--osio-border); background: var(--osio-bg-panel); }
+.explorer ul { list-style: none; margin: 0; padding: 0; }
+.explorer .node > .label { display: block; padding: 2px 8px 2px calc(12px + var(--depth, 0) * 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.explorer .node > .label:hover { background: var(--osio-accent-subtle); }
+.explorer .folder > .label::before { content: "▸"; display: inline-block; width: 12px; margin-left: -12px; color: var(--osio-fg-muted); }
+.explorer .folder[aria-expanded="true"] > .label::before { content: "▾"; }
+.explorer-error { padding: 8px 12px; color: var(--osio-danger); }
+.editor { flex: 1 1 auto; min-width: 0; min-height: 0; }
 .terminal { flex: 0 0 38vh; border-top: 1px solid var(--osio-border); }

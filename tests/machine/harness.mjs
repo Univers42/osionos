@@ -35,14 +35,31 @@ export function makeFolder(base) {
 		version: '2.0.0',
 		tasks: [{ label: 'sentinel', type: 'shell', command: 'touch untrusted-task-ran', runOptions: { runOn: 'folderOpen' } }],
 	}));
+	// C11: a debug launch writes its own sentinel; it must not run before the owner trusts.
+	writeFileSync(join(folder, 'debug-target.js'), "require('fs').writeFileSync(__dirname + '/debug-ran', 'yes');\n");
+	writeFileSync(join(folder, '.vscode', 'launch.json'), JSON.stringify({
+		version: '0.2.0',
+		configurations: [{ name: 'sentinel', type: 'node', request: 'launch', program: '${workspaceFolder}/debug-target.js' }],
+	}));
 	execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: folder });
 	execFileSync('git', ['-c', 'user.email=e2e@osionos', '-c', 'user.name=e2e', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: folder });
 	return folder;
 }
 
-export async function startNode({ serverLib, home, idePort, appOrigin }) {
-	const child = spawn(process.execPath, [CLI, 'serve', '--node', 'laptop', '--server', serverLib, '--listen', `127.0.0.1:${idePort}`, '--app-origin', appOrigin, '--client', CLIENT], {
-		env: { ...process.env, HOME: home, OSIONOS_IDE_TOKEN_SECRET: SECRET, OSIONOS_IDE_OWNER: OWNER },
+export function startNode({ serverLib, home, idePort, appOrigin }) {
+	return spawnNode({ args: ['--node', 'laptop'], env: { HOME: home, OSIONOS_IDE_TOKEN_SECRET: SECRET, OSIONOS_IDE_OWNER: OWNER }, serverLib, idePort, appOrigin, name: 'laptop' });
+}
+
+/** A paired node: `home` holds .osionos/machine.json; no --node and no shared secret. */
+export function startPairedNode({ serverLib, home, idePort, appOrigin, extraAppOrigins = [], machineId }) {
+	const env = { ...process.env, HOME: home };
+	delete env.OSIONOS_IDE_TOKEN_SECRET;
+	return spawnNode({ args: extraAppOrigins.flatMap((origin) => ['--app-origin', origin]), env, replaceEnv: true, serverLib, idePort, appOrigin, name: machineId });
+}
+
+async function spawnNode({ args, env, replaceEnv = false, serverLib, idePort, appOrigin, name }) {
+	const child = spawn(process.execPath, [CLI, 'serve', ...args, '--server', serverLib, '--listen', `127.0.0.1:${idePort}`, '--app-origin', appOrigin, '--client', CLIENT], {
+		env: replaceEnv ? env : { ...process.env, ...env },
 		stdio: ['ignore', 'pipe', 'pipe'],
 	});
 	let log = '';
@@ -51,7 +68,7 @@ export async function startNode({ serverLib, home, idePort, appOrigin }) {
 	// Caveat: 60 s covers a cold server start on this laptop (measured 0.75 s warm); a slower
 	// machine fails here with the node's own log attached, not with a broken feature.
 	const deadline = Date.now() + 60_000;
-	while (!log.includes('osionos-node: laptop on')) {
+	while (!log.includes(`osionos-node: ${name} on`)) {
 		if (child.exitCode !== null || Date.now() > deadline) throw new Error(`osionos-node did not start:\n${log}`);
 		await new Promise((resolve) => setTimeout(resolve, 100));
 	}

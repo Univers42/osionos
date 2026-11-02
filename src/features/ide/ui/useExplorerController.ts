@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { PAGE_FILE_SUFFIX } from "../model/pageFileNames";
 import React from "react";
 
 import { flattenForRender, indexByRel } from "../model/explorerRows";
@@ -18,6 +19,7 @@ import type { WorkspaceFileOps } from "../model/workspaceFileOps";
 import { parentOf } from "../model/workspacePath";
 import type { ExplorerContextValue } from "./explorerContext";
 import type { ExplorerRow, ExplorerRowKind } from "../model/explorerRows";
+import { PLAIN_EXPLORER_HOST, type ExplorerHost } from "./explorerContext";
 import { useExplorerActions } from "./useExplorerActions";
 import { useExplorerFocus } from "./useExplorerFocus";
 import { useExplorerKeyDown } from "./useExplorerKeyDown";
@@ -57,13 +59,17 @@ export type ExplorerControllerProps = {
   defaultExpanded?: readonly string[];
   /** One muted line shown in an expanded, empty folder, by folder path. Keep stable too. */
   emptyHints?: Readonly<Record<string, string>>;
+  /** The app's stores, when the tree runs in the app. */
+  host?: ExplorerHost;
+  /** A folder on a computer: `.omd` is an ordinary file, and there are no pages. */
+  plainFiles?: boolean;
 };
 
 /** Wires tree state, focus, mutations and keys into the context value the rows
  *  read plus the root-level handlers. No JSX: WorkspaceExplorer only lays out. */
-export function useExplorerController({ ops, onOpen, pageIdOf, onRowMenu, defaultExpanded, emptyHints }: ExplorerControllerProps) {
-  const tree = useExplorerTree(ops, defaultExpanded);
-  const actions = useExplorerActions({ ops, tree, onOpen });
+export function useExplorerController({ ops, onOpen, pageIdOf, onRowMenu, defaultExpanded, emptyHints, host = PLAIN_EXPLORER_HOST, plainFiles = false }: ExplorerControllerProps) {
+  const tree = useExplorerTree(ops, defaultExpanded, plainFiles);
+  const actions = useExplorerActions({ ops, tree, onOpen, plainFiles });
   const { pending, setPending } = actions;
   const creating = pending?.type === "create" ? pending : null;
   const rows = React.useMemo(() => flattenForRender(tree.dirs, tree.expanded, creating, emptyHints), [tree.dirs, tree.expanded, creating, emptyHints]);
@@ -74,8 +80,9 @@ export function useExplorerController({ ops, onOpen, pageIdOf, onRowMenu, defaul
 
   const activate: ExplorerContextValue["activate"] = (rel, row) => {
     focusRow(rel);
-    if (row.kind === "dir") tree.setOpen(rel, !tree.expanded.has(rel));
-    else onOpen(rel, row.kind);
+    if (row.kind !== "dir") return onOpen(rel, row.kind);
+    tree.setOpen(rel, !tree.expanded.has(rel));
+    if (row.pageFile) onOpen(`${rel}${PAGE_FILE_SUFFIX}`, "page");
   };
   const cancelEdit = (): void => { setPending(null); focusRow(tabbableRel); };
   const newIn = (kind: "file" | "dir") => (): void => {
@@ -130,6 +137,7 @@ export function useExplorerController({ ops, onOpen, pageIdOf, onRowMenu, defaul
     moveTo: actions.moveTo,
     retry: (dir) => void tree.load(dir),
     openMenu,
+    host,
   };
   const onKeyDown = useExplorerKeyDown({
     visible,

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/20 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/20 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/31 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,9 +37,9 @@ function codeTheme(host: HTMLElement): ITheme {
   };
 }
 
-/** xterm.js terminal over the sandbox PTY (P3). Lazy-loaded from IdeBottomStrip
- *  so xterm never lands in the warm IDE chunk — it loads on first terminal open.
- *  The transport (WS + resize) is useIdeTerminal; this file owns the emulator. */
+/** xterm.js terminal over the sandbox PTY (P3, useIdeTerminal); the desktop app's dock shows
+ *  LocalVsCodeTerminal instead. Lazy-loaded from the dock so xterm never lands in the warm
+ *  IDE chunk — it loads on first terminal open. This file owns the emulator. */
 export const IdeTerminal: React.FC<{ termId?: string; safe?: boolean }> = ({ termId = "0", safe = false }) => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const hostRef = React.useRef<HTMLDivElement>(null);
@@ -75,7 +75,7 @@ export const IdeTerminal: React.FC<{ termId?: string; safe?: boolean }> = ({ ter
   }, [term]);
 
   const { closedReason, reconnect } = useIdeTerminal(term, workspaceId, termId, safe);
-  const reachable = useSandboxHealthStore((s) => isSandboxReachable(s.state));
+  const reachable = isSandboxReachable(useSandboxHealthStore((s) => s.state));
 
   return (
     <div className="relative min-h-0 flex-1" data-osio-terminal>
@@ -83,7 +83,8 @@ export const IdeTerminal: React.FC<{ termId?: string; safe?: boolean }> = ({ ter
           is not cut by the dock's radius (a quarter of it below, half beside:
           enough for any roundness setting). Text padding lives on .xterm. */}
       <div ref={hostRef} className="absolute left-0 top-0 right-[calc(var(--osio-radius-pane)/2)] bottom-[calc(var(--osio-radius-pane)/4)]" />
-      {(!reachable || closedReason !== null) && (
+      {/* With no reachable sandbox the dock shows this computer's terminal instead (WorkbenchDock). */}
+      {reachable && closedReason !== null && (
         <div className="absolute inset-0">
           <SandboxUnavailable onRetried={(next) => { if (isSandboxReachable(next)) reconnect(); }} />
         </div>

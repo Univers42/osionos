@@ -792,7 +792,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
     case "code":
       return (
         <div
-          data-code-theme={block.codeTheme ?? "dark"}
+          data-code-theme={block.codeTheme ?? "app"}
           className="osio-code-card group/code relative my-0 rounded-xl border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]"
         >
           {codeBlockHeader}
@@ -944,7 +944,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           <div className="min-w-0 max-w-full flex-1">
             <EditableContent
               content={block.content}
-              className={`py-0.5 break-words text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)}`}
+              className={`py-0.5 break-words text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)} ${hasChildren && !block.content ? "osionos-callout-line--empty" : ""}`}
               style={editableStyle}
               placeholder={getBlockPlaceholder(block, "Type… '/' for commands · Enter to add blocks inside")}
               onChange={onChange}

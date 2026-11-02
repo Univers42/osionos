@@ -10,9 +10,41 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, type ComponentType } from "react";
 
 import type { DirState, ExplorerRow, ExplorerRowKind } from "../model/explorerRows";
+
+/** What the tree needs from where it runs. The app passes its stores; a page the node serves has
+ *  none (editor on disk, F2), and the defaults draw a plain file tree. */
+export type ExplorerHost = {
+  useIsActive(pageId: string): boolean;
+  beginDrag(pageId: string): void;
+  endDrag(): void;
+  PageGlyph?: ComponentType<{ pageId: string }>;
+};
+
+const useNeverActive = (): boolean => false;
+const noDrag = (): void => undefined;
+export const PLAIN_EXPLORER_HOST: ExplorerHost = { useIsActive: useNeverActive, beginDrag: noDrag, endDrag: noDrag };
+
+/** The words that differ between a cloud workspace and a folder on a computer. */
+export type ExplorerCopy = {
+  toolbar: string;
+  loading: string;
+  errorTitle: string;
+  emptyTitle: string;
+  deleteQuestion(name: string): string;
+  deleteAction: string;
+};
+
+export const WORKSPACE_EXPLORER_COPY: ExplorerCopy = {
+  toolbar: "Files",
+  loading: "Loading workspace files…",
+  errorTitle: "Could not read the workspace folder",
+  emptyTitle: "This workspace folder is empty",
+  deleteQuestion: (name) => `Move “${name}” to the trash? A folder goes with everything inside. Restore it from Archived files.`,
+  deleteAction: "Move to trash",
+};
 
 export type ExplorerPending =
   | { type: "create"; parent: string; kind: "file" | "dir" }
@@ -40,6 +72,7 @@ export type ExplorerContextValue = {
   /** Opens the page actions menu for the given row. The host widget wires the
    *  actual PageContextMenu; the explorer only reports the request. */
   openMenu(rel: string, row: ExplorerRow, at: { x: number; y: number }): void;
+  host: ExplorerHost;
 };
 
 const ExplorerContext = createContext<ExplorerContextValue | null>(null);

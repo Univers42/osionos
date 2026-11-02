@@ -10,10 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { APPEARANCE_ATTRIBUTES } from "@/shared/config/theme";
-
 import { editor } from "../model/monacoRuntime";
 import { buildEditorTheme, resolveEditorColors, SYNTAX_KEYS, type EditorTokenInput, type SyntaxKey } from "./editorPalette";
+import { watchAppearance } from "./watchAppearance";
 
 // The browser half of the palette bridge (editorPalette.ts is the pure half).
 // Tokens are read from the EDITOR HOST's computed style, not from :root — the
@@ -73,17 +72,5 @@ export function applyEditorTheme(host: HTMLElement): void {
 /** Apply now and keep following palette/theme changes; returns the unsubscribe. */
 export function watchEditorTheme(host: HTMLElement): () => void {
   applyEditorTheme(host);
-  const rerun = () => { if (host.isConnected) applyEditorTheme(host); };
-  const rootObserver = new MutationObserver(rerun);
-  rootObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette", "class", ...APPEARANCE_ATTRIBUTES] });
-  const card = host.closest<HTMLElement>("[data-code-theme]");
-  const cardObserver = card ? new MutationObserver(rerun) : null;
-  cardObserver?.observe(card as HTMLElement, { attributes: true, attributeFilter: ["data-code-theme"] });
-  const scheme = window.matchMedia("(prefers-color-scheme: dark)");
-  scheme.addEventListener("change", rerun);
-  return () => {
-    rootObserver.disconnect();
-    cardObserver?.disconnect();
-    scheme.removeEventListener("change", rerun);
-  };
+  return watchAppearance(host, () => applyEditorTheme(host));
 }

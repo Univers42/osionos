@@ -51,6 +51,14 @@ import { wsLaneHealth } from './bridge-realtime-ws-lane.mjs';
 import { socketPublishRoute } from './bridge-publish-socket.mjs';
 
 const TOKEN_VERSION = 'osionos_v1';
+/** A proxy's or container's address says nothing about the device and maps the
+ *  deployment (#236): the list shows only a prefix on the public internet. */
+const PRIVATE_PREFIX = /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|169\.254\.|f[cd]|fe[89ab]|::1?(\/|$))/i;
+
+export function publicIpPrefix(prefix) {
+	return typeof prefix === 'string' && !PRIVATE_PREFIX.test(prefix) ? prefix : null;
+}
+
 const SESSION_COLUMNS = 'id,created_at,expires_at,last_seen_at,auth_method,ip_prefix,user_agent,family_id';
 const LIST_LIMIT = 50;
 const LIST_PAGE_SIZE = 500;
@@ -320,7 +328,7 @@ async function listSessions({ config, pg, session }, response) {
 		expiresAt: row.expires_at,
 		lastSeenAt: row.last_seen_at,
 		authMethod: row.auth_method,
-		ipPrefix: row.ip_prefix,
+		ipPrefix: publicIpPrefix(row.ip_prefix),
 		userAgent: row.user_agent,
 		current: String(row.id ?? '').toLowerCase() === currentId,
 	}));

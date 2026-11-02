@@ -11,14 +11,12 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { prefersReducedMotion } from "@/entities/page/ui/coverMedia";
 import { editor, KeyCode, KeyMod } from "../model/monacoRuntime";
 import { acquireModel, releaseModel } from "../model/monacoModels";
 import { loadMonacoLanguage } from "../model/monacoLanguages";
 import { indentsWithTabs } from "../model/ideLanguages";
 import { registerOpenCodeEditor } from "../model/openCodeEditors";
 import { editorFontFamily, OSIO_THEME, watchEditorTheme } from "./monacoTheme";
-import { attachBreakpoints } from "./monacoBreakpoints";
 
 const SAVE_DEBOUNCE_MS = 1200;
 
@@ -41,7 +39,11 @@ export interface MonacoEditorConfig {
   onStatus(status: EditorStatus): void;
   onRun(): void;
   onFormat(): void;
+  /** Extra gutters for this editor; the answer detaches them. The debugger's lives in the app. */
+  attachGutter?: (instance: editor.IStandaloneCodeEditor, uri: string) => () => void;
 }
+
+const prefersReducedMotion = (): boolean => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 // Posture: what CodeMirror shipped, not Monaco's defaults. No minimap, no
 // word-based suggestions (completion is the LSP's or nobody's), no sticky
@@ -140,7 +142,7 @@ export function useMonacoEditor(
     // dispatcher): Cmd/Ctrl+Enter runs, Cmd/Ctrl+Alt+L formats.
     instance.addCommand(KeyMod.CtrlCmd | KeyCode.Enter, () => configRef.current.onRun());
     instance.addCommand(KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyL, () => configRef.current.onFormat());
-    const stopBreakpoints = attachBreakpoints(instance, current.uri);
+    const stopBreakpoints = current.attachGutter?.(instance, current.uri);
     const stopRegistry = registerOpenCodeEditor(pageId, { read: () => model.getValue(), replace: (text) => replaceEditorText(instance, text) });
 
     const reportStatus = () => {
@@ -175,7 +177,7 @@ export function useMonacoEditor(
       flush();
       for (const sub of subscriptions) sub.dispose();
       stopTheme();
-      stopBreakpoints();
+      stopBreakpoints?.();
       stopRegistry();
       instance.dispose();
       editorRef.current = null;

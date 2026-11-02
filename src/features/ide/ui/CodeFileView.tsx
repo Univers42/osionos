@@ -29,6 +29,7 @@ import { useIdeRevealBus } from "../model/ideRevealBus";
 import { useIdeSyncConflicts } from "../model/ideSyncConflicts";
 import { useTerminalRunBus } from "../model/terminalRunBus";
 import type { IDisposable } from "../model/monacoRuntime";
+import { attachBreakpoints } from "./monacoBreakpoints";
 import { replaceEditorText, useMonacoEditor, type EditorStatus } from "./useMonacoEditor";
 import { RunConsole } from "./RunConsole";
 import "./monacoEditor.css";
@@ -98,6 +99,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const runRef = React.useRef<() => void>(() => undefined);
   const formatRef = React.useRef<() => void>(() => undefined);
   const editorRef = useMonacoEditor(hostRef, {
+    attachGutter: attachBreakpoints,
     pageId,
     blockId,
     monacoId: lang.monacoId,
@@ -206,7 +208,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   if (!contentLoaded || !blockId) return <LoadingPane />;
 
   return (
-    <div data-code-theme="dark" data-osio-ide className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
+    <div data-code-theme="app" data-osio-ide className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
       {conflict && (
         <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 text-xs text-[var(--osio-code-fg)]">
           {/* The page theme's warning colour clears 3:1 on the dark card, not 4.5:1, so only the icon wears it. */}

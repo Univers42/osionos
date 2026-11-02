@@ -11,6 +11,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { wouldBlankDatabase } from './bridge-object-db-guard.mjs';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
@@ -95,6 +96,7 @@ import { createRequestMeter } from './bridge-perf.mjs';
 import { createBaasTransport } from './bridge-baas-transport.mjs';
 import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 import { createEmbedHandler } from './bridge-embed.mjs';
+import { validatedDatabaseState, validatedPageContent } from './bridge-content-validation.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -833,7 +835,7 @@ function pageCreateRowFromPayload(payload, authContext) {
 		visibility,
 		collaborators: safeJsonArray(payload.collaborators),
 		properties: safeJsonArray(payload.properties),
-		content: safeJsonArray(payload.content),
+		content: validatedPageContent(payload.content),
 	};
 	// Only a create that carries an id gets one; without it the database mints it, as before.
 	if (clientId) row.id = clientId;
@@ -884,7 +886,7 @@ function pageUpdateRowFromPayload(payload) {
 	assignPayloadValue(row, payload, 'visibility', 'visibility', pageVisibility);
 	assignPayloadValue(row, payload, 'collaborators', 'collaborators', (value) => safeJsonArray(value));
 	assignPayloadValue(row, payload, 'properties', 'properties', (value) => safeJsonArray(value));
-	assignPayloadValue(row, payload, 'content', 'content', (value) => safeJsonArray(value));
+	assignPayloadValue(row, payload, 'content', 'content', validatedPageContent);
 	assignPayloadValue(row, payload, 'archivedAt', 'archived_at', (value) => safeTimestampOrNull(value, 'archivedAt'));
 	assignPayloadValue(row, payload, 'isTemplate', 'is_template', (value) => value === true);
 	assignPayloadValue(row, payload, 'isDefaultTemplate', 'is_default_template', (value) => value === true);
@@ -3727,7 +3729,7 @@ async function handleRecordSubitemCreate(match, request, response, config, fetch
 		title: safeText(safe.title, 200),
 		icon: safeText(safe.icon, 80),
 		properties: safeJsonArray(safe.properties),
-		content: safeJsonArray(safe.content),
+		content: validatedPageContent(safe.content),
 		now: new Date().toISOString(),
 	});
 	const created = await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', {
@@ -4179,9 +4181,11 @@ async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	let mentions = [];
 	if (title) {
 		const excluded = new Set([pageId, ...sourceIds]);
-		// Ponytail: limit=20 applies before the read filter, so mentions can under-report;
-		// every workspace chunk answers its own 20 and the list is cut back to 20 readable ones.
-		const hits = (await readInChunks(accessible, async (chunk) => {
+		// A title is usually a common word, so an unlinked mention only means something inside
+		// the page's own workspace: `Sales` used to list shell scripts from the owner's other
+		// workspaces (#261). The linked list above keeps every workspace: a link is explicit.
+		// Caveat: limit=20 applies before the read filter, so mentions can under-report.
+		const hits = (await readInChunks([row.workspace_id], async (chunk) => {
 			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('workspace_id', chunk)}&archived_at=is.null&search_doc=wfts(english).${encodeURIComponent(`"${title}"`)}&select=${BACKLINK_SELECT}&limit=20`).catch(() => []);
 			return Array.isArray(rows) ? rows : [];
 		})).flat();
@@ -4634,7 +4638,11 @@ async function handlePageConfigPatch(url, request, response, config, fetchImpl) 
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const { authContext, workspaceId } = await requirePageScopeAccess(request, pageId, payload, 'update', config, fetchImpl);
 	// Version snapshots are local-only (devil ruling 2026-10-28): dropped so old builds stop storing them.
-	const { versions: _versions, ...pageConfig } = safeJsonObject(payload.config, 'config');
+	const { versions: _versions, ...sentConfig } = safeJsonObject(payload.config, 'config');
+	// A row is replaced whole: `merge` lets a caller holding one setting, the assistant,
+	// change it without resetting the others.
+	const stored = payload.merge === true ? await fetchPageConfigRow(pageId, authContext.userId, config, fetchImpl) : null;
+	const pageConfig = { ...stored?.config, ...sentConfig };
 	const rows = await baasRest(config, fetchImpl, 'osionos_page_configurations?on_conflict=user_id,page_id', {
 		method: 'POST',
 		body: {
@@ -4661,8 +4669,14 @@ const OBJECT_DB_KEY_MAX = 128;
 async function handleObjectDatabasesGet(url, request, response, config, fetchImpl) {
 	if (url.pathname !== '/api/object-databases') return false;
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	// Databases without a workspace predate the column: they stay listed in every
+	// workspace until claimed, or a filtered read would hide them from their owner.
+	const workspaceId = url.searchParams.get('workspaceId');
+	const dbKey = safeText(url.searchParams.get('dbKey'), OBJECT_DB_KEY_MAX);
+	const keyFilter = dbKey ? { db_key: `eq.${dbKey}` } : {};
+	const workspaceFilter = workspaceId ? { or: `(workspace_id.eq.${requireUuid(workspaceId, 'workspaceId')},workspace_id.is.null)` } : {};
 	const rows = await baasRest(config, fetchImpl,
-		`osionos_object_databases?${postgrestQuery({ owner_id: `eq.${authContext.userId}`, select: 'db_key,title,state,workspace_id,updated_at' })}`);
+		`osionos_object_databases?${postgrestQuery({ ...workspaceFilter, ...keyFilter, owner_id: `eq.${authContext.userId}`, select: 'db_key,title,state,workspace_id,updated_at' })}`);
 	const databases = Array.isArray(rows) ? rows.map((row) => ({
 		dbKey: row.db_key,
 		title: row.title ?? 'Untitled',
@@ -4693,16 +4707,27 @@ async function handleObjectDatabasesUpsert(url, request, response, config, fetch
 	// answers 409 `db_exists` too, on purpose: the builder reads `db_exists` on a key it
 	// minted itself as "already done". Do not turn it into a 200 that echoes the stored state.
 	const createOnly = payload.ifAbsent === true;
+	const incoming = validatedDatabaseState(payload.state);
+	if (!createOnly) {
+		const owner = encodeURIComponent(authContext.userId);
+		const key = encodeURIComponent(dbKey);
+		const found = await baasRest(config, fetchImpl, `osionos_object_databases?owner_id=eq.${owner}&db_key=eq.${key}&select=state&limit=1`, { method: 'GET' });
+		if (wouldBlankDatabase(dbKey, incoming, found?.[0]?.state)) {
+			json(response, 409, { error: 'db_exists' }, config);
+			return true;
+		}
+	}
 	let rows;
 	try {
 		rows = await baasRest(config, fetchImpl, createOnly ? 'osionos_object_databases' : 'osionos_object_databases?on_conflict=owner_id,db_key', {
 			method: 'POST',
 			body: {
 				owner_id: authContext.userId,
-				workspace_id: workspaceId,
+				// A push that names no workspace must not clear the one the row has.
+				...(workspaceId ? { workspace_id: workspaceId } : {}),
 				db_key: dbKey,
 				title: safeText(payload.title, 200) || 'Untitled',
-				state: safeJsonObject(payload.state, 'state'),
+				state: incoming,
 				updated_at: new Date().toISOString(),
 			},
 			prefer: createOnly ? 'return=representation' : 'resolution=merge-duplicates,return=representation',
