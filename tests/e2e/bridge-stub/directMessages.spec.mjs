@@ -84,7 +84,7 @@ test.describe("direct messages (bridge stub)", () => {
     const composer = page.getByPlaceholder(`Message #${DM.name}`);
     await composer.fill("Yes, see you at three.");
     await composer.press("Enter");
-    await expect(page.getByText("Yes, see you at three.")).toBeVisible();
+    await expect(page.getByRole("paragraph").filter({ hasText: "Yes, see you at three." })).toBeVisible();
     await expect(composer).toHaveValue("");
     expect(bridge.posted).toEqual(["Yes, see you at three."]);
   });

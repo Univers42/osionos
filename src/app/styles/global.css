@@ -417,7 +417,7 @@
   --osio-border-style: solid;
   --osio-scrollbar-radius: 4px;
   --osio-heading-decoration: none;
-  --osio-link-decoration: underline;
+  --osio-link-decoration: none;
   --osio-letter-spacing-ui: 0;
   --osio-letter-spacing-button: 0;
   --osio-font-weight-button: 500;
