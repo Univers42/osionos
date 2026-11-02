@@ -1,8 +1,10 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { accountRestSeconds, recordFailure } from './cooldown.ts';
 import { failedAttemptCost, failoverClassOf, kindOf, startAttempt } from './attempt.ts';
 import type { Attempt, AttemptRecord, ChainStep } from './attempt.ts';
+import { classifyFailure } from './failover.ts';
 import { rotateReservation } from './rotate.ts';
 import { quotaSignal, spendsSharedQuota } from './quota.ts';
 import type { PumpOutcome } from './streamPump.ts';
@@ -15,8 +17,9 @@ import type { PumpOutcome } from './streamPump.ts';
  * row moved under us). `refused`: the next model cannot be paid for, and the
  * money of the old one is already back. `moved`: the next attempt, with its
  * `route` frame already in the stream, and where it sits in the chain.
+ * `retry`: the same attempt once more, after the pause.
  */
-export type MoveOutcome = { kind: 'stay' } | { kind: 'refused' } | { kind: 'moved'; attempt: Attempt; index: number };
+export type MoveOutcome = { kind: 'stay' } | { kind: 'refused' } | { kind: 'retry' } | { kind: 'moved'; attempt: Attempt; index: number };
 
 export interface MoveInput {
 	db: Pool;
@@ -43,6 +46,29 @@ async function nextIndex(input: MoveInput): Promise<number> {
 	return steps.findIndex((step, position) => position > index && !(closed && spendsSharedQuota(step.target)));
 }
 
+/**
+ * A run with one route has no chain to absorb a blip, so it gets ONE retry. Not
+ * after anything was emitted (a tool would run twice), not on a limit, a timeout
+ * or a cancel, and not while the account rests.
+ */
+async function retriesOnce({ steps, records, current, outcome, run, redis }: MoveInput): Promise<boolean> {
+	if (steps.length !== 1 || records.length > 0 || outcome.emitted) return false;
+	if (run.signal.aborted || current.controller.signal.aborted) return false;
+	const reason = classifyFailure(outcome.error)?.reason;
+	if (reason !== 'upstream_error' && reason !== 'unavailable') return false;
+	return (await accountRestSeconds(redis)) === undefined;
+}
+
+/**
+ * 1 to 3 s, jittered so runs that failed together do not come back together.
+ *
+ * Caveat: a blip longer than the pause still ends the run, and a run the user
+ * cancels here ends at once with `cancelled`. The value is a guess, not measured.
+ */
+async function backoff(signal: AbortSignal): Promise<void> {
+	await sleep(1000 + Math.random() * 2000, undefined, { signal }).catch(() => undefined);
+}
+
 export async function moveOn(input: MoveInput): Promise<MoveOutcome> {
 	const { db, run, steps, current, outcome, records } = input;
 	// Before the move is decided: a model that failed rests even when the run
@@ -62,7 +88,12 @@ export async function moveOn(input: MoveInput): Promise<MoveOutcome> {
 		runSignal: run.signal,
 		attemptSignal: current.controller.signal,
 	});
-	if (!failure) return { kind: 'stay' };
+	if (!failure) {
+		if (outcome.error === undefined || !(await retriesOnce(input))) return { kind: 'stay' };
+		records.push({ model: current.target.modelId, kind: kindOf(current.target), outcome: 'retried', billed: 0 });
+		await backoff(run.signal);
+		return run.signal.aborted ? { kind: 'stay' } : { kind: 'retry' };
+	}
 	const next = steps[nextAt];
 	const billed = failedAttemptCost(current.target, failure, outcome.usage, run.runId, run.promptChars);
 	const rotated = await rotateReservation(db, {

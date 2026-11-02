@@ -45,11 +45,11 @@ const accountRests = async () => (await app.redis.exists(ACCOUNT_KEY)) === 1;
 const closeQuota = () => app.redis.set(ACCOUNT_KEY, String(Date.now() + 30_000), 'EX', 30);
 
 describe('the calls of one question', () => {
-	it('a route that keeps failing is called once per step: no SDK retry (15 before)', async () => {
+	it('a route that keeps failing costs far less than the SDK retries did (15 before)', async () => {
 		const steps = Array.from({ length: 4 }, () => [503, 503, 'tool'] as const).flat();
 		failing.script(OURS, ...steps, 503, 503, 503);
 		await runToEnd({ model: OURS });
-		assert.ok(failing.requests.length <= 5, `${failing.requests.length} calls`);
+		assert.ok(failing.requests.length <= 6, `${failing.requests.length} calls`);
 	});
 
 	it('a chain of three spends at most 7 calls: two failed routes and five steps', async () => {
@@ -174,6 +174,66 @@ describe('a failure of the provider', () => {
 		assert.deepEqual(failing.requests, [FIRST]);
 		assert.equal(lastData(events).code, 'rate_limited');
 		assert.equal(await accountRests(), false);
+	});
+});
+
+describe('the one retry of a run with no other route', () => {
+	it('a 503 is called again, after a pause', async () => {
+		failing.script(OURS, 503, 'ok');
+		const started = Date.now();
+		const { runId, events } = await runToEnd({ model: OURS });
+		assert.equal(lastOf(events).event, 'done');
+		assert.equal(failing.countFor(OURS), 2);
+		assert.ok(Date.now() - started >= 1000, 'the backoff waited');
+		assert.deepEqual((await runRow(runId)).usage?.attempts?.map((attempt) => attempt.outcome), ['retried', 'succeeded']);
+	});
+
+	it('a socket that dies is called again', async () => {
+		failing.script(OURS, 'reset', 'ok');
+		const { events } = await runToEnd({ model: OURS });
+		assert.equal(lastOf(events).event, 'done');
+		assert.equal(failing.countFor(OURS), 2);
+	});
+
+	it('only once', async () => {
+		failing.always(OURS, 503);
+		const { events } = await runToEnd({ model: OURS });
+		assert.equal(lastData(events).code, 'provider_unavailable');
+		assert.equal(failing.countFor(OURS), 2);
+	});
+
+	it('the worst case of a run with no chain is 6 calls', async () => {
+		failing.script(OURS, 503, 'tool', 'tool', 'tool', 'tool', 'ok');
+		const { events } = await runToEnd({ model: OURS });
+		assert.equal(lastOf(events).event, 'done');
+		assert.equal(failing.countFor(OURS), 6);
+	});
+
+	it('not a 429', async () => {
+		failing.script(OURS, providerLimit, 'ok');
+		await runToEnd({ model: OURS });
+		assert.equal(failing.countFor(OURS), 1);
+	});
+
+	it('not while the account rests', async () => {
+		await closeQuota();
+		failing.script(OURS, 503, 'ok');
+		await runToEnd({ model: OURS });
+		assert.equal(failing.countFor(OURS), 1);
+	});
+
+	it('not after the run showed something: a tool would run twice', async () => {
+		failing.script(OURS, 'tool', 503, 'ok');
+		await runToEnd({ model: OURS });
+		assert.equal(failing.countFor(OURS), 2);
+	});
+
+	it('not at the end of a chain: the chain was the retry', async () => {
+		failing.script(FIRST, 503);
+		failing.script(SECOND, 503, 'ok');
+		const { events } = await runToEnd({ model: FIRST, fallbacks: [{ model: SECOND }] });
+		assert.equal(lastData(events).code, 'provider_unavailable');
+		assert.deepEqual(failing.requests, [FIRST, SECOND]);
 	});
 });
 

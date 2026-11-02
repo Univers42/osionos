@@ -273,6 +273,10 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			failure = outcome.error;
 			const move = await moveOn({ db, redis, run: runState, steps, index, current, outcome, records, emit });
 			if (move.kind === 'stay') break;
+			if (move.kind === 'retry') {
+				outcome = await callModel(current);
+				continue;
+			}
 			if (move.kind === 'refused') {
 				// The old money is back and the row holds none: only the end is left.
 				research?.end('budget_exhausted', false);

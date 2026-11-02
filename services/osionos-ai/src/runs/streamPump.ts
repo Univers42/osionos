@@ -231,7 +231,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			maxOutputTokens: config.maxOutputTokens,
 			abortSignal: controller.signal,
 			// The SDK retries each STEP, unseen by the quota: 5 steps were 15
-			// calls of a 20-a-minute key. The chain is the only retry.
+			// calls of a 20-a-minute key. Our own loop decides (src/runs/moveOn.ts).
 			maxRetries: 0,
 			// The SDK must never fetch a URL: the images are bytes we fetched.
 			experimental_download: refuseDownload,
