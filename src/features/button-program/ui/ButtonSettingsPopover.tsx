@@ -24,7 +24,7 @@ import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore }
 
 import { ButtonBlockReadOnly } from "@/entities/block/ui/ReadOnlyBlock";
 import { parseButtonProgram } from "@/entities/block/model/buttonProgram";
-import type { Block } from "@/entities/block";
+import { buttonBlockLabel, type Block } from "@/entities/block";
 import { Section, SettingRow } from "@/features/settings/ui/settingsKit";
 import { getLastRun, subscribeLastRun } from "@/services/button-program/runProgram";
 import { CodeSyntaxHighlight, useClickOutside, useEscapeKey } from "@/shared/ui";
@@ -75,7 +75,7 @@ interface PopoverProps {
 
 export const ButtonSettingsPopover: React.FC<PopoverProps> = ({ block, onSave, onClose }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const [label, setLabel] = useState(block.buttonLabel ?? block.content ?? "");
+  const [label, setLabel] = useState(() => buttonBlockLabel(block));
   const [variant, setVariant] = useState<NonNullable<Block["buttonVariant"]>>(block.buttonVariant ?? "primary");
   const [href, setHref] = useState(block.buttonHref ?? "");
   const [draft, setDraft] = useState<DraftStep[]>(() => initialDraft(block));
@@ -91,8 +91,10 @@ export const ButtonSettingsPopover: React.FC<PopoverProps> = ({ block, onSave, o
       setError(`${parsed.error.path || "program"}: ${parsed.error.message}`);
       return;
     }
+    const trimmed = label.trim();
     onSave({
-      buttonLabel: label.trim() || undefined,
+      content: trimmed || "Button",
+      buttonLabel: trimmed || undefined, // keep for backward-compat
       buttonVariant: variant,
       buttonHref: href.trim() || undefined,
       buttonProgram: parsed.program.steps.length > 0 ? parsed.program : undefined,

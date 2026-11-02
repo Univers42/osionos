@@ -61,9 +61,10 @@ export function divider(): Block {
 export function toggle(text: string, children: Block[] = []): Block {
   return { id: bid(), type: 'toggle', content: text, children, collapsed: true };
 }
-export function button(label: string, href?: string, variant: 'primary' | 'secondary' = 'primary'): Block {
-  return { id: bid(), type: 'button', content: '', buttonLabel: label, buttonHref: href, buttonVariant: variant };
-}
+export const buttonBlock = (label: string, href?: string, variant: Block['buttonVariant'] = 'primary'): Block => {
+  return { id: bid(), type: 'button', content: label, buttonLabel: label, buttonHref: href, buttonVariant: variant };
+};
+export const button = buttonBlock;
 
 /** Metadata and content blocks for a seed page. */
 export interface SeedPage {

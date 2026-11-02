@@ -157,7 +157,7 @@ interface HomeSection {
 function homeButton(cellId: string, role: string, label: string, variant: "primary" | "secondary",
   action: string, args: Record<string, string>): Block {
   return { id: stableDashboardBlockId(cellId, `column-${role}`), type: "column", content: "", widthRatio: 1 / 3, children: [{
-    id: stableDashboardBlockId(cellId, `button-${role}`), type: "button", content: "", buttonLabel: label, buttonVariant: variant,
+    id: stableDashboardBlockId(cellId, `button-${role}`), type: "button", content: label, buttonLabel: label, buttonVariant: variant,
     buttonProgram: { version: 1, steps: [{ op: "action", action: { type: "app_action", name: action, args } }] },
   }] };
 }

@@ -182,7 +182,7 @@ export interface Block {
   diagramSpec?: unknown;    /** 'diagram' block: the stored SPEC (never the rendered output). Validated at use by parseDiagramSpec, never trusted as typed. */
   embed?: EmbedSnapshot;    /** Resolved link metadata for 'embed'/'bookmark' (and later media blocks). UNTRUSTED: parseEmbedSnapshot before use. `content` keeps the URL. */
   embedHeight?: number;     /** 'embed' block frame height in px for a generic page; clampEmbedHeight at use. */
-  buttonLabel?: string;     /** Visible label for a 'button' block (falls back to content) */
+  buttonLabel?: string;     /** @deprecated Canonical label is stored in `content`. Kept for read backward compatibility. */
   buttonHref?: string;      /** Button target: internal page link `page://<id>`, a `/...` path, else presentational */
   buttonVariant?: 'primary' | 'secondary'; /** Button style for a 'button' block (default: primary) */
   buttonProgram?: ButtonProgram; /** The steps a 'button' block runs on click (re-parsed on every click) */
