@@ -20,9 +20,7 @@ export function kindOfPage(page: PageEntry): PageFileKind {
 }
 
 /** "Roadmap.omd" → "Roadmap"; any other name is returned unchanged. */
-export function titleFromFileName(name: string): string {
-  return name.toLowerCase().endsWith(PAGE_FILE_SUFFIX) ? name.slice(0, -PAGE_FILE_SUFFIX.length) : name;
-}
+export { titleFromFileName } from "../../ide/model/pageFileNames";
 
 export interface SiblingName {
   own: string;

@@ -31,7 +31,7 @@ export function describeError(error: unknown): string {
  *  Ponytail: refresh is whole-cache, not per-path, and watch events are debounced
  *  into one such refresh, so a busy provider costs one listing per loaded folder
  *  per 150 ms burst, never a missed update. */
-export function useExplorerTree(ops: WorkspaceFileOps, defaultExpanded: readonly string[] = NO_FOLDERS) {
+export function useExplorerTree(ops: WorkspaceFileOps, defaultExpanded: readonly string[] = NO_FOLDERS, plainFiles = false) {
   const [dirs, setDirs] = useState<Readonly<Record<string, DirState>>>({});
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(defaultExpanded));
   const [watchNotice, setWatchNotice] = useState<string | null>(null);
@@ -52,10 +52,10 @@ export function useExplorerTree(ops: WorkspaceFileOps, defaultExpanded: readonly
       if (gen === generation.current && latest.current.get(dir) === id) setDirs((prev) => ({ ...prev, [dir]: next }));
     };
     return ops.list(dir, abort.current?.signal).then(
-      (entries) => settle({ status: "ready", rows: buildExplorerRows(entries) }),
+      (entries) => settle({ status: "ready", rows: buildExplorerRows(entries, { plainFiles }) }),
       (error: unknown) => settle({ status: "error", message: describeError(error) }),
     );
-  }, [ops]);
+  }, [ops, plainFiles]);
 
   // User-initiated listing: shows "Loading" unless rows are already on screen.
   const load = useCallback((dir: string): Promise<void> => {

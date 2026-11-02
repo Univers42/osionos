@@ -15,6 +15,8 @@ export const TERMINAL_PAGE_URL = `${LOCAL_NODE_ORIGIN}/terminal/index.html`;
 export const OLD_NODE_PROBE_URL = `${LOCAL_NODE_ORIGIN}/?local=1`;
 /** The frame posts this to the dock's colours (terminalAppLink.ts). */
 const COLORS_MESSAGE = "osionos-terminal/colors";
+/** The whole code theme; sent before the colours, and again whenever the app's appearance changes. */
+export const TERMINAL_THEME_MESSAGE = "osionos-terminal/theme";
 
 // Caveat: the page sends ready only after its whole bundle has loaded, and a first visit may wait
 // on the browser's local-network prompt, so a slow disk or a person reading the prompt can pass the
@@ -36,6 +38,7 @@ export type TerminalFrameDeps = {
   nonce: () => string;
   schedule: (fire: () => void, ms: number) => () => void;
   colors: () => TerminalColors;
+  theme?: () => unknown;
   /** Chrome's local network access permission for this site, when the browser can tell. */
   localNetwork: () => Promise<LocalNetworkState>;
   /** Whether an osionos-node answers on the IDE page, though not on /terminal/. */
@@ -71,6 +74,8 @@ export function createTerminalFrame(deps: TerminalFrameDeps) {
     const frame = deps.frame();
     if (!colorsSent && frame && event.source === frame && readIdeMessage(event.data, event.origin, LOCAL_NODE_ORIGIN)?.type === "osionos-ide/ready") {
       colorsSent = true;
+      const theme = deps.theme?.();
+      if (theme) frame.postMessage({ type: TERMINAL_THEME_MESSAGE, theme }, LOCAL_NODE_ORIGIN);
       frame.postMessage({ type: COLORS_MESSAGE, colors: deps.colors() }, LOCAL_NODE_ORIGIN);
     }
     handler(event);

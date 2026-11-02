@@ -5,6 +5,11 @@
 // each terminal talks to its pty host over that pty's own port. On the web it is served by this
 // computer's osionos-node and each terminal is a WebSocket to that node (web.ts). Framed anywhere
 // else, or never handed a port or a token, it draws nothing and takes no focus.
+import { updateUserConfiguration } from "@codingame/monaco-vscode-configuration-service-override";
+import type { CodeTheme } from "../features/ide/model/codeTheme";
+import { codeThemeSettings, legacyTerminalSettings } from "../features/ide/model/codeThemeSettings";
+import { EDITOR_CHANNEL } from "../features/machines/model/editorFrameProtocol";
+import { cdCommand } from "./cdCommand";
 import { ITerminalGroupService, IWorkbenchLayoutService, getService, initialize } from "@codingame/monaco-vscode-api";
 import "@codingame/monaco-vscode-theme-defaults-default-extension";
 import { SimpleTerminalBackend, SimpleTerminalProcess } from "@codingame/monaco-vscode-terminal-service-override";
@@ -21,8 +26,25 @@ const terminalEl = document.getElementById("terminal") as HTMLElement;
 const PLACEHOLDER_PID = 1;
 let nextProcessId = 0;
 
+// Caveat: the line goes to the newest shell whatever it is running; with vim or a build in the
+// foreground it lands there as keystrokes instead of moving the shell.
+let newestShell: { input(data: string): void } | null = null;
+let waitingLine: string | null = null;
+
+function typeInNewestShell(line: string): void {
+  if (newestShell) newestShell.input(line);
+  else waitingLine = line;
+}
+
+new BroadcastChannel(EDITOR_CHANNEL).addEventListener("message", (event) => {
+  if (event.data?.type !== "open-terminal" || typeof event.data.path !== "string") return;
+  const line = cdCommand(event.data.path);
+  if (line) typeInNewestShell(line);
+});
+
 class LocalShellProcess extends SimpleTerminalProcess {
   private readonly exited = new Emitter<number>();
+  private readonly typing = { input: (data: string) => this.input(data) };
   private readonly core;
   override onProcessExit = this.exited.event;
 
@@ -37,11 +59,18 @@ class LocalShellProcess extends SimpleTerminalProcess {
   async start() {
     const started = await this.core.start(this.size.cols, this.size.rows);
     if (started === "refused") return { message: "8 terminals are already open in this window. Close one to open another." };
-    return started === "failed" ? { message: "The shell on this computer could not start." } : undefined;
+    if (started === "failed") return { message: "The shell on this computer could not start." };
+    newestShell = this.typing;
+    if (waitingLine) this.input(waitingLine);
+    waitingLine = null;
+    return undefined;
   }
   input(data: string) { this.core.input(data); }
   resize(cols: number, rows: number) { this.core.resize(cols, rows); }
-  shutdown() { this.core.shutdown(); }
+  shutdown() {
+    if (newestShell === this.typing) newestShell = null;
+    this.core.shutdown();
+  }
   // VS Code passes the characters it rendered; the base class declares no parameter.
   override acknowledgeDataEvent(charCount?: number) { this.core.ack(charCount ?? 0); }
   // The desktop picks the cwd ($HOME) and does not report it; VS Code wants a string, not undefined.
@@ -58,35 +87,28 @@ class LocalShellBackend extends SimpleTerminalBackend {
   createProcess = async (_launch: unknown, _cwd: unknown, cols: number, rows: number) => new LocalShellProcess(this.api, { cols, rows });
 }
 
-// VS Code's default theme on the dock's side of light or dark, repainted in the dock's own colours.
-// Caveat: light/dark is the background's perceived brightness against the midpoint; a mid-grey dock
-// (around #808080) can land on the theme whose foreground colours have less contrast.
-const isLight = (hex: string): boolean => {
-  const full = hex.length <= 5 ? [...hex.slice(1, 4)].map((c) => c + c).join("") : hex.slice(1, 7);
-  const [r, g, b] = [0, 2, 4].map((at) => parseInt(full.slice(at, at + 2), 16));
-  return 0.299 * r + 0.587 * g + 0.114 * b > 128;
-};
+let appTheme: CodeTheme | null = null;
+let workbenchRunning = false;
+
+/** The app's theme whenever it comes; a running workbench repaints without touching its shells. */
+function takeTheme(theme: CodeTheme): void {
+  appTheme = theme;
+  document.body.style.background = theme.colors.bg;
+  if (workbenchRunning) void updateUserConfiguration(JSON.stringify(codeThemeSettings(theme)));
+}
 
 function terminalSettings(colors: TerminalColors) {
-  const customizations: Record<string, string> = {};
-  if (colors.background) {
-    customizations["terminal.background"] = colors.background;
-    customizations["panel.background"] = colors.background;
-  }
-  if (colors.foreground) customizations["terminal.foreground"] = colors.foreground;
-  if (colors.cursor) customizations["terminalCursor.foreground"] = colors.cursor;
-  if (colors.selection) customizations["terminal.selectionBackground"] = colors.selection;
   return {
-    "workbench.colorTheme": colors.background && isLight(colors.background) ? "Default Light Modern" : "Default Dark Modern",
-    "workbench.colorCustomizations": customizations,
+    ...(appTheme ? codeThemeSettings(appTheme) : legacyTerminalSettings(colors)),
     // The dock owns closing; the last terminal closed leaves VS Code's panel with its "+" in place.
     "terminal.integrated.hideOnLastClosed": false,
   };
 }
 
 async function start(api: TerminalPtyApi, colors: TerminalColors) {
-  if (colors.background) document.body.style.background = colors.background;
+  if (colors.background && !appTheme) document.body.style.background = colors.background;
   await initialize(terminalModeServices(new LocalShellBackend(api) as never), undefined, terminalWorkbenchOptions(terminalSettings(colors)) as never);
+  workbenchRunning = true;
   const layout = await getService(IWorkbenchLayoutService);
   // VS Code's panel is the whole page: hiding it would leave the dock blank.
   onPartVisibilityChange(Parts.PANEL_PART, (visible) => {
@@ -112,5 +134,5 @@ function onHandoff(event: MessageEvent) {
 if (location.protocol === "app:") {
   if (framedByTheApp) window.addEventListener("message", onHandoff);
 } else {
-  void startOnTheWeb(start).catch(showFailure);
+  void startOnTheWeb(start, takeTheme).catch(showFailure);
 }

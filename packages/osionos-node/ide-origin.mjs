@@ -20,6 +20,7 @@ import { checkNodeOrigin, classifyNodeRequest, isNodeHost } from '../../scripts/
 import { isNodeId, signNodeCap, verifyIdeToken, verifyNodeCap } from '../../scripts/ide-token.mjs';
 import { createSocketRegistry, forwardHttp, forwardUpgrade, refuseRaw } from './node-proxy.mjs';
 import { createPtyService } from './pty-service.mjs';
+import { createFsService } from './fs-service.mjs';
 
 const PREFIX = '/api/node/';
 const COOKIE_NAME = 'osio-node-';
@@ -92,15 +93,17 @@ function legacyVerifier(secret) {
 }
 
 // A paired machine passes `capSecret`, `verifySession` and `machineRoutes` (machine-identity.mjs),
-// and `pty` ({ host, accept }) for the web terminal; the shared-secret mode passes `secret` alone,
-// and opens no shell (W3).
-export function createIdeOriginServer({ secret, capSecret = secret, verifySession = legacyVerifier(secret), machineRoutes = null, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null, pty: ptyOptions = undefined }) {
+// `pty` ({ host, accept }) for the web terminal, and `fs` ({ accept, roots, home, appOrigins }) for
+// the editor on disk (ADR 0044); the shared-secret mode passes `secret` alone, and opens no shell
+// and no folder (W3, F5).
+export function createIdeOriginServer({ secret, capSecret = secret, verifySession = legacyVerifier(secret), machineRoutes = null, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null, pty: ptyOptions = undefined, fs: fsOptions = undefined }) {
 	const sockets = createSocketRegistry({ maxPerUser: maxSocketsPerUser });
 	const cookiePrefix = cookiePrefixFor(ideOrigin);
 	const revokedAt = new Map();
 	const isRevoked = (userId, iat) => iat <= (revokedAt.get(userId) ?? -1);
 	const paired = machineRoutes !== null;
 	const pty = paired && ptyOptions ? createPtyService({ ...ptyOptions, ideOrigin, ownerId, verifySession, isRevoked }) : null;
+	const disk = paired && fsOptions ? createFsService({ ...fsOptions, ideOrigin, ownerId, verifySession, isRevoked }) : null;
 
 	async function openSession(req, res) {
 		if (req.method !== 'POST') throw fail(405);
@@ -170,6 +173,7 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 		socket.on('error', () => socket.destroy());
 		if (!isNodeHost(req.headers, ideOrigin)) return refuseRaw(socket, 403, TEXT[403]);
 		if (req.url === '/api/pty') return pty ? pty.upgrade(req, socket, head) : refuseRaw(socket, 404, TEXT[404]);
+		if (req.url === '/api/fs') return disk ? disk.upgrade(req, socket, head) : refuseRaw(socket, 404, TEXT[404]);
 		let grant;
 		try {
 			grant = authorize(req, true);
@@ -190,15 +194,21 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 	return {
 		server,
 		pty,
-		// Cuts every open socket of a user at once, kills the owner's shells, and voids every
-		// credential issued until now.
+		fs: disk,
+		// Cuts every open socket of a user at once, kills the owner's shells, closes the editor's
+		// sockets and watches, forgets the folders it opened (F9, F17), and voids every credential
+		// issued until now.
 		revoke(userId) {
 			revokedAt.set(userId, Math.floor(Date.now() / 1000));
 			sockets.cut(userId);
-			if (userId === ownerId) pty?.killAll();
+			if (userId !== ownerId) return;
+			pty?.killAll();
+			disk?.killAll();
+			void fsOptions?.roots.forget();
 		},
 		close() {
 			pty?.killAll();
+			disk?.killAll();
 			sockets.closeAll();
 			server.closeAllConnections?.();
 			server.close();

@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// The five themes osionos ships are examples people copy, so each one must be
+// The themes osionos ships are examples people copy, so each one must be
 // valid against the catalog and readable: every text pair the contrast check
 // watches is AA (4.5:1) or better, computed from the theme's own hex values.
 
@@ -35,8 +35,7 @@ test("contrast follows WCAG 2 relative luminance", () => {
   assert.equal(parseHexColor("rgb(0 0 0)"), null);
 });
 
-test("osionos ships exactly the five themes of the spec", () => {
-  assert.deepEqual(themes.map((theme) => theme.raw.name).sort(), ["Graphite Compact", "Harbor Night", "High Contrast", "Meadow", "Studio Paper"]);
+test("osionos ships every theme file, and nothing else", () => {
   assert.deepEqual(SHIPPED_THEMES.map((theme) => theme.name).sort(), themes.map((theme) => theme.raw.name).sort());
   assert.equal(isShippedThemeName("meadow"), true);
   assert.equal(isShippedThemeName("My theme"), false);

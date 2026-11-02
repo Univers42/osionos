@@ -10,9 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { PAGE_FILE_SUFFIX } from "../../page-file/model/types";
-import { isFolderMetaName, isPageFileName } from "../../page-file/model/pageFileCodec";
-import { titleFromFileName } from "../../page-file/model/pagePaths";
+import { isFolderMetaName, isPageFileName, PAGE_FILE_SUFFIX, titleFromFileName } from "./pageFileNames";
 import type { ListedEntry } from "../vfs/types";
 import { joinRel } from "./workspacePath";
 
@@ -86,11 +84,18 @@ function sortNatural(rows: readonly ExplorerRow[]): ExplorerRow[] {
 /** One directory listing → display rows: folders first, natural-order names,
  *  `_folder.omd` hidden (it is a folder page's metadata, not a file to the user).
  *  O(n log n). */
+function plainRows(entries: readonly ListedEntry[]): ExplorerRow[] {
+  const rows = entries.map(({ name, kind }): ExplorerRow => ({ name, kind: kind === "dir" ? "dir" : "code", label: name }));
+  return sortNatural(rows.filter((row) => row.kind === "dir")).concat(sortNatural(rows.filter((row) => row.kind !== "dir")));
+}
+
 function isDirOwningPage(name: string, dirNames: ReadonlySet<string>): boolean {
   return isPageFileName(name) && dirNames.has(name.slice(0, -PAGE_FILE_SUFFIX.length));
 }
 
-export function buildExplorerRows(entries: readonly ListedEntry[]): ExplorerRow[] {
+export function buildExplorerRows(entries: readonly ListedEntry[], { plainFiles = false }: { plainFiles?: boolean } = {}): ExplorerRow[] {
+  // A folder on a computer has no pages: a `.omd` there is a file like any other.
+  if (plainFiles) return plainRows(entries);
   const dirs: ExplorerRow[] = [];
   const files: ExplorerRow[] = [];
   const names = new Set(entries.map((entry) => entry.name));
