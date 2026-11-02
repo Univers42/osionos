@@ -1,6 +1,7 @@
 // The machine half of the Explorer: the folders opened on this computer, one stack section each,
 // using the same tree as the cloud workspace. It runs on the node's own page, so the app sees a
 // frame and a file's base name when it opens a tab, never a listing or a path (F1).
+import { TERMINAL_REQUEST } from "../features/machines/model/editorFrameProtocol";
 import { Folder, FolderPlus, SquareTerminal, X } from "lucide-react";
 import React from "react";
 
@@ -68,6 +69,12 @@ const RowMenu: React.FC<{ request: ExplorerMenuRequest; onTerminal(): void; onCl
   );
 };
 
+// A closed dock has no terminal page listening yet, so the request also waits in storage for it.
+function askTerminal(session: EditorSession, path: string): void {
+  try { localStorage.setItem(TERMINAL_REQUEST, JSON.stringify({ path, at: Date.now() })); } catch { /* an open dock still hears it */ }
+  session.peers.postMessage({ type: "open-terminal", path });
+}
+
 const RootTree: React.FC<{ session: EditorSession; root: Root; host: ExplorerHost }> = ({ session, root, host }) => {
   const { ops } = React.useMemo(() => createDiskOps(session.client, root.id), [session.client, root.id]);
   const [menu, setMenu] = React.useState<ExplorerMenuRequest | null>(null);
@@ -77,7 +84,7 @@ const RootTree: React.FC<{ session: EditorSession; root: Root; host: ExplorerHos
   }, [session.link, root.id]);
 
   const openTerminal = React.useCallback((rel: string) => {
-    session.peers.postMessage({ type: "open-terminal", path: rel ? `${root.path}/${rel}` : root.path });
+    askTerminal(session, rel ? `${root.path}/${rel}` : root.path);
     session.link.tell({ type: EDITOR_SHOW_TERMINAL });
   }, [session, root.path]);
 
@@ -145,7 +152,7 @@ export const ExplorerView: React.FC<{ session: EditorSession; pickRequests: numb
     weight: layout[root.id]?.weight ?? 1,
     actions: (
       <>
-        <IconButton size="xs" label="Open in terminal" onClick={() => { session.peers.postMessage({ type: "open-terminal", path: root.path }); session.link.tell({ type: EDITOR_SHOW_TERMINAL }); }}><SquareTerminal size={14} /></IconButton>
+        <IconButton size="xs" label="Open in terminal" onClick={() => { askTerminal(session, root.path); session.link.tell({ type: EDITOR_SHOW_TERMINAL }); }}><SquareTerminal size={14} /></IconButton>
         <IconButton size="xs" label="Close folder" onClick={() => close(root)}><X size={14} /></IconButton>
       </>
     ),
