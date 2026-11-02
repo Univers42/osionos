@@ -1,5 +1,10 @@
 @import "../app/styles/global.css";
 
+/* Tailwind scans from Vite's root, which here is this folder alone, so every class written in the
+   shared explorer and buttons was missing: rows lost `relative` and piled onto the toolbar. */
+@source "../";
+@source "../../packages/ui/src";
+
 html,
 body,
 #root {
