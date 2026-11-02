@@ -50,3 +50,22 @@ export function contrastRatio(first: Rgb, second: Rgb): number {
   const [light, dark] = [relativeLuminance(first), relativeLuminance(second)].sort((a, b) => b - a);
   return (light + 0.05) / (dark + 0.05);
 }
+
+const toHex = (rgb: Rgb) => `#${rgb.map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+
+/** `color` (opaque hex) when it reaches `ratio` on `background`, else the first colour on the way
+ *  from it to black or white (whichever reads better on `background`) that does, in 2% steps.
+ *  Either pole reaches at least 4.58:1 on any background, so a ratio up to that always holds. */
+export function ensureContrast(color: string, background: string, ratio: number): string {
+  const from = parseHexColor(color);
+  const behind = parseHexColor(background);
+  if (!from || !behind) throw new Error(`ensureContrast: ${color} on ${background} is not a pair of hex colours`);
+  const pole: Rgb = contrastRatio([255, 255, 255], behind) >= contrastRatio([0, 0, 0], behind) ? [255, 255, 255] : [0, 0, 0];
+  for (let step = 0; step <= 50; step += 1) {
+    const t = step / 50;
+    const mixed = from.map((channel, i) => channel + (pole[i] - channel) * t) as unknown as Rgb;
+    const hex = toHex(mixed);
+    if (contrastRatio(parseHexColor(hex) as Rgb, behind) >= ratio) return hex;
+  }
+  return toHex(pole);
+}

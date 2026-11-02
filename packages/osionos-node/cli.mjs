@@ -14,15 +14,18 @@
 // `osionos-node serve`: runs this machine's VS Code server on its private socket and the IDE
 // origin in front of it (ADR-006). Milestone 1 is the owner's own machine, owner-only. The secret
 // comes from the environment only, never argv, which other local users can read in ps.
+import { controlFile, requestFolder, startControlSocket } from './control-socket.mjs';
 import { existsSync, realpathSync } from 'node:fs';
 import { homedir, hostname, userInfo } from 'node:os';
 import { createInterface } from 'node:readline/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { isNodeId } from '../../scripts/ide-token.mjs';
 import { createHeartbeat } from './heartbeat.mjs';
+import { createRootStore } from './fs-roots.mjs';
+import { FS_LIMITS } from './fs-wire.mjs';
 import { createIdeOriginServer } from './ide-origin.mjs';
 import { createMachineSession, loadMachine } from './machine-identity.mjs';
 import { pairMachine } from './pair.mjs';
@@ -34,6 +37,7 @@ import { createClientHandler } from './static-client.mjs';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DEFAULT_CLIENT = fileURLToPath(new URL('../../dist-ide', import.meta.url));
 const DEFAULT_TERMINAL = fileURLToPath(new URL('../../build/terminal', import.meta.url));
+const DEFAULT_EDITOR = fileURLToPath(new URL('../../build/editor', import.meta.url));
 
 // Loopback, RFC 1918 and the tailnet's CGNAT range (100.64.0.0/10): never a wildcard, never a
 // public address (C8).
@@ -117,6 +121,31 @@ function assertPagesBuilt(config) {
 	}
 }
 
+// The editor's disk (devil verdict 2026-11-01 editor on disk): paired machines only, with its own
+// WebSocket server, so the pty's pre-auth bound stays the pty's (F6).
+function diskFor(config, home, env) {
+	if (!config.machine) return undefined;
+	const accept = serverSocketAcceptor(config.serverDir, FS_LIMITS.maxPayload);
+	if (!accept) return undefined;
+	const nodeHome = join(env.HOME ?? homedir(), '.osionos');
+	return { accept, home, appOrigins: config.appOrigins, roots: createRootStore({ file: join(nodeHome, 'roots.json'), home, nodeHome }) };
+}
+
+/** One folder for every app this node serves; the store applies the picker's refusals. */
+async function openRoot(service, roots, appOrigins, path) {
+	if (!isAbsolute(path)) throw new Error('InvalidPath');
+	const added = await Promise.all(appOrigins.map((origin) => roots.add(path, origin)));
+	service.announceRoots(appOrigins);
+	return { opened: added[0]?.realpath ?? path };
+}
+
+async function openFolder(argv, env) {
+	if (argv.length !== 1) throw new Error('usage: osionos <folder>');
+	const answer = await requestFolder(controlFile(env), resolve(argv[0]));
+	if (answer.refused) throw new Error(`${argv[0]} cannot be opened (${answer.refused}): choose a project folder, not /, your home or a folder above it`);
+	console.log(`Opened ${answer.opened} in the Explorer, under This computer.`);
+}
+
 async function serve(argv, env) {
 	const config = readServeConfig(argv, env, loadMachine(machineFile(env)));
 	assertPagesBuilt(config);
@@ -125,16 +154,20 @@ async function serve(argv, env) {
 	const server = await ensureServer({ ...config, loginShell, baseEnv: env });
 	const session = config.machine ? createMachineSession({ machine: config.machine, home }) : null;
 	const terminal = terminalFor(config, home, serverEnv(env, loginShell));
+	const disk = diskFor(config, home, env);
+	const diskRoots = disk?.roots;
 	const origin = createIdeOriginServer({
 		...(session ? session.originOptions : { secret: config.secret }),
 		ownerId: config.ownerId, ideOrigin: config.ideOrigin, commit: SERVER_PIN.server.commit,
 		nodes: { [config.node]: { socketPath: server.socketPath, extensionRoots: config.extensionRoots } },
-		client: createClientHandler({ root: config.client, terminalRoot: config.terminal, appOrigins: config.appOrigins }),
+		client: createClientHandler({ root: config.client, terminalRoot: config.terminal, editorRoot: existsSync(join(DEFAULT_EDITOR, 'index.html')) ? DEFAULT_EDITOR : null, appOrigins: config.appOrigins }),
 		pty: terminal.pty,
+		fs: disk,
 	});
 	await new Promise((resolve, reject) => origin.server.once('error', reject).listen(config.listen.port, config.listen.host, resolve));
 	console.log(`osionos-node: ${config.node} on ${config.ideOrigin} (server ${server.reused ? 'reused' : `pid ${server.pid}`})`);
-	const stop = async () => { origin.close(); terminal.host?.stop(); await server.stop(); process.exit(0); };
+	const control = origin.fs ? startControlSocket({ file: controlFile(env), onOpen: (path) => openRoot(origin.fs, diskRoots, config.appOrigins, path) }) : null;
+	const stop = async () => { control?.close(); origin.close(); terminal.host?.stop(); await server.stop(); process.exit(0); };
 	if (session) {
 		const beat = createHeartbeat({
 			file: machineFile(env), keys: session.keys, ideOrigin: config.ideOrigin,
@@ -198,7 +231,7 @@ async function connect(argv, env) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
 	const [command, ...rest] = process.argv.slice(2);
-	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env), connect: () => connect(rest, process.env) };
+	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env), connect: () => connect(rest, process.env), open: () => openFolder(rest, process.env) };
 	const run = commands[command]?.() ?? Promise.reject(new Error(USAGE));
 	run.catch((error) => { console.error(`osionos-node: ${error.message}`); process.exit(1); });
 }

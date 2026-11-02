@@ -20,6 +20,7 @@ import { baseName, joinRel, validateName } from "../model/workspacePath";
 import type { ExplorerPending } from "./explorerContext";
 
 type Params = {
+  plainFiles?: boolean;
   ops: WorkspaceFileOps;
   tree: Pick<ReturnType<typeof useExplorerTree>, "refresh" | "setOpen">;
   onOpen: (relPath: string, kind: "page" | "code") => void;
@@ -28,7 +29,7 @@ type Params = {
 /** Every mutation the explorer offers. A failed op becomes `notice` (never thrown
  *  into the void) and the tree is re-listed either way, so the screen shows what
  *  the provider really holds. */
-export function useExplorerActions({ ops, tree, onOpen }: Params) {
+export function useExplorerActions({ ops, tree, onOpen, plainFiles = false }: Params) {
   const [pending, setPending] = React.useState<ExplorerPending | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
 
@@ -55,7 +56,7 @@ export function useExplorerActions({ ops, tree, onOpen }: Params) {
       // Validated here, not just in ops: "a/b" would otherwise create a nested path from a name field.
       const valid = validateName(name);
       if (kind === "dir") return ops.createDir(joinRel(parent, valid));
-      const rel = joinRel(parent, nameForNewFile(valid));
+      const rel = joinRel(parent, nameForNewFile(valid, plainFiles));
       await ops.createFile(rel);
       onOpen(rel, fileKindOf(rel));
     });

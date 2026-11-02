@@ -33,6 +33,10 @@ const SYNTAX: Row[] = [
 const capitalized = (word: string) => word[0].toUpperCase() + word.slice(1);
 
 export const COLOR_TOKEN_ROWS: readonly Row[] = [
+  ["selection-bg", "Background of selected text"],
+  ["selection-fg", "Colour of selected text"],
+  ["scrollbar-thumb", "Scrollbar thumb"],
+  ["scrollbar-thumb-hover", "Scrollbar thumb under the pointer"],
   ["bg-canvas", "Backdrop behind panes, the rail and the top bar"],
   ["bg-page", "Page background behind the editor"],
   ["bg-surface", "Cards, inputs and panel surfaces"],

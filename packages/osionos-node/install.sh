@@ -56,7 +56,7 @@ else
     before=$(git -C "$DATA/src" rev-parse HEAD)
     git -C "$DATA/src" pull --ff-only
     if [ "$before" != "$(git -C "$DATA/src" rev-parse HEAD)" ]; then
-        rm -rf "$DATA/src/dist-ide" "$DATA/src/build/terminal"
+        rm -rf "$DATA/src/dist-ide" "$DATA/src/build/terminal" "$DATA/src/build/editor"
     fi
     link_home src
 fi
@@ -85,9 +85,10 @@ build_pages() {
     if command -v pnpm >/dev/null; then
         (cd "$SRC" && pnpm install --frozen-lockfile \
             && pnpm exec vite build --config vite.ide.config.ts \
-            && pnpm exec vite build --config vite.terminal.config.ts)
+            && pnpm exec vite build --config vite.terminal.config.ts \
+            && pnpm exec vite build --config vite.editor.config.ts)
     elif command -v docker >/dev/null; then
-        (cd "$SRC" && bash scripts/docker-run.sh build-ide && bash scripts/docker-run.sh build-terminal)
+        (cd "$SRC" && bash scripts/docker-run.sh build-ide && bash scripts/docker-run.sh build-terminal && bash scripts/docker-run.sh build-editor)
     else
         fail "the prebuilt pages could not be downloaded, and building them needs pnpm or docker"
     fi
@@ -98,7 +99,7 @@ sha256() {
     if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi
 }
 
-if [ ! -f "$SRC/dist-ide/index.html" ] || [ ! -f "$SRC/build/terminal/index.html" ]; then
+if [ ! -f "$SRC/dist-ide/index.html" ] || [ ! -f "$SRC/build/terminal/index.html" ] || [ ! -f "$SRC/build/editor/index.html" ]; then
     download_pages || build_pages
 fi
 
@@ -157,6 +158,15 @@ START=$HOME_DIR/start.sh
     echo
 } >"$START"
 chmod 700 "$START"
+
+# `osionos <folder>` from any shell on this computer.
+BIN_DIR=$HOME/.local/bin
+mkdir -p "$BIN_DIR"
+{
+    echo '#!/bin/sh'
+    printf "exec '%s' '%s' open \"\$@\"\n" "$NODE" "$CLI"
+} >"$BIN_DIR/osionos"
+chmod 755 "$BIN_DIR/osionos"
 
 # The node stays up without a terminal: a service restarts it and starts it at login.
 if command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; then

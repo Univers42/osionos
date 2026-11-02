@@ -7,7 +7,7 @@ import { findPane } from "@/widgets/workspace-grid/model/layoutTree";
 import { getSelectedPaneId, type PaneZoomChange } from "@/widgets/workspace-grid/model/paneZoom";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { startNewPage } from "@/widgets/workspace-grid/model/startActions";
-import { openAndFocusPanel } from "@/widgets/activity-rail/model/panelFocus";
+import { openAndFocusPanel, openMachineFolder } from "@/widgets/activity-rail/model/panelFocus";
 import { useUIStore } from "@/shared/config/uiStore";
 import { useIssueReportRequest } from "@/features/issues/model/issueReportRequest";
 
@@ -34,6 +34,7 @@ export const APP_COMMANDS: Command[] = [
   { id: "newPage", title: "New page", category: "App", run: () => void startNewPage() },
   { id: "toggleSidebar", title: "Show or hide the sidebar", category: "App", run: () => useUIStore.getState().toggleDocked() },
   { id: "openSearchPanel", title: "Search panel", category: "App", run: () => openAndFocusPanel("search") },
+  { id: "openFolder", title: "Open Folder…", category: "App", run: openMachineFolder },
   { id: "focusExplorer", title: "Explorer", category: "App", run: () => openAndFocusPanel("files") },
   { id: "focusConversations", title: "Conversations", category: "App", run: () => openAndFocusPanel("conversations") },
   {

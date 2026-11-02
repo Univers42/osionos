@@ -10,10 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { PAGE_FILE_SUFFIX } from "@/features/page-file/model/types";
+import { PAGE_FILE_SUFFIX } from "../model/pageFileNames";
 import React from "react";
-import { useDragSession } from "@/store/dragSession";
-import { useIsActivePage } from "@/store/activePageFlag";
 
 import type { VisibleItem } from "../model/explorerRows";
 import { useExplorer } from "./explorerContext";
@@ -57,7 +55,7 @@ const RING_INSET = { outlineOffset: -2 } as const;
 /** Drag source + drop target props for one row; a drop lands in the row itself
  *  when it is a folder, otherwise in its folder. */
 function useRowDnd(rel: string, dropDir: string, renaming: boolean, pageId: string | undefined) {
-  const { moveTo } = useExplorer();
+  const { moveTo, host } = useExplorer();
   const [dragOver, setDragOver] = React.useState(false);
   const props = {
     draggable: !renaming,
@@ -66,7 +64,7 @@ function useRowDnd(rel: string, dropDir: string, renaming: boolean, pageId: stri
       event.dataTransfer.effectAllowed = "move";
       if (pageId) {
         event.dataTransfer.setData("text/plain", pageId);
-        useDragSession.getState().beginDrag(pageId);
+        host.beginDrag(pageId);
       }
     },
     onDragOver: (event: React.DragEvent) => {
@@ -82,7 +80,7 @@ function useRowDnd(rel: string, dropDir: string, renaming: boolean, pageId: stri
       const from = event.dataTransfer.getData(EXPLORER_DRAG_MIME);
       if (from && from !== rel) moveTo(from, dropDir);
     },
-    onDragEnd: () => useDragSession.getState().endDrag(),
+    onDragEnd: () => host.endDrag(),
   };
   return { props, dragOver };
 }
@@ -95,7 +93,7 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
   const open = isDir && ctx.expanded.has(rel);
   const renaming = ctx.pending?.type === "rename" && ctx.pending.rel === rel;
   const pageId = row.pageFile ? ctx.pageIdOf?.(`${rel}${PAGE_FILE_SUFFIX}`, "page") : ctx.pageIdOf?.(rel, row.kind);
-  const active = useIsActivePage(pageId ?? "");
+  const active = ctx.host.useIsActive(pageId ?? "");
   const dnd = useRowDnd(rel, isDir ? rel : item.parentRel, renaming, pageId);
   const line = placed(placement);
 

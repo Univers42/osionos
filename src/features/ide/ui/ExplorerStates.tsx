@@ -10,9 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { WORKSPACE_EXPLORER_COPY, type ExplorerCopy } from "./explorerContext";
 import React from "react";
 import { FolderOpen, TriangleAlert, type LucideIcon } from "lucide-react";
-import { Button } from "@/shared/ui";
+import { Button } from "@osionos/ui/atoms/Button";
 
 // Text colours of the two surfaces a state can sit on: the sidebar card, and the
 // dark code surfaces of the dock (data-code-theme), which keep their own palette.
@@ -46,15 +47,15 @@ export const StateBlock: React.FC<{
   </div>
 );
 
-export const ExplorerLoading: React.FC = () => (
-  <p role="status" className="px-3 py-2 text-sm text-[var(--osio-fg-muted)]">Loading workspace files…</p>
+export const ExplorerLoading: React.FC<{ text?: string }> = ({ text = WORKSPACE_EXPLORER_COPY.loading }) => (
+  <p role="status" className="px-3 py-2 text-sm text-[var(--osio-fg-muted)]">{text}</p>
 );
 
-export const ExplorerError: React.FC<{ message: string; onRetry: () => void }> = ({ message, onRetry }) => (
+export const ExplorerError: React.FC<{ message: string; onRetry: () => void; title?: string }> = ({ message, onRetry, title = WORKSPACE_EXPLORER_COPY.errorTitle }) => (
   <div role="alert">
     <StateBlock
       icon={TriangleAlert}
-      title="Could not read the workspace folder"
+      title={title}
       actions={<Button size="sm" onClick={onRetry}>Retry</Button>}
     >
       <p>{message}</p>
@@ -62,10 +63,10 @@ export const ExplorerError: React.FC<{ message: string; onRetry: () => void }> =
   </div>
 );
 
-export const ExplorerEmpty: React.FC<{ onNewFile: () => void; onNewFolder: () => void }> = ({ onNewFile, onNewFolder }) => (
+export const ExplorerEmpty: React.FC<{ onNewFile: () => void; onNewFolder: () => void; title?: string }> = ({ onNewFile, onNewFolder, title = WORKSPACE_EXPLORER_COPY.emptyTitle }) => (
   <StateBlock
     icon={FolderOpen}
-    title="This workspace folder is empty"
+    title={title}
     actions={(
       <>
         <Button size="sm" onClick={onNewFile}>New file</Button>
@@ -83,17 +84,17 @@ export const ExplorerNotice: React.FC<{ message: string; onDismiss?: () => void 
 );
 
 /** In-UI replacement for window.confirm; focus starts on the safe choice. */
-export const ExplorerDeleteConfirm: React.FC<{ name: string; onConfirm: () => void; onCancel: () => void }> = ({ name, onConfirm, onCancel }) => (
+export const ExplorerDeleteConfirm: React.FC<{ name: string; onConfirm: () => void; onCancel: () => void; copy?: ExplorerCopy }> = ({ name, onConfirm, onCancel, copy = WORKSPACE_EXPLORER_COPY }) => (
   <div
     role="alertdialog"
     aria-labelledby="explorer-delete-title"
     onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onCancel(); } }}
     className="osio-surface-panel m-2 flex flex-col gap-2 p-3 text-sm text-[var(--osio-fg-default)]"
   >
-    <p id="explorer-delete-title">Move “{name}” to the trash? A folder goes with everything inside. Restore it from Archived files.</p>
+    <p id="explorer-delete-title">{copy.deleteQuestion(name)}</p>
     <div className="flex justify-end gap-2">
       <Button size="sm" autoFocus onClick={onCancel}>Cancel</Button>
-      <Button size="sm" tone="danger" onClick={onConfirm}>Move to trash</Button>
+      <Button size="sm" tone="danger" onClick={onConfirm}>{copy.deleteAction}</Button>
     </div>
   </div>
 );

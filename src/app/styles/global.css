@@ -414,6 +414,25 @@
   --osio-radius-lg: calc(12px * var(--osio-radius-scale, 1));
   --osio-radius-full: 9999px;
   --osio-border-width: 1px;
+  --osio-border-style: solid;
+  --osio-scrollbar-radius: 4px;
+  --osio-heading-decoration: none;
+  --osio-link-decoration: underline;
+  --osio-letter-spacing-ui: 0;
+  --osio-letter-spacing-button: 0;
+  --osio-font-weight-button: 500;
+  --osio-selection-bg: color-mix(in srgb, var(--osio-accent) 28%, transparent);
+  --osio-selection-fg: inherit;
+  --osio-scrollbar-thumb: var(--osio-border-strong);
+  --osio-scrollbar-thumb-hover: var(--osio-fg-subtle);
+  --osio-focus-ring-style: solid;
+  --osio-icon-stroke: 2;
+  --osio-disabled-opacity: 0.5;
+  --osio-scrollbar-size: 8px;
+  --osio-link-underline-offset: 2px;
+  --osio-heading-transform: none;
+  --osio-heading-style: normal;
+  --osio-button-transform: none;
 
   /* Semantic radius hierarchy — map intent onto the numeric scale so every
      surface picks a radius by ROLE, not an ad-hoc `rounded-*`. */
@@ -616,18 +635,18 @@ body {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: var(--osio-scrollbar-size);
+  height: var(--osio-scrollbar-size);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--osio-fg-subtle);
-  border-radius: 4px;
+  background: var(--osio-scrollbar-thumb);
+  border-radius: var(--osio-scrollbar-radius);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--osio-fg-muted);
+  background: var(--osio-scrollbar-thumb-hover);
 }
 
 .osio-scrollbar-hidden {
@@ -734,13 +753,28 @@ body {
 }
 
 /* ── Code block ("/code") — high-contrast editor card ─────────────────── */
-/* The snippet card always renders on a dark surface for maximum contrast and
-   a polished, focused look, so its palette is fixed (bright) and independent
-   of the page light/dark theme. Tokens live on the card itself (they only
-   apply here) and inherit to its descendants. The IDE's surfaces are not
-   cards but carry the same data-code-theme, so they get the same tokens. */
-.osio-code-card,
-[data-code-theme] {
+/* Code follows the theme: these tokens sit on :root, where a theme's own values
+   land, so a theme can set them and every code surface inherits the result. A
+   rule on the surface itself would outrank the theme. The fixed palettes below
+   are only the per-block "dark" and "light" toggle, an explicit choice. */
+:root {
+  --osio-code-bg: var(--osio-bg-surface);
+  --osio-code-header-bg: var(--osio-bg-surface);
+  --osio-code-border: var(--osio-border);
+  --osio-code-ring: var(--osio-border);
+  --osio-code-fg: var(--osio-fg-default);
+  --osio-code-fg-muted: var(--osio-fg-muted);
+  --osio-code-caret: var(--osio-caret);
+  --osio-code-selection: color-mix(in srgb, var(--osio-accent) 30%, transparent);
+  --osio-code-active-line: var(--osio-bg-hover);
+  --osio-code-bracket: color-mix(in srgb, var(--osio-accent) 22%, transparent);
+  --osio-code-shadow: var(--osio-shadow-sm);
+  --osio-code-chip-bg: var(--osio-bg-muted);
+  --osio-code-btn-hover: var(--osio-bg-hover);
+  --osio-code-btn-active: var(--osio-bg-muted);
+}
+
+[data-code-theme="dark"] {
   --osio-code-bg: #0d1117;
   --osio-code-header-bg: rgba(255, 255, 255, 0.025);
   --osio-code-border: #2a313a;
@@ -1035,4 +1069,25 @@ body {
    (h-15 in AiPromptBar), so the bar never covers the next block. */
 [data-ai-prompt-host] {
   min-height: 3.75rem;
+}
+
+/* Theme tokens with no utility behind them. In base, so a utility such as
+   border-dashed still wins. Only icons left at lucide's default stroke follow
+   the token: a component that chose its own weight chose it for a reason. */
+@layer base {
+  *, ::before, ::after { border-style: var(--osio-border-style); }
+  :focus-visible { outline-style: var(--osio-focus-ring-style); }
+  .lucide[stroke-width="2"] { stroke-width: var(--osio-icon-stroke); }
+  body { letter-spacing: var(--osio-letter-spacing-ui); }
+  ::selection { background-color: var(--osio-selection-bg); color: var(--osio-selection-fg); }
+  button {
+    text-transform: var(--osio-button-transform);
+    letter-spacing: var(--osio-letter-spacing-button);
+    font-weight: var(--osio-font-weight-button);
+  }
+  button:disabled { opacity: var(--osio-disabled-opacity); }
+  a {
+    text-underline-offset: var(--osio-link-underline-offset);
+    text-decoration-line: var(--osio-link-decoration);
+  }
 }

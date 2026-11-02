@@ -24,7 +24,7 @@ const KNOWN_COMMAND_IDS = new Set<CommandId>([
   "undo", "redo", "selectAll", "clearSelection", "copy", "cut", "paste",
   "pastePlain", "duplicate", "delete", "moveBlockUp", "moveBlockDown",
   "heading1", "heading2", "heading3", "openPalette", "openSearch", "openSettings", "splitPane",
-  "bold", "italic", "underline", "inlineCode", "link", "toggleZenMode",
+  "bold", "italic", "underline", "inlineCode", "link", "toggleZenMode", "openFolder",
   "zoomPaneIn", "zoomPaneOut", "zoomPaneReset", "newPage", "toggleSidebar", "openSearchPanel", "focusExplorer", "focusConversations",
 ]);
 

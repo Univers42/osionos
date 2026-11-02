@@ -36,6 +36,7 @@ run_inside_container() {
     # The IDE page osionos-node serves on the IDE origin (ADR-006), built apart from the app.
     build-ide) exec sh -c 'NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build --config vite.ide.config.ts' ;;
     build-terminal) exec sh -c 'NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build --config vite.terminal.config.ts' ;;
+    build-editor) exec sh -c 'NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build --config vite.editor.config.ts' ;;
     # Offline-mode prod bundle for the perf benches (same env as the Playwright webServer).
     build-offline) exec sh -c 'VITE_API_URL= VITE_REQUIRE_BRIDGE_SESSION=false VITE_ALLOW_OFFLINE_MODE=true VITE_BAAS_URL= VITE_BAAS_API_KEY= VITE_BAAS_LIVE_MOUNTS= NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build' ;;
     preview) exec pnpm exec vite preview --host 0.0.0.0 "$@" ;;
@@ -89,6 +90,9 @@ case "${COMMAND}" in
     ;;
   build-terminal)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh build-terminal "$@"
+    ;;
+  build-editor)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh build-editor "$@"
     ;;
   build-offline)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh build-offline "$@"

@@ -8,12 +8,12 @@ import type { TerminalColors } from "@/features/ide/model/terminalPort";
 import { onSudoGranted, useSudoPromptStore } from "@/features/settings/ui/sudo/sudoPromptModel";
 import { mintMachineToken, verifyMachineIdentity } from "../api/machinesApi";
 import { lookupOwnMachine } from "./machineWindowStore";
-import { createTerminalFrame, type LocalNetworkState, type TerminalFrameDeps, type TerminalFramePhase } from "./terminalFrame";
+import { createTerminalFrame, type LocalNetworkState, type TerminalFramePhase, type TerminalFrameDeps } from "./terminalFrame";
 
 export const useTerminalFrameStore = create<{ phase: TerminalFramePhase | "idle" }>()(() => ({ phase: "idle" }));
 
 // Chrome names the permission "local-network-access"; a browser without it rejects the query.
-async function localNetwork(): Promise<LocalNetworkState> {
+export async function localNetwork(): Promise<LocalNetworkState> {
   try {
     const status = await navigator.permissions.query({ name: "local-network-access" as PermissionName });
     return status.state;
@@ -22,11 +22,19 @@ async function localNetwork(): Promise<LocalNetworkState> {
   }
 }
 
-type FrameHooks = Pick<TerminalFrameDeps, "frame" | "probeOldNode"> & { colors: () => TerminalColors; onConnected: () => void };
+type FrameHooks = Pick<TerminalFrameDeps, "frame" | "probeOldNode" | "theme"> & { colors: () => TerminalColors; onConnected: () => void };
 
-export function startTerminalFrame({ frame, probeOldNode, colors, onConnected }: FrameHooks): () => void {
+type MachineFrameHooks = FrameHooks & {
+  onPhase: (phase: TerminalFramePhase) => void;
+  /** False while nobody asked for this frame, as when it reconnects on page load. */
+  mayPromptStepUp?: () => boolean;
+};
+
+/** One node-served frame linked to this app: the terminal's and the editor's are the same door. */
+export function startMachineFrame({ frame, probeOldNode, colors, theme, onConnected, onPhase, mayPromptStepUp = () => true }: MachineFrameHooks): { stop(): void; retry(): void } {
+  let current: TerminalFramePhase = "connecting";
   const controller = createTerminalFrame({
-    frame, probeOldNode, colors, localNetwork,
+    frame, probeOldNode, colors, theme, localNetwork,
     listen: (handler) => {
       const onMessage = (event: MessageEvent) => handler(event);
       globalThis.addEventListener("message", onMessage);
@@ -41,17 +49,25 @@ export function startTerminalFrame({ frame, probeOldNode, colors, onConnected }:
       return () => clearTimeout(timer);
     },
     onPhase: (phase) => {
-      useTerminalFrameStore.setState({ phase });
-      if (phase === "step-up") useSudoPromptStore.getState().show();
+      current = phase;
+      onPhase(phase);
+      if (phase === "step-up" && mayPromptStepUp()) useSudoPromptStore.getState().show();
       if (phase === "connected") onConnected();
     },
   });
   const stopRetrying = onSudoGranted(() => {
-    if (useTerminalFrameStore.getState().phase === "step-up") void controller.retry();
+    if (current === "step-up") void controller.retry();
   });
+  return {
+    stop: () => { stopRetrying(); controller.stop(); },
+    retry: () => { void controller.retry(); },
+  };
+}
+
+export function startTerminalFrame(hooks: FrameHooks): () => void {
+  const { stop } = startMachineFrame({ ...hooks, onPhase: (phase) => useTerminalFrameStore.setState({ phase }) });
   return () => {
-    stopRetrying();
-    controller.stop();
+    stop();
     useTerminalFrameStore.setState({ phase: "idle" });
   };
 }

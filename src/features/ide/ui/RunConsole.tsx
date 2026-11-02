@@ -46,7 +46,7 @@ export const RunConsole: React.FC<Props> = ({ lines, running, exit, onClear, onS
   const btn = "osio-code-btn h-6 text-xs";
 
   return (
-    <div data-code-theme="dark" data-osio-code-chrome className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
+    <div data-code-theme="app" data-osio-code-chrome className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
       <div className="flex h-9 shrink-0 items-center gap-2 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 text-xs text-[var(--osio-code-fg-muted)]">
         <span className="font-medium text-[var(--osio-code-fg)]">Terminal</span>
         {running && (
