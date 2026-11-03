@@ -123,7 +123,9 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
       if (PAGE_EXTENSIONS.has(extension)) {
         const payload = await importPageFile(file);
         const page = await addPage(workspaceId, payload.title || file.name, jwt ?? '', undefined, { content: payload.content });
-        addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: 'completed', pageIds: page?._id ? [page._id] : [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
+        // A refused create already toasted its reason (notifyCreateFailure); it is not a completed import.
+        const pageId = page?._id;
+        addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: pageId ? 'completed' : 'failed', pageIds: pageId ? [pageId] : [], error: pageId ? null : 'The page could not be created.', startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
         continue;
       }
       const kind = assetKindFromFile(file);
