@@ -25,9 +25,10 @@
  */
 
 import { usePageStore } from "@/store/usePageStore";
-import { api, getActivePageJwt } from "@/shared/api/client";
+import { api, getActivePageJwt, getActiveWorkspaceId } from "@/shared/api/client";
 import { getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { applyServerPages } from "./applyServerPages";
+import { loadActiveWorkspaceFirst } from "./loadActiveWorkspaceFirst";
 import type { PageEntry } from "@/entities/page";
 
 /**
@@ -46,12 +47,8 @@ export async function hydratePagesFromBaas(): Promise<number> {
   const jwt = getActivePageJwt();
   const context = getCurrentPageAccessContext();
   if (!jwt || !context) return 0;
-  // Hydrate every workspace in parallel; the api client's 6-slot limiter (shared/api/client)
-  // bounds real concurrency, so N workspaces drain in ~ceil(N/6) waves instead of serially.
-  // allSettled: one workspace's offline/transient failure must not abort the others — a
-  // skipped workspace is reconciled by the outbox + the next hydrate; never block load.
-  const results = await Promise.allSettled(
-    context.workspaceIds.map((workspaceId) => hydrateWorkspace(workspaceId, jwt)),
+  const results = await loadActiveWorkspaceFirst(context.workspaceIds, getActiveWorkspaceId(), (workspaceId) =>
+    hydrateWorkspace(workspaceId, jwt),
   );
   let changed = 0;
   for (const result of results) {
