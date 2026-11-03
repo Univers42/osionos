@@ -27,6 +27,17 @@ export interface ImportedFile {
   content: string;
 }
 
+/**
+ * A file whose first 8,000 characters hold a NUL is binary, whatever its name: git's own test.
+ * An extension-less executable (`push_swap`, `a.out`) read as text is full of NULs, and its page
+ * was refused by the WAF (920270, osionos#286); PostgreSQL jsonb cannot store a NUL either.
+ * Caveat: a UTF-16 text file also holds NULs and is skipped as binary; a binary whose first
+ * 8,000 characters hold none is imported as text.
+ */
+export function looksBinary(content: string): boolean {
+  return content.slice(0, 8000).includes("\u0000");
+}
+
 function isIgnored(relPath: string): boolean {
   if (BINARY_EXT.test(relPath)) return true;
   return relPath.split("/").some((segment) => IMPORT_IGNORE_SEGMENTS.has(segment));
@@ -47,7 +58,8 @@ export async function readImportFiles(files: File[]): Promise<ImportedFile[]> {
   const read = await Promise.all(
     candidates.map(async ({ file, relPath }) => {
       try {
-        return { relPath, content: await file.text() };
+        const content = await file.text();
+        return looksBinary(content) ? null : { relPath, content };
       } catch {
         return null;
       }
