@@ -19,7 +19,7 @@ const args = process.argv.slice(2);
 const log = (kind, data = {}) => fs.appendFileSync(process.env.MOCK_LOG, JSON.stringify({kind, ...data}) + '\\n');
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
 (async () => {
-if (name === 'date') { const f = process.env.MOCK_LOG + '.time'; const n = Number(fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : 0) + Number(process.env.MOCK_CLOCK_STEP || 1); fs.writeFileSync(f, String(n)); console.log(n); return; }
+if (name === 'date') { const f = process.env.MOCK_LOG + '.time'; const n = Number(fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : 0) + Number(process.env.MOCK_CLOCK_STEP || 1); fs.writeFileSync(f, String(n)); console.log(String(n)); return; }
 if (name === 'sleep') { await delay(25); return; }
 if (name === 'cat') { if (args.some(a => a.includes('/sys/class/drm/'))) console.log(process.env.MOCK_VRAM || '1'); else process.exit(require('node:child_process').spawnSync('/bin/cat', args, {stdio: 'inherit'}).status); return; }
 if (name === 'cut') { if (args.includes('/proc/loadavg')) console.log('7'); else process.exit(require('node:child_process').spawnSync('/usr/bin/cut', args, {stdio: 'inherit'}).status); return; }
