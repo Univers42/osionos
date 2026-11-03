@@ -666,11 +666,6 @@ body {
   pointer-events: none;
 }
 
-/* Selection — warm accent tint */
-::selection {
-  background: color-mix(in srgb, var(--osio-accent) 26%, transparent);
-}
-
 /* Cross-block text selection — the anchor block keeps the native ::selection;
    these tints paint the covered middle/focus blocks to match it. */
 .osio-cross-select-overlay {
@@ -1081,10 +1076,12 @@ body {
   body { letter-spacing: var(--osio-letter-spacing-ui); }
   ::selection { background-color: var(--osio-selection-bg); color: var(--osio-selection-fg); }
   button {
-    text-transform: var(--osio-button-transform);
     letter-spacing: var(--osio-letter-spacing-button);
     font-weight: var(--osio-font-weight-button);
   }
+  /* Only the Button atom: a raw <button> also shows content (a page title in Recents, a
+     settings section), and an uppercase theme rewrote it (osionos#290). */
+  [data-osio-button] { text-transform: var(--osio-button-transform); }
   button:disabled { opacity: var(--osio-disabled-opacity); }
   a {
     text-underline-offset: var(--osio-link-underline-offset);
