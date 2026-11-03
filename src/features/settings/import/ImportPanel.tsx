@@ -18,7 +18,7 @@ import { usePageStore } from '@/store/usePageStore';
 import { useImportHistoryStore, type ImportHistoryEntry } from '@/store/settings';
 import { useAssetLibraryStore } from '@/shared/config/assetLibraryStore';
 import { importPageFile } from '@/services/page-actions';
-import { Button, Modal } from '@/shared/ui';
+import { Button, Modal, useToastStore } from '@/shared/ui';
 import { DataTable, EmptyState, FeatureCard, MiniTabs, PanelStatus, Section } from '../ui/settingsKit';
 import { assetKindFromFile, formatBytes, readFileAsDataUrl, stringPayload } from '../model/settingsFiles';
 import { runAsync } from '../model/settingsCalls';
@@ -52,10 +52,12 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
   const jwt = useUserStore((state) => state.activePageJwt());
   const history = useImportHistoryStore((state) => state.data[workspaceId] ?? EMPTY_IMPORT_HISTORY);
   const hydrateHistory = useImportHistoryStore((state) => state.hydrate);
-  const uploadImport = useImportHistoryStore((state) => state.upload);
   const addImportEntry = useImportHistoryStore((state) => state.addEntry);
   const markRetry = useImportHistoryStore((state) => state.markRetry);
-  const files = ['CSV', 'PDF', 'Text & Markdown', 'HTML', 'Word'];
+  // Only what imports today: a page per text file, a page tree per zip, media to the asset library.
+  // CSV, PDF and Word had cards and were sent to /api/imports, which no server mounts (#239).
+  const files = ['ZIP', 'Text & Markdown', 'HTML'];
+  const plannedFiles = ['CSV', 'PDF', 'Word'];
   const apps = ['Asana', 'Confluence', 'Trello', 'Workflowy', 'Evernote', 'Jira', 'Monday.com', 'Quip', 'Google Docs'];
 
   // The store keeps a failed read in `error` instead of rejecting, so it is turned back into a rejection here.
@@ -124,10 +126,17 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
         addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: 'completed', pageIds: page?._id ? [page._id] : [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
         continue;
       }
-      const source = await readFileAsDataUrl(file);
-      addAsset(activeUserId, { kind: assetKindFromFile(file), name: file.name, source, origin: 'upload', mimeType: file.type, size: file.size });
-      const entry = await uploadImport(workspaceId, file);
-      if (!entry) addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: 'completed', pageIds: [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
+      const kind = assetKindFromFile(file);
+      const at = new Date().toISOString();
+      const entry = { userId: activeUserId || 'anonymous', workspaceId, source: 'file' as const, fileName: file.name, byteSize: file.size, pageIds: [], startedAt: at, finishedAt: at, removedAt: null };
+      if (kind === 'file') {
+        const error = `osionos cannot import ${extension || 'these'} files yet.`;
+        addImportEntry(workspaceId, { ...entry, status: 'failed', error });
+        useToastStore.getState().push({ kind: 'error', title: `${file.name} was not imported`, description: `${error} ZIP, Markdown, HTML, JSON and text files become pages; images, audio and video go to your asset library.` });
+        continue;
+      }
+      addAsset(activeUserId, { kind, name: file.name, source: await readFileAsDataUrl(file), origin: 'upload', mimeType: file.type, size: file.size });
+      addImportEntry(workspaceId, { ...entry, status: 'completed', error: null });
     }
   }
 
@@ -169,13 +178,14 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
         <button type="button" className="w-full rounded-[var(--osio-radius-panel)] border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center" onClick={() => fileInputRef.current?.click()} onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
           <Upload className="mx-auto text-[var(--osio-accent)]" size={28} />
           <h4 className="mt-3 font-medium text-[var(--osio-fg-default)]">Import your content to osionos</h4>
-          <p className="mt-2 text-sm text-[var(--osio-fg-muted)]">ZIP, CSV, PDF, text, markdown, HTML, images, audio, and video files.</p>
-          <p className="mt-1 text-xs text-[var(--osio-fg-subtle)]">ZIP files can be a maximum of 5GB</p>
+          <p className="mt-2 text-sm text-[var(--osio-fg-muted)]">ZIP, Markdown, HTML, JSON and text files become pages; images, audio and video go to your asset library.</p>
+          <p className="mt-1 text-xs text-[var(--osio-fg-subtle)]">A zip holds up to 2000 files of 32 MB each.</p>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleLibraryImport} />
           <span className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-1.5 text-sm font-medium text-[var(--osio-fg-default)]"><Upload size={16} /> Choose files</span>
         </button>
       </Section>
       <Section title="File-based imports"><div className="grid gap-3 sm:grid-cols-2">{files.map((file) => <FeatureCard key={file} icon={<FileText size={16} />} title={file} description={`Import ${file.toLowerCase()} content from files`} action={<Button onClick={() => setModal({ name: 'typed-import', payload: { kind: file } })}>Open</Button>} />)}</div></Section>
+      <Section title="Not available yet"><div className="grid gap-3 sm:grid-cols-2">{plannedFiles.map((file) => <FeatureCard key={file} icon={<FileText size={16} />} title={file} description="Not available yet" action={<Button disabled aria-label={`Import ${file} files`}>Open</Button>} />)}</div></Section>
       <Section title="Third-party imports"><div className="grid gap-3 sm:grid-cols-2">{apps.map((app) => <FeatureCard key={app} icon={<Database size={16} />} title={app} description="Not available yet" action={<Button disabled aria-label={`Import from ${app}`}>Import</Button>} />)}</div></Section>
       {modal?.name === 'typed-import' && <TypedImportModal kind={stringPayload(modal.payload?.kind, 'File')} onChoose={() => fileInputRef.current?.click()} onClose={() => setModal(null)} />}
     </PanelStatus>
