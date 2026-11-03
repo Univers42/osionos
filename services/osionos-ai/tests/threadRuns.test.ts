@@ -261,7 +261,7 @@ describe('thread runs', () => {
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			await app.db.query('update public.osionos_messages set deleted_at = now() where id = $1', [channel.trigger]);
 			const events: SseEvent[] = await collect(new SseStream(await response));
-			assert.deepEqual(events.at(-1), { id: events.at(-1)?.id, event: 'error', data: { code: 'access_revoked', message: 'access_revoked' } });
+			assert.deepEqual(events.at(-1), { id: events.at(-1)?.id, event: 'error', data: { code: 'access_revoked' } });
 		} finally {
 			mock.setOptions({ preDelayMs: 0, chunkCount: 3, chunkGapMs: 0, fail: false });
 		}

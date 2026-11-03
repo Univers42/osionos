@@ -74,6 +74,11 @@ function routeReasonOf(reason: unknown): NonNullable<ChatMessage["routeReason"]>
   return ROUTE_REASONS.find((known) => known === reason) ?? "unavailable";
 }
 
+/** The wait a failure asked for: a frame is read, never trusted to be a number. */
+function retryAfterOfFrame(value: unknown): Pick<ChatMessage, "retryAfterSeconds"> | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? { retryAfterSeconds: value } : undefined;
+}
+
 /** Applied view-action tool call ids, bounded to the last 500. */
 const appliedViewActionIds = new Set<string>();
 
@@ -204,6 +209,7 @@ export function dispatchRunEvent(
     actions.patchAssistant({
       status: "error",
       errorCode: typeof data.code === "string" ? data.code : "internal",
+      ...retryAfterOfFrame(data.retryAfterSeconds),
     });
   }
 }

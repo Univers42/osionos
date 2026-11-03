@@ -49,7 +49,7 @@ describe('when a run does not fall back', () => {
 		const { events } = await runToEnd({ model: 'mock-metered', fallbacks: [{ model: 'mock-vision' }] });
 		assert.ok(typesOf(events).includes('tool.called'));
 		assert.ok(!typesOf(events).includes('route'));
-		assert.equal(codeOf(events), 'upstream_error');
+		assert.equal(codeOf(events), 'provider_unavailable');
 		assert.deepEqual(failing.requests, ['mock-metered', 'mock-metered']);
 		assert.equal((await settledLedger()).user.reserved, 0);
 	});
@@ -82,7 +82,7 @@ describe('when a run does not fall back', () => {
 			fallbacks: [{ model: 'mock-vision' }, { model: 'mock-platform' }],
 		});
 		assert.equal(typesOf(events).filter((type) => type === 'route').length, 2);
-		assert.equal(codeOf(events), 'upstream_error');
+		assert.equal(codeOf(events), 'provider_unavailable');
 		assert.deepEqual(failing.requests, ['mock-metered', 'mock-vision', 'mock-platform']);
 		assert.equal(Number((await app.redis.get(key)) ?? 0) - before, 1);
 		const { user, platform } = await settledLedger();
