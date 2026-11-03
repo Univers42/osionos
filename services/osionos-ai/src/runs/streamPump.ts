@@ -49,20 +49,6 @@ export function abortCode(signal: AbortSignal): 'timeout' | 'cancelled' | null {
 	return reason?.name === 'timeout' ? 'timeout' : 'cancelled';
 }
 
-/** The short message of a failure: never the body of the upstream. */
-export function failureMessage(code: string, error: unknown): string {
-	if (code === 'cancelled') return 'the run was cancelled';
-	if (code === 'timeout') return 'the upstream did not answer in time';
-	return failureName(error);
-}
-
-/** The name of a failure, and nothing else: no upstream body reaches the client. */
-function failureName(error: unknown): string {
-	const name = (error as { name?: unknown } | null)?.name;
-	if (typeof name === 'string' && name.length > 0) return name.slice(0, 64);
-	return 'upstream_error';
-}
-
 /**
  * The ceiling of the loop: the money the run holds, and the cost of a step.
  *
@@ -252,6 +238,9 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			maxRetries: input.maxRetries ?? SDK_DEFAULT_RETRIES,
 			// The SDK must never fetch a URL: the images are bytes we fetched.
 			experimental_download: refuseDownload,
+			// The failure comes back as an `error` part. The SDK's default also
+			// prints it whole: the body of the provider and our prompt, in the logs.
+			onError: () => undefined,
 			...(input.providerOptions ? { providerOptions: input.providerOptions } : {}),
 			// The tools, and the ceiling of the loop: the model may call a
 			// tool, and the answer comes after the tool.

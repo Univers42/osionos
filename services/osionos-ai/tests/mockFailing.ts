@@ -20,7 +20,10 @@ export type Behaviour =
 	| 429
 	| 500
 	| 503
+	| 402
 	| 400
+	/** A 200 stream whose first chunk is the `body`: the error of a provider that already said 200. */
+	| 'stream_error'
 	/** The socket dies before the first byte. */
 	| 'reset'
 	/** One chunk of text, then the socket dies. */
@@ -34,6 +37,8 @@ export interface Scripted {
 	delayMs?: number;
 	/** The `Retry-After` header of a status answer. */
 	retryAfter?: string;
+	/** The body of a status answer, or the chunk of a `stream_error`. */
+	body?: string;
 }
 
 export interface FailingUpstream {
@@ -56,9 +61,9 @@ export interface FailingUpstream {
 
 const ERROR_BODY = JSON.stringify({ error: { message: 'scripted failure', type: 'scripted' } });
 
-function sendStatus(response: ServerResponse, status: number, retryAfter?: string): void {
+function sendStatus(response: ServerResponse, status: number, retryAfter?: string, body = ERROR_BODY): void {
 	response.writeHead(status, { 'content-type': 'application/json', ...(retryAfter ? { 'retry-after': retryAfter } : {}) });
-	response.end(ERROR_BODY);
+	response.end(body);
 }
 
 export async function startFailingUpstream(): Promise<FailingUpstream> {
@@ -86,12 +91,18 @@ export async function startFailingUpstream(): Promise<FailingUpstream> {
 			requests.push(model);
 			bodies.push(body);
 			const next = scripts.get(model)?.shift() ?? { behaviour: steady.get(model) ?? ('ok' as const) };
-			setTimeout(() => answer(response, next.behaviour, askedForUsage(body), next.retryAfter), next.delayMs ?? 0);
+			setTimeout(() => answer(response, next, askedForUsage(body)), next.delayMs ?? 0);
 		});
 	});
 
-	function answer(response: ServerResponse, behaviour: Behaviour, sendUsage: boolean, retryAfter?: string): void {
-		if (typeof behaviour === 'number') return sendStatus(response, behaviour, retryAfter);
+	function answer(response: ServerResponse, scripted: Scripted, sendUsage: boolean): void {
+		const { behaviour, retryAfter, body } = scripted;
+		if (typeof behaviour === 'number') return sendStatus(response, behaviour, retryAfter, body);
+		if (behaviour === 'stream_error') {
+			response.writeHead(200, { 'content-type': 'text/event-stream' });
+			response.end(`data: ${body}\n\n`);
+			return;
+		}
 		if (behaviour === 'reset') return void response.socket?.destroy();
 		if (behaviour === 'text_then_break') {
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
