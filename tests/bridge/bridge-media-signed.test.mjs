@@ -8,6 +8,8 @@ import {
 } from '../../scripts/bridge-api.mjs';
 import { pngFixture } from './support/image-fixtures.mjs';
 import { mediaKeysFromEnv, signMediaPath, verifyMediaSignature } from '../../scripts/bridge-media-sign.mjs';
+import { createMediaHandler } from '../../scripts/bridge-media.mjs';
+import { createServer } from 'node:http';
 
 const subject = '3f6d2a70-5b3f-4c92-8f06-8f4644fd1209';
 const payload = {
@@ -188,5 +190,56 @@ describe('MEDIA_URL_ENFORCE=true', () => {
 
 	it('refuses to start without a secret, rather than serve nothing', () => {
 		assert.throws(() => serverWith({ MEDIA_URL_ENFORCE: 'true', MEDIA_URL_SECRET: '' }), /MEDIA_URL_SECRET/);
+	});
+});
+
+describe('signing for a page the caller can read (a teammate on a shared page)', () => {
+	const READER = '7a7a7a7a-0000-4000-8000-000000000001';
+	const ownerImage = `/api/media/uploads/${subject}/${'b'.repeat(64)}.png`;
+	const elsewhere = `/api/media/uploads/${subject}/${'c'.repeat(64)}.png`;
+	const pages = new Map([
+		['page-shared', { content: [{ type: 'image', content: `http://bridge.example${ownerImage}` }], cover: null }],
+		['page-cover', { content: [], cover: `http://bridge.example${elsewhere}` }],
+	]);
+	let server;
+	let base;
+	before(async () => {
+		const saved = process.env.MEDIA_URL_SECRET;
+		process.env.MEDIA_URL_SECRET = SECRET;
+		const handle = createMediaHandler({
+			config: testConfig(),
+			verifySession: () => ({ userId: READER }),
+			readPage: async (_request, pageId) => {
+				if (!pages.has(pageId)) throw Object.assign(new Error('not found'), { status: 404 });
+				return pages.get(pageId);
+			},
+		});
+		if (saved === undefined) delete process.env.MEDIA_URL_SECRET;
+		else process.env.MEDIA_URL_SECRET = saved;
+		server = createServer((request, response) => handle(new URL(request.url, 'http://bridge.example'), request, response));
+		base = await listen(server);
+	});
+	after(() => server.close());
+
+	const sign = (body) => fetch(`${base}/api/media/uploads/sign`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json', authorization: 'Bearer reader' },
+		body: JSON.stringify(body),
+	}).then((res) => res.json());
+
+	it('signs the owner\'s image that appears in the page the reader opened', async () => {
+		const { signed } = await sign({ pageId: 'page-shared', paths: [ownerImage, elsewhere] });
+		assert.deepEqual(Object.keys(signed), [ownerImage]);
+		assert.match(signed[ownerImage], /\?exp=\d+&kid=[0-9a-f]{8}&sig=[0-9a-f]{64}$/);
+	});
+
+	it('signs a cover too', async () => {
+		const { signed } = await sign({ pageId: 'page-cover', paths: [elsewhere] });
+		assert.deepEqual(Object.keys(signed), [elsewhere]);
+	});
+
+	it('signs nothing of someone else\'s for a page the reader cannot read, or with no page', async () => {
+		assert.deepEqual((await sign({ pageId: 'page-hidden', paths: [ownerImage] })).signed, {});
+		assert.deepEqual((await sign({ paths: [ownerImage] })).signed, {});
 	});
 });
