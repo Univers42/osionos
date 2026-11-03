@@ -14,6 +14,7 @@ import type { EmbedSnapshot } from '@/shared/lib/embed/embedInfo';
 import type { ButtonProgram } from './buttonProgram';
 import type { BlockStyle } from './blockStyle';
 import type { CalloutTone } from './calloutTypes';
+export type { CalloutTone };
 
 /**
  * Standalone Block types for the playground application.
