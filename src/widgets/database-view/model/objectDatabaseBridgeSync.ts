@@ -33,6 +33,7 @@ import {
 } from "./objectDatabaseWorkspaces";
 import { createPushBaseline } from "./objectDatabasePushBaseline";
 import { createSessionWait, type SessionWait } from "./sessionWait";
+import { clearRefusedDatabaseSave, noticeRefusedDatabaseSave } from "./refusedDatabaseSave";
 
 const HYDRATION_JWT_RETRY_MS = 1500;
 const HYDRATION_JWT_MAX_ATTEMPTS = 12;
@@ -132,6 +133,20 @@ async function deleteDatabaseRemote(jwt: string, dbKey: string): Promise<void> {
  *  could overwrite real server data before it ever saw it. Once hydration has run
  *  the store is reconciled, so pushing is safe.
  *  Fire-and-forget — a failed item simply stays dirty and retries next flush. */
+/** The starter a page invents for a database this tab has not seen. It says nothing the server
+ *  needs: pushed, it blanks a real database or resurrects a deleted one (scripts/bridge-object-db-guard.mjs).
+ *  Caveat: a database created here reaches the server at its first edit, not at its creation. */
+export function isPristinePlaceholder(dbKey: string, slice: NotionState): boolean {
+  const pages = Object.entries(slice.pages ?? {});
+  if (pages.length > 1 || Object.keys(slice.databases?.[dbKey]?.properties ?? {}).length > 1) return false;
+  const [entry] = pages;
+  if (!entry) return true;
+  const [id, page] = entry;
+  return id === `${dbKey}-row-1` && !page.content?.length && Object.values(page.properties ?? {}).every((value) => value === "" || value == null);
+}
+
+let refreshAfterRefusal: (() => void) | null = null;
+
 export function pushDirtyObjectDatabases(
   state: NotionState,
   seedIds: ReadonlySet<string>,
@@ -150,7 +165,7 @@ export function pushDirtyObjectDatabases(
   const dirty = [...userIds]
     .map((dbKey) => ({ dbKey, title: databaseTitle(state, dbKey), slice: slices.get(dbKey) ?? emptySlice() }))
     .map((item) => ({ ...item, hash: hashSlice(item.slice) }))
-    .filter((item) => pushed[item.dbKey] !== item.hash);
+    .filter((item) => pushed[item.dbKey] !== item.hash && !isPristinePlaceholder(item.dbKey, item.slice));
   const removed = Object.keys(pushed).filter((dbKey) => !userIds.has(dbKey));
   if (dirty.length === 0 && removed.length === 0) return;
 
@@ -162,8 +177,16 @@ export function pushDirtyObjectDatabases(
         try {
           await pushDatabaseSlice(jwt, item.dbKey, item.title, item.slice);
           next[item.dbKey] = item.hash;
-        } catch {
-          delete next[item.dbKey]; // keep dirty → retried next flush
+          clearRefusedDatabaseSave(item.dbKey);
+        } catch (error) {
+          // The server holds this database and this tab has a blank: stop pushing and load it.
+          if ((error as { status?: number }).status === 409) {
+            next[item.dbKey] = item.hash;
+            refreshAfterRefusal?.();
+          } else {
+            delete next[item.dbKey]; // keep dirty → retried next flush
+            noticeRefusedDatabaseSave(item.dbKey, item.title, item.hash, (error as { status?: number }).status);
+          }
         }
       }
       for (const dbKey of removed) {
@@ -241,7 +264,8 @@ export function ensureObjectDatabaseHydration(hooks: ObjectDatabaseSyncHooks): v
       void hydrate(hooks).catch(() => undefined);
       // Live cross-client refresh: re-run the same data-loss-safe hydration whenever
       // another browser/tab of this account writes (idempotent + coalesced).
-      startObjectDatabaseRealtime(() => { void hydrate(hooks).catch(() => undefined); });
+      refreshAfterRefusal = () => { void hydrate(hooks).catch(() => undefined); };
+      startObjectDatabaseRealtime(refreshAfterRefusal);
     },
     retryMs: HYDRATION_JWT_RETRY_MS,
     maxAttempts: HYDRATION_JWT_MAX_ATTEMPTS,
@@ -253,6 +277,7 @@ export function ensureObjectDatabaseHydration(hooks: ObjectDatabaseSyncHooks): v
  *  hydration re-runs for the new session and no old push baseline lingers. */
 export function resetObjectDatabaseSync(): void {
   stopObjectDatabaseRealtime();
+  refreshAfterRefusal = null;
   hydrationWait?.cancel();
   hydrationWait = null;
   hydrationDone = false;

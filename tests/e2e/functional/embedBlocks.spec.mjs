@@ -21,6 +21,16 @@ const PROVIDER_ALLOW =
   "autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; web-share";
 const RICH_ALLOW = "autoplay; encrypted-media; picture-in-picture; clipboard-write; web-share";
 const GENERIC_ALLOW = "picture-in-picture";
+// The frame gets exactly the names of its policy list that this browser recognises: nothing
+// looser, and none it would only warn about (src/shared/lib/dom/frameAllow.ts; Chromium has no
+// web-share, measured 2026-11-03).
+async function expectAllow(page, frame, policy) {
+  const recognised = await page.evaluate((list) => {
+    const known = document.featurePolicy?.features();
+    return list.split("; ").filter((name) => !known || known.includes(name)).join("; ");
+  }, policy);
+  await expect(frame).toHaveAttribute("allow", recognised);
+}
 const CODEPEN = "https://codepen.io/team/pen/abcDEF";
 const YOUTUBE = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
@@ -63,7 +73,7 @@ test.describe("embed and bookmark blocks", () => {
     const frame = linkBlock(page).locator("iframe");
     await expect(frame).toHaveAttribute("src", /^https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?.*autoplay=1/);
     await expect(frame).toHaveAttribute("sandbox", SANDBOX);
-    await expect(frame).toHaveAttribute("allow", PROVIDER_ALLOW);
+    await expectAllow(page, frame, PROVIDER_ALLOW);
     await expect(frame).toHaveAttribute("allowfullscreen", "");
     await expect(frame).toHaveAttribute("referrerpolicy", "strict-origin-when-cross-origin");
   });
@@ -72,7 +82,7 @@ test.describe("embed and bookmark blocks", () => {
     await createLinkBlock(page, baseURL, "/embed", "Embed", CODEPEN);
     const frame = linkBlock(page).locator("iframe");
     await expect(frame).toHaveAttribute("src", /^https:\/\/codepen\.io\/team\/embed\/abcDEF/);
-    await expect(frame).toHaveAttribute("allow", RICH_ALLOW);
+    await expectAllow(page, frame, RICH_ALLOW);
     await expect(frame).not.toHaveAttribute("allowfullscreen", /.*/);
   });
 
@@ -80,7 +90,7 @@ test.describe("embed and bookmark blocks", () => {
     await createLinkBlock(page, baseURL, "/embed", "Embed", "https://example.com/");
     await embedAnyway(page).click();
     const frame = linkBlock(page).locator("iframe");
-    await expect(frame).toHaveAttribute("allow", GENERIC_ALLOW);
+    await expectAllow(page, frame, GENERIC_ALLOW);
     await expect(frame).not.toHaveAttribute("allowfullscreen", /.*/);
     await expect(frame).toHaveAttribute("sandbox", SANDBOX);
     await expect(linkBlock(page).getByText("example.com").first()).toBeVisible();
@@ -137,6 +147,21 @@ test.describe("embed and bookmark blocks", () => {
     await openVideoLinkTab(page, baseURL);
     await fillDialog(page, "https://example.com/clip.mp4");
     await expect(page.locator("video")).toHaveCount(1);
+  });
+
+  // #289: Pixabay's CDN set a foreign __cf_bm cookie from a video block, which Firefox flags. An
+  // anonymous CORS fetch stores no cookie (measured in Firefox 148: plain stores __cf_bm, anonymous
+  // stores none and still plays). Any other host keeps a plain fetch, which it may need to play.
+  test("/video from Pixabay loads without credentials, any other host as before", async ({ page, baseURL }) => {
+    await openVideoLinkTab(page, baseURL);
+    await fillDialog(page, "https://cdn.pixabay.com/video/2016/08/24/4788-180289892_medium.mp4");
+    await expect(page.locator("video")).toHaveAttribute("crossorigin", "anonymous");
+  });
+
+  test("/video from another host carries no crossorigin", async ({ page, baseURL }) => {
+    await openVideoLinkTab(page, baseURL);
+    await fillDialog(page, "https://example.com/clip.mp4");
+    await expect(page.locator("video")).not.toHaveAttribute("crossorigin", /.*/);
   });
 
   test("embed and bookmark survive a reload", async ({ page, baseURL }) => {

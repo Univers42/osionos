@@ -160,3 +160,25 @@ describe('creating an object database', () => {
 		});
 	});
 });
+
+describe('a stale tab pushing its blank placeholder', () => {
+	const key = 'db-real';
+	const real = { databases: { [key]: { properties: { a: {}, b: {} } } }, pages: { r1: { properties: { a: 'x' } }, r2: { properties: { a: 'y' } } }, views: {} };
+	const blank = { databases: { [key]: { properties: { [`${key}-title`]: {} } } }, pages: { [`${key}-row-1`]: { properties: { [`${key}-title`]: '' }, content: [] } }, views: {} };
+
+	it('leaves the stored database alone, and a real save still lands', async () => {
+		const mock = createPostgrestMock(world());
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const created = await send(base, '/api/object-databases', asB, post({ dbKey: key, workspaceId: IDS.homeB, title: 'Real', state: real }));
+			assert.ok(created.status < 300, created.text);
+			const refused = await send(base, '/api/object-databases', asB, post({ dbKey: key, title: 'Untitled database', state: blank }));
+			assert.equal(refused.status, 409, refused.text);
+			const row = () => mock.rows('osionos_object_databases').find((candidate) => candidate.db_key === key);
+			assert.equal(Object.keys(row().state.pages).length, 2);
+			const saved = await send(base, '/api/object-databases', asB, post({ dbKey: key, title: 'Real', state: { ...real, pages: { ...real.pages, r3: { properties: {} } } } }));
+			assert.ok(saved.status < 300, saved.text);
+			assert.equal(Object.keys(row().state.pages).length, 3);
+			assert.equal(row().workspace_id, IDS.homeB, 'a push with no workspace keeps the row\'s');
+		});
+	});
+});

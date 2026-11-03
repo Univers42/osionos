@@ -9,7 +9,8 @@ import { CONNECTOR_DOWNLOAD_URL } from "@/features/machines/model/connector";
 import { TERMINAL_PAGE_URL, terminalFramePanel } from "@/features/machines/model/terminalFrame";
 import { startTerminalFrame, useTerminalFrameStore } from "@/features/machines/model/terminalFrameStore";
 import { SudoPrompt } from "@/features/settings/ui/sudo/SudoPrompt";
-import { LOCAL_NODE_ORIGIN } from "@/features/machines/model/machineWindow";
+import { LOCAL_NODE_ORIGIN, NODE_FRAME_PERMISSIONS } from "@/features/machines/model/machineWindow";
+import { frameAllow } from "@/shared/lib/dom/frameAllow";
 import { TERMINAL_THEME_MESSAGE } from "@/features/machines/model/terminalFrame";
 import { dockColors, dockTheme } from "./dockColors";
 import { watchAppearance } from "./watchAppearance";
@@ -48,9 +49,8 @@ export const NodeVsCodeTerminal: React.FC = () => {
         ref={frameRef}
         src={TERMINAL_PAGE_URL}
         title="Terminal"
-        // Paste needs clipboard-read on this cross-origin frame (measured 2026-11-01: refused without
-        // it); OSC 52 clipboard reads from the shell stay dropped by the page (W13).
-        allow="local-network-access; clipboard-read; clipboard-write"
+        // OSC 52 clipboard reads from the shell stay dropped by the page (W13).
+        allow={frameAllow(NODE_FRAME_PERMISSIONS)}
         className="absolute inset-0 h-full w-full border-0 bg-[var(--osio-code-bg)]"
       />
       {panel && <MachineFramePanel panel={panel} waiting={phase === "idle" || phase === "connecting"} pairing={phase === "no-node" || phase === "other-account"} onTryAgain={() => setAttempt((n) => n + 1)} />}

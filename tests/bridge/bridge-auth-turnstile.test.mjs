@@ -18,9 +18,11 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { configFromEnv } from '../../scripts/bridge-api.mjs';
+import { configFromEnv, TURNSTILE_PROOF_HEADER, turnstileProof } from '../../scripts/bridge-api.mjs';
 import { LOCAL_BYPASS_TOKEN, turnstileBootLine } from '../../scripts/bridge-turnstile.mjs';
 import { authEnv, SECRET, startAuthWorld } from './support/auth-world.mjs';
+
+const BRIDGE_SECRET = authEnv().OSIONOS_BRIDGE_SHARED_SECRET;
 
 const CREDENTIALS = { email: 'ada@example.com', password: 'correct horse battery' };
 const secured = { OSIONOS_BRIDGE_TURNSTILE: 'enforce', TURNSTILE_SECRET_KEY: SECRET };
@@ -210,5 +212,57 @@ describe('the Turnstile settings at boot', () => {
 		assert.match(verified, /enforce.*siteverify/);
 		assert.match(turnstileBootLine(configFromEnv(authEnv(bypassed))), /BYPASS/);
 		assert.ok(!verified.includes(SECRET));
+	});
+});
+
+describe('the proof that the bridge verified the token (prismatica ADR 0003)', () => {
+	const proofOf = (call) => call.headers?.[TURNSTILE_PROOF_HEADER];
+
+	it('sends no proof with the session handoff, which carries no Turnstile token', async (t) => {
+		const world = await startAuthWorld(t, { env: secured });
+		await world.post('/api/auth/login', { ...CREDENTIALS, turnstileToken: 'real-token' });
+		const others = world.calls.gateway.filter((call) => !['/api/auth/register', '/api/auth/login'].includes(call.route));
+		assert.ok(others.length > 0);
+		for (const call of others) assert.equal(proofOf(call), undefined, call.route);
+	});
+
+	it('signs exactly the body sent, for each route, after siteverify passed', async (t) => {
+		const world = await startAuthWorld(t, { env: secured });
+		const before = Math.floor(Date.now() / 1000);
+		await world.post('/api/auth/register', { ...CREDENTIALS, turnstileToken: 'real-token' });
+		const after = Math.ceil(Date.now() / 1000);
+		const signIns = world.calls.gateway.filter((call) => ['/api/auth/register', '/api/auth/login'].includes(call.route));
+		assert.equal(signIns.length, 2);
+		for (const call of signIns) {
+			const proof = proofOf(call);
+			assert.match(proof, /^\d+\.[0-9a-f]{64}$/);
+			const second = Number(proof.split('.')[0]);
+			assert.ok(second >= before && second <= after, `${second} outside [${before}, ${after}]`);
+			assert.equal(proof, turnstileProof(BRIDGE_SECRET, call.route, call.body, second));
+		}
+	});
+
+	const unverified = [
+		['off', {}],
+		['off with a secret', { TURNSTILE_SECRET_KEY: SECRET }],
+		['enforce + bypass', bypassed],
+		['enforce without a shared secret', { ...secured, OSIONOS_BRIDGE_SHARED_SECRET: '' }],
+	];
+	for (const [label, env] of unverified) {
+		it(`sends no proof under ${label}: nothing was verified, or nothing can sign`, async (t) => {
+			const world = await startAuthWorld(t, { env });
+			await world.post('/api/auth/login', { ...CREDENTIALS, turnstileToken: 'real-token' });
+			const login = world.calls.gateway.find((call) => call.route === '/api/auth/login');
+			assert.ok(login, 'the login still reaches the gateway');
+			assert.equal(proofOf(login), undefined);
+		});
+	}
+
+	it('is byte for byte what the gateway expects (vector shared with prismatica tests/unit/auth/bridge-proof.test.ts)', () => {
+		const body = { email: 'ada@example.com', password: 'correct horse battery', turnstileToken: 'real-token' };
+		assert.equal(
+			turnstileProof('vector-secret', '/api/auth/login', body, 1800000000),
+			'1800000000.7114dc30fde239163ade551dcefd297785c75d8677c1494cf77344acee6c814e',
+		);
 	});
 });

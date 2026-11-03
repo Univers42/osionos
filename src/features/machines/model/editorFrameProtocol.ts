@@ -11,6 +11,8 @@ export const EDITOR_THEME = "osionos-editor/theme";
 export const EDITOR_OPEN_TAB = "osionos-editor/open-tab";
 export const EDITOR_TITLE = "osionos-editor/title";
 /** The node-origin pages' own channel: secrets, folder lists, "Open in terminal". */
+/** Where "Open in terminal" leaves its path for a terminal page that is still loading. */
+export const TERMINAL_REQUEST = "osionos.terminal-request";
 export const EDITOR_CHANNEL = "osionos-editor";
 export const EDITOR_SHOW_TERMINAL = "osionos-editor/show-terminal";
 
