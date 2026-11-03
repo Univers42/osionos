@@ -6,7 +6,9 @@ import React from "react";
 import { MachineFramePanel } from "@/features/ide/ui/MachineFramePanel";
 import { SudoPrompt } from "@/features/settings/ui/sudo/SudoPrompt";
 import { CONNECTOR_DOWNLOAD_URL } from "../model/connector";
-import { EDITOR_FRAME_PERMISSIONS, EDITOR_PAGE_URL, useEditorFrame } from "../model/editorFrame";
+import { frameAllow } from "@/shared/lib/dom/frameAllow";
+import { EDITOR_PAGE_URL, useEditorFrame } from "../model/editorFrame";
+import { NODE_FRAME_PERMISSIONS } from "../model/machineWindow";
 import { EDITOR_OPEN, EDITOR_TITLE, type EditorToApp } from "../model/editorFrameProtocol";
 import { markMachineFile } from "../model/machineFileTab";
 import { terminalFramePanel } from "../model/terminalFrame";
@@ -26,7 +28,7 @@ export const MachineFileTab: React.FC<{ fileKey: string }> = ({ fileKey }) => {
   const panel = phase === "idle" ? null : terminalFramePanel(phase, CONNECTOR_DOWNLOAD_URL);
   return (
     <div className="relative h-full min-h-0 w-full bg-[var(--osio-code-bg)]">
-      <iframe key={attempt} ref={frameRef} src={`${EDITOR_PAGE_URL}?view=file`} title="File on this computer" allow={EDITOR_FRAME_PERMISSIONS} className="absolute inset-0 h-full w-full border-0" />
+      <iframe key={attempt} ref={frameRef} src={`${EDITOR_PAGE_URL}?view=file`} title="File on this computer" allow={frameAllow(NODE_FRAME_PERMISSIONS)} className="absolute inset-0 h-full w-full border-0" />
       {panel && <MachineFramePanel panel={panel} waiting={phase === "connecting"} pairing={false} onTryAgain={tryAgain} />}
       {phase === "step-up" && <SudoPrompt />}
     </div>

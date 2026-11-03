@@ -12,6 +12,8 @@
 
 import React from "react";
 
+import { frameAllow } from "@/shared/lib/dom/frameAllow";
+
 import {
   DEFAULT_EMBED_ASPECT,
   EMBED_REFERRER_POLICY,
@@ -59,7 +61,7 @@ export const WebEmbedFrame: React.FC<WebEmbedFrameProps> = ({
           src={safeSrc}
           title={title}
           sandbox={THIRD_PARTY_SANDBOX}
-          allow={allowForPolicy(policy)}
+          allow={frameAllow(allowForPolicy(policy))}
           allowFullScreen={grantsFullscreen(policy)}
           referrerPolicy={EMBED_REFERRER_POLICY}
           loading="lazy"
