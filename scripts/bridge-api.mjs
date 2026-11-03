@@ -5472,7 +5472,12 @@ export function createBridgeServer(options = {}) {
 		chat: createChatHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		notify: createNotifyHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		media: createMediaHandler({
+			config,
+			verifySession: verifyAppSessionToken,
+			fetchImpl,
+			readPage: async (request, pageId, requestConfig) => (await readablePageAccess(request, pageId, 'read', requestConfig, fetchImpl)).row,
+		}),
 		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			comments: createCommentsHandler({
