@@ -24,6 +24,7 @@ import { assetKindFromFile, formatBytes, readFileAsDataUrl, stringPayload } from
 import { runAsync } from '../model/settingsCalls';
 import { useSettingsHydration } from '../model/settingsHydration';
 import { readZipEntries } from './zipEntries';
+import { linkImportedPages } from './relativeLinks';
 
 const EMPTY_IMPORT_HISTORY: ImportHistoryEntry[] = [];
 
@@ -47,6 +48,7 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
   const addAsset = useAssetLibraryStore((s) => s.addAsset);
   const addPage = usePageStore((state) => state.addPage);
   const openPage = usePageStore((state) => state.openPage);
+  const updatePageContent = usePageStore((state) => state.updatePageContent);
   const jwt = useUserStore((state) => state.activePageJwt());
   const history = useImportHistoryStore((state) => state.data[workspaceId] ?? EMPTY_IMPORT_HISTORY);
   const hydrateHistory = useImportHistoryStore((state) => state.hydrate);
@@ -77,19 +79,34 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
     return parent;
   }
 
-  // Caveat: a relative `.md` link stays a plain link, it is not resolved to the imported page.
+  /** Second pass: a Markdown page that links to pages of the same archive gets those links as page mentions. */
+  async function linkArchivePages(sources: { pageId: string; name: string; dir: string[]; text: string }[], pageIdByPath: Map<string, string>) {
+    for (const { pageId, name, dir, text } of sources) {
+      const linked = linkImportedPages(text, dir, pageIdByPath);
+      if (linked !== text) updatePageContent(pageId, (await importPageFile(new File([linked], name))).content);
+    }
+  }
+
   async function importZip(file: File) {
     const startedAt = new Date().toISOString();
     const folders = new Map<string, string>();
     const pageIds: string[] = [];
+    const pageIdByPath = new Map<string, string>();
+    const markdownSources: { pageId: string; name: string; dir: string[]; text: string }[] = [];
     for (const { segments, bytes } of await readZipEntries(file)) {
       const name = segments[segments.length - 1];
-      if (!PAGE_EXTENSIONS.has(extensionOf(name))) continue;
-      const parent = await folderFor(segments.slice(0, -1), folders);
+      const extension = extensionOf(name);
+      if (!PAGE_EXTENSIONS.has(extension)) continue;
+      const dir = segments.slice(0, -1);
+      const parent = await folderFor(dir, folders);
       const payload = await importPageFile(new File([bytes.slice()], name));
       const page = await addPage(workspaceId, payload.title || name, jwt ?? '', parent, { content: payload.content });
-      if (page?._id) pageIds.push(page._id);
+      if (!page?._id) continue;
+      pageIds.push(page._id);
+      pageIdByPath.set(segments.join('/'), page._id);
+      if (extension === '.md' || extension === '.markdown') markdownSources.push({ pageId: page._id, name, dir, text: new TextDecoder().decode(bytes) });
     }
+    await linkArchivePages(markdownSources, pageIdByPath);
     const error = pageIds.length ? null : 'No Markdown, HTML, JSON or text files in this archive.';
     addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: error ? 'failed' : 'completed', pageIds, error, startedAt, finishedAt: new Date().toISOString() });
   }
