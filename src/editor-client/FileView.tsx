@@ -151,12 +151,13 @@ export const FileView: React.FC<{ session: EditorSession; fileKey: string | null
     let current = true;
     setLoad({ kind: "loading" });
     session.peers.postMessage({ type: "active-file", id: `${file.root}:${file.rel}` });
-    readFile(provider, file).then(
+    // A socket knows only the roots it has listed, and this frame opens files without a tree.
+    session.client.request("roots", {}).then(() => readFile(provider, file)).then(
       (loaded) => { if (current) setLoad(loaded === "notText" ? { kind: "notText" } : { kind: "ready", loaded }); },
       (error: unknown) => { if (current) setLoad(failureOf(error)); },
     );
     return () => { current = false; };
-  }, [file, provider, session.peers, epoch]);
+  }, [file, provider, session.client, session.peers, epoch]);
 
   if (!fileKey || !file) return <Message title="Open this file from the Explorer"><p>This tab no longer knows its file.</p></Message>;
   if (load.kind === "loading") return null;

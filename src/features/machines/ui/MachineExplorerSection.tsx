@@ -8,7 +8,9 @@ import { SudoPrompt } from "@/features/settings/ui/sudo/SudoPrompt";
 import { useWorkbenchDockOpener } from "../model/machineDock";
 import { CONNECTOR_DOWNLOAD_URL } from "../model/connector";
 import { EDITOR_OPEN_TAB, EDITOR_PICK, EDITOR_SHOW_TERMINAL, type EditorToApp } from "../model/editorFrameProtocol";
-import { EDITOR_FRAME_PERMISSIONS, EDITOR_PAGE_URL, useEditorFrame } from "../model/editorFrame";
+import { frameAllow } from "@/shared/lib/dom/frameAllow";
+import { EDITOR_PAGE_URL, useEditorFrame } from "../model/editorFrame";
+import { NODE_FRAME_PERMISSIONS } from "../model/machineWindow";
 import { openMachineFile } from "../model/machineFileTab";
 import { useMachineExplorer } from "../model/machineExplorerStore";
 import { terminalFramePanel } from "../model/terminalFrame";
@@ -64,7 +66,7 @@ export const MachineExplorerSection: React.FC<{ collapsed: boolean }> = ({ colla
         ref={frameRef}
         src={`${EDITOR_PAGE_URL}?view=explorer`}
         title="Folders on this computer"
-        allow={EDITOR_FRAME_PERMISSIONS}
+        allow={frameAllow(NODE_FRAME_PERMISSIONS)}
         className="absolute inset-0 h-full w-full border-0 bg-transparent"
       />
       {panel && <MachineFramePanel tone="sidebar" panel={panel} waiting={phase === "connecting"} pairing={phase === "no-node" || phase === "other-account"} onTryAgain={tryAgain} />}

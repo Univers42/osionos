@@ -152,9 +152,16 @@ function readPersistedPersonas() {
   }
 }
 
+// A password is sent once, at sign-in, and never kept: "Keep me signed in" keeps the session's
+// tokens, not the credential. Until 2026-11-03 it sat in clear text in both keys below. Every
+// save goes through here, and boot saves what it restores, so an old record loses it too.
+function withoutPassword<P extends { password: string }>(persona: P): P {
+  return { ...persona, password: '' };
+}
+
 function savePersistedPersonas(personas: typeof INITIAL_PERSONAS) {
   if (typeof localStorage === 'undefined') return;
-  const persisted = personas.filter((persona) => persona.persistInSessions);
+  const persisted = personas.filter((persona) => persona.persistInSessions).map(withoutPassword);
   localStorage.setItem(ACTIVE_ACCOUNTS_STORAGE_KEY, JSON.stringify(persisted));
 }
 
@@ -190,7 +197,8 @@ function readPersistedBridgeSessions(): Record<string, PersistedBridgeSession> {
 
 function savePersistedBridgeSessions(map: Record<string, PersistedBridgeSession>) {
   if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(BRIDGE_SESSION_STORAGE_KEY, JSON.stringify(map));
+  const scrubbed = Object.fromEntries(Object.entries(map).map(([userId, record]) => [userId, { ...record, persona: withoutPassword(record.persona) }]));
+  localStorage.setItem(BRIDGE_SESSION_STORAGE_KEY, JSON.stringify(scrubbed));
 }
 
 function savePersistedBridgeSession(record: PersistedBridgeSession) {
@@ -611,7 +619,7 @@ export const useUserStore = create<RefreshingUserStore>((set, get) => ({
     }
     const ok = loginResult?.ok ? loginResult : null;
     const userId = ok?.userId ?? `local-${crypto.randomUUID()}`;
-    const storedPersona = { ...persona, id: userId };
+    const storedPersona = withoutPassword({ ...persona, id: userId });
     const workspaces = ok ? await fetchWorkspaces(ok.accessToken) : [];
     const parts = ok
       ? partition(workspaces, userId)

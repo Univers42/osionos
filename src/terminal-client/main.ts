@@ -8,7 +8,7 @@
 import { updateUserConfiguration } from "@codingame/monaco-vscode-configuration-service-override";
 import type { CodeTheme } from "../features/ide/model/codeTheme";
 import { codeThemeSettings, legacyTerminalSettings } from "../features/ide/model/codeThemeSettings";
-import { EDITOR_CHANNEL } from "../features/machines/model/editorFrameProtocol";
+import { EDITOR_CHANNEL, TERMINAL_REQUEST } from "../features/machines/model/editorFrameProtocol";
 import { cdCommand } from "./cdCommand";
 import { ITerminalGroupService, IWorkbenchLayoutService, getService, initialize } from "@codingame/monaco-vscode-api";
 import "@codingame/monaco-vscode-theme-defaults-default-extension";
@@ -38,9 +38,23 @@ function typeInNewestShell(line: string): void {
 
 new BroadcastChannel(EDITOR_CHANNEL).addEventListener("message", (event) => {
   if (event.data?.type !== "open-terminal" || typeof event.data.path !== "string") return;
+  try { localStorage.removeItem(TERMINAL_REQUEST); } catch { /* nothing was stored */ }
   const line = cdCommand(event.data.path);
   if (line) typeInNewestShell(line);
 });
+
+// Caveat: a request older than 30 s is dropped, so a dock that was slow to load opens at home.
+const REQUEST_LIFETIME_MS = 30_000;
+
+function takeTerminalRequest(): void {
+  try {
+    const request = JSON.parse(localStorage.getItem(TERMINAL_REQUEST) ?? "null") as { path?: unknown; at?: unknown } | null;
+    localStorage.removeItem(TERMINAL_REQUEST);
+    if (typeof request?.path !== "string" || typeof request.at !== "number" || Date.now() - request.at > REQUEST_LIFETIME_MS) return;
+    const line = cdCommand(request.path);
+    if (line) typeInNewestShell(line);
+  } catch { /* no storage in this frame: the shell stays at home */ }
+}
 
 class LocalShellProcess extends SimpleTerminalProcess {
   private readonly exited = new Emitter<number>();
@@ -63,6 +77,7 @@ class LocalShellProcess extends SimpleTerminalProcess {
     newestShell = this.typing;
     if (waitingLine) this.input(waitingLine);
     waitingLine = null;
+    takeTerminalRequest();
     return undefined;
   }
   input(data: string) { this.core.input(data); }

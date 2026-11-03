@@ -106,15 +106,17 @@ async function siteverify(token, remoteIp, config, fetchImpl) {
 
 /**
  * The token to forward to the gateway: the one the browser sent, verified here first.
+ * `verified` is true only when siteverify accepted it in this call — the one case the bridge may
+ * vouch for the check to the gateway (prismatica ADR 0003); `off` and the bypass verify nothing.
  * `remoteIp` is the address the gateway would also see.
  */
 export async function resolveTurnstileToken(payload, { config, fetchImpl, remoteIp = '' }) {
 	// off: the constant the bridge always sent, whatever the browser sent.
-	if (config.turnstileMode !== 'enforce') return LOCAL_BYPASS_TOKEN;
+	if (config.turnstileMode !== 'enforce') return { token: LOCAL_BYPASS_TOKEN, verified: false };
 	const token = tokenFrom(payload);
 	if (token.length > MAX_TOKEN_CHARS) throw turnstileError(422, 'turnstile_failed', 'The sign-in check failed; try again.');
-	if (config.turnstileBypassLocal) return token || LOCAL_BYPASS_TOKEN;
+	if (config.turnstileBypassLocal) return { token: token || LOCAL_BYPASS_TOKEN, verified: false };
 	if (!token) throw turnstileError(422, 'turnstile_required', 'Complete the sign-in check and try again.');
 	await siteverify(token, remoteIp, config, fetchImpl);
-	return token;
+	return { token, verified: true };
 }

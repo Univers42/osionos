@@ -11,6 +11,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { wouldBlankDatabase } from './bridge-object-db-guard.mjs';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
@@ -291,6 +292,14 @@ export function stableStringify(value) {
 		.sort((left, right) => left.localeCompare(right))
 		.map((key) => JSON.stringify(key) + ':' + stableStringify(value[key]));
 	return '{' + entries.join(',') + '}';
+}
+
+/** prismatica ADR 0003: the header that tells the auth gateway this bridge verified the
+ *  request's Turnstile token itself, so the gateway does not siteverify the spent token again.
+ *  Signed over the second, the path and the exact body sent; the gateway accepts it once. */
+export const TURNSTILE_PROOF_HEADER = 'x-osionos-bridge-proof';
+export function turnstileProof(secret, path, body, nowSec = Math.floor(Date.now() / 1000)) {
+	return `${nowSec}.${createHmac('sha256', secret).update(`${nowSec}.turnstile.${path}.${stableStringify(body)}`).digest('hex')}`;
 }
 
 export function bridgeSignature(secret, timestamp, payload) {
@@ -4706,16 +4715,27 @@ async function handleObjectDatabasesUpsert(url, request, response, config, fetch
 	// answers 409 `db_exists` too, on purpose: the builder reads `db_exists` on a key it
 	// minted itself as "already done". Do not turn it into a 200 that echoes the stored state.
 	const createOnly = payload.ifAbsent === true;
+	const incoming = validatedDatabaseState(payload.state);
+	if (!createOnly) {
+		const owner = encodeURIComponent(authContext.userId);
+		const key = encodeURIComponent(dbKey);
+		const found = await baasRest(config, fetchImpl, `osionos_object_databases?owner_id=eq.${owner}&db_key=eq.${key}&select=state&limit=1`, { method: 'GET' });
+		if (wouldBlankDatabase(dbKey, incoming, found?.[0]?.state)) {
+			json(response, 409, { error: 'db_exists' }, config);
+			return true;
+		}
+	}
 	let rows;
 	try {
 		rows = await baasRest(config, fetchImpl, createOnly ? 'osionos_object_databases' : 'osionos_object_databases?on_conflict=owner_id,db_key', {
 			method: 'POST',
 			body: {
 				owner_id: authContext.userId,
-				workspace_id: workspaceId,
+				// A push that names no workspace must not clear the one the row has.
+				...(workspaceId ? { workspace_id: workspaceId } : {}),
 				db_key: dbKey,
 				title: safeText(payload.title, 200) || 'Untitled',
-				state: validatedDatabaseState(payload.state),
+				state: incoming,
 				updated_at: new Date().toISOString(),
 			},
 			prefer: createOnly ? 'return=representation' : 'resolution=merge-duplicates,return=representation',
@@ -5236,22 +5256,24 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 	const password = safeText(payload.password, 512);
 	if (!email || !password) throw Object.assign(new Error('Email and password are required.'), { status: 422 });
 	const forwardedFor = forwardedForHeader(request);
-	const turnstileToken = await resolveTurnstileToken(payload, { config, fetchImpl, remoteIp: signInRemoteIp(request, config) });
+	const turnstile = await resolveTurnstileToken(payload, { config, fetchImpl, remoteIp: signInRemoteIp(request, config) });
+	const turnstileToken = turnstile.token;
+	// Caveat: a trust delegation — the gateway skips its own check for this header, so it is sent
+	// only after siteverify passed here, and is exactly as strong as OSIONOS_BRIDGE_SHARED_SECRET.
+	const signedCall = (path, body) => gatewayCall(fetchImpl, config, path, {
+		body: JSON.stringify(body),
+		headers: turnstile.verified && config.sharedSecret ? { [TURNSTILE_PROOF_HEADER]: turnstileProof(config.sharedSecret, path, body) } : {},
+		forwardedFor,
+	});
 
 	if (url.pathname === '/api/auth/register') {
 		const rawName = safeText(payload.username ?? payload.name ?? email.split('@')[0], 64);
 		const username = (rawName.replace(/[^\w.-]/g, '') || `user${Date.now()}`).slice(0, 32);
-		const { res: rRes, data: rData } = await gatewayCall(fetchImpl, config, '/api/auth/register', {
-			body: JSON.stringify({ email, password, turnstileToken, profile: { username, confirmPassword: password } }),
-			forwardedFor,
-		});
+		const { res: rRes, data: rData } = await signedCall('/api/auth/register', { email, password, turnstileToken, profile: { username, confirmPassword: password } });
 		if (!rRes.ok) { json(response, rRes.status || 422, { message: rData.message || 'Registration failed.' }, config); return; }
 	}
 
-	const { res: lRes, data: lData } = await gatewayCall(fetchImpl, config, '/api/auth/login', {
-		body: JSON.stringify({ email, password, turnstileToken }),
-		forwardedFor,
-	});
+	const { res: lRes, data: lData } = await signedCall('/api/auth/login', { email, password, turnstileToken });
 	if (!lRes.ok || !lData.access_token) { json(response, lRes.status || 401, { message: lData.message || 'Invalid credentials.' }, config); return; }
 
 	const consumed = await establishAppSession({ request, config, kv, pg, fetchImpl, gatewayToken: lData.access_token, authMethod: 'password' });
@@ -5450,7 +5472,12 @@ export function createBridgeServer(options = {}) {
 		chat: createChatHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		notify: createNotifyHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		media: createMediaHandler({
+			config,
+			verifySession: verifyAppSessionToken,
+			fetchImpl,
+			readPage: async (request, pageId, requestConfig) => (await readablePageAccess(request, pageId, 'read', requestConfig, fetchImpl)).row,
+		}),
 		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			comments: createCommentsHandler({
