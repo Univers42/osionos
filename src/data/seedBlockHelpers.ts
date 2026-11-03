@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { resolveCalloutType } from '@/entities/block/model/calloutTypes';
-import type { Block, CalloutTone } from '@/entities/block/model/types';
+import { resolveCalloutType, type CalloutTone } from '@/entities/block/model/calloutTypes';
+import type { Block } from '@/entities/block/model/types';
 import type { PageEntry } from '@/entities/page';
 
 let _counter = 0;
