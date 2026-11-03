@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Responsive Layout Testing**: Added `responsiveLayout.spec.mjs` Playwright test suite to verify frontend responsiveness across desktop, tablet, and mobile viewports.
 
 ### Fixed
+- **Bridge Content Validation Guard**: Enhanced `scripts/bridge-content-validation.mjs` to reject raw CSS class strings in stored content writes (`block.color`, `block.calloutTone`, and database `options[].color`) with 422 HTTP responses for issue #247.
 - Replaced dynamic test-source execution with Node module mocks; made collaborative block ordering explicit and kept terminal resize framing outside the numeric regex for the PR quality gate.
 - Hardened relay registry validation and writes, page sharing concurrency, and live collaboration authorization and hydration. Corrected GPU benchmark failure propagation, workload overlap, sampling duration, and unsupported co-location guidance.
 - **AI Budget**: The reservation of a run is the cost of the WHOLE loop (five steps), not of its first call: a run that reserves for one call and spends five books a spend the cap never allowed. The ledger books the real cost, and never more than the reservation, so a settlement can never push the daily cap over.
