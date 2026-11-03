@@ -62,3 +62,11 @@ test("WebKit, which warns about nothing, keeps the whole list", () => {
 test("empty directives and stray separators are dropped", () => {
   assert.equal(inBrowser(firefox, () => frameAllow(" fullscreen ;; ;web-share; ")), "fullscreen; web-share");
 });
+
+test("the node's frames keep fullscreen in every engine (its fullscreen button was denied in Firefox)", async () => {
+  const { NODE_FRAME_PERMISSIONS } = await import("../../src/features/machines/model/machineWindow.ts");
+  assert.equal(inBrowser(firefox, () => frameAllow(NODE_FRAME_PERMISSIONS)), "fullscreen");
+  assert.equal(inBrowser(chromium, () => frameAllow(NODE_FRAME_PERMISSIONS)), "clipboard-read; clipboard-write; fullscreen");
+  assert.equal(inBrowser(webkit, () => frameAllow(NODE_FRAME_PERMISSIONS)), NODE_FRAME_PERMISSIONS);
+});
+
