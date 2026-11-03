@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { buttonBlockLabel, type Block } from "@/entities/block";
+import type { Block } from "@/entities/block";
 import { diagramBlockToMarkdown } from "@/features/diagram/model/diagramMarkdown";
 import { appFence, escapeParagraphContent, mediaBlockToMarkdown, tableBlockToMarkdown } from "./pageMarkdownEscape";
 import { indentLines, isListItem, joinTight, joinWithEmpties } from "./pageMarkdownJoin";
@@ -123,7 +123,7 @@ export function blockToMarkdown(block: Block, depth = 0, options?: SerializeOpti
         buttonLabel: block.buttonLabel,
         buttonHref: block.buttonHref,
         buttonVariant: block.buttonVariant,
-        content: buttonBlockLabel(block),
+        content: content || undefined,
       });
     case "database_inline":
       return appFence("osidb", {
