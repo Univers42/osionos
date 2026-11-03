@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { mediaCrossOrigin } from "@/shared/lib/media/mediaCrossOrigin";
 import { ImageTagChips } from "./ImageTagChips";
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { FileText, ImageIcon, Music, Pause, Play } from "lucide-react";
@@ -255,6 +256,7 @@ const DirectMediaPreview: React.FC<MediaBlockPreviewProps> = ({
         <video
           controls
           preload="metadata"
+          crossOrigin={mediaCrossOrigin(resolved.url)}
           poster={resolved.thumbnailUrl}
           className="block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] bg-black/90"
         >

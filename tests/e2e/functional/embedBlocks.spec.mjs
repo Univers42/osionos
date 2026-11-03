@@ -149,6 +149,21 @@ test.describe("embed and bookmark blocks", () => {
     await expect(page.locator("video")).toHaveCount(1);
   });
 
+  // #289: Pixabay's CDN set a foreign __cf_bm cookie from a video block, which Firefox flags. An
+  // anonymous CORS fetch stores no cookie (measured in Firefox 148: plain stores __cf_bm, anonymous
+  // stores none and still plays). Any other host keeps a plain fetch, which it may need to play.
+  test("/video from Pixabay loads without credentials, any other host as before", async ({ page, baseURL }) => {
+    await openVideoLinkTab(page, baseURL);
+    await fillDialog(page, "https://cdn.pixabay.com/video/2016/08/24/4788-180289892_medium.mp4");
+    await expect(page.locator("video")).toHaveAttribute("crossorigin", "anonymous");
+  });
+
+  test("/video from another host carries no crossorigin", async ({ page, baseURL }) => {
+    await openVideoLinkTab(page, baseURL);
+    await fillDialog(page, "https://example.com/clip.mp4");
+    await expect(page.locator("video")).not.toHaveAttribute("crossorigin", /.*/);
+  });
+
   test("embed and bookmark survive a reload", async ({ page, baseURL }) => {
     await seedPage(page, baseURL, [
       { id: "e1", type: "embed", content: "https://example.com/app", embed: frameableSnapshot("https://example.com/app") },

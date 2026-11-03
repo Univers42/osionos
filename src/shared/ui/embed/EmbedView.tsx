@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { mediaCrossOrigin } from "@/shared/lib/media/mediaCrossOrigin";
 import React, { useMemo, useRef, useState } from "react";
 
 import { useHasBeenNearViewport } from "@/shared/lib/dom/useHasBeenNearViewport";
@@ -46,9 +47,10 @@ const REASON_NOTE = {
 const MEDIA = "block max-w-full rounded-md";
 
 function renderMedia(view: Extract<EmbedViewModel, { kind: "media" }>): React.ReactNode {
-  if (view.mediaKind === "image") return <img src={view.src} alt="" loading="lazy" referrerPolicy="no-referrer" className={MEDIA} />;
-  if (view.mediaKind === "audio") return <audio controls preload="none" src={view.src} className="w-full" />;
-  return <video controls preload="metadata" src={view.src} className={`${MEDIA} w-full`} />;
+  const crossOrigin = mediaCrossOrigin(view.src);
+  if (view.mediaKind === "image") return <img src={view.src} alt="" loading="lazy" referrerPolicy="no-referrer" crossOrigin={crossOrigin} className={MEDIA} />;
+  if (view.mediaKind === "audio") return <audio controls preload="none" src={view.src} crossOrigin={crossOrigin} className="w-full" />;
+  return <video controls preload="metadata" src={view.src} crossOrigin={crossOrigin} className={`${MEDIA} w-full`} />;
 }
 
 /** Whatever `chooseEmbedView` decides a link is: player, framed page, media file,
