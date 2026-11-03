@@ -200,6 +200,21 @@ test.describe("dock header", () => {
     await expect(frame).toHaveCount(1);
     expect(await frame.getAttribute("data-mount-mark")).toBe("first");
   });
+
+  // Hiding the panel unmounted it on the web, and the node terminal's shell ends with its socket:
+  // every close, and every action that closed the panel, cost the user their terminal.
+  test("the terminal stays mounted while the panel is hidden", async ({ page, baseURL }) => {
+    await openDock(page, baseURL);
+    const frame = page.locator('[data-osio-terminal] iframe[title="Terminal"]');
+    await expect(frame).toHaveCount(1);
+    await frame.evaluate((el) => { el.dataset.mountMark = "first"; });
+    await page.keyboard.press("Control+j");
+    await expect(dockOf(page)).toBeHidden();
+    await expect(frame).toHaveCount(1);
+    await page.keyboard.press("Control+j");
+    await expect(dockOf(page)).toBeVisible();
+    expect(await frame.getAttribute("data-mount-mark")).toBe("first");
+  });
 });
 
 test.describe("status bar", () => {

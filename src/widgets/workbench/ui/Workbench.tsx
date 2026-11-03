@@ -13,7 +13,6 @@
 import React from "react";
 
 import { useUserStore } from "@/features/auth";
-import { hasLocalTerminal } from "@/features/ide/model/localPty";
 import { useIdeFsSync } from "@/features/ide/model/useIdeFsSync";
 import { usePageFileWriter } from "@/features/page-file/model/usePageFileWriter";
 import { useSandboxHealthProbe } from "@/features/ide/model/sandboxHealthStore";
@@ -35,11 +34,9 @@ export const Workbench: React.FC = () => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const dockOpen = useWorkbenchStore((s) => s.dockOpen);
   const statusBarVisible = useWorkbenchStore((s) => s.statusBarVisible);
-  // The preload is fixed for the window's life, so it is read once.
-  const [keepsShell] = React.useState(hasLocalTerminal);
   const [dockEverOpened, setDockEverOpened] = React.useState(dockOpen);
   if (dockOpen && !dockEverOpened) setDockEverOpened(true);
-  const dock = dockPresence({ open: dockOpen, everOpened: dockEverOpened, keepsShell });
+  const dock = dockPresence({ open: dockOpen, everOpened: dockEverOpened });
 
   useSandboxHealthProbe(workspaceId, true);
   // Always enabled: unlike the legacy shell there is no per-workspace IDE mode;
@@ -61,17 +58,11 @@ export const Workbench: React.FC = () => {
         <MainContent />
       </div>
       {/* The same tree whether shown or hidden, so hiding never remounts the shell. */}
-      {keepsShell && dock !== "absent" && (
+      {dock !== "absent" && (
         <div className={dock === "shown" ? "contents" : "hidden"}>
           <DockSplitter />
           <WorkbenchDock />
         </div>
-      )}
-      {!keepsShell && dock === "shown" && (
-        <>
-          <DockSplitter />
-          <WorkbenchDock />
-        </>
       )}
       {statusBarVisible && <WorkbenchStatusBar />}
     </div>
