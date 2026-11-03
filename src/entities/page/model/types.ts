@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block, BlockType } from "@/entities/block";
+import type { StoredIcon } from "@osionos/ui";
 
 /** Access model for page visibility. */
 export type PageVisibility = "private" | "shared" | "public";
@@ -53,7 +54,8 @@ export interface PagePropertyEntry {
 export interface PageEntry {
   _id: string;
   title: string;
-  icon?: string;
+  get icon(): string | undefined;
+  set icon(value: string | StoredIcon | undefined);
   /** Cover image URL or CSS gradient. */
   cover?: string;
   /** Vertical focal point (%) of the cover image (CSS object-position); default 50 (centered). */
@@ -101,6 +103,8 @@ export interface PageEntry {
   /** Recurrence config — only meaningful on a template page. */
   recurrence?: PageRecurrence | null;
 }
+
+export type Page = PageEntry;
 
 /** Discriminator for the type of page currently active. */
 export type ActivePageKind = "page" | "database" | "home" | "channel";
