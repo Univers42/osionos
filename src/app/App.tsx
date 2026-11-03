@@ -17,8 +17,6 @@ import { useUserStore } from "@/features/auth";
 import { isBridgeSession, isPortalMode, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
 import { Portal } from "@/features/auth/ui/Portal";
 import { usePageSync } from "@/store/sync/usePageSync";
-import { loadActiveWorkspaceFirst } from "@/store/sync/loadActiveWorkspaceFirst";
-import { getActiveWorkspaceId } from "@/shared/api/client";
 import { useUnreadSync } from "@/store/chat/useUnreadSync";
 import { useNotifyLive } from "@/store/chat/useNotifyLive";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
@@ -120,10 +118,8 @@ async function seedEmptyOnlineWorkspaces(sessions: UserSessions, jwt: string) {
     (workspace) => (usePageStore.getState().pages[workspace._id] ?? []).length === 0,
   );
   if (emptyWorkspaces.length > 0) {
-    await loadActiveWorkspaceFirst(
-      emptyWorkspaces.map((workspace) => workspace._id),
-      getActiveWorkspaceId(),
-      (workspaceId) => usePageStore.getState().fetchPages(workspaceId, jwt),
+    await Promise.all(
+      emptyWorkspaces.map((workspace) => usePageStore.getState().fetchPages(workspace._id, jwt)),
     );
   }
 
