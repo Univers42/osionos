@@ -228,14 +228,16 @@ describe('the proof that the bridge verified the token (prismatica ADR 0003)', (
 
 	it('signs exactly the body sent, for each route, after siteverify passed', async (t) => {
 		const world = await startAuthWorld(t, { env: secured });
+		const before = Math.floor(Date.now() / 1000);
 		await world.post('/api/auth/register', { ...CREDENTIALS, turnstileToken: 'real-token' });
+		const after = Math.ceil(Date.now() / 1000);
 		const signIns = world.calls.gateway.filter((call) => ['/api/auth/register', '/api/auth/login'].includes(call.route));
 		assert.equal(signIns.length, 2);
 		for (const call of signIns) {
 			const proof = proofOf(call);
 			assert.match(proof, /^\d+\.[0-9a-f]{64}$/);
 			const second = Number(proof.split('.')[0]);
-			assert.ok(Math.abs(second - Date.now() / 1000) < 5);
+			assert.ok(second >= before && second <= after, `${second} outside [${before}, ${after}]`);
 			assert.equal(proof, turnstileProof(BRIDGE_SECRET, call.route, call.body, second));
 		}
 	});
