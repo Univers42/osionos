@@ -28,6 +28,7 @@ import { recordReactCommit } from '@osionos/perf-probe';
 // DatabaseBlock chunk (perf: off the render-blocking entry CSS), not here.
 import './styles/_graphical-chart.scss';
 import './styles/block-style.scss';
+import './styles/fonts.css';
 import './styles/global.css';
 
 // The load-test/perf harness is a dev-only tool — keep its store/perf code out
