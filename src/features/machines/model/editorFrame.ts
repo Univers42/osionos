@@ -12,7 +12,6 @@ import type { TerminalFramePhase } from "./terminalFrame";
 import { startMachineFrame } from "./terminalFrameStore";
 
 export const EDITOR_PAGE_URL = `${LOCAL_NODE_ORIGIN}/editor/index.html`;
-export const EDITOR_FRAME_PERMISSIONS = "local-network-access; clipboard-read; clipboard-write";
 
 export type EditorFramePhase = TerminalFramePhase | "idle";
 
