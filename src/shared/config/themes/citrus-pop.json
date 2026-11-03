@@ -198,7 +198,7 @@
     "font-weight-bold": "700",
     "heading-transform": "none",
     "heading-style": "normal",
-    "button-transform": "capitalize",
+    "button-transform": "none",
     "heading-decoration": "none",
     "link-decoration": "none",
     "letter-spacing-ui": "0.02em",
