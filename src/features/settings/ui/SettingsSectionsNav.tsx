@@ -36,8 +36,8 @@ interface SettingsSectionsNavProps {
 export const SettingsSectionsNav: React.FC<SettingsSectionsNavProps> = ({ section: active, onSelect, persona }) => {
   const listRef = useRef<HTMLDivElement>(null);
 
-  // A deep link to a section scrolled past the strip's edge would open out of
-  // sight; scroll the active row back into view when the list overflows.
+  // A deep link to a section scrolled past the horizontal strip or vertical column edge would
+  // open out of sight; scroll the active row back into view when the list overflows horizontally or vertically.
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
