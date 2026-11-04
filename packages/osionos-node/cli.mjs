@@ -14,6 +14,7 @@
 // `osionos-node serve`: runs this machine's VS Code server on its private socket and the IDE
 // origin in front of it (ADR-006). Milestone 1 is the owner's own machine, owner-only. The secret
 // comes from the environment only, never argv, which other local users can read in ps.
+import { spawnSync } from 'node:child_process';
 import { controlFile, requestFolder, startControlSocket } from './control-socket.mjs';
 import { existsSync, realpathSync } from 'node:fs';
 import { homedir, hostname, userInfo } from 'node:os';
@@ -209,7 +210,19 @@ const USAGE = [
 	'       osionos-node pair --bridge <url> --name <name> [--accept-account <email>]',
 	'       osionos-node serve --server <lib dir> --app-origin <origin>... [--remember-origin <origin>...] [--listen 127.0.0.1:4100] [--client <dist-ide>] [--terminal <build/terminal>]',
 	'       (unpaired, milestone 1: add --node <id> and OSIONOS_IDE_TOKEN_SECRET / OSIONOS_IDE_OWNER)',
+	'       osionos-node update',
 ].join('\n');
+
+async function updateNode(argv, env) {
+	const installScript = fileURLToPath(new URL('./install.sh', import.meta.url));
+	const res = spawnSync('/bin/sh', [installScript, ...argv], {
+		stdio: 'inherit',
+		env: { ...process.env, ...env },
+	});
+	if (res.status !== 0) {
+		throw new Error(`update failed with code ${res.status ?? 1}`);
+	}
+}
 
 async function pair(argv, env) {
 	const { values } = parseArgs({ args: argv, strict: true, options: { bridge: { type: 'string' }, name: { type: 'string' }, 'accept-account': { type: 'string' } } });
@@ -257,7 +270,7 @@ async function connect(argv, env) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
 	const [command, ...rest] = process.argv.slice(2);
-	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env), connect: () => connect(rest, process.env), open: () => openFolder(rest, process.env) };
+	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env), connect: () => connect(rest, process.env), open: () => openFolder(rest, process.env), update: () => updateNode(rest, process.env) };
 	const run = commands[command]?.() ?? Promise.reject(new Error(USAGE));
 	run.catch((error) => { console.error(`osionos-node: ${error.message}`); process.exit(1); });
 }
