@@ -42,6 +42,7 @@ async function stubAccount(page, state) {
       state.posts.push(request.postDataJSON());
       return state.post ?? { status: 202, json: { id: QUEUED.id, status: "queued" } };
     }
+    if (url.pathname === "/api/account/deletion/status" && request.method() === "GET") return { json: { request: state.deletion?.json ?? null } };
     if (url.pathname === "/api/account/deletion" && request.method() === "GET") return state.deletion ?? { status: 404, json: { code: "deletion_not_found" } };
     if (url.pathname === "/api/account/deletion" && request.method() === "DELETE") return state.cancel;
     return undefined;

@@ -81,6 +81,7 @@ export async function stubMachineBridge(context, node) {
     const path = url.pathname;
     if (path === "/api/machines" && request.method() === "GET") return json(200, { machines: [row] });
     if (path === `/api/machines/${MACHINE}/identity`) return json(200, { ok: true });
+    if (path === "/api/account/sudo" && request.method() === "GET") return json(200, { active: sudo });
     if (path === "/api/account/sudo/email") { calls.sudoEmail += 1; return json(200, { sentTo: "owner@example.test" }); }
     if (path === "/api/account/sudo/verify") { calls.sudoVerify += 1; sudo = true; return json(200, { ok: true }); }
     if (path === `/api/machines/${MACHINE}/token`) {
