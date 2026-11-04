@@ -22,6 +22,13 @@
 // machine key's signature over it, and the app posts a token only once the bridge has checked
 // that signature against the key it paired. A different process on the same loopback port cannot
 // produce it.
+//
+// "Remember this computer" (devil verdict 2026-11-01, Amendment 1, R10) adds two messages to the
+// page and three to the app, none carrying the device secret: the page says `remembered` before its
+// `ready` to an app origin it holds a device secret for, and asks `need-resume` for a 60 s resume
+// assertion the app hands over as `resume`; the app may say `forget`, and the page answers
+// `forgotten` once it dropped its secret and told its node. An app that predates them never hears
+// `remembered`, so it keeps the token path, and a page that predates them ignores them (R14).
 import { isMachineId } from "../../machines/model/machineShape.ts";
 
 export type RefusalReason = "mismatch" | "unavailable" | "other-account";
@@ -30,7 +37,9 @@ export type AppMessage =
   | { type: "osionos-ide/session"; token: string }
   | { type: "osionos-ide/hello"; nonce: string }
   | { type: "osionos-ide/open"; path: string }
-  | { type: "osionos-ide/refused"; reason: RefusalReason };
+  | { type: "osionos-ide/refused"; reason: RefusalReason }
+  | { type: "osionos-ide/resume"; assertion: string }
+  | { type: "osionos-ide/forget" };
 
 export type IdeState = "connecting" | "connected" | "reconnecting" | "error";
 
@@ -38,11 +47,19 @@ export type IdeMessage =
   | { type: "osionos-ide/ready"; node: string }
   | { type: "osionos-ide/state"; state: IdeState }
   | { type: "osionos-ide/need-session" }
-  | { type: "osionos-ide/identity"; machineId: string; sig: string };
+  | { type: "osionos-ide/identity"; machineId: string; sig: string }
+  | { type: "osionos-ide/remembered" }
+  | { type: "osionos-ide/need-resume" }
+  | { type: "osionos-ide/forgotten" };
+
+const BARE_IDE_MESSAGES: ReadonlySet<string> = new Set(["osionos-ide/need-session", "osionos-ide/remembered", "osionos-ide/need-resume", "osionos-ide/forgotten"]);
 
 // osionos_ide1 is the legacy shared-secret token; osionos_mc1 the bridge-signed machine token
 // (`<version>.<kid>.<payload>.<sig>`, scripts/ide-machine-protocol.mjs signMachineToken).
 const TOKEN = /^(?:osionos_ide1|osionos_mc1\.[a-z2-7]{8})\.[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{1,200}$/;
+// The bridge's resume assertion (scripts/ide-machine-protocol.mjs signResumeAssertion).
+const RESUME = /^osionos_mr1\.[a-z2-7]{8}\.[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{1,200}$/;
+export const isResumeAssertion = (value: unknown): value is string => typeof value === "string" && RESUME.test(value);
 // 16 to 96 random bytes; the bridge and the node accept 16 to 128 characters.
 const NONCE = /^[A-Za-z0-9_-]{22,128}$/;
 // An Ed25519 signature is 64 bytes: 86 base64url characters without padding.
@@ -92,6 +109,11 @@ export function readAppMessage(data: unknown, origin: string, appOrigins: readon
     const record = shaped(data, ["type", "reason"]);
     return record && typeof record.reason === "string" && REFUSALS.has(record.reason) ? { type, reason: record.reason as RefusalReason } : null;
   }
+  if (type === "osionos-ide/resume") {
+    const record = shaped(data, ["type", "assertion"]);
+    return record && isResumeAssertion(record.assertion) ? { type, assertion: record.assertion } : null;
+  }
+  if (type === "osionos-ide/forget") return shaped(data, ["type"]) ? { type } : null;
   return null;
 }
 
@@ -106,7 +128,7 @@ export function readIdeMessage(data: unknown, origin: string, ideOrigin: string)
     const record = shaped(data, ["type", "state"]);
     return record && typeof record.state === "string" && STATES.has(record.state) ? { type, state: record.state as IdeState } : null;
   }
-  if (type === "osionos-ide/need-session") return shaped(data, ["type"]) ? { type } : null;
+  if (typeof type === "string" && BARE_IDE_MESSAGES.has(type)) return shaped(data, ["type"]) ? ({ type } as IdeMessage) : null;
   if (type === "osionos-ide/identity") {
     const record = shaped(data, ["type", "machineId", "sig"]);
     if (!record || !isMachineId(record.machineId) || typeof record.sig !== "string" || !SIGNATURE.test(record.sig)) return null;
