@@ -52,7 +52,7 @@ ENV VITE_LEGACY_SECOND_BRAIN=$VITE_LEGACY_SECOND_BRAIN
 RUN pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit \
  && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit \
  && pnpm exec tsc --noEmit \
- && NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build \
+ && NODE_OPTIONS=--max-old-space-size=4096 pnpm exec vite build \
  && find build -name '*.map' -delete \
  && find build -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' \
       -o -name '*.json' -o -name '*.wasm' \) -size +1k -print0 \
