@@ -131,10 +131,10 @@ test("downloadExport: 409 not ready is a refusal and 404 is not a blob either", 
 
 test("deletionStatus: inProgress is true only when the bridge says true", async () => {
   const base = { requestedAt: "2026-10-23T00:00:00Z", scheduledFor: "2026-11-06T00:00:00Z" };
-  const running = await withFetch(() => json(200, { ...base, inProgress: true }), () => api.deletionStatus());
+  const running = await withFetch(() => json(200, { request: { ...base, inProgress: true } }), () => api.deletionStatus());
   assert.equal(running.result.ok && running.result.data?.inProgress, true);
   for (const body of [base, { ...base, inProgress: false }, { ...base, inProgress: "true" }]) {
-    const idle = await withFetch(() => json(200, body), () => api.deletionStatus());
+    const idle = await withFetch(() => json(200, { request: body }), () => api.deletionStatus());
     assert.equal(idle.result.ok && idle.result.data?.inProgress, false);
   }
 });
