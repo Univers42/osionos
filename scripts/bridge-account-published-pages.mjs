@@ -30,6 +30,7 @@
  * read under the `in.()` ceiling, which breaks around 90 values.
  */
 
+import { publishEnabled } from './bridge-capabilities.mjs';
 import { rateLimit } from './bridge-guard.mjs';
 import { pgError } from './bridge-pg.mjs';
 import { bearerToken, sendJson } from './bridge-social-core.mjs';
@@ -127,7 +128,7 @@ function rateLimited(response, error, config) {
 export function createPublishedPagesRoutes({ config, pg, kv, verifySession, env = process.env }) {
 	return async function handleAccountPublishedPages(url, request, response) {
 		if (request.method !== 'GET' || url.pathname !== PUBLISHED_PATH) return false;
-		if (env.OSIONOS_PUBLISH_ENABLED !== '1') {
+		if (!publishEnabled(env)) {
 			return sendJson(response, 404, { ok: false, message: 'Not found.', code: 'publish_disabled' }, config);
 		}
 		const session = verifySession(bearerToken(request), config);
