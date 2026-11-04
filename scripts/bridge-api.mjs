@@ -3349,7 +3349,16 @@ async function handleMarketplaceTemplateRead(url, request, response, config, fet
 	const databaseId = requireUuid(url.searchParams.get('databaseId'), 'databaseId');
 	// G6 F1: the template is shared per database, so only who may read that page (the GET
 	// /api/pages/:id gate, workspace membership included) sees it — `shared` alone is not enough.
-	await readablePageAccess(request, databaseId, 'read', config, fetchImpl);
+	// The gate's not-found (a missing page, or one hidden from the caller: C134 keeps them alike)
+	// is no template rather than a 404: production's marketplace database has no page row, and
+	// every app page logged that 404 as a console error (2026-11-04). No config row is read then.
+	try {
+		await readablePageAccess(request, databaseId, 'read', config, fetchImpl);
+	} catch (error) {
+		if (error?.status !== 404) throw error;
+		json(response, 200, { template: null }, config);
+		return true;
+	}
 	const row = await fetchPageConfigRow(databaseId, MARKETPLACE_SYSTEM_USER, config, fetchImpl);
 	const cfg = row?.config && typeof row.config === 'object' ? row.config : {};
 	json(response, 200, { template: cfg.headerTemplate ?? null }, config);
