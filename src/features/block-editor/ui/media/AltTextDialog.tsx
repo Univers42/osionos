@@ -54,7 +54,7 @@ export const AltTextDialog: React.FC<AltTextDialogProps> = ({ value, onSave, onC
         <p className="mb-3 text-xs text-[var(--osio-fg-muted)]">
           Describe this image for screen readers and when it fails to load.
         </p>
-        <textarea
+        <textarea name="alt-text"
           ref={areaRef}
           value={draft}
           rows={3}

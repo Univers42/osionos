@@ -44,7 +44,7 @@ export const SettingsSearch: React.FC = () => {
     <div role="search" className="relative max-w-lg pt-2">
       <label className="flex h-9 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm text-[var(--osio-fg-muted)] focus-within:border-[var(--osio-accent)]">
         <Search size={16} />
-        <input
+        <input name="search-settings"
           type="search"
           aria-label="Search settings"
           value={query}

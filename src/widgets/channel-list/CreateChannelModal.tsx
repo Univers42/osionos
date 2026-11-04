@@ -73,7 +73,7 @@ const CreateChannelForm: React.FC<{ onCreated: () => void }> = ({ onCreated }) =
 
   return (
     <form onSubmit={submit} className="grid gap-4 p-5">
-      <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="channel-name" autoFocus required />
+      <Input name="channel-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="channel-name" autoFocus required />
       <div className="grid gap-1.5">
         <span className="text-xs font-medium text-[var(--osio-fg-muted)]">Type</span>
         <div className="grid grid-cols-3 gap-1.5">
@@ -93,7 +93,7 @@ const CreateChannelForm: React.FC<{ onCreated: () => void }> = ({ onCreated }) =
       </div>
       <label className="flex items-center justify-between rounded-md border border-[var(--osio-border-default)] px-3 py-2 text-sm">
         <span className="flex items-center gap-2"><Lock size={14} /> Private channel</span>
-        <input type="checkbox" checked={isPrivate} onChange={(event) => setIsPrivate(event.target.checked)} />
+        <input name="is-private" type="checkbox" checked={isPrivate} onChange={(event) => setIsPrivate(event.target.checked)} />
       </label>
       <p className="text-xs text-[var(--osio-fg-subtle)]">
         {isPrivate ? 'Only invited members can find and join.' : 'Anyone in the workspace can find and join.'}

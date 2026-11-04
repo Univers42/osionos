@@ -65,7 +65,7 @@ export const HeaderDesigner: React.FC<Props> = ({ open, onClose, scopes, templat
         {scopes.length > 1 ? (
           <div className="flex items-center justify-between">
             <span className="text-sm text-[var(--osio-fg-muted)]">Apply to</span>
-            <select aria-label="Apply to" className={SELECT} value={scopeKey} onChange={(e) => setScopeKey(e.target.value)}>
+            <select name="apply-to" aria-label="Apply to" className={SELECT} value={scopeKey} onChange={(e) => setScopeKey(e.target.value)}>
               {scopes.map((scope) => (
                 <option key={scope.key} value={scope.key}>{scope.label}</option>
               ))}

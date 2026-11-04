@@ -56,11 +56,11 @@ const PresencePicker: React.FC = () => {
     <SettingRow title="Presence" description="Invisible shows you as offline to everyone else."
       action={(
         <>
-          <select aria-label="Presence" value={state} className={FIELD}
+          <select name="presence" aria-label="Presence" value={state} className={FIELD}
             onChange={(event) => { const next = event.target.value as PresenceChoice; setState(next); apply(next, note); }}>
             {PRESENCE_CHOICES.map((choice) => <option key={choice} value={choice}>{presenceLabel(choice)}</option>)}
           </select>
-          <input aria-label="Presence note" placeholder="Note (optional)" value={note} className={FIELD}
+          <input name="presence-note" aria-label="Presence note" placeholder="Note (optional)" value={note} className={FIELD}
             onChange={(event) => setNote(event.target.value)} onBlur={() => apply(state, note)} />
           {error && <span role="alert" className="text-xs text-[var(--osio-danger)]">{error}</span>}
         </>
@@ -99,15 +99,15 @@ const StatusEditor: React.FC<{ userId: string }> = ({ userId }) => {
     <SettingRow stack title="Status" description="Shown on your card. It disappears by itself at the time you choose."
       action={(
         <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); void save(draft); }}>
-          <input aria-label="Status emoji" placeholder="🙂" value={draft.emoji} className={`${FIELD} w-16`}
+          <input name="status-emoji" aria-label="Status emoji" placeholder="🙂" value={draft.emoji} className={`${FIELD} w-16`}
             onChange={(event) => setDraft({ ...draft, emoji: event.target.value })} />
-          <input aria-label="Status text" placeholder="What are you up to?" value={draft.text} className={`${FIELD} min-w-[200px]`}
+          <input name="status-text" aria-label="Status text" placeholder="What are you up to?" value={draft.text} className={`${FIELD} min-w-[200px]`}
             onChange={(event) => setDraft({ ...draft, text: event.target.value })} />
-          <select aria-label="Clear status" value={minutes} className={FIELD} onChange={(event) => setMinutes(Number(event.target.value))}>
+          <select name="clear-status" aria-label="Clear status" value={minutes} className={FIELD} onChange={(event) => setMinutes(Number(event.target.value))}>
             {EXPIRY_CHOICES.map((choice) => <option key={choice.minutes} value={choice.minutes}>{choice.label}</option>)}
           </select>
           <label className="flex items-center gap-1.5 text-sm text-[var(--osio-fg-default)]">
-            <input type="checkbox" checked={draft.busy} onChange={(event) => setDraft({ ...draft, busy: event.target.checked })} /> Busy
+            <input name="busy" type="checkbox" checked={draft.busy} onChange={(event) => setDraft({ ...draft, busy: event.target.checked })} /> Busy
           </label>
           <Button type="submit" tone="primary">Save status</Button>
           <Button onClick={clear}>Clear</Button>

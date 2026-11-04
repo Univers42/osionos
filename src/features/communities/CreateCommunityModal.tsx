@@ -84,7 +84,7 @@ const CreateCommunityForm: React.FC<{ onCreated: (community: Community) => void 
     <form onSubmit={submit} className="grid gap-4 p-5">
       <div className="flex items-center gap-3">
         <AvatarTrigger avatar={avatar} onChange={setAvatar} />
-        <Input
+        <Input name="community-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="Community name"
@@ -95,7 +95,7 @@ const CreateCommunityForm: React.FC<{ onCreated: (community: Community) => void 
       </div>
       <div className="grid gap-1.5">
         <span className="text-xs font-medium text-[var(--osio-fg-muted)]">Description (optional)</span>
-        <Input
+        <Input name="community-description"
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           placeholder="What this community is about"

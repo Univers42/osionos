@@ -36,7 +36,7 @@ export function ExportSelectRow<T extends string>({
     <div className="flex h-8 items-center justify-between gap-2">
       <span className="text-sm text-[var(--osio-fg-muted)]">{label}</span>
       <div className="relative flex items-center">
-        <select
+        <select name="export-select-select"
           aria-label={label}
           value={value}
           onChange={(event) => onChange(event.target.value as T)}

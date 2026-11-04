@@ -70,7 +70,7 @@ export const IdeSourceControlView: React.FC<{ git: GitState }> = ({ git }) => {
   return (
     <div className="flex h-full flex-col text-xs text-[var(--osio-code-fg)]">
       <div className="flex items-center gap-2 p-2">
-        <input
+        <input name="commit-message"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Commit message"
@@ -92,7 +92,7 @@ export const IdeSourceControlView: React.FC<{ git: GitState }> = ({ git }) => {
           <Upload size={14} /> Push
         </button>
       </div>
-      <input
+      <input name="personal-access-token"
         type="password"
         value={pat}
         onChange={(e) => setPat(e.target.value)}

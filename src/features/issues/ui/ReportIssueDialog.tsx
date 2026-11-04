@@ -224,7 +224,7 @@ export const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ open: open
         <p aria-hidden className="osio-h4 text-[var(--osio-fg-default)]">Report an issue</p>
         <label className="flex flex-col gap-1 text-sm">
           <span>Title</span>
-          <input
+          <input name="title-text"
             type="text"
             value={titleText}
             maxLength={120}
@@ -237,7 +237,7 @@ export const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ open: open
 
         <label className="flex flex-col gap-1 text-sm">
           <span>Description</span>
-          <textarea
+          <textarea name="report-issue-textarea"
             value={description}
             maxLength={4000}
             onChange={(event) => setDescription(event.target.value)}
@@ -259,7 +259,7 @@ export const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ open: open
             <button type="button" onClick={() => fileInputRef.current?.click()} aria-label="Choose image" className="rounded-md border px-3 py-1.5 text-sm">
               Choose image
             </button>
-            <input
+            <input name="report-issue-file"
               ref={fileInputRef}
               type="file"
               accept="image/png,image/jpeg,image/webp"
@@ -280,7 +280,7 @@ export const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ open: open
         <div aria-live="polite" className="text-xs text-[var(--osio-fg-subtle)]">{captured}</div>
 
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={attachErrors} onChange={(event) => setAttachErrors(event.target.checked)} aria-label="Attach recent errors" />
+          <input name="attach-recent-errors" type="checkbox" checked={attachErrors} onChange={(event) => setAttachErrors(event.target.checked)} aria-label="Attach recent errors" />
           Attach recent errors ({recentErrors().length})
         </label>
         {attachErrors ? (

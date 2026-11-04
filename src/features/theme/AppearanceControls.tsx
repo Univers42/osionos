@@ -96,7 +96,7 @@ export const AccentControl: React.FC<{ appearance: Appearance; paletteId: string
       {custom ? (
         <label className="mt-3 flex items-center gap-3 text-xs text-[var(--osio-fg-muted)]">
           Hue
-          <input
+          <input name="accent-hue"
             type="range"
             min={0}
             max={359}

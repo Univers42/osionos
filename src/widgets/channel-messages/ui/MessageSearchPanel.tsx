@@ -47,7 +47,7 @@ export const MessageSearchPanel: React.FC<MessageSearchPanelProps> = ({ channelI
     <div className="absolute right-0 top-full z-[var(--osio-z-modal)] mt-2 w-96 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-menu)]">
       <div className="flex items-center gap-2 border-b border-[var(--osio-border-default)] p-2">
         <Search size={14} className="shrink-0 text-[var(--osio-fg-muted)]" />
-        <input
+        <input name="search-messages"
           autoFocus
           value={query}
           onChange={(event) => setQuery(event.target.value)}

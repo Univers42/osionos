@@ -130,7 +130,7 @@ export const DatabasesPanel: React.FC = () => {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1.5 px-2 pt-2">
-        <input
+        <input name="search-databases-and-tables"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search databases & tables"

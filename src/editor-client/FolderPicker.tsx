@@ -75,7 +75,7 @@ export const FolderPicker: React.FC<{ client: NodeFsClient; onOpened(): void; on
           </React.Fragment>
         ))}
       </nav>
-      <input
+      <input name="filter-folders"
         autoFocus
         aria-label="Filter folders"
         placeholder="Filter folders"
@@ -105,7 +105,7 @@ export const FolderPicker: React.FC<{ client: NodeFsClient; onOpened(): void; on
       </div>
       {failure && <p role="alert" className="text-xs text-[var(--osio-danger)]">{failure}</p>}
       <label className="flex items-center gap-1.5 text-xs text-[var(--osio-fg-muted)]">
-        <input type="checkbox" checked={hidden} onChange={(event) => setHidden(event.target.checked)} /> Show hidden folders
+        <input name="show-hidden-folders" type="checkbox" checked={hidden} onChange={(event) => setHidden(event.target.checked)} /> Show hidden folders
       </label>
       <div className="flex justify-end gap-1.5">
         <Button size="sm" onClick={onCancel}>Cancel</Button>

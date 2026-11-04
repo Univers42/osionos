@@ -116,7 +116,7 @@ export const NoteComposeModal: React.FC<NoteComposeModalProps> = ({
             {error}
           </div>
         ) : null}
-        <textarea
+        <textarea name="note"
           autoFocus
           value={note}
           maxLength={maxLength}

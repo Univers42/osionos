@@ -109,17 +109,17 @@ export const ButtonSettingsPopover: React.FC<PopoverProps> = ({ block, onSave, o
     >
       <Section title="Button">
         <SettingRow stack title="Label" action={
-          <input aria-label="Button label" className={FIELD} value={label} onChange={(event) => setLabel(event.target.value)} />
+          <input name="button-label" aria-label="Button label" className={FIELD} value={label} onChange={(event) => setLabel(event.target.value)} />
         } />
         <SettingRow stack title="Style" action={
-          <select aria-label="Button style" className={FIELD} value={variant}
+          <select name="button-style" aria-label="Button style" className={FIELD} value={variant}
             onChange={(event) => setVariant(event.target.value as typeof variant)}>
             <option value="primary">Primary</option>
             <option value="secondary">Secondary</option>
           </select>
         } />
         <SettingRow stack title="Opens" description="A page:// link or a /path. Ignored while the button has steps."
-          action={<input aria-label="Button target" className={FIELD} value={href} onChange={(event) => setHref(event.target.value)} />} />
+          action={<input name="button-target" aria-label="Button target" className={FIELD} value={href} onChange={(event) => setHref(event.target.value)} />} />
       </Section>
       <Section title="Steps" className="mt-3">
         <ButtonStepList draft={draft} onChange={(next) => { setDraft(next); setError(null); }} />

@@ -123,7 +123,7 @@ export const ConversationsPanel: React.FC = () => {
       <div className="space-y-2 px-3 pb-2">
         <label className="flex h-8 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 text-[var(--osio-fg-muted)] focus-within:ring-2 focus-within:ring-[var(--osio-focus-ring-color)]">
           <Search size={14} aria-hidden />
-          <input
+          <input name="filter-conversations"
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Escape" && filter) { event.preventDefault(); setFilter(""); } }}

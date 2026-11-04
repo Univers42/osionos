@@ -22,7 +22,7 @@ export const PrimitivesSection: React.FC = () => (
         <Badge tone="danger">danger</Badge>
         <Badge tone="warning">warning</Badge>
       </div>
-      <Input placeholder="Type something…" defaultValue="" />
+      <Input name="sample-text" placeholder="Type something…" defaultValue="" />
       <Card
         title="Card title"
         description="A docs-style nav card with hover affordance."

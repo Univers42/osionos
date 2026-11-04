@@ -154,6 +154,17 @@ test.describe("Manage emails modal (bridge stub)", () => {
 });
 
 test.describe("Passkeys modal (bridge stub)", () => {
+  // #293: a bridge without passkeys has no route for them; asking anyway logged a 404.
+  test("a server that does not advertise passkeys shows no passkey row and is never asked for them", async ({ page, baseURL }) => {
+    const bridge = await stubTwoStep(page, { passkeysEnabled: false });
+    await openProfile(page, baseURL);
+    await expect(region(page).getByRole("button", { name: "Manage emails", exact: true })).toBeVisible();
+    await expect(region(page).getByText("Passkeys", { exact: true })).toHaveCount(0);
+    await expect(region(page).getByText(/Passkeys aren't available/)).toHaveCount(0);
+    await expect.poll(() => bridge.calls).toContain("GET /api/account/settings");
+    expect(bridge.calls).not.toContain("GET /api/account/passkeys");
+  });
+
   const PASSKEYS = [passkeyRow("11111111-1111-4111-8111-111111111111", "Laptop"), passkeyRow("22222222-2222-4222-8222-222222222222", "Phone")];
 
   test("lists the server's passkeys, has no Add control and says why", async ({ page, baseURL }) => {
