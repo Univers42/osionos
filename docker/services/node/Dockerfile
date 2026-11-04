@@ -5,6 +5,11 @@
 # Alpine + Node 22 + pnpm — as lightweight as possible.
 # Dependencies are installed once and cached in a named volume.
 # Source code is bind-mounted at runtime for instant HMR.
+#
+# NOTE: this image intentionally runs as root. The playground/dev compose
+# bind-mounts the host repo at /app and uses named volumes for node_modules;
+# a non-root USER cannot mkdir into those mounts (EACCES). The production
+# image (Dockerfile.prod) already runs as a dedicated non-root user.
 
 FROM node:22-alpine
 
@@ -25,10 +30,6 @@ WORKDIR /app
 # Entrypoint: install deps if stale, then exec the command
 COPY docker/services/node/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-
-# Run unprivileged: the base image ships a `node` user; give it the pnpm store and app dir
-RUN chown -R node:node /pnpm /app
-USER node
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["sleep", "infinity"]
