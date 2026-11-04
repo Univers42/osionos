@@ -203,6 +203,21 @@ describe('the deletion request', () => {
 		assert.ok(Date.parse(row.body.scheduledFor) - Date.parse(row.body.requestedAt) >= GRACE_MS);
 	});
 
+	// #293: "no request" is the normal state, and the 404 above logged a console error on every
+	// visit to Settings > Account. The status route answers it with a 200; the 404 stays for old clients.
+	it('answers the state from /deletion/status with a 200, null when there is no request', async (t) => {
+		const { base, token } = await world(t);
+		const empty = await send(base, '/api/account/deletion/status', { token });
+		assert.equal(empty.status, 200);
+		assert.deepEqual(empty.body, { request: null });
+		await send(base, '/api/account/deletion', { method: 'POST', token, body: {} });
+		const open = await send(base, '/api/account/deletion/status', { token });
+		assert.equal(open.status, 200);
+		assert.equal(open.body.request.inProgress, false);
+		assert.ok(Date.parse(open.body.request.scheduledFor) - Date.parse(open.body.request.requestedAt) >= GRACE_MS);
+		assert.equal((await send(base, '/api/account/deletion/status', { method: 'POST', token, body: {} })).status, 405);
+	});
+
 	it('cancels the request without a proof, and the row is gone', async (t) => {
 		const { base, token, store } = await world(t);
 		await send(base, '/api/account/deletion', { method: 'POST', token, body: {} });
