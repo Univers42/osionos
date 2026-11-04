@@ -53,7 +53,7 @@ const TeamMembers: React.FC<{ workspaceId: string; team: WorkspaceTeam }> = ({ w
         ))}
       </ul>
       <div className="flex gap-2">
-        <select aria-label={`Add a member to ${team.name}`} className={FIELD} value={pick} onChange={(event) => setPick(event.target.value)}>
+        <select name="team-member" aria-label={`Add a member to ${team.name}`} className={FIELD} value={pick} onChange={(event) => setPick(event.target.value)}>
           <option value="">Choose a workspace member</option>
           {candidates.map((member) => <option key={member.userId} value={member.userId}>{memberLabel(member.userId, names, member.name)}</option>)}
         </select>
@@ -76,7 +76,7 @@ export const TeamsSection: React.FC = () => {
   useEffect(() => { runAsync(hydrateTeams(workspaceId)); }, [hydrateTeams, workspaceId]);
 
   const rows = teams.map((team) => [
-    <input key={`${team.id}-name`} aria-label="Team name" className={`w-full ${FIELD}`} defaultValue={team.name} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== team.name) runAsync(updateTeam(workspaceId, team.id, { name: next })); }} />,
+    <input name="team-name" key={`${team.id}-name`} aria-label="Team name" className={`w-full ${FIELD}`} defaultValue={team.name} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== team.name) runAsync(updateTeam(workspaceId, team.id, { name: next })); }} />,
     String(team.memberCount),
     <div key={`${team.id}-members`}>
       <Button onClick={() => setOpen(open === team.id ? null : team.id)}>{open === team.id ? 'Hide members' : 'Members'}</Button>
@@ -99,7 +99,7 @@ export const TeamsSection: React.FC = () => {
         <p className="mb-3 text-sm text-[var(--osio-fg-muted)]">Group workspace members into teams.</p>
         <DataTable headers={['Team', 'Members', 'Roster', 'Actions']} rows={rows} empty={<EmptyState icon={<Users size={16} />} title="No teams yet" hint="Create a team to group the people who work together." />} />
         <form className="mt-4 flex gap-2" onSubmit={submit}>
-          <input aria-label="New team name" placeholder="Team name" className={`flex-1 ${FIELD}`} value={name} onChange={(event) => setName(event.target.value)} />
+          <input name="new-team-name" aria-label="New team name" placeholder="Team name" className={`flex-1 ${FIELD}`} value={name} onChange={(event) => setName(event.target.value)} />
           <Button type="submit" tone="primary" disabled={!name.trim()}>Create team</Button>
         </form>
       </Section>

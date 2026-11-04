@@ -186,7 +186,7 @@ export const AccessRequestsSection: React.FC<Props> = ({ workspaceId, pageId, on
               </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-2">
-              <select
+              <select name="permission-for"
                 aria-label={`Permission for ${request.requesterName}`}
                 value={perms[request.id] ?? 'can_view'}
                 onChange={(event) =>

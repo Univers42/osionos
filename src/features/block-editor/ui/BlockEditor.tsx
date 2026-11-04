@@ -984,7 +984,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
             style={editableStyle}
           />
           {shouldEditEquation ? (
-            <textarea
+            <textarea name="equation-latex"
               ref={equationTextareaRef}
               value={block.content}
               onChange={(e) => onChange(e.target.value)}

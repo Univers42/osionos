@@ -35,7 +35,7 @@ export const AiPromptBar: React.FC<AiPromptBarProps> = ({ inputRef, value, busy,
       >
         <Sparkles size={16} />
       </span>
-      <input
+      <input name="ask-ai-anything"
         ref={inputRef}
         value={value}
         onChange={(event) => onChange(event.target.value)}

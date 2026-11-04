@@ -180,7 +180,7 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
         {tab === "upload" ? (
           <div className="flex flex-col items-center gap-3 rounded-[var(--osio-radius-panel)] border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-4 py-8 text-center">
             <p className="text-sm text-[var(--osio-fg-muted)]">Upload {kind === "image" ? "an image" : `a ${kind}`} from your device.</p>
-            <input ref={fileRef} type="file" accept={ACCEPT[kind]} className="hidden" onChange={handleUpload} />
+            <input name="media-embed-file" ref={fileRef} type="file" accept={ACCEPT[kind]} className="hidden" onChange={handleUpload} />
             <Button tone="primary" disabled={busy} onClick={() => fileRef.current?.click()}>
               {busy ? "Uploading…" : UPLOAD_LABEL[kind]}
             </Button>
@@ -201,7 +201,7 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
 
         {tab === "unsplash" ? (
           <div className="flex flex-col gap-2">
-            <input
+            <input name="search-unsplash-images"
               type="search"
               aria-label="Search Unsplash images"
               value={unsplashQuery}

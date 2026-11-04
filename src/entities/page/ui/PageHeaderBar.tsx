@@ -135,7 +135,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
         </div>
       </div>
 
-      <input ref={importInputRef} type="file" accept=".json,.md,.markdown,.txt" className="hidden" onChange={handleImportFile} />
+      <input name="import-file" ref={importInputRef} type="file" accept=".json,.md,.markdown,.txt" className="hidden" onChange={handleImportFile} />
       {moveOpen && <MovePageModal sourcePageId={pageId} onClose={() => setMoveOpen(false)} />}
     </div>
   );

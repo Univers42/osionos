@@ -150,7 +150,7 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
         showInviteCTA={showInviteCTA && canInvite}
         onDismissInvite={() => setShowInviteCTA(false)}
       />
-      <input
+      <input name="import-folder-file"
         ref={importRef}
         type="file"
         multiple

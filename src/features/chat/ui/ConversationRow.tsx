@@ -105,7 +105,7 @@ const RenameInput: React.FC<{ title: string; onSave: (title: string) => void; on
     else onCancel();
   };
   return (
-    <input
+    <input name="conversation-title"
       autoFocus
       aria-label="Conversation title"
       value={value}

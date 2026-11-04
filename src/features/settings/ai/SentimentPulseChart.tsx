@@ -19,6 +19,7 @@
 import React from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+import { RESPONSIVE_CHART_PROPS } from "@/shared/lib/charts/responsiveChartProps";
 import { pulseRows, type Pulse } from "@/features/ai/model/sentimentPulse";
 
 const MUTED = "text-sm text-[var(--osio-fg-muted)]";
@@ -34,7 +35,7 @@ export const SentimentPulseChart: React.FC<{ pulse: Pulse }> = ({ pulse }) => {
     <figure className="m-0 mt-3">
       <figcaption className={MUTED}>Comments per week by tone. A week with fewer than {pulse.minAuthors} people is left out.</figcaption>
       <div aria-hidden="true" className="mt-2 h-56 w-full">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer {...RESPONSIVE_CHART_PROPS}>
           <BarChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--osio-border-soft)" vertical={false} />
             <XAxis dataKey="weekStart" tick={TICK} />

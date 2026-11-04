@@ -49,7 +49,7 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onPick }) => {
   return (
     <div className="w-72">
       <div className="border-b border-[var(--osio-border-default)] p-2">
-        <input
+        <input name="search-gifs"
           autoFocus
           value={query}
           onChange={(e) => { setQuery(e.target.value); setLoading(true); }}

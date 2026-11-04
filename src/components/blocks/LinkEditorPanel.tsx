@@ -72,7 +72,7 @@ export const LinkEditorPanel: React.FC<LinkEditorPanelProps> = ({
     >
       <label className="block text-2xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
         Text
-        <input
+        <input name="draft-text"
           className={`mt-1 ${FIELD_CLASS}`}
           value={draftText}
           placeholder="Link text"
@@ -83,7 +83,7 @@ export const LinkEditorPanel: React.FC<LinkEditorPanelProps> = ({
       </label>
       <label className="block text-2xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
         URL
-        <input
+        <input name="draft-href"
           className={`mt-1 ${FIELD_CLASS}`}
           value={draftHref}
           placeholder="https://…"

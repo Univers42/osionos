@@ -1450,7 +1450,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                   >
                     Web URL
                   </div>
-                  <input
+                  <input name="link-picker"
                     aria-labelledby="external-link-label"
                     autoFocus
                     value={linkPicker.query}
@@ -1490,7 +1490,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                   >
                     Page reference
                   </div>
-                  <input
+                  <input name="link-picker"
                     aria-labelledby="page-link-label"
                     autoFocus
                     value={linkPicker.query}

@@ -89,7 +89,7 @@ const CreateGroupForm: React.FC<{ onCreated: () => void }> = ({ onCreated }) => 
       <h3 className="text-base font-semibold">New group</h3>
       <div className="flex items-center gap-3">
         <IconTrigger icon={icon} onChange={setIcon} />
-        <Input
+        <Input name="group-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="Group name"

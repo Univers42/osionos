@@ -222,7 +222,7 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
         <p className="px-3 pt-2 text-sm font-semibold text-[var(--osio-fg-default)]">{title}</p>
       ) : null}
       {editable && isMermaid ? (
-        <textarea
+        <textarea name="mermaid-source"
           aria-label="Mermaid source"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}

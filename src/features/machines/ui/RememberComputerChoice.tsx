@@ -10,7 +10,7 @@ export const RememberComputerChoice: React.FC = () => {
   return (
     <div className="space-y-1">
       <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-[var(--osio-fg-default)]">
-        <input
+        <input name="remember-this-computer"
           type="checkbox"
           checked={remember}
           aria-describedby={hintId}
