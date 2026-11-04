@@ -39,6 +39,8 @@ export interface Scripted {
 	retryAfter?: string;
 	/** The body of a status answer, or the chunk of a `stream_error`. */
 	body?: string;
+	/** More headers of a status answer. */
+	headers?: Record<string, string>;
 }
 
 export interface FailingUpstream {
@@ -61,8 +63,9 @@ export interface FailingUpstream {
 
 const ERROR_BODY = JSON.stringify({ error: { message: 'scripted failure', type: 'scripted' } });
 
-function sendStatus(response: ServerResponse, status: number, retryAfter?: string, body = ERROR_BODY): void {
-	response.writeHead(status, { 'content-type': 'application/json', ...(retryAfter ? { 'retry-after': retryAfter } : {}) });
+function sendStatus(response: ServerResponse, status: number, scripted: Pick<Scripted, 'retryAfter' | 'body' | 'headers'> = {}): void {
+	const { retryAfter, body = ERROR_BODY, headers } = scripted;
+	response.writeHead(status, { 'content-type': 'application/json', ...(retryAfter ? { 'retry-after': retryAfter } : {}), ...headers });
 	response.end(body);
 }
 
@@ -96,8 +99,8 @@ export async function startFailingUpstream(): Promise<FailingUpstream> {
 	});
 
 	function answer(response: ServerResponse, scripted: Scripted, sendUsage: boolean): void {
-		const { behaviour, retryAfter, body } = scripted;
-		if (typeof behaviour === 'number') return sendStatus(response, behaviour, retryAfter, body);
+		const { behaviour, body } = scripted;
+		if (typeof behaviour === 'number') return sendStatus(response, behaviour, scripted);
 		if (behaviour === 'stream_error') {
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
 			response.end(`data: ${body}\n\n`);
