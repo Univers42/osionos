@@ -12,7 +12,8 @@
 
 // The machine's presence (own-machines plan, devil 2026-10-31, 3, 6, 7): a signed beat tells the
 // bridge where the app can reach it, the reply hands over the bridge's next key, and a 410 means
-// the owner removed this machine, so it forgets its identity and stops.
+// the owner removed this machine, so it forgets its identity and the computers it remembered
+// (`forget`, devil verdict 2026-11-01, Amendment 1, R8), then stops.
 import { createPrivateKey } from 'node:crypto';
 import { rmSync } from 'node:fs';
 
@@ -47,7 +48,7 @@ function replaceKeys(keys, next) {
 	Object.assign(keys, next);
 }
 
-export function createHeartbeat({ file, keys, ideOrigin, fetchImpl = fetch, onGone }) {
+export function createHeartbeat({ file, keys, ideOrigin, fetchImpl = fetch, onGone, forget = [] }) {
 	const machine = loadMachine(file);
 	const privateKey = createPrivateKey({ key: Buffer.from(machine.privateKey, 'base64url'), format: 'der', type: 'pkcs8' });
 	let lastTs = 0;
@@ -55,8 +56,10 @@ export function createHeartbeat({ file, keys, ideOrigin, fetchImpl = fetch, onGo
 
 	// Caveat: an unreachable bridge is reported, never treated as a revocation; a removed machine
 	// keeps serving until the bridge answers again. New sessions are bounded by their tokens' 900 s
-	// life, but a web terminal shell already open is not (ADR 0041: the token gates the opening,
-	// not the life): it lives until its socket closes, or until a 410 here stops the node.
+	// life, and a remembered computer by its 60 s resume assertion, which the bridge stops minting
+	// once the machine is removed (R8); a web terminal shell already open is not (ADR 0041: the
+	// token gates the opening, not the life): it lives until its socket closes, or until a 410 here
+	// stops the node.
 	async function once() {
 		const ts = Math.max(Date.now(), lastTs + 1);
 		lastTs = ts;
@@ -71,7 +74,7 @@ export function createHeartbeat({ file, keys, ideOrigin, fetchImpl = fetch, onGo
 			return 'unreachable';
 		}
 		if (res.status === 410) {
-			rmSync(file, { force: true });
+			for (const path of [...forget, file]) rmSync(path, { force: true });
 			onGone();
 			return 'gone';
 		}
