@@ -21,8 +21,10 @@ test.describe("Legal links", () => {
   });
 
   test("the Help menu opens each page", async ({ page, baseURL }) => {
-    // The public site is not running here: its pages answer from the test.
-    await page.context().route("**/legal/**", (route) => route.fulfill({ contentType: "text/html", body: "<title>legal</title>" }));
+    // The public site is not running here: its pages answer from the test. A predicate, not a
+    // glob: "**/legal/**" also caught the app's own /src/features/legal/ modules under vite.
+    const isLegalPage = (url) => PAGES.some(([, path]) => path.test(url.pathname));
+    await page.context().route(isLegalPage, (route) => route.fulfill({ contentType: "text/html", body: "<title>legal</title>" }));
     await openFreshPage(page, baseURL);
     for (const [label, path] of PAGES) {
       await page.getByRole("navigation", { name: "Application menu" }).getByRole("button", { name: "Help", exact: true }).click();
