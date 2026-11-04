@@ -25,7 +25,7 @@ function sentenceOf(outcome: AccountSecurityOutcome<unknown>): string {
 
 const CODE_INPUT = 'w-40 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-center text-lg tracking-widest outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]';
 
-const PromptBody: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+const PromptBody: React.FC<{ onClose: () => void; extra?: React.ReactNode }> = ({ onClose, extra }) => {
   const granted = useSudoPromptStore((state) => state.granted);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [code, setCode] = useState('');
@@ -74,6 +74,7 @@ const PromptBody: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           />
         </div>
       )}
+      {extra}
       {problem && <p role="alert" className="text-sm text-[var(--osio-danger)]">{problem}</p>}
       <div className="flex justify-end gap-2">
         <Button onClick={onClose}>Cancel</Button>
@@ -86,16 +87,17 @@ const PromptBody: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 /**
  * The one "Confirm it's you" prompt of the app. Mounted once in SettingsView; later
  * packages (password, 2FA, sessions) reuse it through the shared `sudo_required` event
- * instead of carrying a prompt of their own.
+ * instead of carrying a prompt of their own. `extra` is a flow's own choice shown in the prompt,
+ * as the terminal's "Remember this computer".
  */
-export const SudoPrompt: React.FC = () => {
+export const SudoPrompt: React.FC<{ extra?: React.ReactNode }> = ({ extra }) => {
   const open = useSudoPromptStore((state) => state.open);
   const dismiss = useSudoPromptStore((state) => state.dismiss);
   useEffect(() => startSudoListener(), []);
   if (!open) return null;
   return (
     <Modal open onClose={dismiss} title="Confirm it's you" description="Confirm it's you with an emailed code." size="sm">
-      <PromptBody onClose={dismiss} />
+      <PromptBody onClose={dismiss} extra={extra} />
     </Modal>
   );
 };
