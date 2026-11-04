@@ -36,12 +36,13 @@ test("R12, R8: one step-up with Remember checked; 3 reloads and 2 new tabs open 
     const calls = await stubMachineBridge(context, node);
     await routePtyToNode(context, node);
     const frameConsole = [];
-    // Caveat: headless Chromium's software GL reports "GPU stall due to ReadPixels" for xterm's WebGL
-    // renderer, a driver message the page did not write (measured 2026-11-04, Chromium 1217 headless);
-    // it is dropped by its exact prefix, so a real warning from the page still fails this.
+    // Caveat: Playwright's Firefox logs "Layout was forced before the page was fully loaded" for 1 to
+    // 2 of 3 loads of any page the dock frames, a static one with no script or stylesheet included
+    // (measured 2026-11-04, Firefox 1511; #305). So the page does not write it. It is dropped by its
+    // exact text. A page that really forces layout early would be hidden by this filter.
     context.on("console", (message) => {
       if (!["error", "warning"].includes(message.type()) || !message.location().url.startsWith("http://127.0.0.1:4100")) return;
-      if (/^\[\.WebGL-0x[0-9a-f]+\]GL Driver Message /.test(message.text())) return;
+      if (message.text().startsWith('[JavaScript Warning: "Layout was forced before the page was fully loaded.')) return;
       frameConsole.push(`${message.type()}: ${message.text()}`);
     });
     await seedSession(context, {});
