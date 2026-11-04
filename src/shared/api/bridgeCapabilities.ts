@@ -1,3 +1,5 @@
+import { createCapabilityReader } from "./capabilityReader";
+
 /**
  * Which optional features the bridge serves, read once per session from GET /api/capabilities
  * (scripts/bridge-capabilities.mjs).
@@ -11,41 +13,10 @@
  */
 
 export type BridgeCapability = "recs" | "publish";
-export type BridgeCapabilities = Partial<Record<BridgeCapability, boolean>>;
 
 const NAMES: readonly BridgeCapability[] = ["recs", "publish"];
 
-export function parseCapabilities(raw: unknown): BridgeCapabilities {
-  const listed = (raw as { capabilities?: unknown } | null)?.capabilities;
-  if (!listed || typeof listed !== "object") return {};
-  const parsed: BridgeCapabilities = {};
-  for (const name of NAMES) {
-    const value = (listed as Record<string, unknown>)[name];
-    if (typeof value === "boolean") parsed[name] = value;
-  }
-  return parsed;
-}
-
-interface CapabilityReaderDeps {
-  token: () => string | null | Promise<string | null>;
-  load: (token: string) => Promise<unknown>;
-}
-
-export function createCapabilityReader({ token, load }: CapabilityReaderDeps) {
-  let cached: { token: string; read: Promise<BridgeCapabilities | null> } | null = null;
-  return {
-    async serves(name: BridgeCapability): Promise<boolean | null> {
-      const bearer = await token();
-      if (!bearer) return null;
-      if (cached?.token !== bearer) {
-        cached = { token: bearer, read: load(bearer).then(parseCapabilities, () => null) };
-      }
-      return (await cached.read)?.[name] ?? null;
-    },
-  };
-}
-
-const reader = createCapabilityReader({
+const reader = createCapabilityReader(NAMES, {
   // No bridge configured (an offline build): nothing to ask, and a relative URL would 404 on the app.
   token: async () => {
     const client = await import("./client");
