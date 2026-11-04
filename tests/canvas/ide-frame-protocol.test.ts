@@ -128,3 +128,17 @@ test("refused carries one known reason, from a listed app origin only", () => {
   assert.equal(readAppMessage({ type: "osionos-ide/refused", reason: "<b>pwned</b>" }, APP, [APP]), null);
   assert.equal(readAppMessage({ type: "osionos-ide/refused", reason: "mismatch", text: "x" }, APP, [APP]), null);
 });
+
+test("Amendment 1: the page may say remembered, need-resume and forgotten; the app may send resume and forget, each bare or exact", () => {
+  const NODE_ORIGIN = "http://127.0.0.1:4100";
+  const APP = "https://baas.tail10f2ea.ts.net:8443";
+  for (const type of ["osionos-ide/remembered", "osionos-ide/need-resume", "osionos-ide/forgotten"]) {
+    assert.deepEqual(readIdeMessage({ type }, NODE_ORIGIN, NODE_ORIGIN), { type });
+    assert.equal(readIdeMessage({ type, device: "D".repeat(43) }, NODE_ORIGIN, NODE_ORIGIN), null);
+  }
+  const assertion = "osionos_mr1.abcdefgh.payload.sig";
+  assert.deepEqual(readAppMessage({ type: "osionos-ide/resume", assertion }, APP, [APP]), { type: "osionos-ide/resume", assertion });
+  assert.equal(readAppMessage({ type: "osionos-ide/resume", assertion: "osionos_mc1.abcdefgh.payload.sig" }, APP, [APP]), null);
+  assert.deepEqual(readAppMessage({ type: "osionos-ide/forget" }, APP, [APP]), { type: "osionos-ide/forget" });
+  assert.equal(readAppMessage({ type: "osionos-ide/forget", device: "D".repeat(43) }, APP, [APP]), null);
+});
