@@ -12,6 +12,7 @@
 
 import { API_BASE, api, ApiError, getActivePageJwt } from '@/shared/api/client';
 import { useToastStore } from '@/shared/ui';
+import { isUnservedSettingsRoute } from './unservedSettingsRoutes';
 
 export const SETTINGS_WRITE_DEBOUNCE_MS = 400;
 
@@ -125,33 +126,33 @@ async function withSettingsFallback<T>(path: string, run: () => Promise<T>): Pro
 }
 
 export async function trySettingsGet<T>(path: string, jwt = settingsJwt()): Promise<T | null> {
-  if (!API_BASE || !jwt) return null;
+  if (!API_BASE || !jwt || isUnservedSettingsRoute(path)) return null;
   return withSettingsFallback(path, () => api.get<T>(path, jwt));
 }
 
 export async function trySettingsPost<T>(path: string, body: unknown, jwt = settingsJwt()): Promise<T | null> {
-  if (!API_BASE || !jwt) return null;
+  if (!API_BASE || !jwt || isUnservedSettingsRoute(path)) return null;
   return withSettingsFallback(path, () => api.post<T>(path, body, jwt));
 }
 
 export async function trySettingsPut<T>(path: string, body: unknown, jwt = settingsJwt()): Promise<T | null> {
-  if (!API_BASE || !jwt) return null;
+  if (!API_BASE || !jwt || isUnservedSettingsRoute(path)) return null;
   return withSettingsFallback(path, () => api.put<T>(path, body, jwt));
 }
 
 export async function trySettingsPatch<T>(path: string, body: unknown, jwt = settingsJwt()): Promise<T | null> {
-  if (!API_BASE || !jwt) return null;
+  if (!API_BASE || !jwt || isUnservedSettingsRoute(path)) return null;
   return withSettingsFallback(path, () => api.patch<T>(path, body, jwt));
 }
 
 export async function trySettingsDelete<T>(path: string, jwt = settingsJwt()): Promise<T | null> {
-  if (!API_BASE || !jwt) return null;
+  if (!API_BASE || !jwt || isUnservedSettingsRoute(path)) return null;
   return withSettingsFallback(path, () => api.delete<T>(path, jwt));
 }
 
 export async function trySettingsUpload<T>(path: string, formData: FormData): Promise<T | null> {
   const jwt = settingsJwt();
-  if (!API_BASE || !jwt) return null;
+  if (!API_BASE || !jwt || isUnservedSettingsRoute(path)) return null;
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${jwt}` },

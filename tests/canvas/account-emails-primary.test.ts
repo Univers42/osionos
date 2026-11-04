@@ -19,7 +19,7 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import "./support/stub-bridge.ts";
+import { isStepUpRead } from "./support/stub-bridge.ts";
 import { memory } from "./support/emails-env.ts";
 
 const { useAccountEmailsStore } = await import("../../src/store/settings/useAccountEmailsStore.ts");
@@ -39,6 +39,7 @@ async function recording(answer: (call: Seen) => { status?: number; body: unknow
   const original = globalThis.fetch;
   const seen: Seen[] = [];
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (isStepUpRead(input, init)) return new Response(JSON.stringify({ active: true }), { status: 200 });
     const call = { url: String(input), method: init?.method ?? "GET", auth: JSON.stringify(init?.headers ?? {}) };
     seen.push(call);
     const { status = 200, body } = answer(call);

@@ -75,6 +75,8 @@ test("R12, R8: one step-up with Remember checked; 3 reloads and 2 new tabs open 
     test.info().attachments.push({ name: "bridge calls", contentType: "application/json", body: Buffer.from(JSON.stringify(calls)) });
     expect(calls.sudoEmail, "the step-up endpoint").toBe(1);
     expect(calls.sudoVerify).toBe(1);
+    // #293: the app reads the step-up state first, so no mint is refused (Chrome logs every 403).
+    expect(calls.tokenRefused, "no mint before the step-up").toBe(0);
     expect(calls.token).toBe(1);
     expect(calls.rememberedTokens).toBe(1);
     expect(calls.resume).toBeGreaterThanOrEqual(5);
