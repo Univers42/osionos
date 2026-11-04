@@ -20,7 +20,7 @@ import { dirname } from 'node:path';
 
 import { isNodeId } from '../../scripts/ide-token.mjs';
 import { signMessage } from '../../scripts/ide-agent-frames.mjs';
-import { verifyMachineToken, whoamiMessage } from '../../scripts/ide-machine-protocol.mjs';
+import { verifyMachineToken, verifyResumeAssertion, whoamiMessage } from '../../scripts/ide-machine-protocol.mjs';
 import { assertPrivateFile, assertPrivateFolder, writePrivateFile } from './private-file.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -86,22 +86,27 @@ export function createMachineSession({ machine, home }) {
 	const firstUse = createJtiGuard();
 	const privateKey = privateKeyOf(machine);
 
-	function verifySession(bearer, { ideOrigin }) {
+	// Both kinds spend their jti through the one guard, so neither can be replayed through the other.
+	const spending = (verify) => (value, { ideOrigin }) => {
 		let claims;
-		try { claims = verifyMachineToken(bearer, { keys, machine: machine.machineId, aud: ideOrigin }); } catch { throw fail(401); }
+		try { claims = verify(value, { keys, machine: machine.machineId, aud: ideOrigin }); } catch { throw fail(401); }
 		if (!firstUse(claims.jti, claims.exp)) throw fail(401);
-		return { userId: claims.sub, exp: claims.exp, iat: claims.iat };
-	}
+		return { userId: claims.sub, exp: claims.exp, iat: claims.iat, remember: claims.remember === true };
+	};
+	const verifySession = spending(verifyMachineToken);
+	const verifyResume = spending(verifyResumeAssertion);
 
 	// `/api/machine/whoami` lets the app check that this port is the machine it was told about
 	// (devil 2026-10-31, 5); `/api/machine/home` names the folder a window opens on;
 	// `/api/machine/self` names this machine to its own page, which opens without an id and
 	// relays it to the app only by postMessage. A plain GET carries no Origin, so its gate is the
 	// fetch metadata alone, and nothing here answers CORS: another site cannot read it.
-	async function machineRoutes(req, res, { ideOrigin, isSameOrigin, isSameOriginRead, hasSession }) {
+	// `remember` tells this node's own pages that it remembers computers, so a new frame names its app
+	// origin only to a node that reads it; an older frame ignores the field (R14).
+	async function machineRoutes(req, res, { ideOrigin, isSameOrigin, isSameOriginRead, hasSession, remembers }) {
 		if (req.url === '/api/machine/self' && req.method === 'GET') {
 			if (!isSameOriginRead(req)) return json(res, 403, { error: 'forbidden' });
-			return json(res, 200, { paired: true, machineId: machine.machineId });
+			return json(res, 200, remembers ? { paired: true, machineId: machine.machineId, remember: true } : { paired: true, machineId: machine.machineId });
 		}
 		if (req.url === '/api/machine/whoami' && req.method === 'POST') {
 			if (!isSameOrigin(req)) return json(res, 403, { error: 'forbidden' });
@@ -119,6 +124,6 @@ export function createMachineSession({ machine, home }) {
 
 	return {
 		keys,
-		originOptions: { capSecret: randomBytes(32).toString('base64url'), ownerId: machine.ownerId, verifySession, machineRoutes },
+		originOptions: { capSecret: randomBytes(32).toString('base64url'), ownerId: machine.ownerId, verifySession, verifyResume, machineRoutes },
 	};
 }
