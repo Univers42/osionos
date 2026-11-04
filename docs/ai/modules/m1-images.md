@@ -11,8 +11,9 @@ project's review records outside this repository. The out-of-scope of this
 slice is written at the bottom.
 
 **Status: ai-dev only. The public stack stays OFF** (C70): the gate of the
-prompt (C72) is in the service, but the guard is not deployed yet and its
-recall is a lower bound (see "What is not done").
+prompt (C72) is in the service, and groot deploys the guard as
+`osionos-ai-guard` under `--profile ai-gpu-vulkan` (groot `docker-compose.yml`,
+since `db477f00`, 2026-10-22). Its recall is a lower bound (see "What is not done").
 
 ---
 
@@ -94,7 +95,7 @@ The client suite of 2026-10-22 (commit `562678f3`): 2780 tests, 2780 pass,
 |---|---|---|
 | **C70** | Off by default, off in public | `services/osionos-ai/tests/imagesOff.test.ts` ("the route answers exactly what an unknown route answers, and the engine is never called" — the same body as an unknown route, 0 engine calls; "turned on without an engine URL, the service refuses to start and names the variable"), `scripts/verify/ai-images-public-off.sh` (the public overlay forces `OSIONOS_AI_IMAGES` empty), and the client flag default off — `tests/canvas/ai-image-run.test.ts` ("the image entry is in the AI group only when the images flag is on") |
 | **C71** | The adapter is proven by a real call | A1: `git show feat/ai-spike-a1:services/osionos-ai/spikes/a1/results/imagegen/RESULTS.md` (the wire of the measured path: body keys exactly `model, n, prompt, size`, one PNG 512×512 back as `b64_json`), and the ai-dev run of 2026-10-22 (the numbers below) |
-| **C72** | The prompt gate — **L0 and L1, done** | The prompt passes L0 (the rules of the bridge) and L1 (the guard of A1) before anything runs — "Prompt gate (C72)" below. A prompt carrying the engine's `sd_cpp_extra_args` tag is refused, and the schema is strict: `services/osionos-ai/tests/images.test.ts` ("a prompt that carries engine arguments is refused before anything", "the request has no image input: an extra field is refused"). The gate: `services/osionos-ai/tests/imagesPromptGate.test.ts` ("a prompt the guard refuses is refused before the engine, and books nothing", "a prompt the rules of L0 refuse never reaches the guard nor the engine", "a guard that fails answers 503, and nothing is called and nothing is charged", "a guard that is not there answers 503, and nothing is called and nothing is charged", "a guard that hangs past the deadline answers 503, and nothing is called", "a prompt the guard lets through becomes an image", "a refused prompt is in no event and in no log line: the codes are (C77, C94)") and the policy itself: `services/osionos-ai/tests/guardPolicy.test.ts` (15 tests). The public stack stays off: the guard service is not deployed yet (groot slice) and the recall is a lower bound |
+| **C72** | The prompt gate — **L0 and L1, done** | The prompt passes L0 (the rules of the bridge) and L1 (the guard of A1) before anything runs — "Prompt gate (C72)" below. A prompt carrying the engine's `sd_cpp_extra_args` tag is refused, and the schema is strict: `services/osionos-ai/tests/images.test.ts` ("a prompt that carries engine arguments is refused before anything", "the request has no image input: an extra field is refused"). The gate: `services/osionos-ai/tests/imagesPromptGate.test.ts` ("a prompt the guard refuses is refused before the engine, and books nothing", "a prompt the rules of L0 refuse never reaches the guard nor the engine", "a guard that fails answers 503, and nothing is called and nothing is charged", "a guard that is not there answers 503, and nothing is called and nothing is charged", "a guard that hangs past the deadline answers 503, and nothing is called", "a prompt the guard lets through becomes an image", "a refused prompt is in no event and in no log line: the codes are (C77, C94)") and the policy itself: `services/osionos-ai/tests/guardPolicy.test.ts` (15 tests). The public stack stays off: groot deploys the guard only under `--profile ai-gpu-vulkan`, which the public stack does not pass, and the recall is a lower bound |
 | **C73** | The output safety check — **done, the recall UNMEASURED** | The bytes the engine answered are checked before they are stored: two pinned classifiers (Falconsai q8 ≥ 0.5, AdamCodd q8 ≥ 0.9), the union refuses the image if either fires, and a check that fails refuses too — `services/osionos-ai/tests/imagesOutputCheck.test.ts` ("a refused image is never uploaded: the run fails with image_refused, and the image is booked", "a check that is not there refuses the request before the queue, the reservation and the engine", "a check that throws refuses the image: the check fails closed", "an image is refused when either model reaches its threshold"). The models are pinned in `services/osionos-ai/spikes/a1/models.lock` and fetched by `services/osionos-ai/scripts/fetch-image-check.sh`; what the check catches is unknown → the public stack stays off |
 | **C74** | The price | Required config: the service refuses to boot with `OSIONOS_AI_IMAGES=on` and no price — `services/osionos-ai/tests/imagesOff.test.ts` ("turned on without a price, the service refuses to start (C74: an image is never free)"). Booked once the engine received the call, whatever happens next — `services/osionos-ai/tests/images.test.ts` ("a cancelled image is still booked at its price", "an engine that never answers times out, and the image is booked", "the sweep of a stale image run books its price, not zero"). NOT booked when the engine was unreachable or the run was refused before it — `services/osionos-ai/tests/images.test.ts` ("an engine that is not running is told apart from one that failed: nothing is booked", "a user at the cap of the day is refused until midnight, and books nothing") |
 | **C75** | The caps | 3 images a minute per user, 20 a day per user, 200 a day for the platform (`OSIONOS_AI_IMAGES_PER_USER_DAY`, `OSIONOS_AI_IMAGES_PER_DAY`), one GPU served first-come-first-served by a Redis queue of 5 — `services/osionos-ai/tests/images.test.ts` ("the fourth image of a minute is refused with a Retry-After", "a user at the cap of the day is refused until midnight, and books nothing", "the platform at its cap of the day refuses everybody", "a second image waits for the first one: one call reaches the engine at a time", "a full queue refuses the next image with a Retry-After") |
@@ -216,13 +217,14 @@ dropped (Stability AI non-commercial community licence).
 
 ## What is not done
 
-- **The deployment of the guard (C72)** — the gate is in the service, but the
-  guard itself is not: the `ai-guard` llama-server service with the pinned
-  0.6B GGUF, the environment of the compose and the COPY of
-  `scripts/bridge-moderation.mjs` + `scripts/moderation-lists/` into the AI
-  image are the groot slice, not this one. Without it the service refuses to
-  start (`OSIONOS_AI_PROMPT_GUARD_URL` is required when the images are on), so
-  the public stack stays off. (C73 landed: the output check is in the service
+- **The guard on the public stack (C72)** — groot's slice landed in
+  `db477f00` (2026-10-22): `osionos-ai-guard` with the pinned 0.6B GGUF under
+  `--profile ai-gpu-vulkan`, `OSIONOS_AI_PROMPT_GUARD_URL` in the compose, and
+  the COPY of `scripts/bridge-moderation.mjs` + `scripts/moderation-lists/`
+  into the AI image (groot `infrastructure/docker/osionos/ai.Dockerfile:69-71`).
+  Without the guard the service refuses to start (`OSIONOS_AI_PROMPT_GUARD_URL`
+  is required when the images are on). The public stack never passes that
+  profile, so it stays off. (C73 landed: the output check is in the service
   — see the caveats for what it does not prove.)
 - **The cover picker's "Generate" tab** — the image is made from the editor's
   slash menu, not from the cover.
