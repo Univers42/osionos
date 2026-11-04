@@ -22,6 +22,7 @@ import {
 
 import { useWorkspaceInvitesStore } from "@/store/settings";
 import { openSettings } from "@/features/settings/model/settingsNav";
+import { LegalLinks } from "@/features/legal/ui/LegalLinks";
 import { SidebarNavItem } from "./SidebarNavItem";
 
 // Parity gate: the BaaS console nav item only exists when a project is
@@ -36,7 +37,7 @@ interface SidebarFooterProps {
   onDismissInvite: () => void;
 }
 
-/** Bottom section: Settings / Marketplace / archived files + optional Invite CTA. */
+/** Bottom section: Settings / Marketplace / archived files, the legal links + optional Invite CTA. */
 export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   onOpenSettings,
   onOpenTrash,
@@ -87,6 +88,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
           />
         )}
       </div>
+      <LegalLinks className="px-4 pb-1 pt-1.5" />
 
       {showInviteCTA && (
         // The dismiss button sits beside the card, not inside it: a button nested in a
