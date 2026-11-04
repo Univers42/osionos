@@ -4,7 +4,7 @@
 // it is ours, the node signs the app's nonce, and only then is one token minted and posted, to the
 // node's exact origin. Each later shell's token goes through the same identity check. A frame that
 // never answers is explained in plain words: no command in the dock (owner, 2026-11-01).
-import { linkMachineFrame, type IdentityVerdict, type MachineFrameDeps, type MachineViewState, type MintResult } from "../../ide/vscode/machineLink.ts";
+import { linkMachineFrame, type IdentityVerdict, type MachineFrameDeps, type MachineViewState, type MintMode, type MintResult } from "../../ide/vscode/machineLink.ts";
 import { readIdeMessage } from "../../ide/vscode/ideFrameProtocol.ts";
 import type { TerminalColors } from "../../ide/model/terminalPort.ts";
 import type { Machine } from "../api/machinesApi.ts";
@@ -33,7 +33,8 @@ export type TerminalFrameDeps = {
   frame: MachineFrameDeps["frame"];
   listen: MachineFrameDeps["listen"];
   lookup: (machineId: string) => Promise<Machine | "other-account" | "unavailable">;
-  mint: (machineId: string) => Promise<MintResult>;
+  /** A resume mint needs no step-up; it is asked for only by a frame that remembers this computer. */
+  mint: (machineId: string, mode: MintMode) => Promise<MintResult>;
   verify: (machineId: string, nonce: string, sig: string) => Promise<IdentityVerdict>;
   nonce: () => string;
   schedule: (fire: () => void, ms: number) => () => void;
@@ -86,7 +87,7 @@ export function createTerminalFrame(deps: TerminalFrameDeps) {
     frame: deps.frame,
     ideOrigin: LOCAL_NODE_ORIGIN,
     listen,
-    mint: () => (machine ? deps.mint(machine.id) : Promise.resolve({ kind: "unavailable", reason: "no-machine" })),
+    mint: (mode) => (machine ? deps.mint(machine.id, mode) : Promise.resolve({ kind: "unavailable", reason: "no-machine" })),
     onState,
     claim: async (node) => {
       const found = await deps.lookup(node);

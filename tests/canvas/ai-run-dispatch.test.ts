@@ -105,6 +105,18 @@ test("the end of a run, and its failure, are kept", () => {
   assert.deepEqual(quiet.calls, ["patch:status,errorCode"]);
 });
 
+test("the wait of a failure is kept when it is a number of seconds", () => {
+  const waits = seen();
+  dispatchRunEvent("error", { code: "rate_limited", retryAfterSeconds: 7 }, waits.actions);
+  assert.deepEqual(waits.calls, ["patch:status,errorCode,retryAfterSeconds"]);
+
+  for (const value of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, "7", null]) {
+    const odd = seen();
+    dispatchRunEvent("error", { code: "rate_limited", retryAfterSeconds: value }, odd.actions);
+    assert.deepEqual(odd.calls, ["patch:status,errorCode"], String(value));
+  }
+});
+
 test("a frame nobody knows is ignored", () => {
   const { calls, actions } = seen();
   dispatchRunEvent("something.new", { text: "?" }, actions);

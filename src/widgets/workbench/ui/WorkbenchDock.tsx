@@ -14,6 +14,8 @@ import React from "react";
 import { Columns2, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 
 import { Tooltip } from "@/shared/ui";
+import { ForgetComputerIconButton } from "@/features/machines/ui/ForgetComputerButton";
+import { useTerminalFrameStore } from "@/features/machines/model/terminalFrameStore";
 import { useUserStore } from "@/features/auth";
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { hasLocalTerminal, localPtyApi } from "@/features/ide/model/localPty";
@@ -143,6 +145,12 @@ const TerminalActions: React.FC = () => {
   );
 };
 
+// This computer's own terminal, once its frame is linked, is the one with a computer to forget.
+const ComputerActions: React.FC = () => {
+  const linked = useTerminalFrameStore((s) => s.phase === "connected");
+  return linked ? <ForgetComputerIconButton className={ICON_BTN} /> : null;
+};
+
 const OutputActions: React.FC = () => (
   <Tooltip label="Clear output" side="bottom">
     <button type="button" aria-label="Clear output" onClick={() => useIdeOutputBus.getState().clear()} className={ICON_BTN}>
@@ -218,6 +226,7 @@ export const WorkbenchDock: React.FC = () => {
         <span className="flex-1" />
         {/* VS Code's own panel carries new, split and kill; there is no box to restart. */}
         {active === "terminal" && !vsCodePanel && <TerminalActions />}
+        {active === "terminal" && vsCodePanel && <ComputerActions />}
         {active === "output" && <OutputActions />}
         <Tooltip label="Hide panel" side="bottom">
           <button type="button" aria-label="Hide panel" onClick={closeDock} className={ICON_BTN}>

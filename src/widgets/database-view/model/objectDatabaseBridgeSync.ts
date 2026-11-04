@@ -33,6 +33,7 @@ import {
 } from "./objectDatabaseWorkspaces";
 import { createPushBaseline } from "./objectDatabasePushBaseline";
 import { createSessionWait, type SessionWait } from "./sessionWait";
+import { clearRefusedDatabaseSave, noticeRefusedDatabaseSave } from "./refusedDatabaseSave";
 
 const HYDRATION_JWT_RETRY_MS = 1500;
 const HYDRATION_JWT_MAX_ATTEMPTS = 12;
@@ -176,12 +177,16 @@ export function pushDirtyObjectDatabases(
         try {
           await pushDatabaseSlice(jwt, item.dbKey, item.title, item.slice);
           next[item.dbKey] = item.hash;
+          clearRefusedDatabaseSave(item.dbKey);
         } catch (error) {
           // The server holds this database and this tab has a blank: stop pushing and load it.
           if ((error as { status?: number }).status === 409) {
             next[item.dbKey] = item.hash;
             refreshAfterRefusal?.();
-          } else delete next[item.dbKey]; // keep dirty → retried next flush
+          } else {
+            delete next[item.dbKey]; // keep dirty → retried next flush
+            noticeRefusedDatabaseSave(item.dbKey, item.title, item.hash, (error as { status?: number }).status);
+          }
         }
       }
       for (const dbKey of removed) {

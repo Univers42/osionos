@@ -17,7 +17,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { machineErrorMessage, machinesBridgeUrl, parseClaim, parseMachineList, parseToken } from "../../src/features/machines/api/machinesApi.ts";
+import { machineErrorMessage, machinesBridgeUrl, parseClaim, parseMachineList, parseResumeAssertion, parseToken } from "../../src/features/machines/api/machinesApi.ts";
 
 const ROW = {
   id: "m-abcdefghijklmnop", name: "laptop", platform: "linux", fingerprint: "ABCD-EFGH-IJKL-MNOP",
@@ -72,4 +72,12 @@ test("every contract error code has its own sentence; an unknown one keeps the b
   }
   assert.equal(machineErrorMessage("other", "The bridge said no."), "The bridge said no.");
   assert.equal(machineErrorMessage(undefined, " "), "That did not go through. Try again.");
+});
+
+test("R2: a resume answer must carry an osionos_mr1 assertion; a machine token there is refused", () => {
+  const assertion = "osionos_mr1.abcdefgh.payload.sig";
+  assert.equal(parseResumeAssertion({ assertion, exp: 1 }), assertion);
+  for (const body of [null, {}, { assertion: "osionos_mc1.abcdefgh.payload.sig" }, { assertion: 42 }, { token: assertion }]) {
+    assert.equal(parseResumeAssertion(body), null, JSON.stringify(body));
+  }
 });

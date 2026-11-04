@@ -294,6 +294,14 @@ export function stableStringify(value) {
 	return '{' + entries.join(',') + '}';
 }
 
+/** prismatica ADR 0003: the header that tells the auth gateway this bridge verified the
+ *  request's Turnstile token itself, so the gateway does not siteverify the spent token again.
+ *  Signed over the second, the path and the exact body sent; the gateway accepts it once. */
+export const TURNSTILE_PROOF_HEADER = 'x-osionos-bridge-proof';
+export function turnstileProof(secret, path, body, nowSec = Math.floor(Date.now() / 1000)) {
+	return `${nowSec}.${createHmac('sha256', secret).update(`${nowSec}.turnstile.${path}.${stableStringify(body)}`).digest('hex')}`;
+}
+
 export function bridgeSignature(secret, timestamp, payload) {
 	return createHmac('sha256', secret).update(`${timestamp}.${stableStringify(payload)}`).digest('hex');
 }
@@ -5248,22 +5256,24 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 	const password = safeText(payload.password, 512);
 	if (!email || !password) throw Object.assign(new Error('Email and password are required.'), { status: 422 });
 	const forwardedFor = forwardedForHeader(request);
-	const turnstileToken = await resolveTurnstileToken(payload, { config, fetchImpl, remoteIp: signInRemoteIp(request, config) });
+	const turnstile = await resolveTurnstileToken(payload, { config, fetchImpl, remoteIp: signInRemoteIp(request, config) });
+	const turnstileToken = turnstile.token;
+	// Caveat: a trust delegation — the gateway skips its own check for this header, so it is sent
+	// only after siteverify passed here, and is exactly as strong as OSIONOS_BRIDGE_SHARED_SECRET.
+	const signedCall = (path, body) => gatewayCall(fetchImpl, config, path, {
+		body: JSON.stringify(body),
+		headers: turnstile.verified && config.sharedSecret ? { [TURNSTILE_PROOF_HEADER]: turnstileProof(config.sharedSecret, path, body) } : {},
+		forwardedFor,
+	});
 
 	if (url.pathname === '/api/auth/register') {
 		const rawName = safeText(payload.username ?? payload.name ?? email.split('@')[0], 64);
 		const username = (rawName.replace(/[^\w.-]/g, '') || `user${Date.now()}`).slice(0, 32);
-		const { res: rRes, data: rData } = await gatewayCall(fetchImpl, config, '/api/auth/register', {
-			body: JSON.stringify({ email, password, turnstileToken, profile: { username, confirmPassword: password } }),
-			forwardedFor,
-		});
+		const { res: rRes, data: rData } = await signedCall('/api/auth/register', { email, password, turnstileToken, profile: { username, confirmPassword: password } });
 		if (!rRes.ok) { json(response, rRes.status || 422, { message: rData.message || 'Registration failed.' }, config); return; }
 	}
 
-	const { res: lRes, data: lData } = await gatewayCall(fetchImpl, config, '/api/auth/login', {
-		body: JSON.stringify({ email, password, turnstileToken }),
-		forwardedFor,
-	});
+	const { res: lRes, data: lData } = await signedCall('/api/auth/login', { email, password, turnstileToken });
 	if (!lRes.ok || !lData.access_token) { json(response, lRes.status || 401, { message: lData.message || 'Invalid credentials.' }, config); return; }
 
 	const consumed = await establishAppSession({ request, config, kv, pg, fetchImpl, gatewayToken: lData.access_token, authMethod: 'password' });
@@ -5462,7 +5472,12 @@ export function createBridgeServer(options = {}) {
 		chat: createChatHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		notify: createNotifyHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		media: createMediaHandler({
+			config,
+			verifySession: verifyAppSessionToken,
+			fetchImpl,
+			readPage: async (request, pageId, requestConfig) => (await readablePageAccess(request, pageId, 'read', requestConfig, fetchImpl)).row,
+		}),
 		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			comments: createCommentsHandler({

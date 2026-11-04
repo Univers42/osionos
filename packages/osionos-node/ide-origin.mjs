@@ -92,17 +92,19 @@ function legacyVerifier(secret) {
 	};
 }
 
-// A paired machine passes `capSecret`, `verifySession` and `machineRoutes` (machine-identity.mjs),
-// `pty` ({ host, accept }) for the web terminal, and `fs` ({ accept, roots, home, appOrigins }) for
-// the editor on disk (ADR 0044); the shared-secret mode passes `secret` alone, and opens no shell
-// and no folder (W3, F5).
-export function createIdeOriginServer({ secret, capSecret = secret, verifySession = legacyVerifier(secret), machineRoutes = null, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null, pty: ptyOptions = undefined, fs: fsOptions = undefined }) {
+// A paired machine passes `capSecret`, `verifySession`, `verifyResume` and `machineRoutes`
+// (machine-identity.mjs), `pty` ({ host, accept }) for the web terminal, `devices`
+// (remembered-computers.mjs) when it remembers computers, and `fs` ({ accept, roots, home,
+// appOrigins }) for the editor on disk (ADR 0044); the shared-secret mode passes `secret` alone, and
+// opens no shell and no folder (W3, F5).
+export function createIdeOriginServer({ secret, capSecret = secret, verifySession = legacyVerifier(secret), verifyResume = null, machineRoutes = null, ownerId, ideOrigin, commit, nodes, maxSocketsPerUser = 8, client = null, pty: ptyOptions = undefined, fs: fsOptions = undefined, devices = null }) {
 	const sockets = createSocketRegistry({ maxPerUser: maxSocketsPerUser });
 	const cookiePrefix = cookiePrefixFor(ideOrigin);
 	const revokedAt = new Map();
 	const isRevoked = (userId, iat) => iat <= (revokedAt.get(userId) ?? -1);
 	const paired = machineRoutes !== null;
-	const pty = paired && ptyOptions ? createPtyService({ ...ptyOptions, ideOrigin, ownerId, verifySession, isRevoked }) : null;
+	const pty = paired && ptyOptions ? createPtyService({ ...ptyOptions, ideOrigin, ownerId, verifySession, verifyResume, devices, isRevoked }) : null;
+	const remembers = pty !== null && devices !== null && verifyResume !== null;
 	const disk = paired && fsOptions ? createFsService({ ...fsOptions, ideOrigin, ownerId, verifySession, isRevoked }) : null;
 
 	async function openSession(req, res) {
@@ -124,6 +126,16 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 		res.end();
 	}
 
+	// "Forget this computer" (R8): the frame names the device secret it just dropped. It only ever
+	// removes access, so the gate is the node's own origin, as for whoami.
+	async function forgetComputer(req, res) {
+		if (req.method !== 'POST') throw fail(405);
+		if (!routeContext.isSameOrigin(req)) throw fail(403);
+		devices.forget((await readSmallJson(req))?.device);
+		res.writeHead(204, { 'cache-control': 'no-store' });
+		res.end();
+	}
+
 	function liveCap(cookieHeader, node) {
 		return readCookies(cookieHeader, `${cookiePrefix}${node}`).map((value) => {
 			try { return verifyNodeCap(value, { secret: capSecret }); } catch { return null; }
@@ -135,6 +147,7 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 		isSameOrigin: (req) => checkNodeOrigin(req.headers, ideOrigin, false) && req.headers.origin === ideOrigin,
 		isSameOriginRead: (req) => checkNodeOrigin(req.headers, ideOrigin, false),
 		hasSession: (req) => Object.keys(nodes).some((node) => liveCap(req.headers.cookie, node) !== null),
+		remembers,
 	};
 
 	// Order matters for C6: an unknown node and a known one without its cookie both answer 401,
@@ -160,6 +173,7 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 		try {
 			if (!isNodeHost(req.headers, ideOrigin)) throw fail(403);
 			if (req.url === `${PREFIX}session`) return await openSession(req, res);
+			if (remembers && req.url === '/api/machine/forget') return await forgetComputer(req, res);
 			if (machineRoutes && req.url.startsWith('/api/machine/')) return await machineRoutes(req, res, routeContext);
 			if (!req.url.startsWith(PREFIX)) return client ? client(req, res) : reply(res, 404);
 			const { machine, verdict } = authorize(req, false);
@@ -196,12 +210,13 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 		pty,
 		fs: disk,
 		// Cuts every open socket of a user at once, kills the owner's shells, closes the editor's
-		// sockets and watches, forgets the folders it opened (F9, F17), and voids every credential
-		// issued until now.
+		// sockets and watches, forgets the folders it opened (F9, F17) and the computers it
+		// remembered (R8), and voids every credential issued until now.
 		revoke(userId) {
 			revokedAt.set(userId, Math.floor(Date.now() / 1000));
 			sockets.cut(userId);
 			if (userId !== ownerId) return;
+			devices?.clear();
 			pty?.killAll();
 			disk?.killAll();
 			void fsOptions?.roots.forget();

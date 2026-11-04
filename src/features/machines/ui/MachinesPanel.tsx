@@ -25,6 +25,7 @@ import { DataTable, EmptyState, PanelStatus, Section, SettingRow, type PanelStat
 import { listMachines, machineFailure, removeMachine, setDefaultMachine, type Machine } from "../api/machinesApi";
 import { useMachinesStore } from "../model/machinesStore";
 import { AddMachineModal } from "./AddMachineModal";
+import { ForgetComputerButton } from "./ForgetComputerButton";
 
 const HEADERS = ["Name", "Platform", "Fingerprint", "Status", "Actions"];
 
@@ -100,6 +101,11 @@ export const MachinesPanel: React.FC = () => {
         title="Your own machines"
         description="Pair a computer you own and open it from osionos: its files and its terminal stay between this browser and that machine. Adding or removing one asks you to confirm it is you."
         action={<Button tone="primary" onClick={() => setAdding(true)} disabled={status !== "ready"}><Plus size={16} />Add a machine</Button>}
+      />
+      <SettingRow
+        title="This computer"
+        description="If you chose to remember this computer, its terminal opens without an emailed code. Forget it to ask for a code again here."
+        action={<ForgetComputerButton />}
       />
       {rowError && <p role="alert" className="text-sm text-[var(--osio-danger)]">{rowError}</p>}
       <PanelStatus status={status} error={error} onRetry={reload}>

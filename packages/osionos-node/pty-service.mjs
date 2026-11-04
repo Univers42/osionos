@@ -14,8 +14,12 @@
 // own terminal page opens `ws://<node>/api/pty` per shell. The upgrade needs the node's exact Origin;
 // the first message is the owner's bridge-signed token, spent once through the same verifySession
 // (the same jti guard) as /api/node/session, or the session secret this node gave that frame on its
-// first shell, both through the gate /api/fs shares (node-credentials.mjs, devil F5). The token gates the opening, not the life: a shell lives until its socket closes,
-// the node stops, or the owner is revoked. `conn` is the slice of ws's WebSocket used here.
+// first shell, both through the gate /api/fs shares (node-credentials.mjs, devil F5). A remembered
+// computer opens with its device secret beside a fresh resume assertion instead, with no step-up
+// (Amendment 1, R1-R4); only this service's gate is given the remembered computers, so /api/fs
+// never takes that opening. The first shell a remembering token opens is told a device secret,
+// once (R6). The token gates the opening, not the life: a shell lives until its socket closes, the
+// node stops, or the owner is revoked. `conn` is the slice of ws's WebSocket used here.
 import { checkNodeOrigin } from '../../scripts/ide-node-policy.mjs';
 import { PTY_CLOSE, PTY_LIMITS, readPtyAuth, readPtyCommand } from './pty-wire.mjs';
 import { refuseRaw } from './node-proxy.mjs';
@@ -23,10 +27,10 @@ import { createCredentialGate } from './node-credentials.mjs';
 
 const GOING_AWAY = 1001;
 
-export function createPtyService({ ideOrigin, ownerId, verifySession, isRevoked, host, accept, newSecret }) {
+export function createPtyService({ ideOrigin, ownerId, verifySession, verifyResume, devices, isRevoked, host, accept, newSecret }) {
 	const pending = new Set();
 	const live = new Set();
-	const gate = createCredentialGate({ ideOrigin, ownerId, verifySession, isRevoked, newSecret });
+	const gate = createCredentialGate({ ideOrigin, ownerId, verifySession, verifyResume, devices, isRevoked, newSecret });
 
 	function end(record) {
 		if (record.ended) return;
@@ -44,6 +48,12 @@ export function createPtyService({ ideOrigin, ownerId, verifySession, isRevoked,
 			else if (command.op === 'resize') record.shell.resize(command.cols, command.rows);
 			else record.shell.ack(command.chars);
 		} catch { /* a write after exit; the exit closes the socket */ }
+	}
+
+	function openedFor(session, conn) {
+		if (!gate.join(session, conn)) return { op: 'opened' };
+		const device = gate.issueDevice(session);
+		return device ? { op: 'opened', secret: session.secret, device } : { op: 'opened', secret: session.secret };
 	}
 
 	async function open(conn, auth) {
@@ -71,7 +81,7 @@ export function createPtyService({ ideOrigin, ownerId, verifySession, isRevoked,
 		if (!shell) { end(record); return conn.close(PTY_CLOSE.unavailable); }
 		record.shell = shell;
 		record.session = found;
-		send(gate.join(found, conn) ? { op: 'opened', secret: found.secret } : { op: 'opened' });
+		send(openedFor(found, conn));
 		const held = early;
 		early = null;
 		for (const message of held) send(message);

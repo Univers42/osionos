@@ -29,8 +29,10 @@ import { FS_LIMITS } from './fs-wire.mjs';
 import { createIdeOriginServer } from './ide-origin.mjs';
 import { createMachineSession, loadMachine } from './machine-identity.mjs';
 import { pairMachine } from './pair.mjs';
+import { createRememberedComputers } from './remembered-computers.mjs';
 import { SERVER_PIN } from './pin.mjs';
 import { createPtyHost, serverSocketAcceptor } from './pty-runtime.mjs';
+import { isRememberOrigin } from './pty-wire.mjs';
 import { ensureServer, preferredShell, serverEnv } from './server-launch.mjs';
 import { createClientHandler } from './static-client.mjs';
 
@@ -75,18 +77,31 @@ function sharedSecretIdentity(values, env) {
 	return { node: values.node, secret, ownerId: env.OSIONOS_IDE_OWNER, machine: null };
 }
 
+// The app origins whose frames may remember this computer (devil verdict 2026-11-01, Amendment 1, R5;
+// groot ADR 0041: production and, by the owner's override, the beta). Each must also frame the node.
+function readRememberOrigins(origins, appOrigins, machine) {
+	if (origins.length > 0 && !machine) throw new Error('--remember-origin needs a paired machine: the shared-secret mode opens no shell');
+	for (const origin of origins) {
+		if (!isRememberOrigin(origin)) throw new Error(`--remember-origin must be an https app origin, e.g. https://baas.tail10f2ea.ts.net:8443 (got ${origin})`);
+		if (!appOrigins.includes(origin)) throw new Error(`--remember-origin ${origin} must also be an --app-origin`);
+	}
+	return origins;
+}
+
 export function readServeConfig(argv, env, machine = null) {
 	const { values } = parseArgs({
 		args: argv, strict: true,
-		options: { node: { type: 'string' }, server: { type: 'string' }, listen: { type: 'string', default: '127.0.0.1:4100' }, 'app-origin': { type: 'string', multiple: true }, 'ide-origin': { type: 'string' }, client: { type: 'string', default: DEFAULT_CLIENT }, terminal: { type: 'string', default: DEFAULT_TERMINAL } },
+		options: { node: { type: 'string' }, server: { type: 'string' }, listen: { type: 'string', default: '127.0.0.1:4100' }, 'app-origin': { type: 'string', multiple: true }, 'remember-origin': { type: 'string', multiple: true }, 'ide-origin': { type: 'string' }, client: { type: 'string', default: DEFAULT_CLIENT }, terminal: { type: 'string', default: DEFAULT_TERMINAL } },
 	});
 	if (!values.server) throw new Error('--server must name the unpacked server\'s lib directory');
 	const listen = readListen(values.listen);
 	const identity = machine ? pairedIdentity(values, env, machine, listen) : sharedSecretIdentity(values, env);
+	const appOrigins = values['app-origin'] ?? [];
+	const rememberOrigins = readRememberOrigins(values['remember-origin'] ?? [], appOrigins, machine);
 	const home = env.HOME;
 	const dataDir = join(home, '.osionos', 'server-data');
 	return {
-		...identity, listen, appOrigins: values['app-origin'] ?? [], client: values.client, terminal: values.terminal,
+		...identity, listen, appOrigins, rememberOrigins, client: values.client, terminal: values.terminal,
 		ideOrigin: values['ide-origin'] ?? `http://${listen.host}:${listen.port}`,
 		serverDir: values.server, nodeBin: join(values.server, 'node'),
 		// A1: not $XDG_RUNTIME_DIR, which logind removes at an ssh-only user's last logout.
@@ -96,6 +111,15 @@ export function readServeConfig(argv, env, machine = null) {
 }
 
 const machineFile = (env) => join(env.HOME ?? homedir(), '.osionos', 'machine.json');
+const rememberedFile = (env) => join(env.HOME ?? homedir(), '.osionos', 'remembered-computers.json');
+
+// Loaded on every paired start, even with no --remember-origin, so dropping an origin deletes the
+// computers it remembered (R5, R7); offered to the terminal only when an origin remains.
+function rememberedFor(config, env) {
+	if (!config.machine) return null;
+	const devices = createRememberedComputers({ file: rememberedFile(env), owner: config.ownerId, machine: config.node, origins: config.rememberOrigins });
+	return config.rememberOrigins.length > 0 ? devices : null;
+}
 
 // The web terminal of a paired machine (ADR 0041): shells run as this user, in $HOME, with the
 // server's env, under the pinned server's own node and node-pty. Without the server's ws there is
@@ -163,6 +187,7 @@ async function serve(argv, env) {
 		client: createClientHandler({ root: config.client, terminalRoot: config.terminal, editorRoot: existsSync(join(DEFAULT_EDITOR, 'index.html')) ? DEFAULT_EDITOR : null, appOrigins: config.appOrigins }),
 		pty: terminal.pty,
 		fs: disk,
+		devices: terminal.pty ? rememberedFor(config, env) : null,
 	});
 	await new Promise((resolve, reject) => origin.server.once('error', reject).listen(config.listen.port, config.listen.host, resolve));
 	console.log(`osionos-node: ${config.node} on ${config.ideOrigin} (server ${server.reused ? 'reused' : `pid ${server.pid}`})`);
@@ -170,7 +195,7 @@ async function serve(argv, env) {
 	const stop = async () => { control?.close(); origin.close(); terminal.host?.stop(); await server.stop(); process.exit(0); };
 	if (session) {
 		const beat = createHeartbeat({
-			file: machineFile(env), keys: session.keys, ideOrigin: config.ideOrigin,
+			file: machineFile(env), keys: session.keys, ideOrigin: config.ideOrigin, forget: [rememberedFile(env)],
 			onGone: () => { console.error('osionos-node: this machine was removed from its account; it forgot its identity'); void stop(); },
 		});
 		beat.start();
@@ -180,9 +205,9 @@ async function serve(argv, env) {
 }
 
 const USAGE = [
-	'usage: osionos-node connect --bridge <url> --app-origin <origin>... [--name <name>] [--pair-only]',
+	'usage: osionos-node connect --bridge <url> --app-origin <origin>... [--remember-origin <origin>...] [--name <name>] [--pair-only]',
 	'       osionos-node pair --bridge <url> --name <name> [--accept-account <email>]',
-	'       osionos-node serve --server <lib dir> --app-origin <origin>... [--listen 127.0.0.1:4100] [--client <dist-ide>] [--terminal <build/terminal>]',
+	'       osionos-node serve --server <lib dir> --app-origin <origin>... [--remember-origin <origin>...] [--listen 127.0.0.1:4100] [--client <dist-ide>] [--terminal <build/terminal>]',
 	'       (unpaired, milestone 1: add --node <id> and OSIONOS_IDE_TOKEN_SECRET / OSIONOS_IDE_OWNER)',
 ].join('\n');
 
@@ -212,7 +237,7 @@ const shortHostName = () => hostname().split('.')[0].replace(/[^a-zA-Z0-9._-]/g,
 async function connect(argv, env) {
 	const { values } = parseArgs({ args: argv, strict: true, options: {
 		bridge: { type: 'string' }, name: { type: 'string' }, 'app-origin': { type: 'string', multiple: true },
-		'pair-only': { type: 'boolean' },
+		'remember-origin': { type: 'string', multiple: true }, 'pair-only': { type: 'boolean' },
 	} });
 	if (!values.bridge) throw new Error('--bridge must be the osionos bridge URL');
 	if (!values['app-origin']?.length) throw new Error('--app-origin must name the app');
@@ -226,7 +251,8 @@ async function connect(argv, env) {
 	}
 	if (values['pair-only']) return;
 	const server = join(env.HOME ?? homedir(), '.osionos', 'server', SERVER_PIN.server.vscode);
-	await serve(['--server', server, ...values['app-origin'].flatMap((origin) => ['--app-origin', origin])], env);
+	const named = (flag, origins = []) => origins.flatMap((origin) => [flag, origin]);
+	await serve(['--server', server, ...named('--app-origin', values['app-origin']), ...named('--remember-origin', values['remember-origin'])], env);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {

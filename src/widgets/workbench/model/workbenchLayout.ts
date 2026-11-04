@@ -56,10 +56,11 @@ export function isDockTab(value: unknown): value is DockTab {
   return typeof value === "string" && DOCK_TABS.includes(value as DockTab);
 }
 
-/** Whether the dock is in the page. Where it keeps a shell on this computer (the desktop app),
- *  closing it hides it so the shell and its scrollback live on, as in VS Code; elsewhere it
- *  unmounts, and the sandbox session reconnects on the next open. */
-export function dockPresence({ open, everOpened, keepsShell }: { open: boolean; everOpened: boolean; keepsShell: boolean }): "shown" | "hidden" | "absent" {
+/** Whether the dock is in the page. Once opened, closing it hides it, so a terminal's shell and
+ *  its scrollback live on, as in VS Code. The web unmounted it instead, assuming the sandbox
+ *  session reconnects; the node terminal (this computer, through its node) has no session to
+ *  reconnect to, so every close, and every action that closed the dock, ended the shell. */
+export function dockPresence({ open, everOpened }: { open: boolean; everOpened: boolean }): "shown" | "hidden" | "absent" {
   if (open) return "shown";
-  return keepsShell && everOpened ? "hidden" : "absent";
+  return everOpened ? "hidden" : "absent";
 }

@@ -4,7 +4,6 @@
 // which CI is: the gates themselves are covered by osionos-node-pty-service.test.mjs with fakes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
 import { existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -16,25 +15,17 @@ import { createMachineSession } from '../../packages/osionos-node/machine-identi
 import { createPtyHost, serverSocketAcceptor } from '../../packages/osionos-node/pty-runtime.mjs';
 import { PTY_LIMITS } from '../../packages/osionos-node/pty-wire.mjs';
 import { bridgeKeyFromSeed, signMachineToken } from '../../scripts/ide-machine-protocol.mjs';
-import { generateAgentKeyPair } from '../../scripts/ide-agent-frames.mjs';
+import { MACHINE, OWNER, freeLoopbackOrigin, pairedMachine } from './support/paired-node.mjs';
 
 const SERVER = process.env.OSIONOS_TEST_SERVER ?? join(homedir(), '.osionos', 'server', '1.138.0');
 const BASH = '/bin/bash';
 const ready = existsSync(join(SERVER, 'node')) && existsSync(join(SERVER, 'vscode', 'node_modules', 'node-pty')) && existsSync(BASH);
 const skip = ready ? false : `no pinned VS Code server at ${SERVER}`;
 const SEED = randomBytes(32).toString('base64url');
-const OWNER = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
-const MACHINE = 'm-abcdefghijklmnop';
 
 async function world(t) {
-	const probe = http.createServer();
-	await new Promise((resolve) => probe.listen(0, '127.0.0.1', resolve));
-	const { port } = probe.address();
-	await new Promise((resolve) => probe.close(resolve));
-	const base = `http://127.0.0.1:${port}`;
-	const key = bridgeKeyFromSeed(SEED);
-	const { privateKey } = generateAgentKeyPair();
-	const machine = { machineId: MACHINE, ownerId: OWNER, bridgeUrl: 'https://bridge.example', bridgeKeys: { [key.kid]: key.publicKey }, privateKey: privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url') };
+	const { port, origin: base } = await freeLoopbackOrigin();
+	const machine = pairedMachine(bridgeKeyFromSeed(SEED));
 	const host = createPtyHost({ serverDir: SERVER, env: { ...process.env, SHELL: BASH, PS1: '$ ' }, cwd: homedir() });
 	const origin = createIdeOriginServer({
 		...createMachineSession({ machine, home: homedir() }).originOptions, ownerId: OWNER, ideOrigin: base, commit: 'c'.repeat(40),
