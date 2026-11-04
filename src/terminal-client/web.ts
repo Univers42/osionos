@@ -64,6 +64,7 @@ export async function startOnTheWeb(start: (api: TerminalPtyApi, colors: Termina
     remembers,
     store: rememberedStoreOver(() => window.localStorage),
     forgetOnNode,
+    readyAsks: true,
     onAppMessage: (data) => {
       const message = data as { type?: unknown; theme?: unknown } | null;
       if (message?.type !== THEME_MESSAGE) return false;
