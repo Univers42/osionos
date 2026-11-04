@@ -63,7 +63,7 @@ export const VariableCreateForm: React.FC<VariableCreateFormProps> = ({ pageId, 
       </p>
       <label className="flex flex-col gap-1 text-xs text-[var(--osio-fg-muted)]">
         Value
-        <input
+        <input name="variable-create-field"
           autoFocus
           aria-label="Value"
           className="osio-field px-1.5 text-sm text-[var(--osio-fg-default)] [--osio-field-h:var(--osio-control-h-sm)]"
@@ -73,7 +73,7 @@ export const VariableCreateForm: React.FC<VariableCreateFormProps> = ({ pageId, 
       </label>
       <label className="flex flex-col gap-1 text-xs text-[var(--osio-fg-muted)]">
         Saved in env.json of
-        <select
+        <select name="saved-in"
           aria-label="Saved in"
           className="osio-field px-1 text-sm text-[var(--osio-fg-default)] [--osio-field-h:var(--osio-control-h-sm)]"
           value={place}

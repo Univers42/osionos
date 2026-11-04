@@ -300,7 +300,7 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
                   <span className="text-sm" style={{ color: 'var(--osio-fg-muted)' }}>=</span>
                   {canManageAttributes && editingName === attribute.name ? (
                     <>
-                      <Input
+                      <Input name="attribute-value"
                         value={editingValue}
                         onChange={(event) => setEditingValue(event.target.value)}
                         aria-label={`Value for ${attribute.name}`}
@@ -331,14 +331,14 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
             {canManageAttributes && (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Input
+                  <Input name="new-attribute-name"
                     value={newAttrName}
                     onChange={(event) => setNewAttrName(event.target.value)}
                     placeholder="name"
                     aria-label="New attribute name"
                     className="min-w-0 flex-1"
                   />
-                  <Input
+                  <Input name="new-attribute-value"
                     value={newAttrValue}
                     onChange={(event) => setNewAttrValue(event.target.value)}
                     placeholder="value"

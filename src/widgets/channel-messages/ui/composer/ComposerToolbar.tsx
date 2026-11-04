@@ -59,14 +59,14 @@ export const ComposerToolbar: React.FC<ComposerToolbarProps> = ({
 
   return (
     <div className="flex items-center gap-1">
-      <input
+      <input name="pick-files-file"
         ref={imageInput}
         type="file"
         accept="image/*"
         className="hidden"
         onChange={(e) => { if (e.target.files?.length) onPickFiles(e.target.files, 'image'); e.target.value = ''; }}
       />
-      <input
+      <input name="pick-files-file"
         ref={fileInput}
         type="file"
         className="hidden"
@@ -90,7 +90,7 @@ export const ComposerToolbar: React.FC<ComposerToolbarProps> = ({
 
       <Popover anchorRef={emojiBtn} open={emojiOpen} onClose={() => setEmojiOpen(false)} className="w-80">
         <div className="border-b border-[var(--osio-border-default)] p-2">
-          <input
+          <input name="emoji-query"
             value={emojiQuery}
             onChange={(e) => setEmojiQuery(e.target.value)}
             placeholder="Search emoji"

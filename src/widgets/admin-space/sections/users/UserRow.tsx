@@ -69,7 +69,7 @@ const Editor: React.FC<UserRowProps> = (props) => {
     <div className="w-full space-y-3 pb-3">
       <label className="block text-sm text-[var(--osio-fg-muted)]">
         Display name
-        <input className={`${fieldClass} mt-1 block`} value={name} maxLength={100} onChange={(event) => setName(event.target.value)} />
+        <input name="user-field" className={`${fieldClass} mt-1 block`} value={name} maxLength={100} onChange={(event) => setName(event.target.value)} />
       </label>
       <div className="flex items-center gap-3 text-sm">
         <Toggle checked={optOut} onChange={setOptOut} label="Hide from the directory" />

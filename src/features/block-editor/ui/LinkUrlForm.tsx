@@ -54,7 +54,7 @@ export const LinkUrlForm: React.FC<LinkUrlFormProps> = ({ placeholder, submitLab
 
   return (
     <div className="flex flex-col gap-2">
-      <input
+      <input name="link-url"
         type="url"
         ref={inputRef}
         value={draft}

@@ -61,7 +61,7 @@ function RawCodePaneImpl({ initialSource, onChange, showLineNumbers }: Readonly<
           {gutterNumbers}
         </div>
       )}
-      <textarea
+      <textarea name="raw-markdown-source"
         ref={textareaRef}
         defaultValue={initialSource}
         spellCheck={false}

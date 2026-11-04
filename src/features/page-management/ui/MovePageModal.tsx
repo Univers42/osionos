@@ -168,7 +168,7 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
       <div className="flex max-h-[80vh] flex-col">
         <div className="relative border-b border-[var(--osio-border-default)] p-3">
           <Search size={16} aria-hidden className="pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 text-[var(--osio-fg-subtle)]" />
-          <Input
+          <Input name="page-search"
             ref={searchRef}
             className="pl-9 pr-9"
             placeholder="Search for a page to move to..."

@@ -42,7 +42,7 @@ export const CollabBrowseView: React.FC<CollabBrowseViewProps> = ({ ownedWorkspa
       <div className="flex flex-wrap items-center gap-3">
         <MiniTabs value={browse.filter} options={FILTERS} onChange={browse.setFilter} />
         <div className="min-w-48 flex-1">
-          <Input
+          <Input name="search-projects"
             value={browse.query}
             onChange={(event) => browse.setQuery(event.target.value)}
             placeholder="Search projects…"

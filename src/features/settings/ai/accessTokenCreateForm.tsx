@@ -66,7 +66,7 @@ export const CreateTokenForm: React.FC<{
             <div className="mt-1 space-y-1.5">
               {SCOPE_CHOICES.map((choice) => (
                 <label key={choice.id} className="flex items-start gap-2 text-sm text-[var(--osio-fg-default)]">
-                  <input
+                  <input name="access-token-create-checkbox"
                     type="checkbox"
                     checked={scopes.includes(choice.id)}
                     onChange={() => toggleScope(choice.id)}
@@ -91,7 +91,7 @@ export const CreateTokenForm: React.FC<{
                     key={workspace.id}
                     className="flex items-start gap-2 text-sm text-[var(--osio-fg-default)]"
                   >
-                    <input
+                    <input name="access-token-create-checkbox"
                       type="checkbox"
                       checked={workspaceIds.includes(workspace.id)}
                       onChange={() => toggleWorkspace(workspace.id)}

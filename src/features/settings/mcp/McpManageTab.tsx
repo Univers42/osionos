@@ -83,7 +83,7 @@ export const McpManageTab: React.FC<McpManageTabProps> = ({ workspaceId, setting
           </div>
           <div className="relative flex items-center">
             {/* Native select — a custom popup dropdown self-closes inside the focus-trapped Settings modal. */}
-            <select
+            <select name="restrict-ai-apps-members"
               aria-label="Restrict AI apps members can connect"
               data-testid="mcp-restrict-policy"
               value={settings.restrictPolicy}

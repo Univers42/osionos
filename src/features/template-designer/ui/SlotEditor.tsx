@@ -42,18 +42,18 @@ export const SlotEditor: React.FC<Props> = ({ slot, bindKeys, onChange, onRemove
     className="flex items-center gap-1.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-page)] px-1.5 py-1.5"
   >
     <GripVertical size={14} className="shrink-0 cursor-grab text-[var(--osio-fg-subtle)]" aria-hidden="true" />
-    <select aria-label="Slot kind" className={SELECT} value={slot.kind} onChange={(e) => onChange({ kind: e.target.value as HeaderSlotKind })}>
+    <select name="slot-kind" aria-label="Slot kind" className={SELECT} value={slot.kind} onChange={(e) => onChange({ kind: e.target.value as HeaderSlotKind })}>
       {KINDS.map((k) => (
         <option key={k} value={k}>{k}</option>
       ))}
     </select>
-    <select aria-label="Bound field" className={`${SELECT} min-w-0 flex-1`} value={slot.bind ?? ""} onChange={(e) => onChange({ bind: e.target.value || undefined })}>
+    <select name="bound-field" aria-label="Bound field" className={`${SELECT} min-w-0 flex-1`} value={slot.bind ?? ""} onChange={(e) => onChange({ bind: e.target.value || undefined })}>
       <option value="">— field —</option>
       {bindKeys.map((k) => (
         <option key={k} value={k}>{k}</option>
       ))}
     </select>
-    <select aria-label="Tone" className={SELECT} value={slot.tone ?? "default"} onChange={(e) => onChange({ tone: e.target.value as HeaderTone })}>
+    <select name="tone" aria-label="Tone" className={SELECT} value={slot.tone ?? "default"} onChange={(e) => onChange({ tone: e.target.value as HeaderTone })}>
       {TONES.map((t) => (
         <option key={t} value={t}>{t}</option>
       ))}

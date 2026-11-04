@@ -77,7 +77,7 @@ export const BrainRail: React.FC<Props> = ({ conversations, activeId, onOpen, on
         <label className="flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2.5 py-1.5 focus-within:border-[var(--osio-field-border-focus)]">
           <Search size={14} aria-hidden="true" className="shrink-0 text-[var(--osio-fg-subtle)]" />
           <span className="sr-only">Search chats</span>
-          <input
+          <input name="search-chats"
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}

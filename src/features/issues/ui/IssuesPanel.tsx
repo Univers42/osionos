@@ -130,7 +130,7 @@ export const IssuesPanel: React.FC = () => {
           </div>
         ) : null}
 
-        <select aria-label="Status filter" value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-sm">
+        <select name="status-filter" aria-label="Status filter" value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-sm">
           {STATUSES.map((value) => (
             <option key={value || "all"} value={value}>
               {value ? value : "All statuses"}
@@ -209,7 +209,7 @@ export const IssuesPanel: React.FC = () => {
                 <div className="flex flex-col gap-2 border-t border-[var(--osio-border-default)] pt-3">
                   <label className="flex items-center gap-2 text-sm">
                     <span>Status</span>
-                    <select
+                    <select name="issues-select"
                       aria-label="Status"
                       value={selected.status}
                       onChange={(event) => void changeStatus(event.target.value)}
@@ -226,7 +226,7 @@ export const IssuesPanel: React.FC = () => {
                     Open GitHub issue
                   </button>
                   <div className="flex flex-col gap-1">
-                    <input
+                    <input name="link-git-hub-issue"
                       type="text"
                       value={githubUrl}
                       onChange={(event) => setGithubUrl(event.target.value)}

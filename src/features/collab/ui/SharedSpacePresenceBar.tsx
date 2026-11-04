@@ -141,7 +141,7 @@ export const SharedSpacePresenceBar: React.FC = () => {
       >
         <Paperclip size={16} aria-hidden />
       </button>
-      <input ref={fileInput} type="file" hidden onChange={onPickFile} />
+      <input name="shared-space-presence-file" ref={fileInput} type="file" hidden onChange={onPickFile} />
       <CollabCaretLayer />
       <CollabFollowLayer />
       <CollabEditFlash />

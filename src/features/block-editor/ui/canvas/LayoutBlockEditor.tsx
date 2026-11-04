@@ -1278,7 +1278,7 @@ const LayoutNumberControl: React.FC<{
   <label className="osionos-layout-control-row">
     <span>{label}</span>
     <span className="osionos-layout-number-input">
-      <input type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <input name="layout-number" type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
       {suffix ? <span>{suffix}</span> : null}
     </span>
   </label>
@@ -1287,7 +1287,7 @@ const LayoutNumberControl: React.FC<{
 const LayoutToggle: React.FC<{ label: string; checked: boolean; onChange: (checked: boolean) => void }> = ({ label, checked, onChange }) => (
   <label className="osionos-layout-control-row">
     <span>{label}</span>
-    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    <input name="layout-checkbox" type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
   </label>
 );
 
