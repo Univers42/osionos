@@ -5,8 +5,11 @@
 // it. Before an answer, `ready` goes to each app origin by name, never "*": the browser delivers it
 // only where the parent's origin matches. It acts on three messages: a token (for the next shell's
 // socket, and nothing else), a hello (relayed to the node's whoami) and the dock's colours, once.
+// "Remember this computer" adds exactly two (Amendment 1, R10): a resume assertion, handled like the
+// token, and `forget`. Before `ready`, each app origin this frame holds a device secret for is told
+// `remembered`, by name, and nothing more: the secret itself never leaves the frame (R9).
 import { readAppMessage, type IdeMessage, type IdeState } from "../vscode/ideFrameProtocol.ts";
-import { createTokenCredentials, type PtyCredentials } from "./terminalSocket.ts";
+import { createFrameCredentials, type FrameCredentials, type RememberedStore } from "./terminalCredentials.ts";
 import { terminalColorsFrom, type TerminalColors } from "./terminalPort.ts";
 
 export const TERMINAL_COLORS_MESSAGE = "osionos-terminal/colors";
@@ -22,10 +25,15 @@ export interface TerminalAppLinkDeps {
   whoami: (nonce: string) => Promise<IdeMessage | null>;
   /** The editor page's own vocabulary from the app (editorFrameProtocol.ts); true when it was one. */
   onAppMessage?: (data: unknown) => boolean;
+  /** The node remembers computers (/api/machine/self says so); the terminal page only. */
+  remembers?: boolean;
+  store?: RememberedStore | null;
+  /** Tells the node to delete a device secret's record (POST /api/machine/forget). */
+  forgetOnNode?: (device: string) => Promise<void>;
 }
 
 export interface TerminalAppLink {
-  credentials: PtyCredentials;
+  credentials: FrameCredentials;
   /** The dock's colours, when it sends them. */
   colors: Promise<TerminalColors>;
   report(state: IdeState): void;
@@ -35,7 +43,7 @@ export interface TerminalAppLink {
   tell(message: unknown): void;
 }
 
-export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami, onAppMessage }: TerminalAppLinkDeps): TerminalAppLink | null {
+export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami, onAppMessage, remembers = false, store = null, forgetOnNode = async () => {} }: TerminalAppLinkDeps): TerminalAppLink | null {
   if (page.parent === page.self || page.parent !== page.top || appOrigins.length === 0) return null;
   let pinned: string | null = null;
   const send = (message: IdeMessage) => {
@@ -44,7 +52,20 @@ export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami
       try { post(message, origin); } catch { /* not an origin this browser can post to */ }
     }
   };
-  const credentials = createTokenCredentials(() => send({ type: "osionos-ide/need-session" }));
+  const credentials = createFrameCredentials({
+    ask: (kind) => send({ type: kind === "resume" ? "osionos-ide/need-resume" : "osionos-ide/need-session" }),
+    appOrigin: () => pinned,
+    remembers,
+    store,
+  });
+
+  async function forget(): Promise<void> {
+    const device = pinned ? store?.read(pinned) ?? null : null;
+    if (pinned) store?.remove(pinned);
+    if (device) await forgetOnNode(device).catch(() => {});
+    send({ type: "osionos-ide/forgotten" });
+  }
+
   let colorsTaken = false;
   let giveColors: (colors: TerminalColors) => void = () => {};
   const colors = new Promise<TerminalColors>((resolve) => { giveColors = resolve; });
@@ -67,12 +88,24 @@ export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami
     if (message?.type === "osionos-ide/session") {
       pinned ??= event.origin;
       credentials.give(message.token);
+    } else if (message?.type === "osionos-ide/resume") {
+      pinned ??= event.origin;
+      credentials.giveResume(message.assertion);
+    } else if (message?.type === "osionos-ide/forget") {
+      pinned ??= event.origin;
+      void forget();
     } else if (message?.type === "osionos-ide/hello") {
       pinned ??= event.origin;
       const failed = () => send({ type: "osionos-ide/state", state: "error" });
       void whoami(message.nonce).then((identity) => (identity ? send(identity) : failed()), failed);
     }
   });
+  if (remembers && store) {
+    for (const origin of appOrigins) {
+      if (!store.read(origin)) continue;
+      try { post({ type: "osionos-ide/remembered" }, origin); } catch { /* not an origin this browser can post to */ }
+    }
+  }
   send({ type: "osionos-ide/ready", node });
   return {
     credentials,

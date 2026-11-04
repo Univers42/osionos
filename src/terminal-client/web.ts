@@ -1,21 +1,30 @@
 // The terminal page on the web (groot ADR 0041): served by this computer's osionos-node at
 // /terminal/, framed in place by the app's dock. It names its machine (GET /api/machine/self), links
 // to the app (W10), and opens one WebSocket per shell to its own node, with a token the app minted
-// for the first and the node's session secret for the next (U6). Framed by anything but the app's
-// top page, it draws nothing.
+// for the first and the node's session secret for the next (U6). A computer the person chose to
+// remember opens instead with the device secret the node gave this frame, kept in this origin's own
+// storage, beside a resume assertion the app fetched with no emailed code (Amendment 1). Framed by
+// anything but the app's top page, it draws nothing.
 import { readCodeTheme, type CodeTheme } from "../features/ide/model/codeTheme";
 import { readSelf } from "../features/ide/vscode/machineSession";
 import { whoami } from "../features/ide/vscode/machineWhoami";
 import type { TerminalColors, TerminalPtyApi } from "../features/ide/model/terminalPort";
 import { linkTerminalToApp, type TerminalAppLink } from "../features/ide/model/terminalAppLink";
 import { PTY_SOCKET_PATH, ptyApiOverWebSocket, type SocketLike } from "../features/ide/model/terminalSocket";
+import { rememberedStoreOver } from "../features/ide/model/terminalCredentials";
 
 const appOrigins = (): string[] =>
   (document.querySelector<HTMLMetaElement>('meta[name="osionos-app-origin"]')?.content ?? "").split(" ").filter(Boolean);
 
-async function selfNode(): Promise<string | null> {
+async function selfNode(): Promise<{ node: string; remembers: boolean } | null> {
   const res = await fetch("/api/machine/self", { credentials: "same-origin" });
-  return res.status === 200 ? readSelf(await res.json().catch(() => null)) : null;
+  const body: unknown = res.status === 200 ? await res.json().catch(() => null) : null;
+  const node = readSelf(body);
+  return node ? { node, remembers: (body as { remember?: unknown }).remember === true } : null;
+}
+
+async function forgetOnNode(device: string): Promise<void> {
+  await fetch("/api/machine/forget", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ device }) });
 }
 
 // The dock shows "connected" once a shell runs, and its fallback when the first one fails.
@@ -38,8 +47,9 @@ function reporting(api: TerminalPtyApi, link: TerminalAppLink): TerminalPtyApi {
 const THEME_MESSAGE = "osionos-terminal/theme";
 
 export async function startOnTheWeb(start: (api: TerminalPtyApi, colors: TerminalColors) => Promise<void>, onTheme: (theme: CodeTheme) => void): Promise<void> {
-  const node = await selfNode();
-  if (!node) return;
+  const self = await selfNode();
+  if (!self) return;
+  const { node, remembers } = self;
   const link = linkTerminalToApp({
     page: { parent: window.parent, top: window.top, self: window },
     appOrigins: appOrigins(),
@@ -51,6 +61,9 @@ export async function startOnTheWeb(start: (api: TerminalPtyApi, colors: Termina
       return () => window.removeEventListener("message", onMessage);
     },
     whoami,
+    remembers,
+    store: rememberedStoreOver(() => window.localStorage),
+    forgetOnNode,
     onAppMessage: (data) => {
       const message = data as { type?: unknown; theme?: unknown } | null;
       if (message?.type !== THEME_MESSAGE) return false;

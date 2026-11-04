@@ -1,5 +1,5 @@
 // The pty socket's wire (devil verdict 2026-11-01, W3 and W5): the first message opens a shell with
-// a token or the frame's session secret, then only the desktop's write, resize and ack pass, each
+// a token or the frame's session secret (or a remembered computer's two factors, Amendment 1), then only the desktop's write, resize and ack pass, each
 // within its bounds. Everything else is null, and nothing here throws.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,10 +9,12 @@ import { anyWireText, seededRandom } from './support/seeded-values.mjs';
 
 const TOKEN = `osionos_mc1.abcdefgh.${'p'.repeat(200)}.${'s'.repeat(86)}`;
 const SECRET = 'A'.repeat(43);
+const RESUME = `osionos_mr1.abcdefgh.${'p'.repeat(200)}.${'s'.repeat(86)}`;
+const PROD = 'https://baas.tail10f2ea.ts.net:8443';
 const text = (value) => JSON.stringify(value);
 
 test('the first message is a token or a session secret, with the starting size, and nothing else', () => {
-	assert.deepEqual(readPtyAuth(text({ token: TOKEN, cols: 80, rows: 24 })), { kind: 'token', token: TOKEN, cols: 80, rows: 24 });
+	assert.deepEqual(readPtyAuth(text({ token: TOKEN, cols: 80, rows: 24 })), { kind: 'token', token: TOKEN, appOrigin: null, cols: 80, rows: 24 });
 	assert.deepEqual(readPtyAuth(text({ secret: SECRET, cols: 1, rows: 1000 })), { kind: 'secret', secret: SECRET, cols: 1, rows: 1000 });
 	const refused = [
 		'', 'null', '[]', '"x"', '{', text({ token: TOKEN }), text({ token: TOKEN, cols: 80, rows: 24, extra: 1 }),
@@ -21,6 +23,22 @@ test('the first message is a token or a session secret, with the starting size, 
 		text({ secret: 'short', cols: 80, rows: 24 }), text({ secret: `${SECRET}A`, cols: 80, rows: 24 }), text({ op: 'write', data: 'x' }),
 	];
 	for (const message of refused) assert.equal(readPtyAuth(message), null, message.slice(0, 80));
+});
+
+test('R1, R4: a token may name the pinned app origin; a remembered opening needs the device secret, the resume assertion and the origin', () => {
+	const size = { cols: 80, rows: 24 };
+	assert.deepEqual(readPtyAuth(text({ token: TOKEN, appOrigin: PROD, ...size })), { kind: 'token', token: TOKEN, appOrigin: PROD, ...size });
+	assert.deepEqual(readPtyAuth(text({ device: SECRET, assertion: RESUME, appOrigin: PROD, ...size })), { kind: 'remembered', device: SECRET, assertion: RESUME, appOrigin: PROD, ...size });
+	for (const dev of ['http://localhost:3001', 'app://osionos']) {
+		assert.equal(readPtyAuth(text({ token: TOKEN, appOrigin: dev, ...size }))?.appOrigin, dev, 'a dev or desktop origin is read, and remembered by nothing');
+	}
+	const refused = [
+		{ device: SECRET, ...size }, { assertion: RESUME, ...size }, { device: SECRET, assertion: RESUME, ...size }, { assertion: RESUME, appOrigin: PROD, ...size },
+		{ device: SECRET, appOrigin: PROD, ...size }, { device: SECRET, assertion: TOKEN, appOrigin: PROD, ...size }, { token: RESUME, ...size },
+		{ device: SECRET, assertion: RESUME, appOrigin: `${PROD}/`, ...size }, { token: TOKEN, appOrigin: 'https://a b', ...size }, { token: TOKEN, appOrigin: 'null', ...size },
+		{ token: TOKEN, appOrigin: 42, ...size }, { secret: SECRET, appOrigin: PROD, ...size }, { device: 'short', assertion: RESUME, appOrigin: PROD, ...size },
+	];
+	for (const message of refused) assert.equal(readPtyAuth(text(message)), null, JSON.stringify(message).slice(0, 120));
 });
 
 test('a first message over 4 KiB is refused before it is parsed', () => {
