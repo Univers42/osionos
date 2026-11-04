@@ -32,6 +32,7 @@ export type FeatureFlagName =
   | "osio.sqlrun"
   | "osio.publish"
   | "osio.whiteboard"
+  | "osio.whiteboard.inprocess"
   | "osio.panezoom"
   | "osio.ai.images"
   | "osio.ai.channel"

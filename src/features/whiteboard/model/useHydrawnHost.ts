@@ -1,17 +1,9 @@
 import { useEffect, type RefObject } from "react";
 
-import { api, getActivePageJwt } from "@/shared/api/client";
 import { whiteboardAppUrl } from "@/shared/config/whiteboardApp";
 
-import { TOKEN_REPLY, createTokenSource, originOf, readHydrawnMessage } from "./hydrawnHost";
-
-const whiteboardToken = createTokenSource({
-  getSession: getActivePageJwt,
-  async mint(session) {
-    const body = await api.post<{ token?: unknown; exp?: unknown }>("/api/whiteboard/token", {}, session);
-    return typeof body?.token === "string" && typeof body.exp === "number" ? { token: body.token, exp: body.exp } : null;
-  },
-});
+import { TOKEN_REPLY, originOf, readHydrawnMessage } from "./hydrawnHost";
+import { whiteboardToken } from "./whiteboardToken";
 
 /** True when `url` is a page of the configured hydrawn origin. */
 export function isWhiteboardFrameUrl(url: string): boolean {

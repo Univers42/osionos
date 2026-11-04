@@ -19,6 +19,8 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 COPY index.html tsconfig.json tsconfig.markdown-engine.json vite.config.ts eslint.config.js ./
 COPY src ./src
 COPY packages ./packages
+# The built hydrawn board library: vite.config.ts aliases @hydrawn/board to it.
+COPY vendor/hydrawn-board ./vendor/hydrawn-board
 COPY config ./config
 COPY scripts/vite ./scripts/vite
 # The theme rules are shared with the bridge, so they live in scripts/ (src imports them).
