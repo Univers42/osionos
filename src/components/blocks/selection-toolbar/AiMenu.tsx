@@ -49,7 +49,7 @@ export const AiSkillsSection: React.FC<{
   selectionText: string;
   onAskAI: AskAiHandler;
 }> = ({ selectionText, onAskAI }) => (
-  <>
+  <div className="pt-1">
     <p className="h-6 px-2 text-xs font-medium text-[var(--osio-fg-muted)]">
       Skills
     </p>
@@ -57,7 +57,6 @@ export const AiSkillsSection: React.FC<{
       <button
         key={skill.label}
         type="button"
-        role="menuitem"
         title={skill.label}
         data-selection-panel-control
         disabled={!selectionText}
@@ -70,7 +69,7 @@ export const AiSkillsSection: React.FC<{
         {skill.label}
       </button>
     ))}
-  </>
+  </div>
 );
 
 export const AiEditRow: React.FC<{
@@ -79,7 +78,6 @@ export const AiEditRow: React.FC<{
 }> = ({ selectionText, onAskAI }) => (
   <ToolbarRowButton
     title="Ask AI"
-    role="menuitem"
     disabled={!selectionText}
     onClick={() => onAskAI(selectionText)}
   >
