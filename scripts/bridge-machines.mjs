@@ -219,9 +219,11 @@ function createItemRoutes({ config, pg, kv }) {
 	}
 	// A remembered computer's second factor (R1, R2): no step-up, which is the point. Removal,
 	// sign-out-everywhere and account deletion revoke it by this route refusing to mint.
-	// Caveat: callerSession checks the access token statelessly, so after sign-out-everywhere this
-	// still mints until that token expires: GOTRUE_JWT_EXP is 3600 s in grobase's
-	// compose/base/auth-api.yml, not measured on production (verdict R-U1).
+	// Caveat: callerSession checks the bridge's own osionos_v1 token (30 d on production,
+	// OSIONOS_APP_SESSION_TTL_SECONDS, measured 2026-11-04), not a GoTrue JWT. Sign-out-everywhere
+	// stops it through the per-user cut-off, which this process polls every 10 s, so this still mints
+	// for up to 10 s after it. A poll older than 60 s answers 503 instead (bridge-session-tracker.mjs,
+	// verdict R-U1, groot ADR 0041).
 	async function resume(ctx, session, id) {
 		const presence = await spendIdentityCheck(ctx, session, id);
 		const minted = signResumeAssertion({ sub: session.userId, machine: id, aud: presence.ideOrigin, seed: ctx.setup.seed, now: ctx.now });

@@ -60,12 +60,17 @@ export interface FrameCredentialsDeps {
   /** The node said it remembers computers (/api/machine/self); an older node is never shown an origin (R14). */
   remembers?: boolean;
   store?: RememberedStore | null;
+  /** The page's `ready` already asked for the first grant (the dock answers it with one). */
+  readyAsks?: boolean;
 }
 
 /** Grants from the app, one asked for at a time: the app's handshake holds one nonce at a time, so a
  *  second ask before the first answer would void the first identity check. */
-export function createFrameCredentials({ ask, appOrigin = () => null, remembers = false, store = null }: FrameCredentialsDeps) {
+export function createFrameCredentials({ ask, appOrigin = () => null, remembers = false, store = null, readyAsks = false }: FrameCredentialsDeps) {
   let secret: string | null = null;
+  // #304: asking again before the ready's grant arrived crossed it in WebKit, and the dock minted a
+  // second token, which after the step-up window asks a remembered computer for an emailed code.
+  let readyAskOpen = readyAsks;
   // An app that never sent a resume predates them: asking it for one would wait forever.
   let appResumes = false;
   const grants: Grant[] = [];
@@ -82,6 +87,7 @@ export function createFrameCredentials({ ask, appOrigin = () => null, remembers 
   }
 
   function hand(grant: Grant): void {
+    readyAskOpen = false;
     const next = waiting.shift();
     if (next) next(grant);
     else grants.push(grant);
@@ -93,7 +99,7 @@ export function createFrameCredentials({ ask, appOrigin = () => null, remembers 
       for (;;) {
         if (secret) return { secret };
         const grant = grants.shift() ?? await new Promise<Grant>((resolve) => {
-          if (waiting.length === 0) ask(nextAsk());
+          if (waiting.length === 0 && !readyAskOpen) ask(nextAsk());
           waiting.push(resolve);
         });
         // An assertion with no device secret left (forgotten meanwhile) is useless: ask for a token.

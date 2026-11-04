@@ -85,7 +85,7 @@ describe('parallel sign-in', () => {
 		assert.equal(claims.roles[ADMIN_WORKSPACE_ID], 'admin');
 		assert.deepEqual(session.sharedWorkspaces.map((workspace) => [workspace._id, workspace.role, workspace.permissions]), [[ADMIN_WORKSPACE_ID, 'admin', ['read', 'update', 'admin']]]);
 		const kinds = stub.kinds();
-		assert.deepEqual(kinds.slice(3), ['ensure', 'embed'], 'ensure, then the member read again');
+		assert.deepEqual(kinds.slice(3), ['ensure', 'other:GET roles', 'embed'], 'ensure, the admin role lookup (no catalogue here, so no grant), then the member read again');
 		assert.equal(kinds.filter((kind) => kind === 'embed').length, 2, 'the first member read is discarded, not trusted');
 	});
 

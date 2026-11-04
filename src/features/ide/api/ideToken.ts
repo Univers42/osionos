@@ -193,8 +193,10 @@ export async function mintNodeToken(deps: Pick<IdeTokenDeps, "fetch" | "app">, w
 
 export async function getNodeToken(workspaceId: string): Promise<NodeMintResult> {
   const { sudoRequiredAwareFetch } = await import("@/shared/api/sudoRequired");
+  const { stepUpFirstFetch } = await import("@/shared/api/stepUpFirst");
   const client = await import("@/shared/api/client");
-  // The sudo-aware fetch raises the app's confirm-it-is-you prompt on a step-up refusal.
-  const fetchWithSudo = sudoRequiredAwareFetch((url, init) => fetch(url, init));
+  // The sudo-aware fetch raises the app's confirm-it-is-you prompt on a step-up refusal; the
+  // grant is read first, so a missing one never costs a logged 403.
+  const fetchWithSudo = sudoRequiredAwareFetch(stepUpFirstFetch((url, init) => fetch(url, init)));
   return mintNodeToken({ fetch: fetchWithSudo, app: async () => ({ apiBase: client.API_BASE, token: client.getActivePageJwt() }) }, workspaceId);
 }

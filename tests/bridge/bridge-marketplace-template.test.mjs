@@ -50,23 +50,47 @@ describe('marketplace header template', () => {
 			assert.equal((await send(base, TEMPLATE_PATH, asA, write(IDS.sharedA))).status, 200);
 			const own = await send(base, `${TEMPLATE_PATH}?databaseId=${IDS.privateA}`, asA);
 			assert.deepEqual([own.status, own.body], [200, { template }]);
-			const denied = await send(base, `${TEMPLATE_PATH}?databaseId=${IDS.privateA}`, asB);
-			assert.equal(denied.status, 404, denied.text);
+			// A page B may not read answers like a missing one (C134): no template, never A's.
+			const hidden = await send(base, `${TEMPLATE_PATH}?databaseId=${IDS.privateA}`, asB);
+			assert.deepEqual([hidden.status, hidden.body], [200, { template: null }]);
 			const shared = await send(base, `${TEMPLATE_PATH}?databaseId=${IDS.sharedA}`, asB);
 			assert.deepEqual([shared.status, shared.body], [200, { template }]);
 		});
 	});
 
-	it('refuses a non-member the template of a shared page, like the page itself', async () => {
+	it('withholds the template of a shared page from a non-member, as the page itself is withheld', async () => {
 		const world = teamWorld({ memberRole: 'viewer' });
 		world.osionos_workspace_members = world.osionos_workspace_members.filter((row) => row.user_id !== IDS.userB);
 		const mock = createPostgrestMock(world);
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			assert.equal((await send(base, TEMPLATE_PATH, asA, write(IDS.sharedA))).status, 200);
 			const page = await send(base, `/api/pages/${IDS.sharedA}`, asB);
+			assert.equal(page.status, 404, page.text);
 			const denied = await send(base, `${TEMPLATE_PATH}?databaseId=${IDS.sharedA}`, asB);
-			assert.ok([403, 404].includes(denied.status), denied.text);
-			assert.equal(denied.status, page.status);
+			assert.deepEqual([denied.status, denied.body], [200, { template: null }]);
+		});
+	});
+
+	// Production's marketplace database has no page row, so every app page's read was a
+	// console-logged 404 (2026-11-04). The gate's not-found is now an empty answer, read
+	// before any configuration row, so nothing about the page leaks.
+	it('answers no template, and reads no configuration, for a database page that does not exist', async () => {
+		const mock = createPostgrestMock(teamWorld({ memberRole: 'viewer' }));
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const missing = await send(base, `${TEMPLATE_PATH}?databaseId=${IDS.missing}`, asA);
+			assert.deepEqual([missing.status, missing.body], [200, { template: null }]);
+			assert.equal(mock.calls.some((call) => call.table === 'osionos_page_configurations'), false);
+		});
+	});
+
+	it('keeps the 403 of a member without the read permission on a page that exists', async () => {
+		const world = teamWorld({ memberRole: 'viewer' });
+		world.osionos_workspace_members.find((row) => row.user_id === IDS.userB).permissions = [];
+		const mock = createPostgrestMock(world);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			assert.equal((await send(base, TEMPLATE_PATH, asA, write(IDS.sharedA))).status, 200);
+			const denied = await send(base, `${TEMPLATE_PATH}?databaseId=${IDS.sharedA}`, asB);
+			assert.equal(denied.status, 403, denied.text);
 			assert.equal(JSON.stringify(denied.body).includes('cover'), false);
 		});
 	});

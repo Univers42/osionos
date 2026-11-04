@@ -20,11 +20,13 @@
  * raises the one SudoPrompt without any caller handling it.
  *
  * Caveat: `retryAfterSeconds` is read from the body, then the `Retry-After` header; a
- * 429 with neither reports no wait and the prompt says "a little later". `deletionStatus` reads any 404 as "no
- * request", so a bridge that lacks the route looks like an account with nothing scheduled.
+ * 429 with neither reports no wait and the prompt says "a little later". `deletionStatus` reads GET
+ * /deletion/status (a 200, `request: null` for none, so nothing logs) and any 404 as "no request",
+ * so a bridge older than that route looks like an account with nothing scheduled.
  */
 
 import { API_BASE } from '@/shared/api/client';
+import { stepUpFirstFetch } from '@/shared/api/stepUpFirst';
 import { sudoRequiredAwareFetch } from '@/shared/api/sudoRequired';
 import { classifySettingsError, settingsJwt } from '@/store/settings/settingsStoreUtils';
 
@@ -58,7 +60,7 @@ export interface ExportJob {
 
 export const EXPIRED_EXPORT_MESSAGE = 'This export expired; request a new one';
 
-const guardedFetch = sudoRequiredAwareFetch((input, init) => fetch(input, init));
+const guardedFetch = sudoRequiredAwareFetch(stepUpFirstFetch((input, init) => fetch(input, init)));
 
 function text(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
@@ -156,9 +158,10 @@ export const changeUsername = (username: string) =>
 
 export const requestDeletion = () => call('POST', '/api/account/deletion', {}, deletionOf);
 
-/** `data: null` is "no request is open": a 404 here is an answer, not a failure. */
+/** `data: null` is "no request is open"; a 404 is an older bridge without the status route. */
 export const deletionStatus = () =>
-  call<DeletionRequest | null>('GET', '/api/account/deletion', undefined, deletionOf, null);
+  call<DeletionRequest | null>('GET', '/api/account/deletion/status', undefined,
+    (payload) => (payload.request && typeof payload.request === 'object' ? deletionOf(payload.request as Record<string, unknown>) : null), null);
 
 export const cancelDeletion = () => call('DELETE', '/api/account/deletion', undefined, () => null);
 

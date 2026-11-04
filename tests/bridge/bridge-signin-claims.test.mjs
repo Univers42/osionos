@@ -74,14 +74,14 @@ describe('sign-in claims', () => {
 });
 
 describe('env-admin sign-in order', () => {
-	it('env-admin sign-in keeps upsert → PATCH → GET is_admin → POST members → embed', async () => {
+	it('env-admin sign-in keeps upsert → PATCH → GET is_admin → POST members → admin role lookup → embed', async () => {
 		const world = { osionos_workspaces: [workspaceRow(ADMIN_WORKSPACE_ID, OTHER_USER, 'Admin', '2026-10-02T00:00:00.000Z')] };
 		const stub = createSigninStub(world);
 		const { claims } = await signIn(stub, { email: 'boss@example.com' });
 		const kinds = stub.kinds();
 		assert.deepEqual(kinds.slice(0, 4), ['persist', 'patch-admin', 'get-admin', 'ensure']);
 		// The only step that changed with the member read: ids then the RPC became one embed.
-		assert.deepEqual(kinds.slice(4), ['embed']);
+		assert.deepEqual(kinds.slice(4), ['other:GET roles', 'embed']);
 		assert.equal(claims.isAdmin, true);
 		assert.equal(claims.roles[ADMIN_WORKSPACE_ID], 'admin');
 	});

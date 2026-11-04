@@ -29,6 +29,11 @@ registerHooks({
   },
 });
 
+/** GET /api/account/sudo, the grant stepUpFirstFetch reads before a gated request. */
+export function isStepUpRead(input: string, init?: RequestInit): boolean {
+  return (init?.method ?? "GET") === "GET" && String(input).endsWith("/api/account/sudo");
+}
+
 export type Call = { url: string; method: string; body: Record<string, unknown> | null };
 export type Reply = { status?: number; body: unknown; headers?: Record<string, string> };
 
@@ -36,6 +41,9 @@ export async function withBridge(reply: (call: Call) => Reply, run: () => Promis
   const original = globalThis.fetch;
   const calls: Call[] = [];
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    // The step-up read before a gated request (src/shared/api/stepUpFirst.ts, tested on its own)
+    // answers "active" and is not recorded: these suites assert the request that follows it.
+    if (isStepUpRead(input, init)) return new Response(JSON.stringify({ active: true }), { status: 200 });
     const call = { url: String(input), method: init?.method ?? "GET", body: typeof init?.body === "string" ? JSON.parse(init.body) : null };
     calls.push(call);
     const { status = 200, body, headers = {} } = reply(call);

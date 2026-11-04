@@ -117,6 +117,11 @@ function terminalSettings(colors: TerminalColors) {
     ...(appTheme ? codeThemeSettings(appTheme) : legacyTerminalSettings(colors)),
     // The dock owns closing; the last terminal closed leaves VS Code's panel with its "+" in place.
     "terminal.integrated.hideOnLastClosed": false,
+    // #305: "auto" tries xterm's WebGL renderer on every load, and where WebGL is missing (Firefox
+    // without a GPU) Firefox logs "Failed to create WebGL context" each time. A probe logs the same
+    // line, so the page draws with the DOM renderer.
+    // Caveat: the DOM renderer is slower on a flood of output (a large `cat`); not measured here.
+    "terminal.integrated.gpuAcceleration": "off",
   };
 }
 

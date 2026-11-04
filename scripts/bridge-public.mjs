@@ -24,6 +24,7 @@
  * nothing is ever written held and no audit row is ever written.
  */
 
+import { publishEnabled } from './bridge-capabilities.mjs';
 import { bearerToken, moderationWarningBody, readJsonBody, rest, sendJson } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { clientAddress } from './bridge-guard.mjs';
@@ -103,7 +104,7 @@ export function createPublicHandler({ config, verifySession, verifyPageAccess, f
 		if (!publicMatch && !publishMatch) return false;
 		const method = (request.method || 'GET').toUpperCase();
 		try {
-			if (env.OSIONOS_PUBLISH_ENABLED !== '1') return sendJson(response, 404, { ok: false, message: 'Not found.' }, requestConfig);
+			if (!publishEnabled(env)) return sendJson(response, 404, { ok: false, message: 'Not found.' }, requestConfig);
 			if (publicMatch && method === 'GET') return await publicRead(deps, request, publicMatch[1], response, requestConfig);
 			if (publishMatch) {
 				const session = verifySession(bearerToken(request), requestConfig);

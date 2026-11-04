@@ -30,6 +30,8 @@ export interface TerminalAppLinkDeps {
   store?: RememberedStore | null;
   /** Tells the node to delete a device secret's record (POST /api/machine/forget). */
   forgetOnNode?: (device: string) => Promise<void>;
+  /** The app answers `ready` with a grant, so the first shell does not ask again (terminalFrame.ts). */
+  readyAsks?: boolean;
 }
 
 export interface TerminalAppLink {
@@ -43,7 +45,7 @@ export interface TerminalAppLink {
   tell(message: unknown): void;
 }
 
-export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami, onAppMessage, remembers = false, store = null, forgetOnNode = async () => {} }: TerminalAppLinkDeps): TerminalAppLink | null {
+export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami, onAppMessage, remembers = false, store = null, forgetOnNode = async () => {}, readyAsks = false }: TerminalAppLinkDeps): TerminalAppLink | null {
   if (page.parent === page.self || page.parent !== page.top || appOrigins.length === 0) return null;
   let pinned: string | null = null;
   const send = (message: IdeMessage) => {
@@ -57,6 +59,7 @@ export function linkTerminalToApp({ page, appOrigins, node, post, listen, whoami
     appOrigin: () => pinned,
     remembers,
     store,
+    readyAsks,
   });
 
   async function forget(): Promise<void> {

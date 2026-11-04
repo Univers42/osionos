@@ -19,6 +19,7 @@
  * bridge session's session JWT is deliberately blank.
  */
 
+import { bridgeServes } from "@/shared/api/bridgeCapabilities";
 import { ApiError, api, getActivePageJwt } from "@/shared/api/client";
 import { errorMessage, parsePublishedPages, type PublishedPage } from "./publishedPages";
 
@@ -42,6 +43,8 @@ function isPublishDisabled(error: unknown): boolean {
 
 /** The caller's own published pages, with the status of each snapshot. */
 export async function fetchPublishedPages(): Promise<PublishedPagesOutcome> {
+  // A bridge that says publish is off is not asked: its 404 was a console error (#293).
+  if ((await bridgeServes("publish")) === false) return { kind: "disabled" };
   try {
     const body = await api.get<{ ok: true; pages: PublishedPage[] }>(
       "/api/account/published-pages",

@@ -77,6 +77,7 @@ import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
 import { createPersonalizationHandler } from './bridge-personalization.mjs';
 import { createRecsHandler } from './bridge-recs.mjs';
+import { createCapabilitiesHandler } from './bridge-capabilities.mjs';
 import { createEventsHandler } from './bridge-events.mjs';
 import { createIssuesHandler } from './bridge-issues.mjs';
 import { createActivityEmitter } from './bridge-activity.mjs';
@@ -2108,6 +2109,34 @@ async function ensureAdminWorkspaceMembership(userId, config, fetchImpl) {
 }
 
 /**
+ * The grant the users console reads. The flag names the admin role in the claim, but the console
+ * re-reads `public.user_roles` (bridge-account-users.mjs), so a flag with no row was refused there
+ * (osionos#296). `expires_at: null` renews an expired grant. Best-effort, like the membership: a
+ * failure leaves the console refused until the next sign-in, never the sign-in itself.
+ */
+async function ensureAdminRoleGrant(userId, config, fetchImpl) {
+	if (!config.serviceKey || !config.baasUrl) return;
+	try {
+		const roles = await baasRest(config, fetchImpl, 'roles?name=eq.admin&select=id&limit=1');
+		const roleId = Array.isArray(roles) ? roles[0]?.id : null;
+		if (!roleId) return;
+		await baasRest(config, fetchImpl, 'user_roles?on_conflict=user_id,role_id', {
+			method: 'POST',
+			body: { user_id: userId, role_id: roleId, expires_at: null },
+			prefer: 'resolution=merge-duplicates,return=minimal',
+		});
+	} catch {
+		console.warn(`[osionos-bridge] ensureAdminRoleGrant: writing the admin grant failed for ${userId}`);
+	}
+}
+
+/** What the identity flag implies: the admin workspace membership, then the role grant. */
+async function ensureAdminRights(userId, config, fetchImpl) {
+	await ensureAdminWorkspaceMembership(userId, config, fetchImpl);
+	await ensureAdminRoleGrant(userId, config, fetchImpl);
+}
+
+/**
  * With BaaS persistence on, a session must carry the workspace BaaS holds: the hash-derived
  * id of a skipped upsert names no row, so every page route would 403 for the session's 30 days.
  * One retry because a cold link is the usual cause (see BAAS_FETCH_TIMEOUT_MS); then a 503 the
@@ -2153,7 +2182,7 @@ async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
 	await assertAccountNotRefused(roleReader, payload.subject);
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
-	if (isAdmin) await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
+	if (isAdmin) await ensureAdminRights(payload.subject, config, fetchImpl);
 	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceIdOf(payload, persisted)], config, fetchImpl);
 	// The env admin is the root of trust (ADR 0005): the flag names the admin role, so the
 	// catalogue is not read for an admin at all.
@@ -2189,7 +2218,7 @@ async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
 	// admin's read is discarded: the flag is the root of trust and names the role.
 	const platformRole = isAdmin ? 'admin' : (roleRead.status === 'fulfilled' ? roleRead.value.role : null);
 	if (isAdmin) {
-		await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
+		await ensureAdminRights(payload.subject, config, fetchImpl);
 		const excludeIds = [privateWorkspaceIdOf(payload, persisted)];
 		return { persisted, isAdmin, platformRole, memberWorkspaces: await memberWorkspaceEntries(payload.subject, excludeIds, config, fetchImpl) };
 	}
@@ -3320,7 +3349,16 @@ async function handleMarketplaceTemplateRead(url, request, response, config, fet
 	const databaseId = requireUuid(url.searchParams.get('databaseId'), 'databaseId');
 	// G6 F1: the template is shared per database, so only who may read that page (the GET
 	// /api/pages/:id gate, workspace membership included) sees it — `shared` alone is not enough.
-	await readablePageAccess(request, databaseId, 'read', config, fetchImpl);
+	// The gate's not-found (a missing page, or one hidden from the caller: C134 keeps them alike)
+	// is no template rather than a 404: production's marketplace database has no page row, and
+	// every app page logged that 404 as a console error (2026-11-04). No config row is read then.
+	try {
+		await readablePageAccess(request, databaseId, 'read', config, fetchImpl);
+	} catch (error) {
+		if (error?.status !== 404) throw error;
+		json(response, 200, { template: null }, config);
+		return true;
+	}
 	const row = await fetchPageConfigRow(databaseId, MARKETPLACE_SYSTEM_USER, config, fetchImpl);
 	const cfg = row?.config && typeof row.config === 'object' ? row.config : {};
 	json(response, 200, { template: cfg.headerTemplate ?? null }, config);
@@ -5391,6 +5429,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.personalization(url, request, response, context.config)) return;
 	if (await context.social.recs(url, request, response, context.config)) return;
 	if (await context.social.events(url, request, response, context.config)) return;
+	if (await context.social.capabilities(url, request, response, context.config)) return;
 	if (await context.social.issues(url, request, response, context.config)) return;
 	if (await context.social.moderationConsole(url, request, response, context.config)) return;
 	if (await context.social.recsHealth(url, request, response, context.config)) return;
@@ -5491,6 +5530,7 @@ export function createBridgeServer(options = {}) {
 		personalization: createPersonalizationHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		recs: createRecsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env, pageAccessFilter }),
 		events: createEventsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
+		capabilities: createCapabilitiesHandler({ config, verifySession: verifyAppSessionToken, env }),
 		issues: createIssuesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		moderationConsole: createModerationConsoleHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		recsHealth: createRecsHealthHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
