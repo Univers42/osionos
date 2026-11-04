@@ -51,7 +51,9 @@ test.describe("account danger zone (offline build)", () => {
     await openFreshPage(page, baseURL);
     await openSettings(page);
     const profile = region(page);
-    await expect(profile.getByText("Passkeys aren't available on this server yet.")).toBeVisible();
+    await expect(profile.getByText("Two-step verification", { exact: true }).first()).toBeVisible();
+    // Offline, no server advertises passkeys, so the row is not shown at all (#293).
+    await expect(profile.getByText("Passkeys", { exact: true })).toHaveCount(0);
     await expect(profile.getByText("Support access")).toHaveCount(0);
     await expect(profile.getByRole("button", { name: "Load more devices" })).toHaveCount(0);
   });

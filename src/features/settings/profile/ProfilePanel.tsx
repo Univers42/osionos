@@ -61,9 +61,8 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
 
   useEffect(() => {
     runAsync(hydrateAccount(userId));
-    runAsync(hydratePasskeys());
     runAsync(hydrateEmails(userId, persona?.email));
-  }, [hydrateAccount, hydrateEmails, hydratePasskeys, persona?.email, userId]);
+  }, [hydrateAccount, hydrateEmails, persona?.email, userId]);
 
   const primaryEmail = emails.find((email) => email.isPrimary)?.email ?? persona?.email;
   const security = account?.security ?? {};
@@ -71,6 +70,11 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   const rows = signInRows(security);
   const passwordRow = rows.find((row) => row.id === 'password');
   const passkeysReported = rows.some((row) => row.id === 'passkeys');
+
+  // Only a server that advertises passkeys serves their route: asking any other one logged a 404.
+  useEffect(() => {
+    if (passkeysReported) runAsync(hydratePasskeys());
+  }, [hydratePasskeys, passkeysReported, userId]);
 
   return (
     <>
@@ -80,9 +84,7 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
         {username && <SettingRow title="Username" description={`@${username}`} action={<Button onClick={() => setModal({ name: 'username' })}>Change</Button>} />}
         {passwordRow && <SettingRow title="Password" description={security.hasPassword ? 'Password sign-in is available for this account.' : 'Add a password to keep another sign-in option available.'} action={<Button onClick={() => setModal({ name: 'password' })}>{passwordRow.label}</Button>} />}
         <SettingRow title="Two-step verification" description="Add another layer of security to your account" action={<Button onClick={() => setModal({ name: 'two-factor' })}>{twoStep.state.phase === 'ready' && twoStep.state.status.enabled ? 'Manage' : 'Add verification method'}</Button>} />
-        {passkeysReported
-          ? <SettingRow title="Passkeys" description={`${activePasskeys.length} passkey${activePasskeys.length === 1 ? '' : 's'} configured`} action={<Button onClick={() => setModal({ name: 'passkeys' })}><KeyRound size={14} /> Manage passkeys</Button>} />
-          : <SettingRow title="Passkeys" description="Passkeys aren't available on this server yet." />}
+        {passkeysReported && <SettingRow title="Passkeys" description={`${activePasskeys.length} passkey${activePasskeys.length === 1 ? '' : 's'} configured`} action={<Button onClick={() => setModal({ name: 'passkeys' })}><KeyRound size={14} /> Manage passkeys</Button>} />}
         <LinkedIdentitiesRow />
       </Section>
       {isAccountDeleteEnabled() && <AccountDangerZone username={username} email={primaryEmail} />}
