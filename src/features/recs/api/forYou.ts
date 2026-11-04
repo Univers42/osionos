@@ -24,6 +24,7 @@
  * issued to this user (C49).
  */
 
+import { bridgeServes } from "@/shared/api/bridgeCapabilities";
 import { API_BASE, api, getActiveJwt } from "@/shared/api/client";
 
 /** Why a page is in the slate. */
@@ -128,6 +129,8 @@ async function request<T>(
 
 /** The slate of the user: the pages, and why each of them is there. */
 export async function fetchForYou(): Promise<ForYouResult<ForYou>> {
+  // A bridge that says the recommender is off is not asked: its 404 was a console error (#293).
+  if ((await bridgeServes("recs")) === false) return { ok: false, code: "unavailable", message: UNAVAILABLE };
   const result = await request<ForYou>("GET", "/api/recs/for-you");
   if (!result.ok) return result;
   const value = result.value;
