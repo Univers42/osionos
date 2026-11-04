@@ -88,6 +88,7 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   recordLimit: isIntegerAtLeast(1),
   schemaVersion: isIntegerAtLeast(0),
   mediaWidth: isMediaWidth,
+  blockHeight: isIntegerAtLeast(1),
   codeView: isOneOf("preview", "source"),
   codeTheme: isOneOf("dark", "light"),
   mediaShape: isOneOf("rounded", "circle"),

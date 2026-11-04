@@ -166,7 +166,8 @@ export interface Block {
   asset?: string;           /** Serialized ui-collection asset value for media blocks */
   /** Image made by the AI: its provenance (never the prompt). Shown as an "AI-generated" label. */
   aiGenerated?: { model: string; runId: string; createdAt: string };
-  mediaWidth?: number;      /** Display width percentage for media blocks */
+  mediaWidth?: number;      /** Width as a percentage of the column for a resizable block (media, whiteboard, embed, table, inline database); centred when under 100 */
+  blockHeight?: number;     /** Frame height in px a table or inline database was resized to (it scrolls inside); unset = natural height */
   mediaShape?: 'rounded' | 'circle'; /** Image crop shape (circle = avatar; default rounded) */
   mediaAspect?: string;     /** CSS aspect-ratio for image blocks (e.g. "16 / 9"); "original"/unset = natural */
   mediaAlt?: string;        /** Alt text for image media blocks (accessibility + failed-load text) */
