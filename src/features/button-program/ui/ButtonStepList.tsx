@@ -60,7 +60,7 @@ const Select = <T extends string>({ label, value, options, onChange }: {
   options: Record<T, string>;
   onChange: (value: T) => void;
 }) => (
-  <select aria-label={label} className={FIELD} value={value} onChange={(event) => onChange(event.target.value as T)}>
+  <select name="button-step-select" aria-label={label} className={FIELD} value={value} onChange={(event) => onChange(event.target.value as T)}>
     {(Object.keys(options) as T[]).map((key) => (
       <option key={key} value={key}>{options[key]}</option>
     ))}
@@ -85,7 +85,7 @@ const ValueField: React.FC<{ label: string; value: ProgramValue; onChange: (valu
         />
       )}
       {(kind === "text" || kind === "number" || kind === "formula") && (
-        <input
+        <input name="button-step-field"
           aria-label={label}
           className={`${FIELD} min-w-[8rem] flex-1`}
           type={kind === "number" ? "number" : "text"}
@@ -139,7 +139,7 @@ const ActionFields: React.FC<{ action: ProgramAction; onChange: (action: Program
     )}
     {action.type === "set_property" && (
       <>
-        <input
+        <input name="property-name"
           aria-label="Property name"
           className={FIELD}
           placeholder="Property name"
@@ -155,7 +155,7 @@ const ActionFields: React.FC<{ action: ProgramAction; onChange: (action: Program
 type Edit = (path: ListPath, index: number, step: DraftStep) => void;
 
 const NameField: React.FC<{ label: string; value: string; onChange: (value: string) => void }> = ({ label, value, onChange }) => (
-  <input aria-label={label} className={FIELD} placeholder={label} value={value} onChange={(event) => onChange(event.target.value)} />
+  <input name="button-step-field" aria-label={label} className={FIELD} placeholder={label} value={value} onChange={(event) => onChange(event.target.value)} />
 );
 
 const StepFields: React.FC<{

@@ -20,6 +20,7 @@ import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import type { SettingsSectionId } from "@/features/settings/model/sections";
 import { usePageStore } from "@/store/usePageStore";
 import { useIssueReportRequest } from "@/features/issues/model/issueReportRequest";
+import { LEGAL_LINKS } from "@/features/legal/model/siteLegalLinks";
 import { whiteboardAppUrl } from "@/shared/config/appUrls";
 import { consoleTab, homeTab, trashTab, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
@@ -152,6 +153,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
         { id: "help.docs", label: "Documentation", run: () => { globalThis.open(DOCS_URL, "_blank", "noopener"); } },
         { id: "help.shortcuts", label: "Keyboard shortcuts", run: () => ctx.openSettings("shortcuts") },
         { id: "help.report", label: "Report an issue…", run: () => useIssueReportRequest.getState().open({ title: "", description: "" }) },
+        ...LEGAL_LINKS.map((link) => ({ id: `help.${link.id}`, label: link.label, run: () => { globalThis.open(link.href, "_blank", "noopener"); } })),
         { id: "help.about", label: "About osionos", run: () => useToastStore.getState().push({ kind: "info", title: "osionos", description: "Notion-style collaborative workspace" }) },
       ],
     },

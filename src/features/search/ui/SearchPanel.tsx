@@ -105,7 +105,7 @@ export const SearchPanel: React.FC = () => {
     <div className="relative flex h-full min-h-0 flex-col">
       <div className="space-y-1.5 px-2 pt-2">
         <div className="relative">
-          <input
+          <input name="search-query"
             value={s.query}
             onChange={(e) => s.patch({ query: e.target.value })}
             placeholder="Search"
@@ -120,7 +120,7 @@ export const SearchPanel: React.FC = () => {
         </div>
 
         <div className="relative">
-          <input
+          <input name="replace-text"
             value={s.replaceText}
             onChange={(e) => s.patch({ replaceText: e.target.value })}
             placeholder="Replace"
@@ -146,10 +146,10 @@ export const SearchPanel: React.FC = () => {
         </button>
         {s.showOptions ? (
           <div className="space-y-1.5 pb-1">
-            <input value={s.includeGlob} onChange={(e) => s.patch({ includeGlob: e.target.value })} placeholder="files to include (e.g. *report*)" aria-label="Files to include" className={inputClass} />
-            <input value={s.excludeGlob} onChange={(e) => s.patch({ excludeGlob: e.target.value })} placeholder="files to exclude" aria-label="Files to exclude" className={inputClass} />
+            <input name="files-to-include" value={s.includeGlob} onChange={(e) => s.patch({ includeGlob: e.target.value })} placeholder="files to include (e.g. *report*)" aria-label="Files to include" className={inputClass} />
+            <input name="files-to-exclude" value={s.excludeGlob} onChange={(e) => s.patch({ excludeGlob: e.target.value })} placeholder="files to exclude" aria-label="Files to exclude" className={inputClass} />
             <label className="flex items-center gap-2 px-1 text-xs text-[var(--osio-fg-muted)]">
-              <input type="checkbox" checked={s.openEditorsOnly} onChange={(e) => s.patch({ openEditorsOnly: e.target.checked })} />
+              <input name="open-editors-only" type="checkbox" checked={s.openEditorsOnly} onChange={(e) => s.patch({ openEditorsOnly: e.target.checked })} />
               Search only in open editors
             </label>
           </div>

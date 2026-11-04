@@ -132,7 +132,7 @@ export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
             key={entry.id}
             className="flex items-center gap-1 text-xs text-[var(--osio-fg-default)]"
           >
-            <input
+            <input name="database-checkbox"
               type="checkbox"
               checked={checked.has(entry.id)}
               disabled={!checked.has(entry.id) && atCap}
@@ -149,7 +149,7 @@ export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
     <>
       <label className="flex items-center gap-1.5 text-xs text-[var(--osio-fg-muted)]">
         <span>Database</span>
-        <select
+        <select name="pipeline-database"
           aria-label="Pipeline database"
           value={selectedId}
           onChange={(event) => changeDatabase(event.target.value)}
@@ -164,7 +164,7 @@ export const DatabaseControls: React.FC<DatabaseControlsProps> = ({
       </label>
       <label className="flex items-center gap-1.5 text-xs text-[var(--osio-fg-muted)]">
         <span>Status</span>
-        <select
+        <select name="status-property"
           aria-label="Status property"
           value={statusValue}
           onChange={(event) =>

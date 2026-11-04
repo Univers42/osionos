@@ -175,7 +175,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
         onSubmit={(e) => { e.preventDefault(); void run(); }}
         className="flex items-end gap-[var(--osio-space-2)] border-t border-[var(--osio-border-default)] p-[var(--osio-space-2)]"
       >
-        <textarea
+        <textarea name="message-the-assistant"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {

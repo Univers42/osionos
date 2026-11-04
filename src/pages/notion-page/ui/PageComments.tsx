@@ -71,7 +71,7 @@ export const PageComments: React.FC<Props> = ({ pageId, open, onClose }) => {
         )}
       </div>
       <form className="flex items-end gap-2" onSubmit={handleSubmit}>
-        <textarea
+        <textarea name="comment-draft"
           value={commentDraft}
           onChange={(event) => setCommentDraft(event.target.value)}
           rows={2}

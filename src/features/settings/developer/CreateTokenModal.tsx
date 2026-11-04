@@ -55,7 +55,7 @@ const SecretView: React.FC<{ secret: string; onClose: () => void }> = ({ secret,
     <div className="space-y-4">
       <p role="status" className="text-sm font-medium text-[var(--osio-fg-default)]">Copy it now — it is not shown again.</p>
       <div className="flex gap-2">
-        <Input readOnly aria-label="Your new token" value={secret} onFocus={(event) => event.currentTarget.select()} className="font-mono" />
+        <Input name="new-token" readOnly aria-label="Your new token" value={secret} onFocus={(event) => event.currentTarget.select()} className="font-mono" />
         <Button onClick={copy} aria-label="Copy token">{copied === "done" ? <Check size={16} /> : <Copy size={16} />}{copied === "done" ? "Copied" : "Copy"}</Button>
       </div>
       {copied === "failed" && <p role="alert" className="text-sm text-[var(--osio-danger)]">Copy failed. Select the token and copy it by hand.</p>}

@@ -59,7 +59,7 @@ export function AutomationManagerPanel(): React.JSX.Element {
           <button type="button" className={TOOLBAR_BUTTON} onClick={exportConfig}><Download size={14} /> Export</button>
           <button type="button" className={TOOLBAR_BUTTON} onClick={() => fileRef.current?.click()}><Upload size={14} /> Import</button>
           <button type="button" className={TOOLBAR_BUTTON} onClick={() => store.resetAll()}><RotateCcw size={14} /> Reset all</button>
-          <input
+          <input name="automation-manager-file"
             ref={fileRef}
             type="file"
             accept="application/json"

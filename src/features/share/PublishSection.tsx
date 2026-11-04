@@ -59,7 +59,7 @@ export const PublishSection: React.FC<{ pageId: string }> = ({ pageId }) => {
       </div>
       {token && (
         <div className="mt-2 flex items-center gap-2">
-          <input readOnly value={publicUrl} className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-2xs text-[var(--osio-fg-default)]" />
+          <input name="public-url" readOnly value={publicUrl} className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-2xs text-[var(--osio-fg-default)]" />
           <button type="button" onClick={() => void navigator.clipboard.writeText(publicUrl)} className="shrink-0 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">Copy</button>
         </div>
       )}

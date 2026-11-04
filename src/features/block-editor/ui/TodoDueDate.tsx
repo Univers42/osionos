@@ -32,7 +32,7 @@ export const TodoDueDate: React.FC<{ dueAt?: string; checked?: boolean; onChange
 
   if (editing) {
     return (
-      <input
+      <input name="due-date"
         type="date"
         autoFocus
         defaultValue={dueKey}

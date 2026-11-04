@@ -95,7 +95,7 @@ export const PageMenu: React.FC<PageMenuProps> = ({
     >
       <div className="relative px-2 pb-1">
         <Search size={14} aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--osio-fg-muted)]" />
-        <input
+        <input name="search-actions"
           autoFocus
           value={query}
           onChange={(event) => { setQuery(event.target.value); setOpenSubmenu(null); }}

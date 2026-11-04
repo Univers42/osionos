@@ -76,7 +76,7 @@ export const MessageEditForm: React.FC<MessageEditFormProps> = ({ messageId, con
       onSubmit={(event) => { event.preventDefault(); void submit(); }}
       className="mt-1 flex flex-wrap items-center gap-2"
     >
-      <input
+      <input name="message-edit-field"
         ref={inputRef}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}

@@ -50,7 +50,7 @@ export const ModerationPanelView: React.FC<ModerationPanelViewProps> = (props) =
     <Section title="Reports" className="mt-6">
       <label className="mb-3 flex items-center gap-2 text-sm text-[var(--osio-fg-muted)]">
         Status
-        <select className={fieldClass} value={status} onChange={(event) => onStatus(event.target.value as ReportStatus)}>
+        <select name="moderation-select" className={fieldClass} value={status} onChange={(event) => onStatus(event.target.value as ReportStatus)}>
           {STATUSES.map((value) => <option key={value} value={value}>{value}</option>)}
         </select>
       </label>

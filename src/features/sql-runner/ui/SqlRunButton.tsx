@@ -35,7 +35,7 @@ export const SqlRunButton: React.FC<{ block: Block; onUpdateBlock: (blockId: str
   return (
     <div className="flex flex-col gap-1.5 border-t border-[var(--osio-code-border)] px-3 py-2">
       <div className="flex items-center gap-2">
-        <select
+        <select name="mount-id"
           value={mountId}
           onChange={(event) => onUpdateBlock(block.id, { sqlMountId: event.target.value })}
           className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs text-[var(--osio-fg-default)]"

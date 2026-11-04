@@ -60,7 +60,7 @@ const DiscoverGrid: React.FC<{ isConnected: (id: string) => boolean; busyId: str
     <div className="space-y-4">
       <div className="flex items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2.5">
         <Search size={16} className="text-[var(--osio-fg-subtle)]" />
-        <input
+        <input name="search-connections"
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

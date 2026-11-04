@@ -78,7 +78,7 @@ export const SharePeoplePicker: React.FC<SharePeoplePickerProps> = ({ people, te
     <div className="space-y-1">
       <label className="flex h-8 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm text-[var(--osio-fg-muted)] focus-within:border-[var(--osio-accent)]">
         <Search size={14} />
-        <input
+        <input name="share-people-field"
           value={query}
           disabled={disabled}
           onChange={(event) => setQuery(event.target.value)}
@@ -125,7 +125,7 @@ export const SharePeoplePicker: React.FC<SharePeoplePickerProps> = ({ people, te
       <div className="mt-2 space-y-1" data-attribute-target>
         <p className="osio-menu-label">Attribute</p>
         <div className="flex items-center gap-2">
-          <Input
+          <Input name="attribute-name"
             value={attrName}
             disabled={disabled}
             onChange={(event) => setAttrName(event.target.value)}
@@ -134,7 +134,7 @@ export const SharePeoplePicker: React.FC<SharePeoplePickerProps> = ({ people, te
             aria-label="Attribute name"
             className="min-w-0 flex-1"
           />
-          <Input
+          <Input name="attribute-value"
             value={attrValue}
             disabled={disabled}
             onChange={(event) => setAttrValue(event.target.value)}

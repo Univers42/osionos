@@ -75,18 +75,18 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
         {mode === 'signup' && (
           <label className="mb-3 block text-xs font-medium text-[var(--osio-fg-muted)]">
             <span>Nom</span>
-            <Input value={name} onChange={(event) => setName(event.target.value)} className="mt-1" placeholder="Nom affiché" />
+            <Input name="display-name" value={name} onChange={(event) => setName(event.target.value)} className="mt-1" placeholder="Nom affiché" />
           </label>
         )}
 
         <label className="mb-3 block text-xs font-medium text-[var(--osio-fg-muted)]">
           <span>Email</span>
-          <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1" placeholder="name@example.com" required />
+          <Input name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1" placeholder="name@example.com" required />
         </label>
 
         <label className="mb-3 block text-xs font-medium text-[var(--osio-fg-muted)]">
           <span>Mot de passe</span>
-          <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1" required />
+          <Input name="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1" required />
         </label>
 
         <Checkbox

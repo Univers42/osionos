@@ -55,7 +55,7 @@ export const PeoplePickerList: React.FC<PeoplePickerListProps> = ({
 
   return (
     <div className="rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1.5">
-      <input
+      <input name="people-field"
         autoFocus={autoFocus}
         value={query}
         onChange={(event) => setQuery(event.target.value)}

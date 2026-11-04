@@ -10,13 +10,23 @@ import { fillCell, insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 test("a database the server refuses to save shows one toast and keeps retrying", async ({ page, baseURL }) => {
   const posts = [];
+  // The page the database goes on is created through the bridge once a session exists: a
+  // stub that answered `{}` gave the new page no id, so the editor stayed on Home (#292).
+  const pages = new Map();
   await stubBridge(page, (url, request) => {
+    if (url.pathname === "/api/pages" && request.method() === "POST") {
+      const created = { ...request.postDataJSON(), _id: `6a17600000000000000${String(pages.size).padStart(5, "0")}`, archivedAt: null };
+      pages.set(created._id, created);
+      return { json: created };
+    }
+    const stored = pages.get(url.pathname.replace("/api/pages/", ""));
+    if (stored && request.method() === "GET") return { json: stored };
     if (url.pathname === "/api/object-databases" && request.method() === "GET") return { json: { databases: [] } };
     if (url.pathname === "/api/object-databases" && request.method() === "POST") {
       posts.push(Date.now());
       return { status: 403, json: { message: "BaaS request failed with 403: nginx" } };
     }
-    if (url.pathname === "/api/pages/all") return { json: [] };
+    if (url.pathname === "/api/pages/all") return { json: [...pages.values()] };
     return { json: {} };
   });
   // A bridge session present at boot: database sync starts only with a session token.

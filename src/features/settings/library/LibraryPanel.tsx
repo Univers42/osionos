@@ -70,7 +70,7 @@ export const LibraryPanel = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <MiniTabs active="All" tabs={[{ label: 'All', count: assets.length }, { label: 'Images', count: imageAssets.length }, { label: 'Files' }]} />
           <div>
-            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleLibraryUpload} />
+            <input name="library-file" ref={fileInputRef} type="file" multiple className="hidden" onChange={handleLibraryUpload} />
             <Button onClick={() => fileInputRef.current?.click()}><Upload size={16} /> Add import</Button>
           </div>
         </div>

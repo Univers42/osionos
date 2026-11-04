@@ -38,7 +38,7 @@ export const ImageTagChips: React.FC<ImageTagChipsProps> = ({ tags, text, onAdd,
         ))}
         {onAdd ? (
           <li>
-            <input
+            <input name="add-tag"
               type="text"
               value={draft}
               aria-label="Add tag"

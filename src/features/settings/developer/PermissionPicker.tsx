@@ -26,7 +26,7 @@ function toggled(list: string[], value: string): string[] {
 
 const Choice: React.FC<{ label: string; checked: boolean; onChange: () => void }> = ({ label, checked, onChange }) => (
   <label className="flex items-center gap-2 text-sm text-[var(--osio-fg-default)]">
-    <input type="checkbox" checked={checked} onChange={onChange} className={boxClass} />
+    <input name="permission-checkbox" type="checkbox" checked={checked} onChange={onChange} className={boxClass} />
     {label}
   </label>
 );

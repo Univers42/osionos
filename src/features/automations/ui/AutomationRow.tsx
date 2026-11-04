@@ -61,13 +61,13 @@ export function AutomationRow(props: AutomationRowProps): React.JSX.Element {
         {recorder.recording ? "Press keys…" : combo ? formatCombo(combo) : "Set shortcut"}
       </button>
 
-      <select value={automation.actions[0]?.commandId} onChange={(event) => onCommand(event.target.value as CommandId)} className={`flex-1 basis-0 ${SELECT_CLASS}`}>
+      <select name="command-id" value={automation.actions[0]?.commandId} onChange={(event) => onCommand(event.target.value as CommandId)} className={`flex-1 basis-0 ${SELECT_CLASS}`}>
         {ALL_COMMANDS.map((command) => (
           <option key={command.id} value={command.id}>{command.title}</option>
         ))}
       </select>
 
-      <select value={automation.trigger.when} onChange={(event) => onWhen(event.target.value as WhenName)} className={`flex-1 basis-0 @min-[560px]:w-40 @min-[560px]:flex-none ${SELECT_CLASS}`}>
+      <select name="when" value={automation.trigger.when} onChange={(event) => onWhen(event.target.value as WhenName)} className={`flex-1 basis-0 @min-[560px]:w-40 @min-[560px]:flex-none ${SELECT_CLASS}`}>
         {WHEN_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>
         ))}

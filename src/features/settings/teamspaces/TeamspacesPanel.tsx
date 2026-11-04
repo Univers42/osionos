@@ -40,7 +40,7 @@ export const TeamspacesPanel: React.FC = () => {
   const [archiving, setArchiving] = useState<{ id: string; name: string } | null>(null);
   const activeTeamspaces = teamspaces.filter((teamspace) => !teamspace.archivedAt);
   const rows = activeTeamspaces.map((teamspace) => [
-    <input key={`${teamspace._id}-name`} aria-label="Teamspace name" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={teamspace.name} onBlur={(event) => updateTeamspace(workspaceId, teamspace._id, { name: event.target.value })} />,
+    <input name="teamspace-name" key={`${teamspace._id}-name`} aria-label="Teamspace name" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={teamspace.name} onBlur={(event) => updateTeamspace(workspaceId, teamspace._id, { name: event.target.value })} />,
     teamspace.owners.join(', ') || activeUserId,
     <Dropdown key={`${teamspace._id}-access`} label={`${teamspace.name} access`} value={teamspace.access} options={[{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'private', label: 'Private' }]} onChange={(value) => updateTeamspace(workspaceId, teamspace._id, { access: value as 'open' | 'closed' | 'private' })} align="end" width="auto" />,
     <Button key={`${teamspace._id}-archive`} tone="danger-subtle" onClick={() => setArchiving({ id: teamspace._id, name: teamspace.name })}>Archive</Button>,
