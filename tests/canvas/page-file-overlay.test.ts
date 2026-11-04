@@ -172,6 +172,13 @@ test("valid enums, boundary numbers and layout values round-trip", () => {
   assert.deepEqual(applyOverlay([para("n")], collectOverlay([original])), [{ ...original, content: "" }]);
 });
 
+test("a width wider than the column (mediaWidth above 100) round-trips; an absurd one does not", () => {
+  const wide = withExtras({ mediaWidth: 211.9 });
+  assert.deepEqual(applyOverlay([para("n")], collectOverlay([wide])), [{ ...wide, content: "" }]);
+  const absurd = Object.values(collectOverlay([withExtras({ mediaWidth: 1001 })]));
+  assert.ok(absurd.every((entry) => !("mediaWidth" in entry)));
+});
+
 test("children are rebuilt; a missing entry still walks them", () => {
   const overlay: BlockOverlay = {
     "0.0": { t: "paragraph", id: "deep", children: [{ id: "injected" }] },
