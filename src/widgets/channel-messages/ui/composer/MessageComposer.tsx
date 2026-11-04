@@ -167,7 +167,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
             data-dictation-composer="channel"
             className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 focus-within:border-[var(--osio-accent)]"
           >
-            <textarea
+            <textarea name="message"
               ref={textareaRef}
               value={draft.text}
               onChange={(e) => { actions.onTextChange(e.target.value); setMention(mentionQuery(e.target.value, e.target.selectionStart ?? e.target.value.length)); }}
@@ -210,7 +210,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           </div>
         )}
 
-        <input
+        <input name="slash-attachment-file"
           ref={slashFileRef}
           type="file"
           accept={slashAccept || undefined}

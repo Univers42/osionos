@@ -108,7 +108,7 @@ export const TwoFactorModal: React.FC<Props> = ({ userId, state, preferred, onPr
         {step.name === 'scan' && (
           <>
             <img alt="Two-step verification QR code" className="h-40 w-40 rounded-md border border-[var(--osio-border-default)]" src={step.qr} />
-            <input className={FIELD} aria-label="6-digit code" inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value.replaceAll(/\D/g, '').slice(0, 6))} placeholder="6-digit code" />
+            <input name="6-digit-code" className={FIELD} aria-label="6-digit code" inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value.replaceAll(/\D/g, '').slice(0, 6))} placeholder="6-digit code" />
             <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" disabled={busy || code.length !== 6} onClick={() => runAsync(confirm())}>Verify</Button></div>
           </>
         )}

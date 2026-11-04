@@ -48,7 +48,7 @@ export const DataSourcePicker: React.FC<DataSourcePickerProps> = ({ current, onP
       aria-label="Select data source"
     >
       <div className="flex items-center gap-2 pb-2">
-        <input
+        <input name="search-data-sources"
           autoFocus
           value={query}
           onChange={(event) => setQuery(event.target.value)}

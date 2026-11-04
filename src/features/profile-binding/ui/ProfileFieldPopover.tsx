@@ -123,14 +123,14 @@ export const ProfileFieldPopover: React.FC<PopoverProps> = ({ block, anchorRef, 
       className={`${MENU_PANEL_CLASS} absolute left-0 top-full z-20 mt-1 w-[min(24rem,90vw)] p-3`}>
       <Section title="Profile field">
         <SettingRow stack title="Field" action={
-          <select aria-label="Profile field" className={FIELD} autoFocus value={known ? block.fieldBind : ""}
+          <select name="profile-field" aria-label="Profile field" className={FIELD} autoFocus value={known ? block.fieldBind : ""}
             onChange={(event) => changeField(event.target.value)}>
             {!known && <option value="" disabled>Unknown field</option>}
             {README_FIELDS.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}
           </select>
         } />
         <SettingRow stack title="Style" action={
-          <select aria-label="Profile field style" className={FIELD} value={String(styleOf(block))}
+          <select name="profile-field-style" aria-label="Profile field style" className={FIELD} value={String(styleOf(block))}
             onChange={(event) => changeStyle(event.target.value)}>
             {STYLES.map((style) => <option key={style.value} value={String(style.value)}>{style.label}</option>)}
           </select>

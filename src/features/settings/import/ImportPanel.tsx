@@ -182,7 +182,7 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
           <h4 className="mt-3 font-medium text-[var(--osio-fg-default)]">Import your content to osionos</h4>
           <p className="mt-2 text-sm text-[var(--osio-fg-muted)]">ZIP, Markdown, HTML, JSON and text files become pages; images, audio and video go to your asset library.</p>
           <p className="mt-1 text-xs text-[var(--osio-fg-subtle)]">A zip holds up to 2000 files of 32 MB each.</p>
-          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleLibraryImport} />
+          <input name="import-file" ref={fileInputRef} type="file" multiple className="hidden" onChange={handleLibraryImport} />
           <span className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-1.5 text-sm font-medium text-[var(--osio-fg-default)]"><Upload size={16} /> Choose files</span>
         </button>
       </Section>

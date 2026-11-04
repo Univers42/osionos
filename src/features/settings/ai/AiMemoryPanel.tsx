@@ -98,7 +98,7 @@ export const AiMemoryPanel: React.FC<{ workspaces: AccessTokenWorkspace[] }> = (
     <section aria-labelledby="ai-memory-title" className="mt-6">
       <h3 id="ai-memory-title" className="text-sm font-semibold text-[var(--osio-fg-default)]">AI memory</h3>
       {workspaces.length > 1 && (
-        <select aria-label="Workspace" className={FIELD_INPUT} value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)}>
+        <select name="workspace" aria-label="Workspace" className={FIELD_INPUT} value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)}>
           {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
         </select>
       )}

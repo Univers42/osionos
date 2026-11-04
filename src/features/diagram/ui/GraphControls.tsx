@@ -88,7 +88,7 @@ export const GraphControls: React.FC<GraphControlsProps> = ({
     <>
       <label className="flex items-center gap-1.5 text-xs text-[var(--osio-fg-muted)]">
         <span>Depth</span>
-        <select
+        <select name="graph-depth"
           aria-label="Graph depth"
           value={depth}
           onChange={(event) =>
@@ -116,7 +116,7 @@ export const GraphControls: React.FC<GraphControlsProps> = ({
               key={kind}
               className="flex items-center gap-1 text-xs text-[var(--osio-fg-default)]"
             >
-              <input
+              <input name="graph-checkbox"
                 type="checkbox"
                 checked={checked.has(kind)}
                 // The last kind stays on: an empty list means EVERY kind, so

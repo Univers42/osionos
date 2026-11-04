@@ -69,7 +69,7 @@ export const MediaSettingsBar: React.FC<MediaSettingsBarProps> = ({
 
     <div className="flex items-center gap-2 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs text-[var(--osio-fg-muted)]">
       <SlidersHorizontal size={12} />
-      <input
+      <input name="media-width"
         type="range"
         min={25}
         max={100}

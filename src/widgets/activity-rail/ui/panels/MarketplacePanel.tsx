@@ -85,7 +85,7 @@ export const MarketplacePanel: React.FC = () => {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1.5 px-2 pt-2">
-        <input
+        <input name="search-apps-in-marketplace"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search apps in Marketplace"

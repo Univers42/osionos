@@ -130,7 +130,7 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
   return (
     <div ref={containerRef} className="relative w-full max-w-xl">
       <Search size={14} aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--osio-fg-subtle)]" />
-      <input
+      <input name="search-pages-or-run"
         ref={inputRef}
         type="text"
         role="combobox"

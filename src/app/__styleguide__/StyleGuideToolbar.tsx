@@ -20,7 +20,7 @@ interface PaletteSelectProps {
 }
 
 const PaletteSelect: React.FC<PaletteSelectProps> = ({ value, onChange }) => (
-  <select
+  <select name="palette"
     aria-label="Palette"
     value={value}
     onChange={(event) => onChange(event.target.value)}

@@ -157,7 +157,7 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
           <div className="space-y-3">
             <div className="flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2">
               <Link size={16} className="text-[var(--osio-fg-muted)]" />
-              <input
+              <input name="url-draft"
                 value={urlDraft}
                 onChange={(event) => setUrlDraft(event.target.value)}
                 onKeyDown={(event) => {
@@ -182,7 +182,7 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
           <div className="rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-5 text-center">
             <Upload className="mx-auto text-[var(--osio-accent)]" size={24} />
             <p className="mt-2 text-sm font-medium">Upload cover</p>
-            <input
+            <input name="cover-asset-file"
               ref={fileInputRef}
               type="file"
               accept="image/*"

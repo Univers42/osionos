@@ -38,7 +38,7 @@ function RequestModal({ name, onClose, onSubmit }: { name: string; onClose: () =
         onSubmit={(event) => { event.preventDefault(); onSubmit(message.trim()); }}
       >
         <p className="text-sm text-[var(--osio-fg-muted)]">Tell the owner why you want to join.</p>
-        <textarea
+        <textarea name="optional-message"
           autoFocus
           value={message}
           onChange={(event) => setMessage(event.target.value)}

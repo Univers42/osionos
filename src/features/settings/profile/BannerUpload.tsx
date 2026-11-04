@@ -97,7 +97,7 @@ export const BannerUpload: React.FC<BannerUploadProps> = ({ bannerUrl, onChanged
       </div>
       <p className="text-xs text-[var(--osio-fg-muted)]">Shown above your profile. Cropped to 3 by 1 from the middle of the image you pick.</p>
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <input name="banner-image-file"
           ref={inputRef}
           type="file"
           accept="image/png,image/jpeg,image/webp,image/gif"

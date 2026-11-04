@@ -101,7 +101,7 @@ export const CoverSearchTab: React.FC<CoverSearchTabProps> = ({ value, onSelect 
     <div className="space-y-2">
       <label className="flex h-9 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-xs text-[var(--osio-fg-muted)]">
         {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-        <input
+        <input name="search-photos"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search photos"

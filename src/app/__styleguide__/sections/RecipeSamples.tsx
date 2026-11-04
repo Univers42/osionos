@@ -24,8 +24,8 @@ export const RecipeSamples: React.FC = () => {
         <span className="osio-chip">Design</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <input data-testid="recipe-field" aria-label="Sample field" className="osio-field px-2.5 text-sm" placeholder="osio-field" />
-        <input aria-label="Sample date" type="date" defaultValue="2026-10-01" className="osio-field px-2.5 text-sm" />
+        <input name="sample-field" data-testid="recipe-field" aria-label="Sample field" className="osio-field px-2.5 text-sm" placeholder="osio-field" />
+        <input name="sample-date" aria-label="Sample date" type="date" defaultValue="2026-10-01" className="osio-field px-2.5 text-sm" />
         <Dropdown label="Sample stage" width={160} value={stage} options={STAGES} onChange={setStage} />
       </div>
     </div>

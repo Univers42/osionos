@@ -113,7 +113,7 @@ const EditableField: React.FC<{ label: string; value: string; onCommit: (value: 
   // field when the committed value changes externally (avoids a sync effect).
   <div className="flex items-center justify-between gap-3">
     <span className="shrink-0 text-[var(--osio-fg-subtle)]">{label}</span>
-    <input
+    <input name="legacy-node-inspector-field"
       key={value}
       defaultValue={value}
       onBlur={(event) => { if (event.target.value !== value) onCommit(event.target.value); }}
