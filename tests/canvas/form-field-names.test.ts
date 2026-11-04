@@ -57,3 +57,20 @@ test("every form field in the app and its UI kit has an id or a name", () => {
   const unnamed = files.flatMap((file) => unnamedFields(file.pathname, readFileSync(file, "utf8")));
   assert.deepEqual(unnamed, [], `form fields without an id or a name:\n${unnamed.join("\n")}`);
 });
+
+// Chromium 149's Issues panel calls `autocomplete="nickname"` non-standard, although the HTML
+// spec lists it (measured on the beta's Settings > Profile, 2026-11-04: one probe input, one more
+// issue). Only measured tokens are listed here.
+// Caveat: literal attribute values only; a token that arrives through a variable or a spread is
+// not read, so this under-reports.
+const CHROMIUM_UNKNOWN_AUTOCOMPLETE = new Set(["nickname"]);
+
+test("no JSX field uses an autocomplete token Chromium reports as non-standard", () => {
+  const files = ROOTS.flatMap((root) => readdirSync(root, { recursive: true, encoding: "utf8" })
+    .filter((entry) => entry.endsWith(".tsx") && !entry.includes("node_modules"))
+    .map((entry) => new URL(entry, root)));
+  const flagged = files.flatMap((file) => [...readFileSync(file, "utf8").matchAll(/autoComplete="([^"]+)"/g)]
+    .filter((match) => match[1].split(/\s+/).some((token) => CHROMIUM_UNKNOWN_AUTOCOMPLETE.has(token)))
+    .map((match) => `${file.pathname}: autoComplete="${match[1]}"`));
+  assert.deepEqual(flagged, []);
+});
