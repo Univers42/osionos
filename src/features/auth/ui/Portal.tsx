@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useUserStore } from "@/features/auth/model/useUserStore";
+import { LegalLinks } from "@/features/legal/ui/LegalLinks";
 
 type Mode = "login" | "signup";
 
@@ -119,6 +120,7 @@ export function Portal() {
         <p className="mt-5 text-center text-xs text-[var(--osio-fg-muted)]">
           Local account · Track Binocle
         </p>
+        <LegalLinks className="mt-2 justify-center" />
       </section>
     </div>
   );
