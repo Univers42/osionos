@@ -46,7 +46,7 @@ describe('web C347 html to text', () => {
 	});
 
 	it('C347 controls and format characters are stripped: zero-width, bidi, the tag block, C0 and C1', () => {
-		const sneaky = 'a​b‮c⁦d﻿e\u{E0041}\u{E0020}f\u0000g\u0007h\u0085i\u009Fj­k';
+		const sneaky = 'a​b\u202ec\u2066d﻿e\u{E0041}\u{E0020}f\u0000g\u0007h\u0085i\u009Fj­k';
 		assert.equal(text(`<p>${sneaky}</p>`), 'abcdefghijk');
 		assert.equal(plainToText(sneaky), 'abcdefghijk');
 		assert.equal(text('a 　 b'), 'a b');
@@ -113,7 +113,7 @@ describe('web C347 a hostile page costs linear time', () => {
 
 describe('web C347 properties', () => {
 	const fragments = fc.constantFrom('<', '>', '</', '<div', '<a href="', '"', "'", '=', '&', '&#', '&amp;', ';', '<!--', '-->', '<script>', '</script>',
-		'<p hidden>', '<svg>', '<title>', '</title>', ' ', '\n', '​', '‮', '\u0000', 'x', 'é', '😀', '/', '<br/>', '<a>', '</a>');
+		'<p hidden>', '<svg>', '<title>', '</title>', ' ', '\n', '​', '\u202e', '\u0000', 'x', 'é', '😀', '/', '<br/>', '<a>', '</a>');
 	const pages = fc.oneof(fc.string({ maxLength: 400 }), fc.array(fragments, { maxLength: 200 }).map((parts) => parts.join('')), fc.string({ unit: 'binary', maxLength: 400 }));
 
 	it('C347 for any input it never throws, never emits <, and stays within maxChars', () => {

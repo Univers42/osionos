@@ -26,5 +26,9 @@ WORKDIR /app
 COPY docker/services/node/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Run unprivileged: the base image ships a `node` user; give it the pnpm store and app dir
+RUN chown -R node:node /pnpm /app
+USER node
+
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["sleep", "infinity"]

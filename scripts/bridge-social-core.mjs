@@ -189,7 +189,7 @@ export async function readInChunks(ids, read, { size = CHUNK_SIZE } = {}) {
 
 /** Best-effort publish to the Rust realtime gateway; never throws. */
 export async function publishRealtime({ topic, eventType, payload, fetchImpl = keepAliveFetch, env = process.env }) {
-	const base = (env.REALTIME_PUBLISH_URL || 'http://mini-baas-realtime:4000').replace(/\/$/, '');
+	const base = (env.REALTIME_PUBLISH_URL || 'http://mini-baas-realtime:4000').replace(/\/$/, ''); // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 	if (/^wss?:\/\//i.test(base)) return realtimeSocketPublisher(base, env).publish(topic, eventType, payload);
 	if (publishViaLane(env, topic, eventType, payload)) return true;
 	const apikey = (env.REALTIME_PUBLISH_APIKEY ?? '').trim();

@@ -17,7 +17,7 @@ import { Parts, attachPart, onPartVisibilityChange } from "@codingame/monaco-vsc
 import { Emitter } from "@codingame/monaco-vscode-api/vscode/vs/base/common/event";
 import { ProcessPropertyType } from "@codingame/monaco-vscode-api/vscode/vs/platform/terminal/common/terminal";
 import { createLocalPtyProcess } from "../features/ide/model/localPtyProcess";
-import { acceptTerminalPort, ptyApiOverPort, terminalColorsFrom, type TerminalColors, type TerminalPtyApi } from "../features/ide/model/terminalPort";
+import { APP_ORIGIN, acceptTerminalPort, ptyApiOverPort, terminalColorsFrom, type TerminalColors, type TerminalPtyApi } from "../features/ide/model/terminalPort";
 import { terminalModeServices, terminalWorkbenchOptions } from "./services";
 import { startOnTheWeb } from "./web";
 import "./terminal.css";
@@ -145,6 +145,7 @@ const showFailure = (error: Error) => { terminalEl.textContent = `The terminal d
 // Only a frame of the app's own top page, and only the first port it hands over (A1, A2).
 const framedByTheApp = window.parent !== window && window.parent === window.top;
 function onHandoff(event: MessageEvent) {
+  if (event.origin !== APP_ORIGIN) return;
   const port = acceptTerminalPort(event, { parent: window.parent, top: window.top, self: window });
   if (!port) return;
   window.removeEventListener("message", onHandoff);

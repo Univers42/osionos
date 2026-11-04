@@ -292,7 +292,7 @@ describe('the summary, in pieces', () => {
 	});
 
 	it('C379 the output loses control and format characters and stops at 4 000 characters', () => {
-		assert.equal(cleanSummary(' a‮b​c\u0007\nd\te '), 'abc\nd\te');
+		assert.equal(cleanSummary(' a\u202eb​c\u0007\nd\te '), 'abc\nd\te');
 		assert.equal(Array.from(cleanSummary('é'.repeat(5_000))).length, 4_000);
 		assert.equal(cleanSummary('​ \u0000'), '');
 	});

@@ -12,6 +12,9 @@ COPY tools/healthcheck.sh /usr/local/bin/healthcheck.sh
 COPY tools/seed.sh /usr/local/bin/seed.sh
 RUN chmod +x /usr/local/bin/*.sh
 
+# Run unprivileged (the image ships a `postgres` user)
+USER postgres
+
 EXPOSE 5432
 
 HEALTHCHECK --interval=5s --timeout=5s --retries=5 \

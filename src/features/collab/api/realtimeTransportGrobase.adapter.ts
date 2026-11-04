@@ -443,7 +443,7 @@ class GrobaseChannel implements RealtimeChannel {
   }
 
   request(target: string, req: SummonReq): Promise<SummonRes> {
-    const raw = globalThis.crypto?.randomUUID?.() ?? `r-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const raw = globalThis.crypto?.randomUUID?.() ?? `r-${Date.now()}-${Array.from(globalThis.crypto.getRandomValues(new Uint32Array(2)), (n) => n.toString(36)).join('')}`;
     const cid = raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || `r-${Date.now()}`;
     return new Promise<SummonRes>((resolve) => {
       // No bridge publishing → there is no directed channel; fail closed rather

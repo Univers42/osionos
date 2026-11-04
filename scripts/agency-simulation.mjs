@@ -34,6 +34,7 @@
 import { createRequire } from 'node:module';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { requiredEnv } from './required-env.mjs';
 
 const websiteUrl = process.env.AGENCY_WEBSITE_URL ?? 'https://127.0.0.1:4322';
 const appUrl = process.env.AGENCY_APP_URL ?? 'https://127.0.0.1:3001';
@@ -53,8 +54,9 @@ const livekitApiSecret = process.env.LIVEKIT_API_SECRET ?? 'devsecret-livekit-lo
 const stamp = Date.now();
 
 const ORG_WS_ID = 'b1a0c1e5-0000-4000-a000-000000000001';
-const OWNER = { email: 'owner@agency.local', password: 'BinocleOwner1!', label: 'owner' };
-const EMPLOYEE_PASSWORD = 'AgencyDemo1!';
+const SEED_HINT = 'set it to the value the agency seed used (see groot tools/seeds/seed_agency.py)';
+const OWNER = { email: 'owner@agency.local', password: requiredEnv('AGENCY_OWNER_PASSWORD', SEED_HINT), label: 'owner' };
+const EMPLOYEE_PASSWORD = requiredEnv('AGENCY_PASSWORD', SEED_HINT);
 
 /* ── tiny env-file parser (KEY=VALUE lines, # comments) ─────────────────── */
 async function loadEnvFile(path) {
@@ -74,7 +76,8 @@ async function loadEnvFile(path) {
 const results = [];
 function record(name, status, detail = '') {
 	const icon = status === 'PASS' ? '✅' : status === 'WARN' ? '⚠️ ' : '❌';
-	console.log(`[agency-sim] ${icon} ${status} — ${name}${detail ? ` — ${detail}` : ''}`);
+	const oneLine = (value) => String(value).replaceAll(/[\r\n\u2028\u2029]+/g, ' ');
+	console.log(`[agency-sim] ${icon} ${status} — ${oneLine(name)}${detail ? ` — ${oneLine(detail)}` : ''}`);
 	results.push({ name, status, detail, at: new Date().toISOString() });
 }
 async function step(name, fn) {
@@ -94,7 +97,7 @@ async function shot(page, file) {
 }
 
 async function fetchJson(url, options = {}) {
-	const response = await fetch(url, options);
+	const response = await fetch(url, options); // NOSONAR S8476 S7044: dev simulation, the target URLs are built from this script's own env config
 	const text = await response.text().catch(() => '');
 	let payload = {};
 	try { payload = text ? JSON.parse(text) : {}; } catch { payload = { raw: text.slice(0, 200) }; }

@@ -69,8 +69,8 @@ PAGES=https://github.com/Univers42/osionos/releases/download/node-pages/osionos-
 
 download_pages() {
     TMP_PAGES=$(mktemp -d "$DATA/pages.XXXXXX")
-    if curl -fsSL --retry 3 -o "$TMP_PAGES/pages.tar.gz" "$PAGES" \
-        && curl -fsSL --retry 3 -o "$TMP_PAGES/pages.sha256" "$PAGES.sha256" \
+    if curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$TMP_PAGES/pages.tar.gz" "$PAGES" \
+        && curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$TMP_PAGES/pages.sha256" "$PAGES.sha256" \
         && (cd "$TMP_PAGES" && sha256 -c pages.sha256 >/dev/null); then
         tar -xzf "$TMP_PAGES/pages.tar.gz" -C "$SRC/"
         rm -rf "$TMP_PAGES"
@@ -121,7 +121,7 @@ if [ ! -x "$SERVER/node" ]; then
     SHA=$(pin "s.upstream['$PLATFORM'].sha256")
     TMP=$(mktemp -d "$DATA/download.XXXXXX")
     trap 'rm -rf "$TMP"' EXIT
-    curl -fL --retry 3 -o "$TMP/$ASSET" \
+    curl -fL --proto '=https' --tlsv1.2 --retry 3 -o "$TMP/$ASSET" \
         "https://github.com/coder/code-server/releases/download/v$VERSION/$ASSET"
     echo "$SHA  $TMP/$ASSET" | sha256 -c - >/dev/null || fail "$ASSET does not match its pinned sha256"
     tar -xzf "$TMP/$ASSET" -C "$TMP"

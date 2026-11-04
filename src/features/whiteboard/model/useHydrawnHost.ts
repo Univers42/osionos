@@ -26,6 +26,7 @@ export function useHydrawnHost(frameRef: RefObject<HTMLIFrameElement | null>, ur
     if (!isWhiteboardFrameUrl(url)) return;
     const origin = originOf(url);
     const onMessage = (event: MessageEvent) => {
+      if (event.origin !== origin) return;
       const frame = frameRef.current?.contentWindow ?? null;
       const message = readHydrawnMessage(event, frame, origin);
       if (message?.kind !== "token-request") return;

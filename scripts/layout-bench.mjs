@@ -131,7 +131,7 @@ async function ensureServer(base) {
   if (alive) return null;
   const port = new URL(base).port || "4173";
   console.error(`[bench] ${base} unreachable — starting vite preview on :${port}`);
-  const child = spawn("pnpm", ["exec", "vite", "preview", "--host", "127.0.0.1", "--port", port, "--strictPort"], {
+  const child = spawn("pnpm", ["exec", "vite", "preview", "--host", "127.0.0.1", "--port", port, "--strictPort"], { // NOSONAR S4036: fixed tool name run from the pinned toolchain, PATH is the dev/CI image
     cwd: new URL("..", import.meta.url).pathname,
     stdio: ["ignore", "ignore", "inherit"],
   });

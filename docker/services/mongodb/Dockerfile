@@ -14,6 +14,9 @@ RUN chmod +x /usr/local/bin/*.sh
 # Create log directory
 RUN mkdir -p /var/log/mongodb && chown mongodb:mongodb /var/log/mongodb
 
+# Run unprivileged (the image ships a `mongodb` user)
+USER mongodb
+
 EXPOSE 27017
 
 HEALTHCHECK --interval=5s --timeout=5s --retries=5 \

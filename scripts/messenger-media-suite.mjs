@@ -50,7 +50,9 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { demoLoginPassword } from './required-env.mjs';
+import { demoLoginPassword, requiredEnv } from './required-env.mjs';
+import { tmpdir } from 'node:os';
+const agencyPassword = () => requiredEnv('AGENCY_PASSWORD', 'set it to the password the agency seed used');
 
 /* ── config ─────────────────────────────────────────────────────────────── */
 const websiteUrl = process.env.SUITE_WEBSITE_URL ?? 'https://127.0.0.1:4322';
@@ -61,8 +63,8 @@ const headless = process.env.SUITE_HEADLESS !== '0';
 const slowMo = Number.parseInt(process.env.SUITE_SLOWMO_MS ?? '0', 10) || 0;
 
 const DEV = { email: 'dev.pro.photo@gmail.com', password: demoLoginPassword(), label: 'dev' };
-const SOFIA = { email: 'e02.lindqvist@agency.local', password: process.env.AGENCY_PASSWORD ?? 'AgencyDemo1!', label: 'sofia' };
-const DAVID = { email: 'e03.okafor@agency.local', password: process.env.AGENCY_PASSWORD ?? 'AgencyDemo1!', label: 'david' };
+const SOFIA = { email: 'e02.lindqvist@agency.local', password: agencyPassword(), label: 'sofia' };
+const DAVID = { email: 'e03.okafor@agency.local', password: agencyPassword(), label: 'david' };
 
 // Seeded channels (verified live). The Dylan↔Sofia DM carries BOTH a voice note
 // (40-sample waveform) and an image — the rich-thread target for 1–5.
@@ -325,7 +327,7 @@ try {
   try {
     const page = dev.page;
     await openDm(page, 'Sofia');
-    const pngPath = '/tmp/messenger-suite-upload.png';
+    const pngPath = `${tmpdir()}/messenger-suite-upload.png`;
     await writeTinyPng(pngPath); // UNIQUE colour ⇒ unique sha256 ⇒ genuinely new attachment
     const before = await page.locator('img[alt="Image"]').count().catch(() => 0);
     // Server-side truth: image-attachments in this channel BEFORE the send.

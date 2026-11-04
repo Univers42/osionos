@@ -74,7 +74,7 @@ const u1 = `${USERS}:og_users:u1`;
 const authored = focusMapped.model.edges.find((e) => e.source === n1 && e.target === u1);
 assert.ok(authored, "authored_by edge n1→u1 present (cross-DB)");
 assert.ok(focusMapped.model.edges.some((e) => e.kind === "note_link"), "note_link generated from [[..]]");
-console.log(`✔ focus(n1): guarantee=${focusMapped.guarantee}, cross-DB authored_by→u1 (kind=${authored?.kind}), note_link present`);
+console.log(`✔ focus(n1): guarantee=${String(focusMapped.guarantee).replaceAll(/[\r\n]+/g, ' ')}, cross-DB authored_by→u1 (kind=${String(authored?.kind).replaceAll(/[\r\n]+/g, ' ')}), note_link present`);
 
 // 3) Write path: a same-value /txn update via osionos's buildRecordUpdate (safe no-op).
 const n3 = `${EDGES}:og_nodes:n3`;

@@ -3,6 +3,7 @@
 //   node scripts/legacy-sb-hydrate-check.mjs
 import { chromium } from "playwright";
 import { readDotEnv, requiredEnv } from "./required-env.mjs";
+import { tmpdir } from 'node:os';
 
 const BAAS = "http://127.0.0.1:8000";
 // Same keys the app is built with: the tenant key and Kong key from this checkout's .env.
@@ -55,7 +56,7 @@ const found = await page.getByText(title, { exact: false }).first().count().catc
 const body = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ");
 console.log("sidebar shows the restored note:", found > 0 ? "YES ✅" : "NO ❌");
 console.log("title present in DOM text:", body.includes(title) ? "YES" : "NO");
-await page.screenshot({ path: "/tmp/sb-hydrate.png" }).catch(() => {});
+await page.screenshot({ path: `${tmpdir()}/sb-hydrate.png` }).catch(() => {});
 
 // 4) Cleanup the test row.
 await notes("delete", { filter: { id } });

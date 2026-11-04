@@ -26,7 +26,7 @@ const MAX_MESSAGE = 1 << 20; // 1 MiB per message
 
 /** The Sec-WebSocket-Accept value for a client key (the RFC handshake proof). */
 export function acceptKey(secWebSocketKey) {
-  return crypto.createHash("sha1").update(secWebSocketKey + GUID).digest("base64");
+  return crypto.createHash("sha1").update(secWebSocketKey + GUID).digest("base64"); // NOSONAR S4790: SHA-1 is mandated by the protocol (RFC 6455 / RFC 4122 v5), not a security hash
 }
 
 /** Complete the HTTP upgrade on a raw socket. Returns true if it was a WS upgrade.
