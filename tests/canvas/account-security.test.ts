@@ -127,11 +127,14 @@ test("changeUsername: 409 and 422 keep their codes", async () => {
   assert.equal(bad.result.ok === false && bad.result.code, "invalid_username");
 });
 
-test("deletion: status 404 is 'no request', 201 carries the date, cancel is 204", async () => {
+test("deletion: the status route's null is 'no request', 201 carries the date, cancel is 204", async () => {
   useSession("osionos_v1.tok");
-  const none = await withFetch(() => json(404, { code: "deletion_not_found" }), () => api.deletionStatus());
+  const none = await withFetch(() => json(200, { request: null }), () => api.deletionStatus());
   assert.deepEqual(none.result, { ok: true, data: null });
-  const open = await withFetch(() => json(200, { requestedAt: "2026-10-23T00:00:00Z", scheduledFor: "2026-11-06T00:00:00Z", successorUserId: null }), () => api.deletionStatus());
+  assert.match(none.calls[0].url, /\/api\/account\/deletion\/status$/, "the 200 status route, not the GET that 404s (#293)");
+  const older = await withFetch(() => json(404, { code: "not_found" }), () => api.deletionStatus());
+  assert.deepEqual(older.result, { ok: true, data: null }, "a bridge without the status route reads as no request");
+  const open = await withFetch(() => json(200, { request: { requestedAt: "2026-10-23T00:00:00Z", scheduledFor: "2026-11-06T00:00:00Z", successorUserId: null } }), () => api.deletionStatus());
   assert.equal(open.result.ok && open.result.data?.scheduledFor, "2026-11-06T00:00:00Z");
   const made = await withFetch(() => json(201, { requestedAt: "a", scheduledFor: "b" }), () => api.requestDeletion());
   assert.equal(made.calls[0].init?.method, "POST");
