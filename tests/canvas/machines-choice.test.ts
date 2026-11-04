@@ -112,3 +112,10 @@ test("/machine with no node chooses; a machine id opens it with or without a fol
     assert.equal(readMachineRoute(search), null, search);
   }
 });
+
+test("R5: the command from production or the beta remembers that origin; any other app's remembers nothing", () => {
+  for (const origin of ["https://baas.tail10f2ea.ts.net:8443", "https://baas-beta.tail10f2ea.ts.net"]) {
+    assert.match(connectCommand("https://baas.tail10f2ea.ts.net:10000", origin, "laptop"), new RegExp(` --app-origin ${origin} --remember-origin ${origin} --name laptop$`));
+  }
+  assert.doesNotMatch(connectCommand("https://baas.example:10000", "https://app.example"), /--remember-origin/);
+});

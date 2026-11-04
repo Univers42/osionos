@@ -16,6 +16,7 @@ import { dockColors, dockTheme } from "./dockColors";
 import { watchAppearance } from "./watchAppearance";
 import { MachineFramePanel } from "./MachineFramePanel";
 import { probeOldNode } from "@/features/machines/model/oldNodeProbe";
+import { RememberComputerChoice } from "@/features/machines/ui/RememberComputerChoice";
 
 export const NodeVsCodeTerminal: React.FC = () => {
   const frameRef = React.useRef<HTMLIFrameElement>(null);
@@ -55,7 +56,7 @@ export const NodeVsCodeTerminal: React.FC = () => {
       />
       {panel && <MachineFramePanel panel={panel} waiting={phase === "idle" || phase === "connecting"} pairing={phase === "no-node" || phase === "other-account"} onTryAgain={() => setAttempt((n) => n + 1)} />}
       {/* The store opens the emailed-code prompt on a step-up; it renders only where it is mounted. */}
-      {phase === "step-up" && <SudoPrompt />}
+      {phase === "step-up" && <SudoPrompt extra={<RememberComputerChoice />} />}
     </div>
   );
 };

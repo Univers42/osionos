@@ -2,24 +2,16 @@
 // desktop hands the page a MessagePort per shell (terminalPort.ts); on the web the page opens one
 // WebSocket per shell to this computer's osionos-node, `ws://<node>/api/pty`. Both implement the
 // same TerminalPtyApi and PortLike, so createLocalPtyProcess (OSC 52 filter, typed-ahead input) runs
-// unchanged on either. The socket's first message is the frame's session secret when it holds one,
-// else one fresh token the app minted; nothing here stores a credential beyond the frame's memory.
+// unchanged on either. The socket's first message is whatever terminalCredentials.ts hands it; a
+// device secret the node issues goes back there, and nowhere else.
 import type { PortLike, PtyConnection, TerminalPtyApi } from "./terminalPort";
+import type { PtyCredential, PtyCredentials } from "./terminalCredentials";
 
 export const PTY_SOCKET_PATH = "/api/pty";
 
 /** The node's close codes (packages/osionos-node/pty-wire.mjs PTY_CLOSE). */
 const CLOSE_AUTH = 4401;
 const CLOSE_FULL = 4429;
-
-export type PtyCredential = { token: string } | { secret: string };
-
-export interface PtyCredentials {
-  /** The frame's secret if it holds one, else the next token from the app (it may wait for a step-up). */
-  take(): Promise<PtyCredential>;
-  keepSecret(secret: string): void;
-  dropSecret(): void;
-}
 
 /** The slice of the browser's WebSocket used here. */
 export interface SocketLike {
@@ -28,31 +20,6 @@ export interface SocketLike {
   onopen: (() => void) | null;
   onmessage: ((event: { data: unknown }) => void) | null;
   onclose: ((event: { code: number }) => void) | null;
-}
-
-/** Tokens from the app, one asked for at a time: the app's handshake holds one nonce at a time, so
- *  a second ask before the first answer would void the first identity check. */
-export function createTokenCredentials(askForToken: () => void): PtyCredentials & { give(token: string): void } {
-  let secret: string | null = null;
-  const tokens: string[] = [];
-  const waiting: Array<(token: string) => void> = [];
-  return {
-    async take() {
-      if (secret) return { secret };
-      const ready = tokens.shift();
-      if (ready) return { token: ready };
-      if (waiting.length === 0) askForToken();
-      return new Promise<PtyCredential>((resolve) => waiting.push((token) => resolve({ token })));
-    },
-    give(token) {
-      const next = waiting.shift();
-      if (next) next(token);
-      else tokens.push(token);
-      if (waiting.length > 0) askForToken();
-    },
-    keepSecret(value) { secret = value; },
-    dropSecret() { secret = null; },
-  };
 }
 
 const readMessage = (data: unknown): Record<string, unknown> | null => {
@@ -105,6 +72,7 @@ export function ptyApiOverWebSocket(openSocket: () => SocketLike, credentials: P
         const message = readMessage(event.data);
         if (message?.op !== "opened") return;
         if (typeof message.secret === "string") credentials.keepSecret(message.secret);
+        if (typeof message.device === "string") credentials.keepDevice(message.device);
         const id = `web-${++nextId}`;
         open.set(id, socket);
         const port = portOver(socket);
@@ -120,10 +88,11 @@ export function ptyApiOverWebSocket(openSocket: () => SocketLike, credentials: P
     async create(cols, rows) {
       let credential = await credentials.take();
       let opening = await openOnce(credential, cols, rows);
-      // A secret dies with the frame's last shell, and a token waiting in memory can expire: one
-      // retry, with a fresh token, before saying no.
+      // A secret dies with the frame's last shell, a device secret with its 30 days or a forget, and
+      // a token waiting in memory can expire: one retry, with a fresh grant, before saying no.
       if (opening.kind === "refused") {
         if ("secret" in credential) credentials.dropSecret();
+        if ("device" in credential) credentials.dropDevice();
         credential = await credentials.take();
         opening = await openOnce(credential, cols, rows);
       }

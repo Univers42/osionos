@@ -4,7 +4,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createTokenCredentials, ptyApiOverWebSocket, type SocketLike } from "../../src/features/ide/model/terminalSocket.ts";
+import { ptyApiOverWebSocket, type SocketLike } from "../../src/features/ide/model/terminalSocket.ts";
+import { createFrameCredentials } from "../../src/features/ide/model/terminalCredentials.ts";
 import { createLocalPtyProcess } from "../../src/features/ide/model/localPtyProcess.ts";
 
 const TOKEN_A = "osionos_mc1.abcdefgh.payloadA.sigA";
@@ -29,7 +30,7 @@ function fakeSocket(): SocketLike & { sent: unknown[]; closed: boolean; open(): 
 function world() {
   const sockets: ReturnType<typeof fakeSocket>[] = [];
   let asks = 0;
-  const credentials = createTokenCredentials(() => { asks++; });
+  const credentials = createFrameCredentials({ ask: () => { asks++; } });
   const api = ptyApiOverWebSocket(() => { const s = fakeSocket(); sockets.push(s); return s; }, credentials);
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
   return { sockets, credentials, api, settle, asks: () => asks };

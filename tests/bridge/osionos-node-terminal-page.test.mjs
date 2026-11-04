@@ -13,13 +13,11 @@ import { createIdeOriginServer } from '../../packages/osionos-node/ide-origin.mj
 import { createMachineSession } from '../../packages/osionos-node/machine-identity.mjs';
 import { createClientHandler, terminalCsp } from '../../packages/osionos-node/static-client.mjs';
 import { bridgeKeyFromSeed } from '../../scripts/ide-machine-protocol.mjs';
-import { generateAgentKeyPair } from '../../scripts/ide-agent-frames.mjs';
+import { MACHINE, OWNER, freeLoopbackOrigin, pairedMachine } from './support/paired-node.mjs';
 import { fakeHost } from './support/pty-fakes.mjs';
 import { createHostedFetch } from './support/host-fetch.mjs';
 
 const APPS = ['https://baas.tail10f2ea.ts.net:8443', 'https://baas-beta.tail10f2ea.ts.net', 'app://osionos'];
-const MACHINE = 'm-abcdefghijklmnop';
-const OWNER = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
 const hosted = createHostedFetch();
 
 function roots(t) {
@@ -38,17 +36,8 @@ function roots(t) {
 
 async function world(t) {
 	const { ide, terminal } = roots(t);
-	const probe = http.createServer();
-	await new Promise((resolve) => probe.listen(0, '127.0.0.1', resolve));
-	const { port } = probe.address();
-	await new Promise((resolve) => probe.close(resolve));
-	const ideOrigin = `http://127.0.0.1:${port}`;
-	const key = bridgeKeyFromSeed(randomBytes(32).toString('base64url'));
-	const { privateKey } = generateAgentKeyPair();
-	const machine = {
-		machineId: MACHINE, ownerId: OWNER, bridgeUrl: 'https://bridge.example', bridgeKeys: { [key.kid]: key.publicKey },
-		privateKey: privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url'),
-	};
+	const { port, origin: ideOrigin } = await freeLoopbackOrigin();
+	const machine = pairedMachine(bridgeKeyFromSeed(randomBytes(32).toString('base64url')));
 	const accepted = [];
 	const origin = createIdeOriginServer({
 		...createMachineSession({ machine, home: '/home/owner' }).originOptions, ownerId: OWNER, ideOrigin, commit: 'c'.repeat(40),

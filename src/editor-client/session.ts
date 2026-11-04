@@ -76,7 +76,11 @@ export async function startEditorSession(onAppMessage: (data: unknown) => boolea
       const shared = await peerSecret(peers);
       if (shared) return { secret: shared };
     }
-    return linked.credentials.take();
+    const taken = await linked.credentials.take();
+    if ("secret" in taken) return { secret: taken.secret };
+    // This link is given no remembered store, so it never hands over a device secret (/api/fs takes none).
+    if ("device" in taken) throw new Error("the editor opens no remembered computer");
+    return { token: taken.token };
   }
 
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${FS_SOCKET_PATH}`;
