@@ -25,6 +25,7 @@ import { ConfirmModal } from '../ui/ConfirmModals';
 import { type EncodedAvatar } from './avatarVariants';
 import { BANNER_HEIGHT, BANNER_WIDTH, bannerCropRect, buildBannerPayload } from './bannerVariant';
 import { SIGN_IN_TO_UPLOAD, uploadFailureMessage } from './uploadFailure';
+import { isSafeImageSource } from '@/shared/lib/media/bridgeMediaUrl';
 
 interface BannerUploadProps {
   bannerUrl: string | null;
@@ -43,7 +44,7 @@ async function drawBanner(bitmap: ImageBitmap, type: string, quality: number): P
   return blob ? { type: blob.type, bytes: new Uint8Array(await blob.arrayBuffer()) } : null;
 }
 
-const safeSource = (url: string | null): string | undefined => (url && /^(https:\/\/|\/(?!\/))/.test(url) ? url : undefined);
+const safeSource = (url: string | null): string | undefined => (isSafeImageSource(url) ? url : undefined);
 
 export const BannerUpload: React.FC<BannerUploadProps> = ({ bannerUrl, onChanged }) => {
   const toast = useToastStore((state) => state.push);

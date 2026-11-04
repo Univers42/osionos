@@ -9,7 +9,9 @@ import { whiteboardBoardTab } from "@/widgets/workspace-grid/model/layoutPersist
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 
 import { isBoardSlug, mintBoardSlug, normalizeBoardTitle } from "../model/boardRefs";
+import { isInProcessWhiteboardEnabled } from "../model/inProcessFlag";
 import { boardUrl } from "../model/whiteboardClient";
+import { InProcessBoard } from "./InProcessBoard";
 
 interface Props {
   block: Block;
@@ -33,7 +35,10 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
   const frameUrl = isValidSlug ? embeddableUrl(boardUrl(slug, title)) : "";
 
   let body: React.ReactNode;
-  if (hasSlug && !isValidSlug) {
+  if (isValidSlug && isInProcessWhiteboardEnabled()) {
+    // Drawn in this page; the frame below stays the default until it matches it.
+    body = isNear ? <InProcessBoard slug={slug} title={title} /> : null;
+  } else if (hasSlug && !isValidSlug) {
     body = <Message>This whiteboard link is not valid, so the board was not loaded.</Message>;
   } else if (hasSlug && frameUrl === "") {
     body = <Message>The whiteboard service is not configured for this build.</Message>;

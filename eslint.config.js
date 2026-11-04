@@ -100,6 +100,8 @@ export default [
       "src/shared/notion-database-sys/packages/**/*",
       "src/shared/notion-database-sys/playground/**/*",
       "src/shared/notion-database-sys/vendor/**/*",
+      // Built output of hydrawn's library, vendored by scripts/vendor-hydrawn-board.sh.
+      "vendor/hydrawn-board/**/*",
       "dist",
       "build",
       "node_modules",

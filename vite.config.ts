@@ -97,6 +97,11 @@ export default defineConfig(({ mode }) => {
           find: /^@notion-db\/contract-types$/,
           replacement: path.resolve(root, 'src/shared/notion-database-sys/packages/contract-types/src/index.ts'),
         },
+        // The built hydrawn board library (vendor/hydrawn-board/README.md), loaded lazily.
+        {
+          find: /^@hydrawn\/board$/,
+          replacement: path.resolve(root, 'vendor/hydrawn-board/index.js'),
+        },
         {
           find: /^@osionos\/legacy-graph-engine$/,
           replacement: path.resolve(root, 'packages/legacy-graph-engine/src/index.ts'),

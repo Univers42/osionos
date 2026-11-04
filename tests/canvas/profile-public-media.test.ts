@@ -31,6 +31,7 @@ registerHooks({
 });
 
 const { mergePublicFields } = await import("../../src/widgets/profile-page/useProfile.ts");
+const { isSafeImageSource } = await import("../../src/shared/lib/media/bridgeMediaUrl.ts");
 
 const BASE = { userId: "user-a", username: "ada" } as never;
 
@@ -48,4 +49,16 @@ test("mergePublicFields: absolute URLs, other paths and nulls are kept", () => {
   assert.equal(merged.avatarUrl, "https://cdn.example.com/a.png");
   assert.equal(merged.bannerUrl, null);
   assert.equal(mergePublicFields(BASE, { bannerUrl: "/elsewhere/b.png" }).bannerUrl, "/elsewhere/b.png");
+});
+
+test("isSafeImageSource: https, a same-origin path and the bridge's media are drawn", () => {
+  assert.ok(isSafeImageSource("https://cdn.example.com/a.png"));
+  assert.ok(isSafeImageSource("/api/media/avatars/a.webp"));
+  assert.ok(isSafeImageSource("https://bridge.test/api/media/avatars/a.webp"));
+});
+
+test("isSafeImageSource: a protocol-relative, plain-http or script URL is refused", () => {
+  for (const url of ["//evil.example/a.png", "http://evil.example/api/media/a.png", "javascript:alert(1)", "data:image/png;base64,AA", "", null, undefined]) {
+    assert.equal(isSafeImageSource(url), false, String(url));
+  }
 });

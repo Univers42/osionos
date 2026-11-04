@@ -30,7 +30,12 @@ export interface PresenceSetting {
 const STORAGE_KEY = 'osionos:presence';
 
 const HEARTBEAT_MS = 45_000;
+/** The bridge allows 10 beats a minute per user across every tab and device
+ *  (scripts/bridge-presence.mjs); a remount this soon after a beat adds nothing, since
+ *  presence lasts 90 s. Route changes beat on every mount and answered 429 (2026-11-04). */
+const REMOUNT_BEAT_GAP_MS = 15_000;
 let consumers = 0;
+let lastBeatAt = Number.NEGATIVE_INFINITY;
 let timer: ReturnType<typeof setInterval> | null = null;
 let setting: PresenceSetting | null = null;
 
@@ -46,9 +51,10 @@ export function getPresenceSetting(): PresenceSetting | null {
   return setting;
 }
 
-function beat(): void {
+function beat(now = Date.now()): void {
   const jwt = getActivePageJwt();
   if (!jwt) return;
+  lastBeatAt = now;
   const chosen = getPresenceSetting();
   void api.post('/api/profile/heartbeat', chosen ?? {}, jwt).catch(() => undefined);
 }
@@ -60,12 +66,18 @@ export function setPresenceSetting(next: PresenceSetting): void {
   beat();
 }
 
+/** The beat a consumer's first mount sends, unless this tab beat within the last 15 s. */
+export function beatOnMount(now = Date.now()): void {
+  if (now - lastBeatAt < REMOUNT_BEAT_GAP_MS) return;
+  beat(now);
+}
+
 export function usePresenceHeartbeat(): void {
   useEffect(() => {
     consumers += 1;
     if (consumers === 1) {
-      beat();
-      timer = setInterval(beat, HEARTBEAT_MS);
+      beatOnMount();
+      timer = setInterval(() => beat(), HEARTBEAT_MS);
     }
     return () => {
       consumers -= 1;

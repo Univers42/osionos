@@ -29,11 +29,12 @@ import { BannerUpload } from './BannerUpload';
 import { ImageAvatarUpload } from './ImageAvatarUpload';
 import { LinksField, TextField, TimezoneField } from './PublicProfileFields';
 import { diffProfile, formFromProfile, toPatch, validateField, type ProfileForm } from './profileFields';
+import { isSafeImageSource } from '@/shared/lib/media/bridgeMediaUrl';
 
 const ORDER = ['displayName', 'pronouns', 'headline', 'bio', 'location', 'company', 'website', 'links', 'timezone', 'orcid', 'patreon'] as const;
 
 function avatarIconValue(url: string | null | undefined): string | undefined {
-  return url && /^(https:\/\/|\/)/.test(url) ? `img:${url}` : undefined;
+  return isSafeImageSource(url) ? `img:${url}` : undefined;
 }
 
 function formErrors(draft: ProfileForm): Partial<Record<keyof ProfileForm, string>> {
