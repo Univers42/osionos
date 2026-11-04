@@ -10,10 +10,15 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// A workspace database whose engine is down must read as "engine offline" (503),
-// not as a server fault (500). Measured before the fix: the MSSQL schema request
-// hung for the bridge's full 2.5 s timeout, then surfaced the raw AbortError as
+// A workspace database whose engine is down must read as "engine offline", not as a
+// server fault (500). Measured before the first fix: the MSSQL schema request hung for
+// the bridge's full 2.5 s timeout, then surfaced the raw AbortError as
 // `500 This operation was aborted`, which the database page rendered as a crash.
+// It then answered 503, but a browser logs every non-2xx response as a console error,
+// and the app reads every mount's schema on each load: the owner's offline Inception
+// databases logged 18 errors per sweep (2026-11-04). An unreachable source is an
+// expected state, so it is a 200 that says `unavailable`, and the client throws it as
+// before (liveMountClient getLiveSchema).
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,10 +41,13 @@ function offlineConfig() {
 	});
 }
 
-function fetchWithDeadEngine(engineFailure) {
+function fetchWithDeadEngine(engineFailure, routerCalls = { count: 0 }) {
 	return async (input) => {
 		const url = String(input);
-		if (url.startsWith('http://query-router.local')) throw engineFailure();
+		if (url.startsWith('http://query-router.local')) {
+			routerCalls.count += 1;
+			throw engineFailure();
+		}
 		if (url.includes('osionos_workspace_members')) return Response.json([]);
 		if (url.includes('osionos_workspace_databases')) {
 			return Response.json([{ id: 'd21fec9c-7404-406a-8d4c-a8c25c6451c3', workspace_id: workspaceId, db_id: dbId, engine: 'mssql', label: 'Finance · MSSQL' }]);
@@ -48,33 +56,47 @@ function fetchWithDeadEngine(engineFailure) {
 	};
 }
 
-async function schemaStatus(engineFailure) {
+async function schemaStatus(engineFailure, { reads = 1, routerCalls = { count: 0 } } = {}) {
 	const config = offlineConfig();
-	const server = createBridgeServer({ config, fetchImpl: fetchWithDeadEngine(engineFailure) });
+	const server = createBridgeServer({ config, fetchImpl: fetchWithDeadEngine(engineFailure, routerCalls) });
 	await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen));
 	const { token } = signAppSessionToken({ payload: { subject: userId, provider: 'test' }, workspace: { _id: workspaceId }, config });
 	try {
-		const started = Date.now();
-		const response = await fetch(`http://127.0.0.1:${server.address().port}/api/databases/${dbId}/schema`, {
-			headers: { authorization: `Bearer ${token}` },
-		});
-		return { status: response.status, body: await response.json(), elapsedMs: Date.now() - started };
+		let result;
+		for (let read = 0; read < reads; read += 1) {
+			const started = Date.now();
+			const response = await fetch(`http://127.0.0.1:${server.address().port}/api/databases/${dbId}/schema`, {
+				headers: { authorization: `Bearer ${token}` },
+			});
+			result = { status: response.status, body: await response.json(), elapsedMs: Date.now() - started };
+		}
+		return result;
 	} finally {
 		await new Promise((resolveClose) => server.close(resolveClose));
 	}
 }
 
 describe('database schema when the engine is offline', () => {
-	it('answers 503 with an explanation when the query-router call times out', async () => {
+	it('answers 200 unavailable with an explanation when the query-router call times out', async () => {
 		const result = await schemaStatus(() => new DOMException('This operation was aborted', 'AbortError'));
-		assert.equal(result.status, 503);
+		assert.equal(result.status, 200);
+		assert.equal(result.body.unavailable, true);
+		assert.deepEqual(result.body.tables, []);
 		assert.match(result.body.message, /not reachable|offline|did not answer/i);
 		assert.doesNotMatch(result.body.message, /operation was aborted/i);
 	});
 
-	it('answers 503 when the query-router connection is refused', async () => {
+	it('answers 200 unavailable when the query-router connection is refused', async () => {
 		const result = await schemaStatus(() => Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } }));
-		assert.equal(result.status, 503);
+		assert.equal(result.status, 200);
+		assert.equal(result.body.unavailable, true);
 		assert.match(result.body.message, /not reachable|offline|did not answer/i);
+	});
+
+	it('remembers an unreachable source briefly, so the next read does not wait again', async () => {
+		const routerCalls = { count: 0 };
+		const result = await schemaStatus(() => new DOMException('This operation was aborted', 'AbortError'), { reads: 3, routerCalls });
+		assert.equal(result.body.unavailable, true);
+		assert.equal(routerCalls.count, 1, `the query-router was asked ${routerCalls.count} times for 3 reads`);
 	});
 });
