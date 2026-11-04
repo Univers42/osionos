@@ -4,67 +4,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { randomBytes } from 'node:crypto';
 
-import { createIdeOriginServer } from '../../packages/osionos-node/ide-origin.mjs';
-import { createMachineSession } from '../../packages/osionos-node/machine-identity.mjs';
-import { bridgeKeyFromSeed, signMachineToken } from '../../scripts/ide-machine-protocol.mjs';
-import { generateAgentKeyPair } from '../../scripts/ide-agent-frames.mjs';
-import { FakeConn, fakeHost, settle } from './support/pty-fakes.mjs';
+import { FakeConn, settle } from './support/pty-fakes.mjs';
 import { anyWireText, seededRandom } from './support/seeded-values.mjs';
-
-const SEED = randomBytes(32).toString('base64url');
-const KEY = bridgeKeyFromSeed(SEED);
-const OWNER = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
-const STRANGER = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
-const MACHINE = 'm-abcdefghijklmnop';
-
-function machine() {
-	const { privateKey } = generateAgentKeyPair();
-	return {
-		machineId: MACHINE, ownerId: OWNER, bridgeUrl: 'https://bridge.example:10000', bridgeKeys: { [KEY.kid]: KEY.publicKey },
-		privateKey: privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url'),
-	};
-}
-
-// What ws's handleUpgrade does, minus the framing: answer 101, and end the TCP socket with the conn.
-function acceptLikeWs(socket, accepted) {
-	const conn = new FakeConn();
-	socket.write('HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: Upgrade\r\n\r\n');
-	conn.once('close', () => socket.destroy());
-	accepted.push({ conn, socket });
-	return conn;
-}
-
-async function world(t, { paired = true } = {}) {
-	const host = fakeHost();
-	const accepted = [];
-	const server = http.createServer();
-	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-	const port = server.address().port;
-	await new Promise((resolve) => server.close(resolve));
-	const ideOrigin = `http://127.0.0.1:${port}`;
-	const session = paired ? createMachineSession({ machine: machine(), home: '/home/owner' }) : null;
-	const origin = createIdeOriginServer({
-		...(session ? session.originOptions : { secret: 'k'.repeat(32) }), ownerId: OWNER, ideOrigin, commit: 'c'.repeat(40),
-		nodes: { [MACHINE]: { socketPath: '/nonexistent.sock', extensionRoots: [] } },
-		pty: paired ? { host, accept: (req, socket) => Promise.resolve(acceptLikeWs(socket, accepted)) } : undefined,
-	});
-	await new Promise((resolve) => origin.server.listen(port, '127.0.0.1', resolve));
-	t.after(() => origin.close());
-	return { base: ideOrigin, origin, host, accepted };
-}
-
-const mint = (base, over = {}) => signMachineToken({ sub: OWNER, machine: MACHINE, aud: base, seed: SEED, ...over }).token;
-const opening = (credential, size = { cols: 80, rows: 24 }) => JSON.stringify({ ...credential, ...size });
-
-async function open(origin, credential) {
-	const conn = new FakeConn();
-	origin.pty.attach(conn);
-	conn.receive(opening(credential));
-	await settle();
-	return conn;
-}
+import { MACHINE, OWNER, STRANGER, mint, open, opening, world } from './support/pty-world.mjs';
 
 function upgrade(base, headers) {
 	return new Promise((resolve) => {
