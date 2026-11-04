@@ -4,6 +4,9 @@ FROM redis:7-alpine
 # Copy custom config if present; otherwise Redis runs with defaults
 COPY conf/redis.conf /usr/local/etc/redis/redis.conf
 
+# Run unprivileged (the image ships a `redis` user)
+USER redis
+
 EXPOSE 6379
 
 CMD ["redis-server", "/usr/local/etc/redis/redis.conf"]

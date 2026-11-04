@@ -222,21 +222,21 @@ export function configFromEnv(env = process.env) {
 		// DNS, when grobase shares this daemon. Behind a link only Kong is relayed, so the link
 		// sets Kong's public route (http://mini-baas-kong:8000/query/v1); a blank value means
 		// the default, as the link writes one for a local grobase.
-		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL || 'http://mini-baas-query-router:4001').replace(/\/$/, ''),
+		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL || 'http://mini-baas-query-router:4001').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		baasApiKey: env.OSIONOS_BAAS_API_KEY ?? env.BAAS_API_KEY ?? env.VITE_BAAS_API_KEY ?? '',
 		// Adapter-registry lists the tenant's databases; it trusts X-Baas-Tenant-Id
 		// (no Kong route works from the browser — anon key 401s on /admin/v1). The
 		// tenant id is taken from env, or derived from the api-key via tenant-control.
 		// Behind a link the registry is not relayed, so the link sets Kong's
 		// service_role-only route (http://mini-baas-kong:8000/admin/v1); blank = default.
-		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL || 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''),
+		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL || 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		// Set by a link that reaches grobase over Tailscale Funnel, where the WAF refuses
 		// /admin/v1 (rule 10130): the tenant's own mount list, opened by the tenant api-key.
 		// Blank = the registry above.
 		tenantMountsUrl: (env.OSIONOS_TENANT_MOUNTS_URL ?? '').trim().replace(/\/$/, ''),
-		tenantControlUrl: (env.OSIONOS_TENANT_CONTROL_URL ?? 'http://mini-baas-tenant-control:3022').replace(/\/$/, ''),
+		tenantControlUrl: (env.OSIONOS_TENANT_CONTROL_URL ?? 'http://mini-baas-tenant-control:3022').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		baasTenantId: env.OSIONOS_BAAS_TENANT_ID ?? env.VITE_BAAS_TENANT_ID ?? env.BAAS_TENANT_ID ?? '',
-		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
+		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		publicApiKey: env.PUBLIC_BAAS_ANON_KEY ?? env.KONG_PUBLIC_API_KEY ?? '',
 		...turnstileConfigFromEnv(env),
 		serviceKey: env.SERVICE_ROLE_KEY ?? env.KONG_SERVICE_API_KEY ?? env.BAAS_SERVICE_ROLE_KEY ?? '',

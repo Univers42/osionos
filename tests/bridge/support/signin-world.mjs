@@ -26,7 +26,7 @@ import { createPostgrestMock } from './bridge-harness.mjs';
 import { kvStub } from './kv-stub.mjs';
 import { noFactorPg } from './no-factor-pg.mjs';
 
-export const BAAS_URL = 'http://baas.local';
+export const BAAS_URL = 'http://baas.local'; // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 export const SUBJECT = '3f6d2a70-5b3f-4c92-8f06-8f4644fd1209';
 export const PRIVATE_ID = 'ac47a462-a784-49cb-aa8d-c87a7251be1e';
 export const NOW = 1_768_000_000_000;
