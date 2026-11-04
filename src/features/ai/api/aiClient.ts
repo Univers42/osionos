@@ -23,6 +23,7 @@
  */
 
 import { AiError, toAiError } from "./aiContract";
+import { AI_CAPABILITY_NAMES, capabilityGatedFetch } from "./aiCapabilities";
 import { conversationFromWire, messageFromWire, summaryFromBody, type ConversationSummary, type ConversationWire, type MessageWire } from "./aiWire";
 import type {
   AiAgent,
@@ -56,6 +57,7 @@ import type {
 import { bearerFetch } from "@/shared/agent/bearerFetch";
 import { getActivePageJwt, reportRevokedSession } from "@/shared/api/client";
 import { revocationAwareFetch } from "@/shared/api/sessionRevocation";
+import { createCapabilityReader } from "@/shared/api/capabilityReader";
 
 /** The minimal fetch shape, so a test can inject a stub without a network. */
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -130,10 +132,22 @@ export function isAiConfigured(): boolean {
  * `requestStream`, which goes through this transport -- they do not fetch on their
  * own, the way the bridge's own agent stream does (packages/http-gate/src/sse.ts).
  */
-let transport: FetchLike = bearerFetch(
+const sessionFetch: FetchLike = bearerFetch(
   revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
   getActivePageJwt,
 );
+
+/** The service's switches, read once per session (aiCapabilities.ts). */
+const capabilities = createCapabilityReader(AI_CAPABILITY_NAMES, {
+  token: getActivePageJwt,
+  load: async () => {
+    const response = await sessionFetch(`${aiBaseUrl()}/capabilities`, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw await toAiError(response);
+    return response.json();
+  },
+});
+
+let transport: FetchLike = capabilityGatedFetch(sessionFetch, capabilities);
 
 /** Swaps the transport. The tests use it; the app never calls it. */
 export function setAiTransport(impl: FetchLike): void {
