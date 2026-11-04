@@ -31,10 +31,10 @@ const isDueAt: ExtraKeyCheck = (value) =>
 const isIntegerAtLeast = (min: number): ExtraKeyCheck => (value) =>
   typeof value === "number" && Number.isInteger(value) && value >= min;
 
-// Ponytail: a legitimate width above 100% is dropped (false negative); the
-// range keeps a persisted percentage sane.
+// A share of the column; above 100 for a block that breaks out of it. Caveat: a block wider
+// than ten columns is dropped (false negative); the ceiling keeps a hand-edited value sane.
 const isMediaWidth: ExtraKeyCheck = (value) =>
-  typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 100;
+  typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 1000;
 
 const isHeadingLevel: ExtraKeyCheck = (value) =>
   typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 6;

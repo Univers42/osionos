@@ -24,8 +24,8 @@ import { isEmbedRead, readEmbed } from './embed-postgrest.mjs';
 import { EDGE_RPCS } from './bridge-harness-rpcs.mjs';
 import { configFromEnv, createBridgeServer, createUserSession, validateBridgePayload } from '../../../scripts/bridge-api.mjs';
 
-const BAAS_URL = 'http://baas.local';
-const QUERY_ROUTER_URL = 'http://query-router.local';
+const BAAS_URL = 'http://baas.local'; // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
+const QUERY_ROUTER_URL = 'http://query-router.local'; // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 const RESERVED_PARAMS = new Set(['select', 'order', 'limit', 'on_conflict', 'columns', 'offset']);
 const ALL_PERMISSIONS = ['create', 'read', 'update', 'delete', 'admin'];
 

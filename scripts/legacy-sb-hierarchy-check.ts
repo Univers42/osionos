@@ -26,7 +26,7 @@ const payload = {
 
 const res = await fetch(`${BAAS}/query/v1/graph/overview`, { method: "POST", headers, body: JSON.stringify(payload) });
 const overview = (await res.json()) as BaasGraphResponse;
-console.log(`overview: ${overview.nodes.length} nodes, ${overview.edges.length} edges`);
+console.log(`overview: ${Number(overview.nodes.length)} nodes, ${Number(overview.edges.length)} edges`);
 
 // The known parent chain (a note child inside a note child).
 const chain = [

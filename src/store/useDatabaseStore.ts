@@ -91,5 +91,5 @@ function createIdSuffix(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID().slice(0, 8);
   }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${Date.now().toString(36)}-${Array.from(globalThis.crypto.getRandomValues(new Uint32Array(2)), (n) => n.toString(36)).join('').slice(0, 6)}`;
 }

@@ -17,7 +17,7 @@
  */
 /** Generate a bridge-valid tab id (charset/length). Call once per module/tab. */
 export function randomTabId(): string {
-  return (globalThis.crypto?.randomUUID?.() ?? `t-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  return (globalThis.crypto?.randomUUID?.() ?? `t-${Date.now()}-${Array.from(globalThis.crypto.getRandomValues(new Uint32Array(2)), (n) => n.toString(36)).join('')}`)
     .replace(/[^A-Za-z0-9_-]/g, '')
     .slice(0, 32) || `t-${Date.now()}`;
 }

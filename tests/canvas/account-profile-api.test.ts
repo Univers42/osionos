@@ -108,6 +108,24 @@ test("fetchAccountProfile: 200 -> the row and its version", async () => {
   assert.equal(calls[0].init?.method, "GET");
 });
 
+test("fetchAccountProfile: bridge media paths resolve against the bridge, not the web origin", async () => {
+  // Production 2026-11-04: the banner's "/api/media/..." path resolved against :8443, which
+  // answered with the app's index.html, so the <img> showed its alt text.
+  useSession("osionos_v1.tok");
+  const row = { ...PROFILE_ROW, avatarUrl: "/api/media/avatars/user-a/a.webp", bannerUrl: "/api/media/avatars/user-a/a-banner.webp" };
+  const { result } = await withFetch(() => json(200, row), () => fetchAccountProfile());
+  assert.equal(result.ok && result.profile.avatarUrl, "https://bridge.test/api/media/avatars/user-a/a.webp");
+  assert.equal(result.ok && result.profile.bannerUrl, "https://bridge.test/api/media/avatars/user-a/a-banner.webp");
+});
+
+test("fetchAccountProfile: an absolute or non-media URL is kept as it is", async () => {
+  useSession("osionos_v1.tok");
+  const row = { ...PROFILE_ROW, avatarUrl: "https://cdn.example.com/a.png", bannerUrl: "/elsewhere/b.png" };
+  const { result } = await withFetch(() => json(200, row), () => fetchAccountProfile());
+  assert.equal(result.ok && result.profile.avatarUrl, "https://cdn.example.com/a.png");
+  assert.equal(result.ok && result.profile.bannerUrl, "/elsewhere/b.png");
+});
+
 test("fetchAccountProfile: it sends the app-session token", async () => {
   useSession("osionos_v1.page-token");
   const { calls } = await withFetch(() => json(200, PROFILE_ROW), () => fetchAccountProfile());

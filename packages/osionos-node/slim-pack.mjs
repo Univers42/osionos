@@ -22,7 +22,7 @@ import { sha256File } from './artifact.mjs';
 
 export function hasGnuTar() {
 	try {
-		return execFileSync('tar', ['--version'], { encoding: 'utf8' }).includes('GNU tar');
+		return execFileSync('tar', ['--version'], { encoding: 'utf8' }).includes('GNU tar'); // NOSONAR S4036: fixed tool name run from the pinned toolchain, PATH is the dev/CI image
 	} catch {
 		return false;
 	}
@@ -36,6 +36,6 @@ export function packSlimServer({ libDir, outFile, pin = SERVER_PIN }) {
 	}
 	const excludes = pin.server.removeBuiltins.map((name) => `--exclude=vscode/extensions/${name}`);
 	const tar = ['--sort=name', '--mtime=@0', '--owner=0', '--group=0', '--numeric-owner', ...excludes, '-cf', '-', 'vscode', 'node'];
-	execFileSync('sh', ['-c', 'set -o pipefail; tar "$@" | gzip -n -9 > "$OUT"', 'tar', ...tar], { cwd: libDir, env: { ...process.env, OUT: outFile } });
+	execFileSync('sh', ['-c', 'set -o pipefail; tar "$@" | gzip -n -9 > "$OUT"', 'tar', ...tar], { cwd: libDir, env: { ...process.env, OUT: outFile } }); // NOSONAR S4036: fixed tool name run from the pinned toolchain, PATH is the dev/CI image
 	return { file: outFile, sha256: sha256File(outFile) };
 }

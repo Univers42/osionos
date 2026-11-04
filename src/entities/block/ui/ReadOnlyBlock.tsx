@@ -364,7 +364,11 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       );
 
     case "code":
-      return <CodeBlockReadOnly block={block} />;
+      return (
+        <SizedBlockBox block={block}>
+          <CodeBlockReadOnly block={block} />
+        </SizedBlockBox>
+      );
 
     case "equation":
       return (

@@ -5,12 +5,27 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
  * a local dev server, the Tauri shell and the desktop app. Anyone else keeps the configured
  * origin, so the browser still refuses them.
  */
-const CALLER_ORIGINS = [
-	/^https?:\/\/(localhost|127\.0\.0\.1):\d+$/i,
-	/^tauri:\/\/localhost$/i,
-	/^https?:\/\/tauri\.localhost$/i,
-	/^app:\/\/osionos$/i,
-];
+const LOCAL_DEV_ORIGIN = /^(https?):\/\/(localhost|127\.0\.0\.1):(\d{1,5})$/i;
+const FIXED_CALLER_ORIGINS = new Map<string, string>([
+	['tauri://localhost', 'tauri://localhost'],
+	['http://tauri.localhost', 'http://tauri.localhost'],
+	['https://tauri.localhost', 'https://tauri.localhost'],
+	['app://osionos', 'app://osionos'],
+]);
+
+/**
+ * The origin to answer with, rebuilt from fixed strings and a numeric port rather than
+ * echoing the request header: null when the caller is not one of the above.
+ */
+function callerOrigin(origin: string): string | null {
+	const local = LOCAL_DEV_ORIGIN.exec(origin);
+	if (local) {
+		const port = Number.parseInt(local[3], 10);
+		if (port < 1 || port > 65535) return null;
+		return `${local[1].toLowerCase()}://${local[2].toLowerCase()}:${port}`;
+	}
+	return FIXED_CALLER_ORIGINS.get(origin.toLowerCase()) ?? null;
+}
 
 const isOriginHeader = (name: string): boolean => name.toLowerCase() === 'access-control-allow-origin';
 
@@ -21,8 +36,8 @@ const isOriginHeader = (name: string): boolean => name.toLowerCase() === 'access
  * above, whichever code writes it.
  */
 export function answerWithOrigin(request: IncomingMessage, response: ServerResponse): void {
-	const origin = String(request.headers.origin ?? '');
-	if (!CALLER_ORIGINS.some((pattern) => pattern.test(origin))) return;
+	const origin = callerOrigin(String(request.headers.origin ?? ''));
+	if (origin === null) return;
 	const setHeader = response.setHeader.bind(response);
 	response.setHeader = (name, value) => setHeader(name, isOriginHeader(name) ? origin : value);
 	const writeHead = response.writeHead.bind(response) as (...args: unknown[]) => ServerResponse;

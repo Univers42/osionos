@@ -23,7 +23,8 @@ export function blockSizeUpdate(commit: BlockResizeCommit, heightKey?: BlockHeig
 }
 
 /** Whether a table or inline database still bleeds into the page gutter: only until the
- *  user gives it a width or a height, which the bleed would contradict. */
+ *  user gives it a width (100 % is the column, the default) or a height, which the bleed
+ *  would contradict. */
 export function keepsWideBleed(block: Pick<Block, "mediaWidth" | "blockHeight">): boolean {
-  return (block.mediaWidth === undefined || block.mediaWidth >= 100) && block.blockHeight === undefined;
+  return (block.mediaWidth === undefined || block.mediaWidth === 100) && block.blockHeight === undefined;
 }

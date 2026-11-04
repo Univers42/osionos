@@ -27,7 +27,8 @@ export function AddAxisButton({ axis, onAdd }: Readonly<{ axis: Axis; onAdd: (ax
   const isColumn = axis === "column";
   const [dragCount, setDragCount] = useState(0);
   const label = isColumn ? "column" : "row";
-  const anchorClass = isColumn ? "absolute -right-3 top-1/2 -translate-y-1/2 flex-col" : "absolute -bottom-3 left-1/2 -translate-x-1/2 flex-row";
+  // Past the block's 8 px resize grip, not on it: the whole edge of the table resizes the block.
+  const anchorClass = isColumn ? "absolute left-full ml-3 top-1/2 -translate-y-1/2 flex-col" : "absolute top-full mt-3 left-1/2 -translate-x-1/2 flex-row";
 
   const startDrag = (event: React.PointerEvent) => {
     event.preventDefault();

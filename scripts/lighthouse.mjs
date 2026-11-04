@@ -45,7 +45,7 @@ function runLighthouse({ url, preset, chrome }) {
     `--output-path=${jsonPath}`,
   ];
   if (preset) args.push(`--preset=${preset}`);
-  const result = spawnSync("npx", args, {
+  const result = spawnSync("npx", args, { // NOSONAR S4036: fixed tool name run from the pinned toolchain, PATH is the dev/CI image
     stdio: ["ignore", "ignore", "inherit"],
     env: { ...process.env, CHROME_PATH: chrome },
   });

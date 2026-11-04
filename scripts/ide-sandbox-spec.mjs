@@ -72,7 +72,7 @@ export function deriveHomeVolume(userId) {
  *  never the databases that share the host (they run at the default 0). */
 export const SANDBOX_OOM_SCORE_ADJ = 500;
 
-const PROXY_URL = "http://ide-egress:8080";
+const PROXY_URL = "http://ide-egress:8080"; // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 
 /** The fixed container-create body. Hardening (conditions 5,14,15) is baked in;
  *  the ONLY inputs are the validated identity + server config. GIT_PAT is NOT in

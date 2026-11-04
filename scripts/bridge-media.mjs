@@ -100,7 +100,7 @@ async function signPaths(deps, session, request, response, config) {
 	for (const input of paths) {
 		let pathname;
 		try {
-			pathname = new URL(input, 'http://media.invalid').pathname;
+			pathname = new URL(input, 'https://media.invalid').pathname;
 		} catch {
 			continue;
 		}

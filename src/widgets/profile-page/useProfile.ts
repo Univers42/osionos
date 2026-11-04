@@ -21,6 +21,7 @@
 import { useEffect, useState } from 'react';
 
 import { api, getActivePageJwt } from '@/shared/api/client';
+import { bridgeMediaUrl } from '@/shared/lib/media/bridgeMediaUrl';
 
 import type { ReadmeProjection } from './ReadmeBlocks';
 
@@ -65,6 +66,9 @@ export const PUBLIC_FIELD_KEYS = [
 export function mergePublicFields(base: MemberProfile, pub: Record<string, unknown>): MemberProfile {
   const merged: Record<string, unknown> = { ...base };
   for (const key of PUBLIC_FIELD_KEYS) if (key in pub) merged[key] = pub[key];
+  for (const key of ['avatarUrl', 'bannerUrl'] as const) {
+    if (typeof merged[key] === 'string') merged[key] = bridgeMediaUrl(merged[key] as string);
+  }
   return merged as unknown as MemberProfile;
 }
 

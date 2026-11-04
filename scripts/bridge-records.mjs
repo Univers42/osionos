@@ -36,7 +36,7 @@ export function pkColumnForEngine(engine) {
  */
 export function uuidv5(name, namespace = RECORD_NOTE_NAMESPACE) {
 	const nsBytes = Buffer.from(namespace.replace(/-/g, ''), 'hex');
-	const hash = createHash('sha1').update(nsBytes).update(Buffer.from(String(name), 'utf8')).digest();
+	const hash = createHash('sha1').update(nsBytes).update(Buffer.from(String(name), 'utf8')).digest(); // NOSONAR S4790: SHA-1 is mandated by the protocol (RFC 6455 / RFC 4122 v5), not a security hash
 	const bytes = hash.subarray(0, 16);
 	bytes[6] = (bytes[6] & 0x0f) | 0x50; // version 5
 	bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant

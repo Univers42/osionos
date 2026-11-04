@@ -26,7 +26,7 @@ const providerBody = (message: string, errorType?: string) =>
 	JSON.stringify({ error: { code: 400, message, metadata: { provider_name: CANARY, raw: CANARY, ...(errorType ? { error_type: errorType } : {}) } } });
 const lastData = (events: { event: string; data: unknown }[]) => lastOf(events as never).data as Record<string, unknown>;
 
-/** One attempt: a chain of one retries, and the SDK sleeps through a Retry-After. */
+/** The run ends on the frame the test reads, with a fallback that also fails. */
 const oneAttempt = (answer: Parameters<typeof failing.script>[1]) => {
 	failing.script('mock-metered', answer);
 	failing.script('mock-vision', answer);
