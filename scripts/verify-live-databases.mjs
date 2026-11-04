@@ -55,7 +55,7 @@ async function main() {
   if (res.status !== 200) throw new Error(`GET /api/databases → ${res.status}: ${JSON.stringify(body)}`);
   const dbs = Array.isArray(body?.databases) ? body.databases : [];
   const names = dbs.map((d) => d.name);
-  console.log(`/api/databases → ${dbs.length} databases: ${clean(names.join(', '))}`);
+  console.log(clean(`/api/databases → ${Number(dbs.length)} databases: ${names.join(', ')}`));
 
   if (dbs.length === 0) throw new Error('registry returned 0 databases (tenant/user-header regression).');
   const onlyMocks = names.length > 0 && names.every((n) => MOCK_NAMES.includes(n));
@@ -70,7 +70,7 @@ async function main() {
   const schema = await sres.json().catch(() => null);
   if (sres.status !== 200) throw new Error(`schema[${first.name}] → ${sres.status}: ${JSON.stringify(schema)}`);
   const tableCount = Array.isArray(schema?.tables) ? schema.tables.length : 0;
-  console.log(`schema[${clean(first.name)}] → ${tableCount} tables`);
+  console.log(clean(`schema[${first.name}] → ${Number(tableCount)} tables`));
   if (tableCount === 0) throw new Error(`schema[${first.name}] returned no tables.`);
 
   console.log('PASS: bridge serves the full live-database registry (no mock fallback).');
