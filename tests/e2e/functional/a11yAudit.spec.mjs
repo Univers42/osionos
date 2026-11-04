@@ -214,7 +214,7 @@ for (const theme of ["light", "dark"]) {
       await createBlockViaSlash(page, "table", "Table");
       const addRowBtn = page.getByRole("button", { name: "Add row" });
       await expect(addRowBtn).toBeAttached();
-      await addRowBtn.hover();
+      await addRowBtn.focus();
       const add2Btn = page.getByRole("button", { name: "Add 2 rows" });
       await expect(add2Btn).toBeVisible();
       const box = await add2Btn.boundingBox();
