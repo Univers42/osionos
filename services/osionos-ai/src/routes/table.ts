@@ -23,6 +23,7 @@ import {
 	handleProviders,
 } from './connections.ts';
 import { handleUsage } from './usage.ts';
+import { handleCapabilities } from './capabilities.ts';
 import { handleRelated } from './related.ts';
 import { handleSources } from './sources.ts';
 import { handleApprovalDecision, handleApprovalGet, handleApprovalList, handleApprovalResume, handleApprovalUndo } from './approvals.ts';
@@ -91,6 +92,7 @@ export const ROUTES: RouteEntry[] = [
 	{ methods: ['GET'], pattern: /^\/api\/ai\/agents$/, label: '/api/ai/agents', handle: handleAgents },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/providers$/, label: '/api/ai/providers', handle: handleProviders },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/usage$/, label: '/api/ai/usage', handle: handleUsage },
+	{ methods: ['GET'], pattern: /^\/api\/ai\/capabilities$/, label: '/api/ai/capabilities', handle: handleCapabilities },
 	{
 		methods: ['GET'],
 		pattern: /^\/api\/ai\/pages\/([^/]+)\/related$/,
