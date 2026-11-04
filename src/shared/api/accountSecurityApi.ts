@@ -25,6 +25,7 @@
  */
 
 import { API_BASE } from '@/shared/api/client';
+import { stepUpFirstFetch } from '@/shared/api/stepUpFirst';
 import { sudoRequiredAwareFetch } from '@/shared/api/sudoRequired';
 import { classifySettingsError, settingsJwt } from '@/store/settings/settingsStoreUtils';
 
@@ -58,7 +59,7 @@ export interface ExportJob {
 
 export const EXPIRED_EXPORT_MESSAGE = 'This export expired; request a new one';
 
-const guardedFetch = sudoRequiredAwareFetch((input, init) => fetch(input, init));
+const guardedFetch = sudoRequiredAwareFetch(stepUpFirstFetch((input, init) => fetch(input, init)));
 
 function text(value: unknown): string | null {
   return typeof value === 'string' ? value : null;

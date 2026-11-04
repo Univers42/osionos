@@ -63,10 +63,15 @@ function useSession(pageJwt: string | null) {
 
 interface Call { url: string; init: RequestInit | undefined }
 
+// The step-up read before a gated request (src/shared/api/stepUpFirst.ts, tested on its own)
+// answers "active" and is not recorded: these tests assert the request that follows it.
+const isStepUpRead = (input: string, init?: RequestInit) => (init?.method ?? "GET") === "GET" && String(input).endsWith("/api/account/sudo");
+
 async function withFetch<T>(answer: (call: Call) => Response, run: () => Promise<T>): Promise<{ result: T; calls: Call[] }> {
   const original = globalThis.fetch;
   const calls: Call[] = [];
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (isStepUpRead(input, init)) return new Response(JSON.stringify({ active: true }), { status: 200 });
     const call = { url: String(input), init };
     calls.push(call);
     return answer(call).clone();

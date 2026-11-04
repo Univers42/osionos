@@ -54,6 +54,8 @@ async function withFetch<T>(answer: () => Response, run: () => Promise<T>): Prom
   const original = globalThis.fetch;
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    // The step-up read before the export request (src/shared/api/stepUpFirst.ts) answers "active".
+    if ((init?.method ?? "GET") === "GET" && String(input).endsWith("/api/account/sudo")) return new Response(JSON.stringify({ active: true }), { status: 200 });
     calls.push({ url: String(input), init });
     return answer();
   }) as typeof fetch;
