@@ -71,7 +71,7 @@ export function Portal() {
               <span className="text-[var(--osio-fg-muted)]">Display name</span>
               <input name="display-name"
                 type="text" value={name} onChange={(e) => setName(e.target.value)}
-                autoComplete="nickname" placeholder="Your name"
+                autoComplete="name" placeholder="Your name"
                 className="rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
               />
             </label>
