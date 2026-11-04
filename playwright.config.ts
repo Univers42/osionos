@@ -146,6 +146,9 @@ export default defineConfig({
       // baseURL; the bridge-stub mode builds against its own stub origin.
       VITE_API_URL: bridgeStub ? BRIDGE_STUB_URL : (process.env.PLAYWRIGHT_API_URL ?? ""),
       VITE_AI_URL: aiStub ? AI_STUB_URL : "",
+      // The bridge-stub specs answer this host too (bridge-stub/mobileLayout.spec.mjs), so the
+      // Calendar rail item exists there; elsewhere the build keeps whatever the environment says.
+      ...(bridgeStub ? { VITE_CALENDAR_APP_URL: "https://calendar.invalid" } : {}),
       VITE_ALLOW_OFFLINE_MODE: "true",
       VITE_REQUIRE_BRIDGE_SESSION: "false",
     },
