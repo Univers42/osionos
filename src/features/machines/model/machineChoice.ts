@@ -90,9 +90,15 @@ export function shellWord(value: string): string {
 
 const INSTALLER_URL = "https://raw.githubusercontent.com/Univers42/osionos/main/packages/osionos-node/install.sh";
 
+/** The app origins a node may remember a computer for (devil verdict 2026-11-01, Amendment 1, R5;
+ *  groot ADR 0041: production and, by the owner's override, the beta). Any other app's command
+ *  remembers nothing, so its terminal asks for the emailed code on every load. */
+export const REMEMBER_ORIGINS: readonly string[] = ["https://baas.tail10f2ea.ts.net:8443", "https://baas-beta.tail10f2ea.ts.net"];
+
 /** Installs or updates, pairs and starts, in one command that stays running. */
 export function connectCommand(bridgeUrl: string, appOrigin: string, name?: string): string {
   const named = name ? ` --name ${shellWord(name)}` : "";
-  return `curl -fsSL ${INSTALLER_URL} | sh -s -- --bridge ${shellWord(bridgeUrl)} --app-origin ${shellWord(appOrigin)}${named}`;
+  const remembered = REMEMBER_ORIGINS.includes(appOrigin) ? ` --remember-origin ${shellWord(appOrigin)}` : "";
+  return `curl -fsSL ${INSTALLER_URL} | sh -s -- --bridge ${shellWord(bridgeUrl)} --app-origin ${shellWord(appOrigin)}${remembered}${named}`;
 }
 
