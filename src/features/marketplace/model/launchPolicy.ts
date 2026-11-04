@@ -1,7 +1,8 @@
 // Decides whether a marketplace app can be opened from THIS origin, and at which URL.
-// The catalogue is server data (seed-marketplace.mjs), one seed for every clone, so its
-// launch URLs are the dev ones (https://localhost:3002 …). The build's VITE_*_APP_URL is
-// the deployment's own answer and wins: before, the localhost catalogue URL was checked
+// The catalogue is server data (seed-marketplace.mjs). Records seeded before 2026-11-04 still
+// hold the dev URLs (https://localhost:3002 …); the seed now writes the deployment's own URL or
+// none. The build's VITE_*_APP_URL is the deployment's own answer and wins: before, the
+// localhost catalogue URL was checked
 // even when the public build named Mail's public origin, so a public site could never
 // list Mail or Calendar (baas, 2026-10-22). A loopback URL shown on a public origin would
 // open the visitor's own machine, so such an entry is unlaunchable and hidden.
@@ -38,4 +39,13 @@ export function effectiveLaunchUrl(identifier: string, launchUrl: string, pageHo
 
 export function isListableApp(identifier: string, launchUrl: string, pageHostname = currentPageHostname(), pageOrigin = currentPageOrigin()): boolean {
   return listableFor(identifier, launchUrl, configuredUrlFor(identifier), pageHostname, pageOrigin);
+}
+
+/** The website a record shows on this page. A built-in app's is the URL this build is configured
+ *  with (`configured`; "" hides it), never the stored one: the seed's dev loopback URLs reached
+ *  the tailnet's header ("localhost:3007", 2026-11-04). Any other app's stored website shows when
+ *  this page can reach it. */
+export function websiteFor(website: string, configured: string | null, pageHostname: string): string {
+  const url = configured ?? website;
+  return isReachableUrl(url, pageHostname) ? url : "";
 }

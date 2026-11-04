@@ -16,6 +16,7 @@
 // (5cc30a3f) only. Apps marked `builtIn` ship inside osionos: they are listed here for their
 // description pages but are never part of an install record. Apps listed in RETIRED are
 // removed (children, then the page) on every run.
+// The app URLs come from the environment (appUrl below); unset, they are left empty.
 // Apply with:  node seed-marketplace.mjs | docker exec -i mini-baas-postgres psql -U postgres -d postgres
 
 import { createHash } from "node:crypto";
@@ -24,6 +25,27 @@ const WS = "5a4b1c2d-1111-4111-8111-000000000001"; // marketplace workspace
 const DB = "5a4b1c2d-2222-4222-8222-000000000002"; // marketplace database (records' database_id)
 const SYS = "5a4b1c2d-0000-4000-8000-000000000000"; // system owner
 const DEV = "5cc30a3f-87e4-471d-b795-c936723081ee"; // dev.pro.photo (apps installed for this user)
+
+// The app URLs are the deployment's own, read from the variables its web build and bridge
+// already set (the first one set wins); an unset or non-http(s) one stays "". There is no
+// localhost default: on the tailnet a loopback URL points at the visitor's own machine
+// (owner rule, 2026-11-04). A dev clone that wants one sets it.
+const appUrl = (...names) => {
+  for (const name of names) {
+    const value = String(process.env[name] ?? "").trim().replace(/\/+$/, "");
+    if (value === "") continue;
+    try {
+      return ["http:", "https:"].includes(new URL(value).protocol) ? value : "";
+    } catch {
+      return "";
+    }
+  }
+  return "";
+};
+const MAIL_URL = appUrl("VITE_MAIL_APP_URL", "PUBLIC_MAIL_ORIGIN");
+const CALENDAR_URL = appUrl("VITE_CALENDAR_APP_URL", "PUBLIC_CALENDAR_ORIGIN");
+const WHITEBOARD_URL = appUrl("VITE_WHITEBOARD_APP_URL", "OSIONOS_WHITEBOARD_ORIGIN");
+const DESKTOP_URL = appUrl("OSIONOS_APP_URL", "PUBLIC_OSIONOS_APP_URL");
 
 const det = (s) => {
   const h = createHash("md5").update("mkt:" + s).digest("hex");
@@ -48,20 +70,27 @@ function appProps(m) {
     prop("identifier", "Identifier", "text", m.id),
     prop("publishedAt", "Published", "date", "2026-06-01T00:00:00Z"),
     prop("categories", "Categories", "multi_select", m.categories),
-    prop("resources", "Resources", "multi_select", [m.website]),
+    prop("resources", "Resources", "multi_select", m.website ? [m.website] : []),
     prop("published", "Published", "checkbox", true),
     prop("launchKind", "Launch", "text", m.launchKind ?? "embed"),
     prop("launchUrl", "Launch URL", "url", m.launchUrl),
   ];
 }
 
+function installationText(m) {
+  const where = m.launchUrl ? ` the app ${m.builtIn ? "runs" : "opens"} at ${m.launchUrl}.` : "";
+  return m.builtIn
+    ? `Built in to osionos: nothing to install. Open it from its rail icon${where ? ";" + where : "."}`
+    : `Install from the Marketplace panel${where ? ";" + where : "."}`;
+}
+
 const SUBPAGES = (m) => [
   { slug: "details", title: "Details", icon: "icon:file-text", content: [blk("heading_2", "Overview"), blk("paragraph", m.overview), ...m.features.map((f) => blk("bulleted_list", f))] },
   { slug: "features", title: "Features", icon: "icon:sparkles", content: [blk("heading_2", "Features"), ...m.features.map((f) => blk("bulleted_list", f))] },
   { slug: "changelog", title: "Changelog", icon: "icon:history", content: [blk("heading_3", `${m.version}`), blk("bulleted_list", "Initial release inside the osionos marketplace.")] },
-  { slug: "installation", title: "Installation", icon: "icon:download", rail: true, content: [blk("paragraph", m.builtIn ? `Built in to osionos: nothing to install. Open it from its rail icon; the app runs at ${m.launchUrl}.` : `Install from the Marketplace panel; the app opens at ${m.launchUrl}.`)] },
+  { slug: "installation", title: "Installation", icon: "icon:download", rail: true, content: [blk("paragraph", installationText(m))] },
   { slug: "categories", title: "Categories", icon: "icon:tag", rail: true, content: [blk("paragraph", m.categories.join(", "))] },
-  { slug: "resources", title: "Resources", icon: "icon:link", rail: true, content: [blk("paragraph", m.website)] },
+  { slug: "resources", title: "Resources", icon: "icon:link", rail: true, content: m.website ? [blk("paragraph", m.website)] : [] },
 ];
 
 function pageInsert({ id, parent, title, icon, surface, dbId, props, content }) {
@@ -72,41 +101,41 @@ ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, icon=EXCLUDED.icon, databas
 
 const APPS = [
   {
-    id: "osionos.mail", title: "Mail", icon: "icon:mail", company: "osionos", website: "https://localhost:3002",
+    id: "osionos.mail", title: "Mail", icon: "icon:mail", company: "osionos", website: MAIL_URL,
     description: "Read & manage your Gmail messages directly inside osionos.",
     overview: "Mail brings your Gmail inbox into osionos with a fast, keyboard-first reader and a secure OAuth bridge.",
     version: "0.1.0", categories: ["Productivity", "Communication"],
-    launchUrl: "https://localhost:3002",
+    launchUrl: MAIL_URL,
     features: ["Unified Gmail inbox", "Compose & reply", "Labels and search", "Secure OAuth bridge — tokens never touch the client"],
   },
   {
-    id: "osionos.calendar", title: "Calendar", icon: "icon:calendar", company: "osionos", website: "https://localhost:3003",
+    id: "osionos.calendar", title: "Calendar", icon: "icon:calendar", company: "osionos", website: CALENDAR_URL,
     description: "See and manage your Google Calendar events from osionos.",
     overview: "Calendar embeds your Google Calendar with month/week views and event editing, bridged over a secure OAuth flow.",
     version: "0.1.0", categories: ["Productivity"],
-    launchUrl: "https://localhost:3003",
+    launchUrl: CALENDAR_URL,
     features: ["Month & week views", "Create and edit events", "Multiple calendars", "Secure OAuth bridge"],
   },
   {
-    id: "osionos.desktop", title: "Desktop", icon: "icon:monitor", company: "osionos", website: "https://localhost:3001",
+    id: "osionos.desktop", title: "Desktop", icon: "icon:monitor", company: "osionos", website: DESKTOP_URL,
     description: "Run osionos as a focused desktop-style window over the local suite.",
     overview: "The osionos workspace in a dedicated desktop window — same data, fewer distractions.",
     version: "0.5.4", categories: ["Productivity"],
-    launchUrl: "https://localhost:3001",
+    launchUrl: DESKTOP_URL,
     features: ["Native-feel window shell", "Loopback to the local suite", "Offline-friendly"],
   },
   {
-    id: "osionos.whiteboard", title: "Whiteboard", icon: "icon:pen-tool", company: "osionos", website: "https://localhost:3008", builtIn: true,
-    description: "Built in: an infinite canvas — sketch, diagram &amp; plan on boards you open full-screen or drop into any page with /whiteboard.",
-    overview: "Whiteboard is built into osionos: it is on for every account, with nothing to install. Its rail icon opens your board gallery, where every board shows a live picture of its contents; click one to open it. In any page, type /whiteboard &lt;name&gt; to create a new board on the spot and embed it inline — with no name it is Untitled. Open full turns an embedded board into a tab of its own. Boards autosave to your account and only you can see them. Drawings from the retired Draw tool download as .osidraw.",
+    id: "osionos.whiteboard", title: "Whiteboard", icon: "icon:pen-tool", company: "osionos", website: WHITEBOARD_URL, builtIn: true,
+    description: "Built in: an infinite canvas — sketch, diagram & plan on boards you open full-screen or drop into any page with /whiteboard.",
+    overview: "Whiteboard is built into osionos: it is on for every account, with nothing to install. Its rail icon opens your board gallery, where every board shows a live picture of its contents; click one to open it. In any page, type /whiteboard <name> to create a new board on the spot and embed it inline — with no name it is Untitled. Open full turns an embedded board into a tab of its own. Boards autosave to your account and only you can see them. Drawings from the retired Draw tool download as .osidraw.",
     version: "1.0.0", categories: ["Productivity", "Design"], launchKind: "embed",
-    launchUrl: "https://localhost:3008",
+    launchUrl: WHITEBOARD_URL,
     features: [
       "Built in: always on, no install step",
       "Board gallery behind the rail icon, with a live picture of every board",
-      "/whiteboard &lt;name&gt; creates a board and embeds it inline (Untitled without a name)",
+      "/whiteboard <name> creates a board and embeds it inline (Untitled without a name)",
       "Open full opens an embedded board in its own tab",
-      "Hand-drawn shapes, arrows that stay attached, freehand, text &amp; images",
+      "Hand-drawn shapes, arrows that stay attached, freehand, text & images",
       "Autosave to your account, private to you",
       "Drawings from the retired Draw tool download as .osidraw",
     ],

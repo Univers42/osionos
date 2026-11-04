@@ -19,6 +19,7 @@ import type { PageEntry } from "@/entities/page";
 import type { HeaderSlot } from "@/entities/page/model/headerTemplate";
 
 import { resolveBinding, formatStat, linkLabel, mediaIconValue, type BindingValue } from "../model/headerBinding";
+import { headerLinkHref } from "../model/headerLink";
 
 const STAR_ON = "icon:star;color=var(--osio-block-tint-yellow-fg)";
 const STAR_OFF = "icon:star;color=var(--osio-fg-subtle)";
@@ -65,12 +66,14 @@ export const HeaderSlotView: React.FC<SlotProps> = ({ slot, page, onAction }) =>
         </span>
       );
     }
-    case "link":
-      return value ? (
-        <a href={String(value)} target="_blank" rel="noreferrer" className="text-[var(--osio-accent-text)] hover:underline">
-          {linkLabel(String(value))}
+    case "link": {
+      const href = headerLinkHref(page, slot.bind, value);
+      return href ? (
+        <a href={href} target="_blank" rel="noreferrer" className="text-[var(--osio-accent-text)] hover:underline">
+          {linkLabel(href)}
         </a>
       ) : null;
+    }
     case "stat":
       return (
         <span className="inline-flex items-center gap-1 text-[var(--osio-fg-muted)]">
