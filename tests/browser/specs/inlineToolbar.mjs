@@ -663,7 +663,7 @@ export const inlineToolbarScenarios = [
       await selectText(editor, "alpha");
       await expect(toolbarButton(page, "Comment")).toBeVisible();
       for (const label of ["Improve writing", "Proofread", "Explain", "Reformat", "Edit with AI"]) {
-        await expect(page.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: label, exact: true })).toBeVisible();
       }
     },
   ),
