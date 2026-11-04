@@ -21,6 +21,8 @@ import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
 import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
 import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
 import { TableBlockReadOnly } from "./TableBlockReadOnly";
+import { SizedBlockBox } from "./SizedBlockBox";
+import { keepsWideBleed } from "../model/blockSize";
 import { LayoutBlockReadOnly } from "./LayoutBlockReadOnly";
 import { VisibleWhenGate } from "./VisibleWhenGate";
 import { BoundFieldReadOnly } from "./BoundFieldReadOnly";
@@ -453,7 +455,11 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       return <ButtonBlockReadOnly block={block} />;
 
     case "table_block":
-      return <TableBlockReadOnly block={block} wide={wideBlock} />;
+      return (
+        <SizedBlockBox block={block}>
+          <TableBlockReadOnly block={block} wide={wideBlock && keepsWideBleed(block)} />
+        </SizedBlockBox>
+      );
 
     case "database_inline": {
       const databaseEmbed = (
@@ -468,10 +474,13 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       );
       // Below-the-fold Home sections defer-mount (reserve height, no first-paint work).
       const databaseContent = block.deferMount ? <DeferredMount>{databaseEmbed}</DeferredMount> : databaseEmbed;
+      const wide = wideBlock && keepsWideBleed(block);
       return (
-        <div className={wideBlock ? "osio-wide-block my-2" : "my-2"}>
-          {wideBlock ? <div data-wide-block-content>{databaseContent}</div> : databaseContent}
-        </div>
+        <SizedBlockBox block={block}>
+          <div className={wide ? "osio-wide-block my-2" : "my-2"}>
+            {wide ? <div data-wide-block-content>{databaseContent}</div> : databaseContent}
+          </div>
+        </SizedBlockBox>
       );
     }
 
@@ -533,9 +542,11 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "bookmark":
       return (
         <div className="my-3">
-          <Suspense fallback={databaseLoadingFallback}>
-            <ReadOnlyLinkBlock block={block} />
-          </Suspense>
+          <SizedBlockBox block={block}>
+            <Suspense fallback={databaseLoadingFallback}>
+              <ReadOnlyLinkBlock block={block} />
+            </Suspense>
+          </SizedBlockBox>
         </div>
       );
 

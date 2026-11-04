@@ -39,7 +39,6 @@ function toBlock(attachment: Attachment, src: string): Block {
     type: attachment.type === 'url' ? 'file' : attachment.type,
     content: attachment.name ?? '',
     asset: `url:${src}`,
-    mediaWidth: attachment.type === 'image' || attachment.type === 'video' ? 70 : 100,
   };
 }
 
@@ -52,15 +51,19 @@ const MediaAttachment: React.FC<{ attachment: Attachment }> = ({ attachment }) =
     );
   }
   const isImage = attachment.type === 'image';
+  // 70 % and left-aligned here, not through `mediaWidth`: a page block with one is centred.
+  const widthClass = isImage || attachment.type === 'video' ? 'w-[70%]' : undefined;
   return (
     <div className="mt-1 max-w-md">
-      {isImage ? (
-        <button type="button" onClick={() => setZoomed(true)} aria-label="View image larger" className="block w-full cursor-zoom-in">
+      <div className={widthClass}>
+        {isImage ? (
+          <button type="button" onClick={() => setZoomed(true)} aria-label="View image larger" className="block w-full cursor-zoom-in">
+            <MediaBlockPreview block={toBlock(attachment, src)} />
+          </button>
+        ) : (
           <MediaBlockPreview block={toBlock(attachment, src)} />
-        </button>
-      ) : (
-        <MediaBlockPreview block={toBlock(attachment, src)} />
-      )}
+        )}
+      </div>
       {zoomed && isImage && <MediaLightbox src={src} name={attachment.name} onClose={() => setZoomed(false)} />}
     </div>
   );

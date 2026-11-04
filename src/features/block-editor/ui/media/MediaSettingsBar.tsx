@@ -79,7 +79,7 @@ export const MediaSettingsBar: React.FC<MediaSettingsBarProps> = ({
         className="h-1.5 w-24 accent-[var(--osio-accent)]"
         onChange={(event) => onWidthChange(Number(event.target.value))}
       />
-      <span className="w-9 tabular-nums">{mediaWidth}%</span>
+      <span className="w-9 tabular-nums">{Math.round(mediaWidth)}%</span>
     </div>
 
     {[50, 75, 100].map((width) => (
