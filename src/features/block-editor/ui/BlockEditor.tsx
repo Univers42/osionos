@@ -34,6 +34,8 @@ import {
   resolveCalloutType,
   WHITEBOARD_BLOCK_DEFAULT_HEIGHT,
   WHITEBOARD_MIN_HEIGHT,
+  BLOCK_MIN_WIDTH,
+  blockSizeUpdate,
   type Block,
 } from "@/entities/block";
 
@@ -61,7 +63,9 @@ import { ButtonBlockEditor } from "@/features/button-program/ui/ButtonSettingsPo
 import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
+import { ResizableWideBlock } from "./ResizableWideBlock";
 import { VisibleWhenGate } from "@/entities/block/ui/VisibleWhenGate";
+import { BlockResizeFrame } from "@/shared/ui/molecules/BlockResizeFrame";
 
 // The same build-time switch the slash menu and the chat port read. Hoisted so
 // a paragraph render never re-reads the env / rebuilds the base URL.
@@ -1046,17 +1050,24 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           data-table-block-shell
           aria-label="Table block"
         >
-          <div className={wideBlock ? "osio-wide-block" : "osio-block-scroll-x"}>
-            <TableBlockEditor
-              block={block}
-              pageId={pageId}
-              style={editableStyle}
-              textStyle={editableStyle}
-              wide={wideBlock}
-              onDeleteTable={onDeleteCodeBlock}
-              onBeforeStructuralEdit={onBeforeStructuralEdit}
-            />
-          </div>
+          <ResizableWideBlock
+            block={block}
+            label="table"
+            wideBlock={wideBlock ?? false}
+            onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+          >
+            {(wide) => (
+              <TableBlockEditor
+                block={block}
+                pageId={pageId}
+                style={editableStyle}
+                textStyle={editableStyle}
+                wide={wide}
+                onDeleteTable={onDeleteCodeBlock}
+                onBeforeStructuralEdit={onBeforeStructuralEdit}
+              />
+            )}
+          </ResizableWideBlock>
         </div>
       );
 
@@ -1079,18 +1090,25 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           aria-label="Database block"
           className="relative group/dbblock"
         >
-          <div className={wideBlock ? "osio-wide-block" : "osio-block-scroll-x"}>
-            <div data-wide-block-content={wideBlock ? "" : undefined} className={wideBlock ? undefined : "contents"}>
-              <Suspense fallback={null}>
-                <DatabaseBlock
-                  databaseId={block.databaseId}
-                  initialViewId={block.viewId}
-                  mode="inline"
-                  recordLimit={block.recordLimit}
-                />
-              </Suspense>
-            </div>
-          </div>
+          <ResizableWideBlock
+            block={block}
+            label="database"
+            wideBlock={wideBlock ?? false}
+            onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+          >
+            {(wide) => (
+              <div data-wide-block-content={wide ? "" : undefined} className={wide ? undefined : "contents"}>
+                <Suspense fallback={null}>
+                  <DatabaseBlock
+                    databaseId={block.databaseId}
+                    initialViewId={block.viewId}
+                    mode="inline"
+                    recordLimit={block.recordLimit}
+                  />
+                </Suspense>
+              </div>
+            )}
+          </ResizableWideBlock>
         </div>
       );
 
@@ -1141,7 +1159,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
 
     case "whiteboard":
       return (
-        <div // NOSONAR - keyboard navigation wrapper for non-editable block
+        <BlockResizeFrame // NOSONAR - keyboard navigation wrapper for non-editable block
           onKeyDown={(e) => {
             // Only the wrapper's own keys: the board owns its hotkeys.
             if (e.target !== e.currentTarget) return;
@@ -1149,13 +1167,19 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           }}
           tabIndex={-1}
           aria-label="Whiteboard block"
-          className="relative my-0 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
+          label="whiteboard"
+          widthPercent={block.mediaWidth}
+          minWidth={BLOCK_MIN_WIDTH}
+          resizesHeight
+          minHeight={WHITEBOARD_MIN_HEIGHT}
+          onCommit={(commit) => commitBlockUpdate(block.id, blockSizeUpdate(commit, "whiteboardHeight"))}
+          className="my-0"
           style={{ height: Math.max(WHITEBOARD_MIN_HEIGHT, block.whiteboardHeight ?? WHITEBOARD_BLOCK_DEFAULT_HEIGHT) }}
         >
           <Suspense fallback={null}>
             <WhiteboardBlock block={block} onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)} />
           </Suspense>
-        </div>
+        </BlockResizeFrame>
       );
 
     case "diagram":

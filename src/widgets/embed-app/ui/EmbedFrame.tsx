@@ -18,9 +18,6 @@ interface Props {
   /** Already validated with `embeddableUrl`: this component trusts it. */
   url: string;
   title: string;
-  /** False while a parent drags a resize grip: a cross-origin iframe swallows the
-   *  pointer events, so the drag would stop at the frame's edge. */
-  interactive?: boolean;
 }
 
 /** How long the iframe may stay blank before the pane says so. A cross-origin frame
@@ -44,7 +41,7 @@ const WHITEBOARD_SANDBOX = "allow-scripts allow-same-origin allow-forms allow-mo
  *  The frame stays rendered under the message: a hidden (display:none) frame is one some
  *  browsers stop loading, so a slow board could never answer. Its `load` lifts the message.
  *  Shared by the pane view and the inline whiteboard block. */
-export const EmbedFrame: React.FC<Props> = ({ url, title, interactive = true }) => {
+export const EmbedFrame: React.FC<Props> = ({ url, title }) => {
   const [stalled, setStalled] = React.useState(false);
   const frameRef = React.useRef<HTMLIFrameElement>(null);
   useHydrawnHost(frameRef, url);
@@ -87,7 +84,6 @@ export const EmbedFrame: React.FC<Props> = ({ url, title, interactive = true }) 
           hasLoaded.current = true;
           setStalled(false);
         }}
-        style={interactive ? undefined : { pointerEvents: "none" }}
         className="h-full w-full flex-1 border-0 bg-[var(--osio-bg-page)]"
         sandbox={isWhiteboardFrameUrl(url) ? WHITEBOARD_SANDBOX : SANDBOX}
       />

@@ -26,7 +26,6 @@ interface Props {
   aspect: string;
   /** A fixed-pixel player (audio strips): the box is this tall at full width, never aspect-scaled. */
   height?: number;
-  interactive?: boolean;
 }
 
 /** The player URL with autoplay on, and Twitch's `parent` for this host. */
@@ -38,10 +37,10 @@ function playingSrc(embed: ProviderEmbed): string {
 
 /** A thumbnail with a play button that mounts the real player on click. Every pane
  *  mounts a live editor, so without this a page of eight videos loads eight players. */
-export const PlayerFacade: React.FC<Props> = ({ embed, title, thumb = "", aspect, height, interactive = true }) => {
+export const PlayerFacade: React.FC<Props> = ({ embed, title, thumb = "", aspect, height }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   if (isPlaying) {
-    return <WebEmbedFrame src={playingSrc(embed)} title={title || embed.provider} policy="provider" aspect={aspect} height={height} interactive={interactive} />;
+    return <WebEmbedFrame src={playingSrc(embed)} title={title || embed.provider} policy="provider" aspect={aspect} height={height} />;
   }
   const image = safeHttpUrl(thumb);
   return (

@@ -31,10 +31,6 @@ export interface EmbedViewProps {
   onShowAsBookmark?: () => void;
   /** Live surfaces only: a page nobody confirmed frameable shows "Embed anyway". Static surfaces get a plain card. */
   canEmbedAnyway?: boolean;
-  /** False while a parent drags a resize grip. */
-  interactive?: boolean;
-  /** Rendered inside a framed page's box (a resize grip); other views ignore it. */
-  frameOverlay?: React.ReactNode;
 }
 
 const REASON_NOTE = {
@@ -55,7 +51,7 @@ function renderMedia(view: Extract<EmbedViewModel, { kind: "media" }>): React.Re
 
 /** Whatever `chooseEmbedView` decides a link is: player, framed page, media file,
  *  bookmark card or plain text. Iframes mount once the block is near the viewport. */
-export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onShowAsBookmark, canEmbedAnyway = false, interactive = true, frameOverlay }) => {
+export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onShowAsBookmark, canEmbedAnyway = false }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const isNear = useHasBeenNearViewport(rootRef);
   // Component state on purpose: the choice is this viewer's, not the block's.
@@ -90,7 +86,7 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onS
     case "facade":
       body = (
         <>
-          <PlayerFacade embed={view.embed} title={view.title} thumb={view.thumb} aspect={view.aspect} height={view.height} interactive={interactive} />
+          <PlayerFacade embed={view.embed} title={view.title} thumb={view.thumb} aspect={view.aspect} height={view.height} />
           <EmbedFooter framedSrc={view.embed.src} openUrl={url} />
         </>
       );
@@ -107,11 +103,8 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onS
             policy={view.policy}
             height={height ?? view.height ?? (view.aspect === undefined ? DEFAULT_EMBED_HEIGHT : undefined)}
             aspect={view.aspect}
-            interactive={interactive}
             isActive={isNear}
-          >
-            {frameOverlay}
-          </WebEmbedFrame>
+          />
           <EmbedFooter
             framedSrc={view.src}
             openUrl={url}

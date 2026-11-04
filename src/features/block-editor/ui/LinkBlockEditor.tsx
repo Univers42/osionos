@@ -13,13 +13,13 @@
 import React, { useMemo } from "react";
 import { Bookmark, Globe } from "lucide-react";
 
-import type { Block } from "@/entities/block";
-import { useHeightResizeGrip } from "@/shared/lib/dom/useHeightResizeGrip";
+import { BLOCK_MIN_WIDTH, blockSizeUpdate, type Block } from "@/entities/block";
 import { linkPlaceholderText } from "@/shared/lib/embed/embedHints";
 import { parseEmbedSnapshot } from "@/shared/lib/embed/embedInfo";
 import { MAX_EMBED_HEIGHT, MIN_EMBED_HEIGHT, clampEmbedHeight } from "@/shared/lib/embed/embedPolicy";
 import { appForbiddenOrigins, safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard";
 import { EmbedView } from "@/shared/ui/embed/EmbedView";
+import { BlockResizeFrame } from "@/shared/ui/molecules/BlockResizeFrame";
 import { LinkCard, type LinkCardData } from "@/shared/ui/embed/LinkCard";
 import { chooseEmbedView } from "@/shared/ui/embed/model/chooseEmbedView";
 
@@ -36,9 +36,6 @@ interface LinkBlockEditorProps {
 const STATUS_ROW =
   "flex w-full items-center gap-3 rounded-[var(--osio-radius-panel)] bg-[var(--osio-bg-subtle)] px-3 py-3 text-sm text-[var(--osio-fg-muted)]";
 
-// grip -> the frame's box, which owns the height style
-const resolveFrameBox = (grip: HTMLElement): HTMLElement | null => grip.parentElement;
-
 /** The editing surface of `embed` and `bookmark`. `content` is the URL and `block.embed`
  *  the untrusted snapshot, so rendering goes through the same guarded views as the
  *  read-only block. The wrapper handles only its own keys: the frame owns its input. */
@@ -51,18 +48,12 @@ export const LinkBlockEditor: React.FC<LinkBlockEditorProps> = ({ block, onKeyDo
     () => chooseEmbedView({ url, snapshot, forbiddenOrigins: appForbiddenOrigins() }),
     [url, snapshot],
   );
-  // Provider players keep their aspect; only a plain framed page has a user height.
-  // An "unknown" card becomes a generic frame on "Embed anyway", so it already offers the grip.
+  // Every embed takes a width; provider players keep their aspect, so only a plain framed
+  // page has a user height. An "unknown" card becomes a generic frame on "Embed anyway",
+  // so it already offers the height grips (they move nothing until the frame is there).
   const isGenericFrame = view.kind === "frame" && view.policy === "generic" && view.aspect === undefined;
-  const isResizable = kind === "embed" && (isGenericFrame || (view.kind === "card" && view.reason === "unknown"));
+  const hasUserHeight = isGenericFrame || (view.kind === "card" && view.reason === "unknown");
   const frameHeight = clampEmbedHeight(block.embedHeight);
-  const { isDragging, gripProps } = useHeightResizeGrip({
-    height: frameHeight,
-    min: MIN_EMBED_HEIGHT,
-    max: MAX_EMBED_HEIGHT,
-    resolveTarget: resolveFrameBox,
-    onCommit: (embedHeight) => onUpdateBlock({ embedHeight }),
-  });
   const hasLink = url.trim() !== "";
 
   const onWrapperKeyDown = (event: React.KeyboardEvent) => {
@@ -97,25 +88,18 @@ export const LinkBlockEditor: React.FC<LinkBlockEditorProps> = ({ block, onKeyDo
     body = <LinkCard data={card} />;
   } else {
     body = (
-      <EmbedView
-        url={url}
-        snapshot={snapshot}
-        height={isResizable ? frameHeight : undefined}
-        canEmbedAnyway
-        interactive={!isDragging}
-        frameOverlay={
-          isResizable ? (
-            <div
-              role="separator"
-              aria-label="Resize embed"
-              {...gripProps}
-              className="absolute inset-x-0 bottom-0 z-10 h-2 cursor-ns-resize opacity-0 transition-opacity group-hover/link:opacity-100"
-            >
-              <div className="mx-auto h-1 w-10 rounded-full bg-[var(--osio-border-strong)]" />
-            </div>
-          ) : undefined
-        }
-      />
+      <BlockResizeFrame
+        label="embed"
+        widthPercent={block.mediaWidth}
+        minWidth={BLOCK_MIN_WIDTH}
+        resizesHeight={hasUserHeight}
+        minHeight={MIN_EMBED_HEIGHT}
+        maxHeight={MAX_EMBED_HEIGHT}
+        heightTarget="[data-embed-frame-box]"
+        onCommit={(commit) => onUpdateBlock(blockSizeUpdate(commit, "embedHeight"))}
+      >
+        <EmbedView url={url} snapshot={snapshot} height={hasUserHeight ? frameHeight : undefined} canEmbedAnyway />
+      </BlockResizeFrame>
     );
   }
 

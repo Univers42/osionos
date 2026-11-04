@@ -79,6 +79,7 @@ export const OVERLAY_PROBES: Record<string, Probe> = {
   backgroundColor: probe(mk({ type: "paragraph", content: "p", backgroundColor: "#222" }), "backgroundColor"),
   collapsed: probe(mk({ type: "toggle", content: "t", collapsed: true }), "collapsed"),
   mediaWidth: probe(mk({ type: "image", asset: "a", mediaWidth: 50 }), "mediaWidth"),
+  blockHeight: probe(mk({ type: "table_block", tableData: [["A"], ["1"]], blockHeight: 320 }), "blockHeight"),
   mediaShape: probe(mk({ type: "image", asset: "a", mediaShape: "circle" }), "mediaShape"),
   mediaAspect: probe(mk({ type: "image", asset: "a", mediaAspect: "16 / 9" }), "mediaAspect"),
   mediaTags: probe(mk({ type: "image", asset: "a", mediaTags: ["cat", "street sign"] }), "mediaTags"),
