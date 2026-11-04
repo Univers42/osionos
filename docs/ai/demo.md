@@ -44,7 +44,7 @@ service is <https://localhost:4000>, and the ai-dev stack is
 
 ## 1. M2 — Complete RAG on a large dataset (Major, 2)
 
-Sheet: [modules/m2-rag.md](modules/m2-rag.md). Confidence A.
+Sheet: [modules/m2-rag.md](modules/m2-rag.md). Confidence B.
 
 1. Open <https://localhost:13001> and open the Assistant on the demo workspace.
 2. Ask a question that the workspace's pages answer.
@@ -113,7 +113,7 @@ L1 is log-only and there is no auto-removal (C83); a human decides, always.
 
 ## 4. M5 — Voice / speech (Minor, 1)
 
-Sheet: [modules/m5-voice.md](modules/m5-voice.md). Confidence A.
+Sheet: [modules/m5-voice.md](modules/m5-voice.md). Confidence B.
 
 1. Before the first start, pre-fetch the model with the `docker compose
    --profile ai run --rm --no-deps osionos-ai-stt python -c ...` command in
