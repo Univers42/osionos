@@ -36,10 +36,24 @@ test.afterEach(() => {
 
 const frameOf = (page, type) => page.locator(`[data-block-type="${type}"] [data-block-resize-frame]`).first();
 
+// A block's own controls win where they overlap a grip (a table's "Add column" sits on the
+// middle of its right edge), so the drag starts at the first point along the grip that is the grip.
+async function grabPoint(frame, edge) {
+  return frame.locator(`:scope > [data-resize-edge="${edge}"]`).evaluate((grip) => {
+    const box = grip.getBoundingClientRect();
+    const alongX = box.width > box.height;
+    for (let t = 0.5, step = 0; step < 20; step += 1, t = 0.5 + (step % 2 ? 1 : -1) * Math.ceil(step / 2) * 0.05) {
+      const x = alongX ? box.left + box.width * t : box.left + box.width / 2;
+      const y = alongX ? box.top + box.height / 2 : box.top + box.height * t;
+      if (grip.contains(document.elementFromPoint(x, y))) return [x, y];
+    }
+    throw new Error(`no free point on the ${grip.dataset.resizeEdge} grip`);
+  });
+}
+
 async function drag(page, frame, edge, dx, dy) {
   await frame.hover();
-  const box = await frame.locator(`:scope > [data-resize-edge="${edge}"]`).boundingBox();
-  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+  const [x, y] = await grabPoint(frame, edge);
   await page.mouse.move(x, y);
   await page.mouse.down();
   await page.mouse.move(x + dx, y + dy, { steps: 6 });
@@ -50,6 +64,8 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
   for (const { type, block } of BLOCKS) {
     test(`${type} at ${viewport.width}px: a side grows both sides alike, the top edge changes the height`, async ({ page, baseURL }) => {
       await mockHydrawn(page);
+      // CI has a network: the framed page must answer, or its 404 lands in the console.
+      await page.route("https://example.com/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>app</title>" }));
       await seedPage(page, baseURL, [block]);
       // Resized after the page is open: the phone layout opens on Home, not on the page.
       await page.setViewportSize(viewport);
@@ -72,7 +88,15 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
       expect(Math.abs(taller.height - after.height - 50)).toBeLessThanOrEqual(2);
       expect(Math.abs(taller.width - after.width)).toBeLessThanOrEqual(2);
 
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      // Neither the document nor any scroller around the block scrolls sideways.
+      const overflow = await frame.evaluate((node) => {
+        const widest = [];
+        for (let el = node.parentElement; el; el = el.parentElement) {
+          if (/(auto|scroll)/.test(getComputedStyle(el).overflowX)) widest.push(el.scrollWidth - el.clientWidth);
+        }
+        const root = document.documentElement;
+        return Math.max(root.scrollWidth - root.clientWidth, ...widest);
+      });
       expect(overflow).toBeLessThanOrEqual(0);
     });
   }

@@ -22,17 +22,19 @@ export interface BlockResizeFrameProps extends Omit<React.HTMLAttributes<HTMLDiv
 const SIDES: readonly ResizeEdge[] = ["left", "right"];
 const ALL_EDGES: readonly ResizeEdge[] = ["top", "bottom", "left", "right", "top-left", "top-right", "bottom-left", "bottom-right"];
 
-// Inside the frame, never past it: a grip hanging over the edge would be clipped by a block
-// with overflow:hidden and would push a narrow page into a horizontal scroll.
+// Just outside the frame's edges, in the page gutter: inside it, a grip sat on the block's own
+// controls (a database's "View settings" at a phone width, a table's last-column grip). A block
+// that clips (overflow:hidden) must clip on an inner element, or it hides its grips. 8 px stays
+// inside the narrowest page gutter (16 px), so a phone width does not scroll sideways.
 const EDGE_CLASS: Record<ResizeEdge, string> = {
-  top: "inset-x-3 top-0 h-2 cursor-ns-resize",
-  bottom: "inset-x-3 bottom-0 h-2 cursor-ns-resize",
-  left: "inset-y-3 left-0 w-2 cursor-ew-resize",
-  right: "inset-y-3 right-0 w-2 cursor-ew-resize",
-  "top-left": "left-0 top-0 h-3 w-3 cursor-nwse-resize",
-  "top-right": "right-0 top-0 h-3 w-3 cursor-nesw-resize",
-  "bottom-left": "bottom-0 left-0 h-3 w-3 cursor-nesw-resize",
-  "bottom-right": "bottom-0 right-0 h-3 w-3 cursor-nwse-resize",
+  top: "inset-x-3 -top-2 h-2 cursor-ns-resize",
+  bottom: "inset-x-3 -bottom-2 h-2 cursor-ns-resize",
+  left: "inset-y-3 -left-2 w-2 cursor-ew-resize",
+  right: "inset-y-3 -right-2 w-2 cursor-ew-resize",
+  "top-left": "-left-2 -top-2 h-3 w-3 cursor-nwse-resize",
+  "top-right": "-right-2 -top-2 h-3 w-3 cursor-nesw-resize",
+  "bottom-left": "-bottom-2 -left-2 h-3 w-3 cursor-nesw-resize",
+  "bottom-right": "-bottom-2 -right-2 h-3 w-3 cursor-nwse-resize",
 };
 
 const PILL_CLASS: Partial<Record<ResizeEdge, string>> = {
@@ -64,7 +66,8 @@ export const BlockResizeFrame: React.FC<BlockResizeFrameProps> = ({
       className={`group/resize relative [&[data-resizing]_iframe]:pointer-events-none ${className ?? ""}`}
       style={{ ...style, ...blockWidthStyle(widthPercent, minWidth) }}
     >
-      {children}
+      {/* Before the children: a control of theirs at the same z-index that reaches past the
+          edge (a table's "Add column" and "Add row") stays on top of the grip it overlaps. */}
       {edges.map((edge) => (
         <div
           key={edge}
@@ -78,6 +81,7 @@ export const BlockResizeFrame: React.FC<BlockResizeFrameProps> = ({
           {PILL_CLASS[edge] ? <div className={`rounded-full bg-[var(--osio-border-strong)] ${PILL_CLASS[edge]}`} /> : null}
         </div>
       ))}
+      {children}
     </div>
   );
 };

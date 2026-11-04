@@ -1173,7 +1173,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           resizesHeight
           minHeight={WHITEBOARD_MIN_HEIGHT}
           onCommit={(commit) => commitBlockUpdate(block.id, blockSizeUpdate(commit, "whiteboardHeight"))}
-          className="my-0 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
+          className="my-0"
           style={{ height: Math.max(WHITEBOARD_MIN_HEIGHT, block.whiteboardHeight ?? WHITEBOARD_BLOCK_DEFAULT_HEIGHT) }}
         >
           <Suspense fallback={null}>

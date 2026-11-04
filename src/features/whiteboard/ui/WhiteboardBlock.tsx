@@ -53,7 +53,7 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
   }
 
   return (
-    <div ref={rootRef} className="relative flex h-full w-full flex-col overflow-hidden">
+    <div ref={rootRef} className="relative flex h-full w-full flex-col overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
       <div className="flex shrink-0 items-center justify-between border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-1.5">
         <span className="min-w-0 truncate text-xs font-semibold text-[var(--osio-fg-default)]">{title}</span>
         {isValidSlug ? (
