@@ -2,7 +2,7 @@
 
 /* The node serves only /editor/assets/* (packages/osionos-node/static-client.mjs), so the app's
    faces, named by its root path /fonts/ (src/app/styles/fonts.css, which this page does not load),
-   would fetch nothing on 127.0.0.1:4100 (osionos#291). These use relative URLs, which Vite bundles
+   would fetch nothing on 127.0.0.1:4100 (osionos issue 291). These use relative URLs, which Vite bundles
    into assets/. No emoji faces here. */
 @font-face {
   font-family: "Inter Variable";
