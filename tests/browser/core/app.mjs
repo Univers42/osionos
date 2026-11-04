@@ -75,6 +75,9 @@ export async function activateFirstEditor(page) {
     name: /Click here to start writing/i,
   });
 
+  // Wait for one of the two first: the body renders after the title, so an instant count()
+  // could miss an empty state still on its way and then wait forever for an editor.
+  await emptyState.or(getEditors(page).first()).first().waitFor();
   if (await emptyState.count()) {
     await emptyState.click();
   }
