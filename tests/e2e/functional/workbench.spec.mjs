@@ -68,7 +68,8 @@ test("Ctrl+J toggles the dock; tabs and splitter work by keyboard", async ({ pag
   await page.keyboard.press("ArrowUp");
   await expect(splitter).toHaveAttribute("aria-valuenow", String(before + 16));
 
+  // Since f84edb43 the dock is hidden, not unmounted, so its terminal's shell survives the toggle.
   await page.keyboard.press("Control+j");
-  await expect(dock).toHaveCount(0);
+  await expect(dock).toBeHidden();
   expect(errors).toEqual([]);
 });
