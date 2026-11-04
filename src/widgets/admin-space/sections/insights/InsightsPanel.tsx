@@ -21,6 +21,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+import { RESPONSIVE_CHART_PROPS } from "@/shared/lib/charts/responsiveChartProps";
 import { DAY_CHOICES, eventsPerDay, fetchInsights, type DayChoice, type Insights } from "@/features/admin-insights/api";
 import { DataTable, EmptyState, PanelStatus, Section } from "@/features/settings/ui/settingsKit";
 import { Dropdown } from "@/shared/ui";
@@ -51,7 +52,7 @@ const PerDayChart: React.FC<{ insights: Insights }> = ({ insights }) => {
   const points = eventsPerDay(insights.cells);
   return (
     <div role="img" aria-label={`Events per day, ${points.length} days, ${insights.totalOfShownCells} events in total`} className="h-56 w-full min-w-0">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer {...RESPONSIVE_CHART_PROPS}>
         <BarChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="var(--osio-border-soft)" vertical={false} />
           <XAxis dataKey="day" tick={TICK} tickFormatter={(value: string) => value.slice(5)} minTickGap={16} />
