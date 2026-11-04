@@ -24,19 +24,18 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import type { Block } from "@/entities/block";
-import { MEDIA_BLOCK_LABELS, isMediaBlockType } from "@/entities/block";
+import { IMAGE_MIN_WIDTH, MEDIA_BLOCK_LABELS, blockSizeUpdate, isMediaBlockType, type Block } from "@/entities/block";
 import {
   ImageBlockPicture,
   ImagePlayButton,
   MediaBlockPreview,
-  mediaWidthStyle,
   resolveMediaBlockAsset,
   useImageAnimation,
 } from "@/entities/block/ui/MediaBlockPreview";
 import { useAiImageStore } from "@/features/ai/model/aiImageStore";
 import { AiImageJobView } from "@/features/ai/ui/AiImageJobView";
 import type { EmbedSnapshot } from "@/shared/lib/embed/embedInfo";
+import { BlockResizeFrame } from "@/shared/ui/molecules/BlockResizeFrame";
 import { usePageStore } from "@/store/usePageStore";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { MediaEmbedDialog } from "./MediaEmbedDialog";
@@ -61,12 +60,22 @@ interface MediaBlockEditorProps {
  * the edit button, never a descendant: a button inside a button is invalid
  * HTML (axe `nested-interactive`) and a keyboard cannot reach the inner one.
  */
-const ImageBlockEditor: React.FC<{ block: Block; label: string; onEdit: () => void }> = ({ block, label, onEdit }) => {
+const ImageBlockEditor: React.FC<{
+  block: Block;
+  label: string;
+  onEdit: () => void;
+  onResize: (updates: Partial<Block>) => void;
+}> = ({ block, label, onEdit, onResize }) => {
   const animation = useImageAnimation(block);
-  // The width preset lands here: the editor renders the picture without the
-  // preview's <figure>, which is where the read-only path puts it.
+  // The width lands here: the editor renders the picture without the preview's
+  // <figure>, which is where the read-only path puts it. The height follows the aspect.
   return (
-    <div className="relative" style={mediaWidthStyle(block)}>
+    <BlockResizeFrame
+      label="image"
+      widthPercent={block.mediaWidth}
+      minWidth={IMAGE_MIN_WIDTH}
+      onCommit={(commit) => onResize(blockSizeUpdate(commit))}
+    >
       <button
         type="button"
         className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/30"
@@ -82,7 +91,7 @@ const ImageBlockEditor: React.FC<{ block: Block; label: string; onEdit: () => vo
           className="absolute bottom-2 right-2"
         />
       ) : null}
-    </div>
+    </BlockResizeFrame>
   );
 };
 
@@ -209,7 +218,12 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           </button>
         )
       ) : isImage ? (
-        <ImageBlockEditor block={block} label={label} onEdit={() => setShowSettings(true)} />
+        <ImageBlockEditor
+          block={block}
+          label={label}
+          onEdit={() => setShowSettings(true)}
+          onResize={(updates) => updateBlock(pageId, block.id, updates)}
+        />
       ) : (
         <div className="rounded-lg" onPointerDown={() => setShowSettings(true)}>
           <MediaBlockPreview block={block} />

@@ -45,7 +45,7 @@ import {
  *     layoutMode  layoutRole  layoutConfig  layoutCells  schemaVersion
  *   OVERLAY (front-matter `blocks`)          everything else in EXTRA_BLOCK_KEYS
  *     dueAt  collapsed  codeView  codeTheme  lineNumbers  fileName  sqlMountId
- *     heightLines  textColor  backgroundColor  mediaWidth  mediaShape
+ *     heightLines  textColor  backgroundColor  mediaWidth  blockHeight  mediaShape
  *     mediaAspect  deferMount  collectionRef  recordRef  fieldBind
  *     headingLevel (markdown keeps it on a toggle only; quote/callout lose it)
  *     tableConfig (markdown keeps only the column alignments)
