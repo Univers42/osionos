@@ -9,7 +9,8 @@
 const DIAGRAM_KINDS = new Set(['mermaid', 'schema', 'graph', 'hierarchy', 'pipeline']);
 const MAX_BLOCK_DEPTH = 64;
 const STATE_TABLES = ['databases', 'pages', 'views'];
-const RAW_CSS_CLASSES_RE = /\b(?:bg|text|dark|hover|px|py|border)-[a-z0-9_-]+/i;
+const RAW_CSS_CLASS_TOKEN_RE = /^(?:(?:dark|hover|focus|active|sm|md|lg|xl|2xl):)*-?(?:bg|text|px|py|border)-\S+$/i;
+const VALID_CALLOUT_TONES = new Set(['gray', 'blue', 'green', 'yellow', 'orange', 'red', 'purple']);
 
 function refuse(path, reason) {
 	throw Object.assign(new Error(`${path} ${reason}`), { status: 422 });
@@ -19,8 +20,15 @@ function isPlainObject(value) {
 	return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function hasRawCssClass(value) {
+	if (typeof value !== 'string') return false;
+	const trimmed = value.trim();
+	if (!trimmed) return false;
+	return trimmed.split(/\s+/).some((token) => RAW_CSS_CLASS_TOKEN_RE.test(token));
+}
+
 function assertNoPresentationStyles(value, path, label = 'value') {
-	if (typeof value === 'string' && RAW_CSS_CLASSES_RE.test(value)) {
+	if (typeof value === 'string' && hasRawCssClass(value)) {
 		refuse(path, `must be a semantic ${label}, not raw CSS classes.`);
 	}
 }
@@ -35,6 +43,9 @@ function assertBlock(block, path, depth) {
 	}
 	if (calloutTone !== undefined && calloutTone !== null) {
 		assertNoPresentationStyles(calloutTone, `${path}.calloutTone`, 'tone');
+		if (typeof calloutTone !== 'string' || !VALID_CALLOUT_TONES.has(calloutTone.trim())) {
+			refuse(`${path}.calloutTone`, `must be one of ${[...VALID_CALLOUT_TONES].join(', ')}.`);
+		}
 	}
 	if (type === 'diagram' && diagramSpec != null && !DIAGRAM_KINDS.has(diagramSpec.kind)) {
 		refuse(`${path}.diagramSpec.kind`, `must be one of ${[...DIAGRAM_KINDS].join(', ')}.`);
