@@ -185,3 +185,20 @@ test("14. lenientStoredIconSchema.safeParse accepts legacy strings and produces 
   assert.ok(r6.success);
   assert.equal(r6.data, null);
 });
+
+test("15. PageEntry interface accepts plain object without icon, with string icon, and with undefined", () => {
+  const pageNoIcon: import("@/entities/page").PageEntry = {
+    _id: "p1",
+    title: "Page without icon",
+    workspaceId: "ws1",
+  };
+  assert.equal(pageNoIcon.icon, undefined);
+
+  const pageWithIcon: import("@/entities/page").PageEntry = {
+    _id: "p2",
+    title: "Page with icon",
+    workspaceId: "ws1",
+    icon: "🚀",
+  };
+  assert.equal(pageWithIcon.icon, "🚀");
+});
