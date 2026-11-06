@@ -102,9 +102,9 @@ export interface ResolvedCallout {
  * fallback to the legacy `color` field.
  */
 export function resolveCalloutProps(block?: {
-  calloutIcon?: string | null;
+  calloutIcon?: string | unknown | null;
   calloutTone?: CalloutTone | null;
-  color?: string | null;
+  color?: string | unknown | null;
 } | null): ResolvedCallout {
   if (!block) {
     return {
@@ -114,9 +114,12 @@ export function resolveCalloutProps(block?: {
     };
   }
 
+  const rawIcon = typeof block.calloutIcon === "string" ? block.calloutIcon.trim() : "";
+  const rawColor = typeof block.color === "string" ? block.color.trim() : "";
+
   if (block.calloutTone) {
     const type = CALLOUT_TYPES.find((t) => t.tone === block.calloutTone) ?? NOTE;
-    const icon = block.calloutIcon && block.calloutIcon.trim() !== "" ? block.calloutIcon.trim() : type.icon;
+    const icon = rawIcon !== "" ? rawIcon : type.icon;
     return {
       icon,
       tone: block.calloutTone,
@@ -124,7 +127,7 @@ export function resolveCalloutProps(block?: {
     };
   }
 
-  const raw = (block.calloutIcon || block.color || "").trim();
+  const raw = rawIcon || rawColor || "";
   const type = resolveCalloutType(raw);
   const icon = calloutDisplayIcon(raw);
   return {
