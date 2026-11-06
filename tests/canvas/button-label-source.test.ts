@@ -23,8 +23,8 @@ test("buttonBlockLabel falls back to legacy buttonLabel", () => {
   assert.equal(buttonBlockLabel({ buttonLabel: "Legacy Go" }), "Legacy Go");
 });
 
-test("buttonBlockLabel prefers canonical content over legacy buttonLabel", () => {
-  assert.equal(buttonBlockLabel({ content: "Primary", buttonLabel: "Legacy" }), "Primary");
+test("buttonBlockLabel preserves legacy buttonLabel over stale content", () => {
+  assert.equal(buttonBlockLabel({ content: "Start", buttonLabel: "Submit" }), "Submit");
 });
 
 test("buttonBlockLabel returns 'Button' for empty object", () => {
