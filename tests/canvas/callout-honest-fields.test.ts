@@ -71,6 +71,23 @@ test("resolveCalloutProps supports lucide icon values with explicit tone", () =>
   assert.equal(result.type.tone, "blue");
 });
 
+test("resolveCalloutProps safely handles non-string calloutIcon without throwing", () => {
+  // @ts-expect-error non-string calloutIcon
+  const res1 = resolveCalloutProps({ calloutIcon: { type: "icon", name: "rocket" }, calloutTone: "purple" });
+  assert.equal(res1.tone, "purple");
+  assert.equal(res1.icon, "❗"); // default icon for purple (Important)
+
+  // @ts-expect-error non-string calloutIcon with legacy color fallback
+  const res2 = resolveCalloutProps({ calloutIcon: 42, color: "💡" });
+  assert.equal(res2.icon, "💡");
+  assert.equal(res2.tone, "yellow");
+
+  // @ts-expect-error non-string calloutIcon and color
+  const res3 = resolveCalloutProps({ calloutIcon: {}, color: {} });
+  assert.equal(res3.icon, "📝");
+  assert.equal(res3.tone, "gray");
+});
+
 test("resolveCalloutProps is exported from index.ts matching model/calloutTypes.ts", () => {
   assert.equal(typeof resolveCalloutPropsFromIndex, "function");
   assert.equal(resolveCalloutProps, resolveCalloutPropsFromIndex);
