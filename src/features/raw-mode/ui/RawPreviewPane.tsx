@@ -30,7 +30,8 @@ import { reconcileBlocks } from "../model/reconcileBlocks";
  * unchanged blocks, so only the block being edited actually re-renders — and
  * stable ids make safe, non-tearing keys.
  */
-function RawPreviewPaneImpl({ source }: Readonly<{ source: string }>) {
+/** `parse` turns the source into blocks; markdown by default (an `.omd` file passes its codec). */
+function RawPreviewPaneImpl({ source, parse = parseMarkdownToBlocks }: Readonly<{ source: string; parse?: (source: string) => Block[] }>) {
   const previousBlocksRef = useRef<Block[]>([]);
   const blocks = useMemo(() => {
     // Deliberate previous-value cache: reconcileBlocks is pure given
@@ -38,11 +39,11 @@ function RawPreviewPaneImpl({ source }: Readonly<{ source: string }>) {
     // so the render-time ref access is safe — the id-reuse across renders is
     // the entire point (stable keys, minimal re-renders).
     // eslint-disable-next-line react-hooks/refs
-    const reconciled = reconcileBlocks(parseMarkdownToBlocks(source), previousBlocksRef.current);
+    const reconciled = reconcileBlocks(parse(source), previousBlocksRef.current);
     // eslint-disable-next-line react-hooks/refs
     previousBlocksRef.current = reconciled;
     return reconciled;
-  }, [source]);
+  }, [source, parse]);
   return (
     <div className="h-full min-h-0 overflow-auto bg-[var(--osio-bg-page)] px-6 py-4">
       <div className="mx-auto max-w-[820px]">

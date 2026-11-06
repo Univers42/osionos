@@ -17,8 +17,9 @@ import { useUserStore } from "@/features/auth";
 import { RawModeHeader } from "./RawModeHeader";
 import { RawCodePane } from "./RawCodePane";
 import { RawPreviewPane } from "./RawPreviewPane";
+import { startPaneDrag } from "./startPaneDrag";
 import { useRawMode } from "../model/useRawMode";
-import { DEFAULT_RAW_LAYOUT, dropZoneFromX, ratioFromX, type RawLayout, type RawLayoutMode } from "../model/rawModeLayout";
+import { DEFAULT_RAW_LAYOUT, dropZoneFromX, type RawLayout, type RawLayoutMode } from "../model/rawModeLayout";
 
 /** VSCode-style raw markdown editor: tabs, a resizable split, and a drag-the-
  *  header gesture that previews the Code/Preview reorganization while sliding. */
@@ -56,14 +57,7 @@ export function RawModeView({ pageId }: Readonly<{ pageId: string }>) {
   }, []);
 
   const startDividerDrag = useCallback((event: React.PointerEvent) => {
-    event.preventDefault();
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const move = (moveEvent: PointerEvent) => setLayout((current) => ({ ...current, ratio: ratioFromX(moveEvent.clientX, rect) }));
-    const up = () => { globalThis.removeEventListener("pointermove", move); document.body.style.userSelect = ""; };
-    document.body.style.userSelect = "none";
-    globalThis.addEventListener("pointermove", move);
-    globalThis.addEventListener("pointerup", up, { once: true });
+    startPaneDrag(event, containerRef.current, (ratio) => setLayout((current) => ({ ...current, ratio })));
   }, []);
 
   return (
