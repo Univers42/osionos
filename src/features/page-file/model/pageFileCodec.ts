@@ -68,12 +68,6 @@ export const MARKDOWN_KEYS: readonly string[] = Object.freeze([
   "layoutMode", "layoutRole", "layoutConfig", "layoutCells", "schemaVersion",
 ]);
 
-/** Optional block keys */
-export const OPTIONAL_KEYS: readonly string[] = Object.freeze([
-  "calloutIcon",
-  "calloutTone",
-]);
-
 /**
  * Extra keys Markdown does NOT carry, so they ride the overlay. Derived, not
  * typed out: a key added to `EXTRA_BLOCK_KEYS` is picked up here at once and the
