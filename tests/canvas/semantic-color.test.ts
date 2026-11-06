@@ -56,7 +56,7 @@ describe('semanticColor', () => {
   });
 
   it('normalizes blank or unknown input to default', () => {
-    const invalidInputs = [undefined, null, '', '   ', 'junk', 'not-a-real-color', 'foobar-123'];
+    const invalidInputs = [undefined, null, '', '   ', 'junk', 'not-a-real-color', 'foobar-123', '__proto__', 'constructor', 'toString'];
     for (const value of invalidInputs) {
       assert.equal(normalizeOptionColor(value), 'default');
     }
