@@ -77,6 +77,8 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   textColor: isBoundedText,
   backgroundColor: isBoundedText,
   color: isBoundedText,
+  calloutIcon: isBoundedText,
+  calloutTone: isOneOf("gray", "blue", "green", "yellow", "orange", "red", "purple"),
   fileName: isBoundedText,
   sqlMountId: isBoundedText,
   fieldBind: isBoundedText,
