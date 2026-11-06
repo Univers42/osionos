@@ -67,7 +67,7 @@ test.describe("selection panel", () => {
     // Ask AI menu used, so the skills block is present in this build.
     await expect(panel.getByText("Skills", { exact: true })).toBeVisible();
     for (const label of ["Improve writing", "Proofread", "Explain", "Reformat"]) {
-      await expect(page.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: label, exact: true })).toBeVisible();
     }
     await expect(toolbarButton(page, "Ask AI")).toContainText("Edit with AI");
     await expect(toolbarButton(page, "Comment")).toBeVisible();

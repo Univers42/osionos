@@ -36,12 +36,14 @@ interface SettingsSectionsNavProps {
 export const SettingsSectionsNav: React.FC<SettingsSectionsNavProps> = ({ section: active, onSelect, persona }) => {
   const listRef = useRef<HTMLDivElement>(null);
 
-  // A deep link to a section scrolled past the strip's edge would open out of
-  // sight; scroll the active row back into view when the list overflows.
+  // A deep link to a section scrolled past the horizontal strip or vertical column edge would
+  // open out of sight; scroll the active row back into view when the list overflows horizontally or vertically.
   useEffect(() => {
     const list = listRef.current;
-    if (!list || list.scrollWidth <= list.clientWidth) return;
-    list.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (!list) return;
+    if (list.scrollWidth > list.clientWidth || list.scrollHeight > list.clientHeight) {
+      list.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
   }, [active]);
 
   function exploreAi() {
@@ -96,7 +98,7 @@ const SectionRow: React.FC<{
     data-settings-section={section.id}
     onClick={() => onSelect(section.id)}
     className={[
-      "flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm @min-[720px]:w-full",
+      "flex h-8 min-h-[32px] min-w-[24px] shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm @min-[720px]:w-full",
       "pointer-coarse:h-11",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]",
       active

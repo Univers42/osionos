@@ -123,7 +123,7 @@ const MENUS = [
       await createParagraphs(page, ["alpha beta"]);
       await selectText(getEditors(page).first(), "alpha");
       await toolbarButton(page, "Turn into").click();
-      const panel = page.getByRole("menu");
+      const panel = page.getByRole("menu", { name: "Turn into" });
       return { panel, row: panel.getByRole("menuitem").first() };
     },
   },
