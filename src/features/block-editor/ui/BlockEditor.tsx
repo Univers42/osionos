@@ -32,7 +32,6 @@ import {
   calloutAccent,
   calloutSurface,
   resolveCalloutProps,
-  resolveCalloutType,
   WHITEBOARD_BLOCK_DEFAULT_HEIGHT,
   WHITEBOARD_MIN_HEIGHT,
   BLOCK_MIN_WIDTH,
