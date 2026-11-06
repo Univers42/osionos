@@ -77,6 +77,7 @@ import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
 import { createPersonalizationHandler } from './bridge-personalization.mjs';
 import { createRecsHandler } from './bridge-recs.mjs';
+import { createCapabilitiesHandler } from './bridge-capabilities.mjs';
 import { createEventsHandler } from './bridge-events.mjs';
 import { createIssuesHandler } from './bridge-issues.mjs';
 import { createActivityEmitter } from './bridge-activity.mjs';
@@ -221,21 +222,21 @@ export function configFromEnv(env = process.env) {
 		// DNS, when grobase shares this daemon. Behind a link only Kong is relayed, so the link
 		// sets Kong's public route (http://mini-baas-kong:8000/query/v1); a blank value means
 		// the default, as the link writes one for a local grobase.
-		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL || 'http://mini-baas-query-router:4001').replace(/\/$/, ''),
+		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL || 'http://mini-baas-query-router:4001').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		baasApiKey: env.OSIONOS_BAAS_API_KEY ?? env.BAAS_API_KEY ?? env.VITE_BAAS_API_KEY ?? '',
 		// Adapter-registry lists the tenant's databases; it trusts X-Baas-Tenant-Id
 		// (no Kong route works from the browser — anon key 401s on /admin/v1). The
 		// tenant id is taken from env, or derived from the api-key via tenant-control.
 		// Behind a link the registry is not relayed, so the link sets Kong's
 		// service_role-only route (http://mini-baas-kong:8000/admin/v1); blank = default.
-		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL || 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''),
+		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL || 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		// Set by a link that reaches grobase over Tailscale Funnel, where the WAF refuses
 		// /admin/v1 (rule 10130): the tenant's own mount list, opened by the tenant api-key.
 		// Blank = the registry above.
 		tenantMountsUrl: (env.OSIONOS_TENANT_MOUNTS_URL ?? '').trim().replace(/\/$/, ''),
-		tenantControlUrl: (env.OSIONOS_TENANT_CONTROL_URL ?? 'http://mini-baas-tenant-control:3022').replace(/\/$/, ''),
+		tenantControlUrl: (env.OSIONOS_TENANT_CONTROL_URL ?? 'http://mini-baas-tenant-control:3022').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		baasTenantId: env.OSIONOS_BAAS_TENANT_ID ?? env.VITE_BAAS_TENANT_ID ?? env.BAAS_TENANT_ID ?? '',
-		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
+		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		publicApiKey: env.PUBLIC_BAAS_ANON_KEY ?? env.KONG_PUBLIC_API_KEY ?? '',
 		...turnstileConfigFromEnv(env),
 		serviceKey: env.SERVICE_ROLE_KEY ?? env.KONG_SERVICE_API_KEY ?? env.BAAS_SERVICE_ROLE_KEY ?? '',
@@ -292,6 +293,14 @@ export function stableStringify(value) {
 		.sort((left, right) => left.localeCompare(right))
 		.map((key) => JSON.stringify(key) + ':' + stableStringify(value[key]));
 	return '{' + entries.join(',') + '}';
+}
+
+/** prismatica ADR 0003: the header that tells the auth gateway this bridge verified the
+ *  request's Turnstile token itself, so the gateway does not siteverify the spent token again.
+ *  Signed over the second, the path and the exact body sent; the gateway accepts it once. */
+export const TURNSTILE_PROOF_HEADER = 'x-osionos-bridge-proof';
+export function turnstileProof(secret, path, body, nowSec = Math.floor(Date.now() / 1000)) {
+	return `${nowSec}.${createHmac('sha256', secret).update(`${nowSec}.turnstile.${path}.${stableStringify(body)}`).digest('hex')}`;
 }
 
 export function bridgeSignature(secret, timestamp, payload) {
@@ -2100,6 +2109,34 @@ async function ensureAdminWorkspaceMembership(userId, config, fetchImpl) {
 }
 
 /**
+ * The grant the users console reads. The flag names the admin role in the claim, but the console
+ * re-reads `public.user_roles` (bridge-account-users.mjs), so a flag with no row was refused there
+ * (osionos#296). `expires_at: null` renews an expired grant. Best-effort, like the membership: a
+ * failure leaves the console refused until the next sign-in, never the sign-in itself.
+ */
+async function ensureAdminRoleGrant(userId, config, fetchImpl) {
+	if (!config.serviceKey || !config.baasUrl) return;
+	try {
+		const roles = await baasRest(config, fetchImpl, 'roles?name=eq.admin&select=id&limit=1');
+		const roleId = Array.isArray(roles) ? roles[0]?.id : null;
+		if (!roleId) return;
+		await baasRest(config, fetchImpl, 'user_roles?on_conflict=user_id,role_id', {
+			method: 'POST',
+			body: { user_id: userId, role_id: roleId, expires_at: null },
+			prefer: 'resolution=merge-duplicates,return=minimal',
+		});
+	} catch {
+		console.warn(`[osionos-bridge] ensureAdminRoleGrant: writing the admin grant failed for ${userId}`);
+	}
+}
+
+/** What the identity flag implies: the admin workspace membership, then the role grant. */
+async function ensureAdminRights(userId, config, fetchImpl) {
+	await ensureAdminWorkspaceMembership(userId, config, fetchImpl);
+	await ensureAdminRoleGrant(userId, config, fetchImpl);
+}
+
+/**
  * With BaaS persistence on, a session must carry the workspace BaaS holds: the hash-derived
  * id of a skipped upsert names no row, so every page route would 403 for the session's 30 days.
  * One retry because a cold link is the usual cause (see BAAS_FETCH_TIMEOUT_MS); then a 503 the
@@ -2145,7 +2182,7 @@ async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
 	await assertAccountNotRefused(roleReader, payload.subject);
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
-	if (isAdmin) await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
+	if (isAdmin) await ensureAdminRights(payload.subject, config, fetchImpl);
 	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceIdOf(payload, persisted)], config, fetchImpl);
 	// The env admin is the root of trust (ADR 0005): the flag names the admin role, so the
 	// catalogue is not read for an admin at all.
@@ -2181,7 +2218,7 @@ async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
 	// admin's read is discarded: the flag is the root of trust and names the role.
 	const platformRole = isAdmin ? 'admin' : (roleRead.status === 'fulfilled' ? roleRead.value.role : null);
 	if (isAdmin) {
-		await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
+		await ensureAdminRights(payload.subject, config, fetchImpl);
 		const excludeIds = [privateWorkspaceIdOf(payload, persisted)];
 		return { persisted, isAdmin, platformRole, memberWorkspaces: await memberWorkspaceEntries(payload.subject, excludeIds, config, fetchImpl) };
 	}
@@ -3312,7 +3349,16 @@ async function handleMarketplaceTemplateRead(url, request, response, config, fet
 	const databaseId = requireUuid(url.searchParams.get('databaseId'), 'databaseId');
 	// G6 F1: the template is shared per database, so only who may read that page (the GET
 	// /api/pages/:id gate, workspace membership included) sees it — `shared` alone is not enough.
-	await readablePageAccess(request, databaseId, 'read', config, fetchImpl);
+	// The gate's not-found (a missing page, or one hidden from the caller: C134 keeps them alike)
+	// is no template rather than a 404: production's marketplace database has no page row, and
+	// every app page logged that 404 as a console error (2026-11-04). No config row is read then.
+	try {
+		await readablePageAccess(request, databaseId, 'read', config, fetchImpl);
+	} catch (error) {
+		if (error?.status !== 404) throw error;
+		json(response, 200, { template: null }, config);
+		return true;
+	}
 	const row = await fetchPageConfigRow(databaseId, MARKETPLACE_SYSTEM_USER, config, fetchImpl);
 	const cfg = row?.config && typeof row.config === 'object' ? row.config : {};
 	json(response, 200, { template: cfg.headerTemplate ?? null }, config);
@@ -3808,15 +3854,54 @@ async function handleDatabaseList(url, request, response, config, fetchImpl) {
 }
 
 /** GET /api/databases/:dbId/schema — engine-agnostic schema via the query-router. */
+// Caveat: a source that comes back is still reported unavailable for up to
+// UNREACHABLE_SOURCE_TTL_MS; a schema read in that window answers from this memory, not
+// from the engine. Lower the TTL if a revived mount must show sooner.
+const UNREACHABLE_SOURCE_TTL_MS = 30_000;
+const unreachableSources = new WeakMap();
+
+function unreachableUntil(config) {
+	let sources = unreachableSources.get(config);
+	if (!sources) {
+		sources = new Map();
+		unreachableSources.set(config, sources);
+	}
+	return sources;
+}
+
+/** A mount whose engine did not answer is an expected state, not a fault: the browser
+ *  logs every non-2xx as a console error and the app reads every mount's schema on each
+ *  load. It answers 200 `unavailable`, and the client throws it as before. "Did not
+ *  answer" is the 503 that engineFetchOrUnavailable and queryRouterStatus already make of
+ *  a timeout, a refused connection or a failed data-plane forward. A broken body stays a
+ *  502, and a bridge without query-router access stays a 503. */
+function isUnreachableSource(error) {
+	return error?.status === 503 && !/not configured/i.test(String(error?.message ?? ''));
+}
+
+function answerUnavailable(response, config, dbId, message) {
+	json(response, 200, { dbId, tables: [], unavailable: true, message }, config);
+	return true;
+}
+
 async function handleDatabaseSchema(match, request, response, config, fetchImpl) {
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
 	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
 	// The schema is a READ of the database: it takes the read capability.
 	if (!canReadDatabase(member)) throw databasePermissionError('read');
+	const sources = unreachableUntil(config);
+	const remembered = sources.get(dbId);
+	if (remembered && remembered.until > Date.now()) return answerUnavailable(response, config, dbId, remembered.message);
 	let schema;
 	try {
 		schema = await baasQueryGet(config, fetchImpl, `/${dbId}/schema`);
+		sources.delete(dbId);
 	} catch (error) {
+		if (isUnreachableSource(error)) {
+			const message = error instanceof Error ? error.message : 'The database did not answer.';
+			sources.set(dbId, { until: Date.now() + UNREACHABLE_SOURCE_TTL_MS, message });
+			return answerUnavailable(response, config, dbId, message);
+		}
 		// Schemaless engines (dynamodb, …) reject introspection (422
 		// unsupported_capability). Surface that as an empty-but-OK schema so the
 		// database still LISTS — just without tables — instead of failing the
@@ -5248,22 +5333,24 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 	const password = safeText(payload.password, 512);
 	if (!email || !password) throw Object.assign(new Error('Email and password are required.'), { status: 422 });
 	const forwardedFor = forwardedForHeader(request);
-	const turnstileToken = await resolveTurnstileToken(payload, { config, fetchImpl, remoteIp: signInRemoteIp(request, config) });
+	const turnstile = await resolveTurnstileToken(payload, { config, fetchImpl, remoteIp: signInRemoteIp(request, config) });
+	const turnstileToken = turnstile.token;
+	// Caveat: a trust delegation — the gateway skips its own check for this header, so it is sent
+	// only after siteverify passed here, and is exactly as strong as OSIONOS_BRIDGE_SHARED_SECRET.
+	const signedCall = (path, body) => gatewayCall(fetchImpl, config, path, {
+		body: JSON.stringify(body),
+		headers: turnstile.verified && config.sharedSecret ? { [TURNSTILE_PROOF_HEADER]: turnstileProof(config.sharedSecret, path, body) } : {},
+		forwardedFor,
+	});
 
 	if (url.pathname === '/api/auth/register') {
 		const rawName = safeText(payload.username ?? payload.name ?? email.split('@')[0], 64);
 		const username = (rawName.replace(/[^\w.-]/g, '') || `user${Date.now()}`).slice(0, 32);
-		const { res: rRes, data: rData } = await gatewayCall(fetchImpl, config, '/api/auth/register', {
-			body: JSON.stringify({ email, password, turnstileToken, profile: { username, confirmPassword: password } }),
-			forwardedFor,
-		});
+		const { res: rRes, data: rData } = await signedCall('/api/auth/register', { email, password, turnstileToken, profile: { username, confirmPassword: password } });
 		if (!rRes.ok) { json(response, rRes.status || 422, { message: rData.message || 'Registration failed.' }, config); return; }
 	}
 
-	const { res: lRes, data: lData } = await gatewayCall(fetchImpl, config, '/api/auth/login', {
-		body: JSON.stringify({ email, password, turnstileToken }),
-		forwardedFor,
-	});
+	const { res: lRes, data: lData } = await signedCall('/api/auth/login', { email, password, turnstileToken });
 	if (!lRes.ok || !lData.access_token) { json(response, lRes.status || 401, { message: lData.message || 'Invalid credentials.' }, config); return; }
 
 	const consumed = await establishAppSession({ request, config, kv, pg, fetchImpl, gatewayToken: lData.access_token, authMethod: 'password' });
@@ -5381,6 +5468,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.personalization(url, request, response, context.config)) return;
 	if (await context.social.recs(url, request, response, context.config)) return;
 	if (await context.social.events(url, request, response, context.config)) return;
+	if (await context.social.capabilities(url, request, response, context.config)) return;
 	if (await context.social.issues(url, request, response, context.config)) return;
 	if (await context.social.moderationConsole(url, request, response, context.config)) return;
 	if (await context.social.recsHealth(url, request, response, context.config)) return;
@@ -5462,7 +5550,12 @@ export function createBridgeServer(options = {}) {
 		chat: createChatHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		notify: createNotifyHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		media: createMediaHandler({
+			config,
+			verifySession: verifyAppSessionToken,
+			fetchImpl,
+			readPage: async (request, pageId, requestConfig) => (await readablePageAccess(request, pageId, 'read', requestConfig, fetchImpl)).row,
+		}),
 		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			comments: createCommentsHandler({
@@ -5476,6 +5569,7 @@ export function createBridgeServer(options = {}) {
 		personalization: createPersonalizationHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		recs: createRecsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env, pageAccessFilter }),
 		events: createEventsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
+		capabilities: createCapabilitiesHandler({ config, verifySession: verifyAppSessionToken, env }),
 		issues: createIssuesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		moderationConsole: createModerationConsoleHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		recsHealth: createRecsHealthHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),

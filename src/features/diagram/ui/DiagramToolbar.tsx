@@ -102,7 +102,7 @@ export const DiagramToolbar: React.FC<DiagramToolbarProps> = ({
     <div className="flex flex-wrap items-center gap-2 border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-1.5">
       <label className="flex items-center gap-1.5 text-xs text-[var(--osio-fg-muted)]">
         <span>Kind</span>
-        <select
+        <select name="diagram-kind"
           aria-label="Diagram kind"
           value={kind}
           onChange={(event) => onKindChange(event.target.value)}
@@ -119,7 +119,7 @@ export const DiagramToolbar: React.FC<DiagramToolbarProps> = ({
         <>
           <label className="flex items-center gap-1.5 text-xs text-[var(--osio-fg-muted)]">
             <span>Depth</span>
-            <select
+            <select name="tree-depth"
               aria-label="Tree depth"
               value={depth}
               onChange={(event) => {

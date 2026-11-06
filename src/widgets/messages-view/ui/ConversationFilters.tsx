@@ -47,7 +47,7 @@ export const ConversationFilters: React.FC<ConversationFiltersProps> = ({
         size={16}
         className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--osio-fg-subtle)]"
       />
-      <input
+      <input name="search-conversations"
         value={query}
         onChange={(event) => onQuery(event.target.value)}
         placeholder="Search or start a new chat"

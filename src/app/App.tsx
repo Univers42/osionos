@@ -16,6 +16,7 @@ import type { UserSession } from "@/entities/user";
 import { useUserStore } from "@/features/auth";
 import { isBridgeSession, isPortalMode, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
 import { Portal } from "@/features/auth/ui/Portal";
+import { LegalLinks } from "@/features/legal/ui/LegalLinks";
 import { usePageSync } from "@/store/sync/usePageSync";
 import { useUnreadSync } from "@/store/chat/useUnreadSync";
 import { useNotifyLive } from "@/store/chat/useNotifyLive";
@@ -331,6 +332,7 @@ const App: React.FC = () => {
           >
             Go to Prismatica
           </button>
+          <LegalLinks className="mt-4 justify-center" />
         </section>
       </div>
     );

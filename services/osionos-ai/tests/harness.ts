@@ -64,6 +64,10 @@ export const DEAR = {
  */
 export const USER_DAILY_MICROUSD = 200_000;
 
+/** Two routes on OpenRouter's free tier: the ids are what marks them. */
+export const FREE_TIER_FIRST = { id: 'mock/first:free', label: 'Free first', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: false };
+export const FREE_TIER_SECOND = { id: 'mock/second:free', label: 'Free second', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: false };
+
 /** The free model: the runs of the other cases are not bounded by the budget. */
 export const FREE = {
 	id: 'mock-model',
@@ -190,7 +194,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
 	const bridge = await startMockBridge();
 	process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${options.upstreamBaseUrl ?? mock.baseUrl}/v1`;
 	process.env.OSIONOS_AI_BRIDGE_URL = bridge.baseUrl;
-	process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([FREE, METERED, PLATFORM, DEAR, VISION, REASONER]);
+	process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([FREE, METERED, PLATFORM, DEAR, VISION, REASONER, FREE_TIER_FIRST, FREE_TIER_SECOND]);
 	// The daily budget of a user: the same as the deployment's, and the dear
 	// model asks for more than that.
 	process.env.OSIONOS_AI_USER_DAILY_MICROUSD = String(USER_DAILY_MICROUSD);

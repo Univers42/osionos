@@ -327,7 +327,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
         }}
       >
         <div className="shrink-0 pb-1">
-          <input
+          <input name="search-actions"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Search actions"

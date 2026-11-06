@@ -44,7 +44,7 @@ export const IdeInlineInput: React.FC<Props> = ({ initialValue = "", placeholder
   };
 
   return (
-    <input
+    <input name="ide-field"
       ref={ref}
       value={value}
       placeholder={placeholder}

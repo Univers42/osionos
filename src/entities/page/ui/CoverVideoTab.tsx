@@ -100,7 +100,7 @@ export const CoverVideoTab: React.FC<CoverVideoTabProps> = ({ value, onSelect, o
     <div className="space-y-3">
       <label className="flex h-9 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-[var(--osio-fg-muted)]">
         {search.status === "loading" ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-        <input
+        <input name="search-videos"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           aria-label="Search videos"
@@ -112,7 +112,7 @@ export const CoverVideoTab: React.FC<CoverVideoTabProps> = ({ value, onSelect, o
 
       <div className="flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2">
         <Link size={16} className="text-[var(--osio-fg-muted)]" />
-        <input
+        <input name="cover-video-url"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {

@@ -25,15 +25,16 @@ export const SIGNED_OUT = "Two-step verification changed and you are signed out;
 
 const route = (url, method) => `${method} ${url.pathname}`;
 
-/** `enabled` is the server's answer to the status route; `passkeys` its rows. */
-export async function stubTwoStep(page, { enabled = false, recoveryRemaining = 0, passkeys = [], preferred = "totp", sessionRecordDown = false, emailsDown = false } = {}) {
+/** `enabled` is the server's answer to the status route; `passkeys` its rows; `passkeysEnabled`
+ *  what the settings route advertises (false: a bridge without PASSKEYS_ENABLED). */
+export async function stubTwoStep(page, { enabled = false, recoveryRemaining = 0, passkeys = [], passkeysEnabled = true, preferred = "totp", sessionRecordDown = false, emailsDown = false } = {}) {
   const state = { enabled, recoveryRemaining, passkeys: [...passkeys], preferred, calls: [], bodies: {}, patches: [], emails: [] };
   await stubBridge(page, (url, request) => {
     const key = route(url, request.method());
     if (url.pathname.startsWith("/api/account/")) state.calls.push(key);
     const body = request.postData() ? JSON.parse(request.postData()) : undefined;
     const [, passkeyId] = url.pathname.match(/^\/api\/account\/passkeys\/([^/]+)$/) ?? [];
-    const settings = () => ({ userId: "u", security: { passkeysEnabled: true, preferredMfaMethod: state.preferred } });
+    const settings = () => ({ userId: "u", security: { passkeysEnabled, preferredMfaMethod: state.preferred } });
     if (key === "GET /api/account/settings") return { json: settings() };
     if (key === "PATCH /api/account/settings") {
       // The real route takes exactly this one key; anything else is a 422, as on the bridge.

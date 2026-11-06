@@ -132,7 +132,7 @@ function sandboxRefusal(kind, names, error, fallback) {
  *  is the browser-origin predicate (same allowlist as the REST CORS layer). */
 export function createIdeExecUpgradeHandler({ config, verifySession, env = process.env, allowOrigin = () => true }) {
   return function handleIdeExecUpgrade(request, socket) {
-    const url = new URL(request.url, 'http://ide.local');
+    const url = new URL(request.url, 'https://ide.local');
     const isPty = url.pathname === '/api/ide/pty';
     const isLsp = url.pathname === '/api/ide/lsp';
     const isDap = url.pathname === '/api/ide/debug';

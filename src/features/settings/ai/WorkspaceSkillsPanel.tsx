@@ -117,7 +117,7 @@ export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[]
         Procedures the assistant can load in this workspace. Owners and admins write them; the text is treated as data, never as rules.
       </p>
       {workspaces.length > 1 && (
-        <select aria-label="Workspace" className={FIELD_INPUT} value={workspaceId} onChange={(event) => { setWorkspaceId(event.target.value); setDraft(null); }}>
+        <select name="workspace" aria-label="Workspace" className={FIELD_INPUT} value={workspaceId} onChange={(event) => { setWorkspaceId(event.target.value); setDraft(null); }}>
           {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
         </select>
       )}
@@ -140,11 +140,11 @@ export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[]
       {draft ? (
         <form className="mt-3 space-y-2" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           {editing === null && (
-            <label className={FIELD_LABEL}>Id<input className={FIELD_INPUT} value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: event.target.value })} /></label>
+            <label className={FIELD_LABEL}>Id<input name="slug" className={FIELD_INPUT} value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: event.target.value })} /></label>
           )}
-          <label className={FIELD_LABEL}>Name<input className={FIELD_INPUT} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
-          <label className={FIELD_LABEL}>Description (one line, shown to the assistant)<input className={FIELD_INPUT} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
-          <label className={FIELD_LABEL}>Text<textarea rows={8} className={FIELD_INPUT} value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} /></label>
+          <label className={FIELD_LABEL}>Name<input name="workspace-skills-field" className={FIELD_INPUT} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
+          <label className={FIELD_LABEL}>Description (one line, shown to the assistant)<input name="workspace-skills-field" className={FIELD_INPUT} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
+          <label className={FIELD_LABEL}>Text<textarea name="workspace-skills-textarea" rows={8} className={FIELD_INPUT} value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} /></label>
           <p className="text-xs text-[var(--osio-fg-muted)]" aria-live="polite">{bodyCharsLeft(draft.body)} of {SKILL_BODY_MAX} characters left</p>
           {problem && <p className="text-xs text-[var(--osio-danger)]">{problem}</p>}
           <div className="flex gap-2">
@@ -156,7 +156,7 @@ export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[]
         <div className="mt-3 flex gap-2">
           <button type="button" className={SECONDARY_BUTTON} onClick={() => { setEditing(null); setDraft(EMPTY); }}>New skill</button>
           <Button onClick={() => importInput.current?.click()}>Import SKILL.md</Button>
-          <Input
+          <Input name="skill-md-file"
             ref={importInput}
             type="file"
             accept=".md,text/markdown"

@@ -44,7 +44,8 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { demoLoginPassword } from './required-env.mjs';
+import { demoLoginPassword, requiredEnv } from './required-env.mjs';
+import { randomBytes } from 'node:crypto';
 
 /* ── config ─────────────────────────────────────────────────────────────── */
 const websiteUrl = process.env.SUITE_WEBSITE_URL ?? 'https://127.0.0.1:4322';
@@ -58,7 +59,7 @@ const stamp = Date.now();
 const tag = stamp.toString(36);
 
 const DEV = { email: 'dev.pro.photo@gmail.com', password: demoLoginPassword(), label: 'dev' };
-const TEAM_PW = 'AgencyDemo1!';
+const TEAM_PW = requiredEnv('AGENCY_PASSWORD', 'set it to the password the agency seed used');
 // The workspace DEV shares with the teammates (Track Binocle Crew). DMs, the
 // "Crew Standup" group and every teammate membership live here — NOT the agency
 // org (b1a0c1e5…), which DEV is not a member of.
@@ -437,7 +438,7 @@ try {
 
   /* ═══════════════ S5 — REALTIME (core acceptance) ═════════════════════ */
   // DEV + Sofia both open the Dylan↔Sofia DM in fresh browser contexts.
-  const marker = `rt-${tag}-${Math.random().toString(36).slice(2, 7)}`;
+  const marker = `rt-${tag}-${randomBytes(4).toString('hex').slice(0, 5)}`;
   try {
     const sofiaWs = [];
     const sofiaB = await loginViaWebsite(browser, { email: sofia.email, password: sofia.password, label: 'sofia' }, sofiaWs);

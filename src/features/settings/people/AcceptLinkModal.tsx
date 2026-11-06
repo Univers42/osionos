@@ -27,7 +27,7 @@ export type InviteRole = Exclude<WorkspaceMemberRole, "owner">;
 export const InviteRoleSelect: React.FC<{
   value: InviteRole; onChange: (role: InviteRole) => void; allowAdmin: boolean; disabled?: boolean; ariaLabel?: string;
 }> = ({ value, onChange, allowAdmin, disabled, ariaLabel }) => (
-  <select value={value} disabled={disabled} aria-label={ariaLabel} className={PEOPLE_INPUT_CLASS}
+  <select name="accept-link-select" value={value} disabled={disabled} aria-label={ariaLabel} className={PEOPLE_INPUT_CLASS}
     onChange={(event) => onChange(event.target.value as InviteRole)}>
     <option value="member">Member — can edit</option>
     <option value="guest">Guest — can view</option>
@@ -56,7 +56,7 @@ export const AcceptLinkModal: React.FC<{ link: string; onClose: () => void }> = 
     <Modal open onClose={onClose} size="sm" title="Invite link">
       <div className="space-y-3 p-6">
         <p className="text-sm">Send this link to the person you invited. It is shown once and works for 7 days.</p>
-        <input readOnly value={link} onFocus={(event) => event.currentTarget.select()} className={PEOPLE_INPUT_CLASS} aria-label="Invite link" />
+        <input name="invite-link" readOnly value={link} onFocus={(event) => event.currentTarget.select()} className={PEOPLE_INPUT_CLASS} aria-label="Invite link" />
         <div className="flex justify-end gap-2">
           <Button onClick={() => void copy()}>{copied ? "Copied" : "Copy link"}</Button>
           <Button tone="primary" onClick={onClose}>Done</Button>

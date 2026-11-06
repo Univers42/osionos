@@ -26,6 +26,7 @@
  */
 
 import { API_BASE } from '@/shared/api/client';
+import { bridgeMediaUrl } from '@/shared/lib/media/bridgeMediaUrl';
 import { classifySettingsError, settingsJwt } from '@/store/settings/settingsStoreUtils';
 
 const PROFILE_PATH = '/api/account/profile';
@@ -95,8 +96,8 @@ function toProfile(raw: unknown): AccountProfile | null {
     timezone: text(row.timezone),
     orcid: text(row.orcid),
     patreon: text(row.patreon),
-    avatarUrl: text(row.avatarUrl),
-    bannerUrl: text(row.bannerUrl),
+    avatarUrl: bridgeMediaUrl(text(row.avatarUrl)),
+    bannerUrl: bridgeMediaUrl(text(row.bannerUrl)),
     directoryOptOut: typeof row.directoryOptOut === 'boolean' ? row.directoryOptOut : null,
     profession: text(row.profession),
     readmePageId: text(row.readmePageId),

@@ -89,7 +89,7 @@ export const ImageAvatarUpload: React.FC<ImageAvatarUploadProps> = ({ onUploaded
 
   return (
     <div className="flex items-center gap-2">
-      <input
+      <input name="image-avatar-upload-file"
         ref={inputRef}
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"

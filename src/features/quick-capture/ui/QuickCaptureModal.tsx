@@ -60,7 +60,7 @@ export const QuickCaptureModal: React.FC = () => {
   return (
     <Modal open={open} onClose={close} title="Quick capture" description="Append a note to today's daily note." size="sm" initialFocusRef={textareaRef as React.RefObject<HTMLElement>}>
       <div className="flex flex-col gap-3 p-6">
-        <textarea
+        <textarea name="quick-capture"
           ref={textareaRef}
           value={text}
           onChange={(event) => setText(event.target.value)}

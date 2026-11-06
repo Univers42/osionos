@@ -26,6 +26,7 @@ import React, { useEffect, useState } from "react";
 import { Activity } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+import { RESPONSIVE_CHART_PROPS } from "@/shared/lib/charts/responsiveChartProps";
 import { ApiError } from "@/shared/api/client";
 import { fetchRecsHealth, type RecsHealth as Health } from "../api/recsHealthClient";
 import { ctrSeries, modelSeries, type CtrPoint, type ModelPoint } from "../model/recsHealthSeries";
@@ -97,7 +98,7 @@ const QualityChart: React.FC<{ models: ModelPoint[] }> = ({ models }) => {
     <figure className="m-0">
       <figcaption className={MUTED}>The offline quality of every trained model, oldest first. The champion is marked.</figcaption>
       <div aria-hidden="true" className="mt-2 h-56 w-full">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer {...RESPONSIVE_CHART_PROPS}>
           <LineChart data={models} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--osio-border-soft)" vertical={false} />
             <XAxis dataKey="label" tick={TICK} />
@@ -131,7 +132,7 @@ const CtrChart: React.FC<{ days: CtrPoint[] }> = ({ days }) => (
   <figure className="m-0">
     <figcaption className={MUTED}>The daily click-through of what was served, the real and the synthetic apart.</figcaption>
     <div aria-hidden="true" className="mt-2 h-56 w-full">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer {...RESPONSIVE_CHART_PROPS}>
         <LineChart data={days} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="var(--osio-border-soft)" vertical={false} />
           <XAxis dataKey="day" tick={TICK} />

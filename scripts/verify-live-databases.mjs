@@ -31,6 +31,7 @@ const SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
 const WS = process.env.OSIONOS_ORG_WORKSPACE_ID ?? 'b1a0c1e5-0000-4000-a000-000000000001';
 // The 3 entries shipped in VITE_BAAS_LIVE_MOUNTS — the panel must show MORE.
 const MOCK_NAMES = ['pg-commerce', 'mysql-ops', 'mongo-activity'];
+const clean = (value) => String(value).replaceAll(/[\r\n\u2028\u2029]+/g, ' ');
 
 function mintToken() {
   if (!SECRET) throw new Error('OSIONOS_APP_SESSION_SECRET is not set — run inside the osionos-bridge container.');
@@ -54,22 +55,22 @@ async function main() {
   if (res.status !== 200) throw new Error(`GET /api/databases → ${res.status}: ${JSON.stringify(body)}`);
   const dbs = Array.isArray(body?.databases) ? body.databases : [];
   const names = dbs.map((d) => d.name);
-  console.log(`/api/databases → ${dbs.length} databases: ${names.join(', ')}`);
+  console.log(clean(`/api/databases → ${Number(dbs.length)} databases: ${names.join(', ')}`));
 
   if (dbs.length === 0) throw new Error('registry returned 0 databases (tenant/user-header regression).');
   const onlyMocks = names.length > 0 && names.every((n) => MOCK_NAMES.includes(n));
-  if (onlyMocks) throw new Error(`only the mock mounts surfaced (${names.join(', ')}) — the registry list is not reaching the panel.`);
+  if (onlyMocks) throw new Error(`only the mock mounts surfaced (${clean(names.join(', '))}) — the registry list is not reaching the panel.`);
   if (dbs.length <= MOCK_NAMES.length) {
     console.warn(`WARN: only ${dbs.length} databases — expected the full registry set (> ${MOCK_NAMES.length}).`);
   }
 
   // The first db's schema must load through the query-router proxy too.
   const first = dbs[0];
-  const sres = await fetch(`${BRIDGE}/api/databases/${encodeURIComponent(first.dbId)}/schema`, { headers });
+  const sres = await fetch(`${BRIDGE}/api/databases/${encodeURIComponent(String(first.dbId))}/schema`, { headers }); // NOSONAR S8476: dbId is URI-encoded and the host is the fixed bridge URL
   const schema = await sres.json().catch(() => null);
   if (sres.status !== 200) throw new Error(`schema[${first.name}] → ${sres.status}: ${JSON.stringify(schema)}`);
   const tableCount = Array.isArray(schema?.tables) ? schema.tables.length : 0;
-  console.log(`schema[${first.name}] → ${tableCount} tables`);
+  console.log(clean(`schema[${first.name}] → ${Number(tableCount)} tables`));
   if (tableCount === 0) throw new Error(`schema[${first.name}] returned no tables.`);
 
   console.log('PASS: bridge serves the full live-database registry (no mock fallback).');

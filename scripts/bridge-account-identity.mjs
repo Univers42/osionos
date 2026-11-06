@@ -41,6 +41,7 @@ import { accountError, callerSession, clientMetaOf, noContent, readBody, respond
 const USERNAME_PATH = '/api/account/username';
 const DELETION_PATH = '/api/account/deletion';
 const ACCEPT_PATH = '/api/account/deletion/successor/accept';
+const STATUS_PATH = '/api/account/deletion/status';
 const REQUESTS_TABLE = 'osionos_account_deletion_requests';
 const SUCCESSOR_NOTICE = 'A workspace owner named you as the successor of their workspaces. You may accept from your account.';
 const USERNAME_LIMIT = 3;
@@ -183,7 +184,8 @@ async function readInProgress(pg, session) {
 	return Array.isArray(rows) && rows.length > 0 && Boolean(rows[0]?.erased_at);
 }
 
-async function readDeletion({ pg }, session, response, config) {
+/** The caller's open deletion request, or null when there is none. */
+async function deletionState(pg, session) {
 	let row;
 	let inProgress;
 	try {
@@ -192,14 +194,23 @@ async function readDeletion({ pg }, session, response, config) {
 	} catch {
 		throw accountError(503, 'account_plane_unavailable', PLANE_DOWN);
 	}
-	if (!row) throw accountError(404, 'deletion_not_found', 'This account has no deletion request.');
-	return sendJson(response, 200, {
+	if (!row) return null;
+	return {
 		requestedAt: row.requested_at ?? null,
 		scheduledFor: row.scheduled_for ?? null,
 		successorUserId: row.successor_user_id ?? null,
 		inProgress,
-	}, config);
+	};
 }
+
+async function readDeletion({ pg }, session, response, config) {
+	const state = await deletionState(pg, session);
+	if (!state) throw accountError(404, 'deletion_not_found', 'This account has no deletion request.');
+	return sendJson(response, 200, state, config);
+}
+
+// GET /deletion/status: the state as a 200, null for none; the GET above 404s, which Chrome logs (#293).
+const readDeletionStatus = async ({ pg }, session, response, config) => sendJson(response, 200, { request: await deletionState(pg, session) }, config);
 
 async function cancelDeletion({ pg }, session, request, response, config) {
 	await writeAudit(pg, {
@@ -254,8 +265,8 @@ async function acceptSuccessor({ pg }, session, request, response, config) {
 }
 
 /**
- * The account routes of this module: POST /api/account/username and the three
- * /api/account/deletion ones. It answers true when it handled the request and false
+ * The account routes of this module: POST /api/account/username, the three
+ * /api/account/deletion ones and GET /api/account/deletion/status. It answers true when it handled the request and false
  * when the path is not its own.
  */
 export function createAccountIdentityRoutes({ config, pg, kv, verifySession }) {
@@ -263,12 +274,16 @@ export function createAccountIdentityRoutes({ config, pg, kv, verifySession }) {
 		const pathname = url.pathname;
 		const method = (request.method || 'GET').toUpperCase();
 		const isUsername = pathname === USERNAME_PATH;
-		if (!isUsername && pathname !== DELETION_PATH && pathname !== ACCEPT_PATH) return false;
+		if (!isUsername && pathname !== DELETION_PATH && pathname !== ACCEPT_PATH && pathname !== STATUS_PATH) return false;
 		try {
 			const session = callerSession(request, config, verifySession);
 			if (isUsername) {
 				if (method !== 'POST') throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
 				return await changeUsername({ pg, kv }, session, request, response, config);
+			}
+			if (pathname === STATUS_PATH) {
+				if (method !== 'GET') throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
+				return await readDeletionStatus({ pg }, session, response, config);
 			}
 			if (pathname === ACCEPT_PATH) {
 				if (method !== 'POST') throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);

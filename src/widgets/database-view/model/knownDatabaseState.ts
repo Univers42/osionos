@@ -703,7 +703,7 @@ export { resetObjectDatabaseSync } from "./objectDatabaseBridgeSync";
 
 function createId(prefix: string): string {
   if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`;
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${Date.now().toString(36)}-${Array.from(globalThis.crypto.getRandomValues(new Uint32Array(2)), (n) => n.toString(36)).join('')}`;
 }
 
 function cloneState(state: NotionState): NotionState {

@@ -185,11 +185,12 @@ function pickBanner(region) {
 }
 
 // Fields about the person carry their WCAG input purpose, so a browser or an assistive
-// tool can fill or iconify them (RGAA 11.13, #224).
+// tool can fill or iconify them (RGAA 11.13, #224). Display name is "name": Chromium 149 reports
+// "nickname" as non-standard (fb21c39d).
 test("the profile fields about the person name their input purpose", async ({ page, baseURL }) => {
   await stubProfile(page, UPLOAD);
   const panel = await openProfilePanel(page, baseURL);
-  await expect(panel.getByLabel("Display name")).toHaveAttribute("autocomplete", "nickname");
+  await expect(panel.getByLabel("Display name")).toHaveAttribute("autocomplete", "name");
   await expect(panel.getByLabel("Company")).toHaveAttribute("autocomplete", "organization");
   await expect(panel.getByLabel("Website")).toHaveAttribute("autocomplete", "url");
 });

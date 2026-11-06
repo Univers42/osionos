@@ -39,7 +39,7 @@ export const AiMemoryRow: React.FC<AiMemoryRowProps> = ({ memory, busy, onApprov
   if (draft !== null) {
     return (
       <li className="rounded-md border border-[var(--osio-border-default)] p-2.5">
-        <textarea
+        <textarea name="ai-memory-textarea"
           rows={3}
           className={FIELD_INPUT}
           aria-label={label("Edit text", memory.body)}

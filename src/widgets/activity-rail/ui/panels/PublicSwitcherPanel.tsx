@@ -53,7 +53,7 @@ export const PublicSwitcherPanel: React.FC = () => {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="px-2 pt-2 pb-1">
-        <input
+        <input name="filter-shared-projects"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter projects"

@@ -17,7 +17,7 @@ const MACHINE = "m-abcdefghijklmnop";
 
 type Event = { source: unknown; origin: string; data: unknown };
 
-function world({ framed = true, top = true } = {}) {
+function world({ framed = true, top = true, readyAsks = false } = {}) {
   const parent = {};
   const self = {};
   const page = { self, parent: framed ? parent : self, top: top ? (framed ? parent : self) : {} };
@@ -25,7 +25,7 @@ function world({ framed = true, top = true } = {}) {
   let handler: (event: Event) => void = () => {};
   const whoamis: string[] = [];
   const link = linkTerminalToApp({
-    page, appOrigins: ORIGINS, node: MACHINE,
+    page, appOrigins: ORIGINS, node: MACHINE, readyAsks,
     post: (message, origin) => { if (origin === "*") throw new Error("never *"); posted.push({ message, origin }); },
     listen: (next) => { handler = next; return () => {}; },
     whoami: async (nonce) => { whoamis.push(nonce); return { type: "osionos-ide/identity", machineId: MACHINE, sig: SIG }; },
@@ -105,6 +105,20 @@ test("a shell needing a token asks the pinned app once; a failed whoami reports 
   w.deliver({ type: "osionos-ide/session", token: TOKEN });
   await w.link!.credentials.take();
   w.posted.length = 0;
+  void w.link!.credentials.take();
+  assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/need-session" }, origin: PROD }]);
+});
+
+// #304, measured in WebKit 26.4: the dock answers `ready` with a grant, and the page's first shell
+// asked again before that grant arrived. The ask crossed the grant, so the dock minted a second
+// token, which after the 600 s step-up window asks a remembered computer for an emailed code.
+test("#304: with readyAsks, the first shell waits for the grant its ready asked for; a later one asks", async () => {
+  const w = world({ readyAsks: true });
+  w.posted.length = 0;
+  const first = w.link!.credentials.take();
+  assert.deepEqual(w.posted, [], "the ready already asked");
+  w.deliver({ type: "osionos-ide/session", token: TOKEN });
+  assert.deepEqual(await first, { token: TOKEN });
   void w.link!.credentials.take();
   assert.deepEqual(w.posted, [{ message: { type: "osionos-ide/need-session" }, origin: PROD }]);
 });

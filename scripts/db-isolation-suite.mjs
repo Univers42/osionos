@@ -61,7 +61,7 @@ const other = mint(OTHER_SUB, OTHER_WS);
 const results = [];
 function check(name, ok, detail) {
 	results.push({ name, ok, detail });
-	console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`);
+	console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${String(detail).replaceAll(/[\r\n]+/g, ' ')}` : ''}`);
 }
 
 // 1) Owner can reach their own mount.

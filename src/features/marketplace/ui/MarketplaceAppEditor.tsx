@@ -87,22 +87,22 @@ export const MarketplaceAppEditor: React.FC<Props> = ({ app, onClose, onSaved })
   return (
     <Modal open onClose={onClose} size="lg" title={meta.published ? "Edit app" : "Edit draft app"}>
       <div className="flex flex-col gap-3 p-4">
-        <label className={LABEL}>Name<input className={FIELD} value={f.title} onChange={(e) => set("title", e.target.value)} /></label>
+        <label className={LABEL}>Name<input name="marketplace-app-field" className={FIELD} value={f.title} onChange={(e) => set("title", e.target.value)} /></label>
         <div className="grid grid-cols-2 gap-3">
-          <label className={LABEL}>Icon (iconValue)<input className={FIELD} value={f.icon} onChange={(e) => set("icon", e.target.value)} placeholder="icon:box" /></label>
-          <label className={LABEL}>Company<input className={FIELD} value={f.company} onChange={(e) => set("company", e.target.value)} /></label>
+          <label className={LABEL}>Icon (iconValue)<input name="icon" className={FIELD} value={f.icon} onChange={(e) => set("icon", e.target.value)} placeholder="icon:box" /></label>
+          <label className={LABEL}>Company<input name="company" className={FIELD} value={f.company} onChange={(e) => set("company", e.target.value)} /></label>
         </div>
-        <label className={LABEL}>Short description<input className={FIELD} value={f.description} onChange={(e) => set("description", e.target.value)} /></label>
+        <label className={LABEL}>Short description<input name="marketplace-app-field" className={FIELD} value={f.description} onChange={(e) => set("description", e.target.value)} /></label>
         <div className="grid grid-cols-2 gap-3">
-          <label className={LABEL}>Website<input className={FIELD} value={f.website} onChange={(e) => set("website", e.target.value)} placeholder="https://…" /></label>
-          <label className={LABEL}>Launch URL (embed)<input className={FIELD} value={f.launchUrl} onChange={(e) => set("launchUrl", e.target.value)} placeholder="https://app.example.com" /></label>
+          <label className={LABEL}>Website<input name="website" className={FIELD} value={f.website} onChange={(e) => set("website", e.target.value)} placeholder="https://…" /></label>
+          <label className={LABEL}>Launch URL (embed)<input name="launch-url" className={FIELD} value={f.launchUrl} onChange={(e) => set("launchUrl", e.target.value)} placeholder="https://app.example.com" /></label>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <label className={LABEL}>Version<input className={FIELD} value={f.version} onChange={(e) => set("version", e.target.value)} /></label>
-          <label className={LABEL}>Categories (comma-separated)<input className={FIELD} value={f.categories} onChange={(e) => set("categories", e.target.value)} /></label>
+          <label className={LABEL}>Version<input name="version" className={FIELD} value={f.version} onChange={(e) => set("version", e.target.value)} /></label>
+          <label className={LABEL}>Categories (comma-separated)<input name="categories" className={FIELD} value={f.categories} onChange={(e) => set("categories", e.target.value)} /></label>
         </div>
         <label className="flex items-center gap-2 text-sm text-[var(--osio-fg-default)]">
-          <input type="checkbox" checked={f.verified} onChange={(e) => set("verified", e.target.checked)} /> Verified publisher
+          <input name="verified" type="checkbox" checked={f.verified} onChange={(e) => set("verified", e.target.checked)} /> Verified publisher
         </label>
         <div className="mt-1 flex items-center justify-between gap-3">
           <span className="text-xs text-[var(--osio-fg-subtle)]">{meta.published ? "Published — visible to everyone." : "Draft — only you see it until you publish."}</span>

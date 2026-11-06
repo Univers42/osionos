@@ -155,7 +155,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
           </span>
 
           {renaming ? (
-            <input
+            <input name="workspace-name"
               autoFocus
               defaultValue={workspaceName}
               aria-label="Workspace name"

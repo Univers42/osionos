@@ -23,6 +23,8 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { errorWords } from "@/widgets/chat-shell/ui/errorWords";
+
 import {
   failureCode,
   noticeText,
@@ -49,6 +51,9 @@ const CODES = [
   "attachment_not_found",
   "upstream_unavailable",
   "upstream_error",
+  "quota_exhausted",
+  "provider_unavailable",
+  "context_too_long",
   "network_error",
   "cancelled",
   "timeout",
@@ -103,6 +108,14 @@ test("a rate limit without a header waits a minute", () => {
   const info = runError("rate_limited");
   assert.equal(info.retryAfter, null);
   assert.equal(info.text, "Too many requests — try again in 60 s");
+});
+
+test("the finer classes of a provider failure read as upstream_error did", () => {
+  const today = runError("upstream_error");
+  for (const code of ["quota_exhausted", "provider_unavailable", "context_too_long"]) {
+    assert.deepEqual(runError(code), today, code);
+    assert.equal(errorWords(code), errorWords("upstream_error"), code);
+  }
 });
 
 test("the Retry-After of a refusal is read from its headers", () => {

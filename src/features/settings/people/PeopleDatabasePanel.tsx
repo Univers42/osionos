@@ -93,11 +93,11 @@ const CreatePeopleModal: React.FC<{
   return (
     <Modal open onClose={onClose} size="sm" title={kind === "group" ? "New group" : "Invite people"}>
       <form className="space-y-3 p-6" onSubmit={submit}>
-        <input autoFocus value={value} onChange={(event) => setValue(event.target.value)}
+        <input name="people-database-field" autoFocus value={value} onChange={(event) => setValue(event.target.value)}
           placeholder={kind === "group" ? "Group name" : "guest@email.com"} className={INPUT_CLASS}
           aria-label={kind === "group" ? "Group name" : "Email address"} />
         {kind === "group" ? (
-          <select value={groupKind} onChange={(event) => setGroupKind(event.target.value as "chat" | "community")} className={INPUT_CLASS}>
+          <select name="group-kind" value={groupKind} onChange={(event) => setGroupKind(event.target.value as "chat" | "community")} className={INPUT_CLASS}>
             <option value="chat">Group chat</option>
             <option value="community">Community</option>
           </select>
@@ -180,7 +180,7 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
           </div>
         )}
         {descriptor.search && (
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people"
+          <input name="search-people" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people"
             className={`${INPUT_CLASS} max-w-[240px]`} />
         )}
         {descriptor.create && (descriptor.create.kind !== "guest" || canInvite) && (

@@ -75,7 +75,7 @@ test("Ratio picker applies an aspect-ratio and the width preset resizes", async 
 
   await page.getByRole("button", { name: "50%", exact: true }).click();
   // The nearest ancestor carrying a width: the editor frame, or the preview's <figure>.
-  await expect(img.locator("xpath=ancestor::*[contains(@style, 'width')][1]")).toHaveJSProperty("style.width", "50%");
+  await expect(img.locator("xpath=ancestor::*[contains(@style, 'width')][1]")).toHaveJSProperty("style.width", "max(80px, 50%)");
 });
 
 test("Full screen opens and closes on Escape", async ({ page, baseURL }) => {

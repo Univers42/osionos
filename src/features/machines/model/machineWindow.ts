@@ -26,6 +26,13 @@ export type OpenOutcome = "opened" | "focused" | "blocked";
 /** osionos-node's default listen address (packages/osionos-node/cli.mjs), a loopback IDE origin. */
 export const LOCAL_NODE_ORIGIN = "http://127.0.0.1:4100";
 
+/** What a frame of the node's pages (terminal, editor) may use: the loopback node, the clipboard
+ *  (paste needs clipboard-read on the cross-origin frame, measured 2026-11-01) and fullscreen (the
+ *  node page's fullscreen button was "denied because of Permissions Policy directives" on
+ *  baas-beta, 2026-11-04: Firefox drops the other three names, so the frame had no allow at all).
+ *  Pass it through frameAllow, which drops the names the browser does not know. */
+export const NODE_FRAME_PERMISSIONS = "local-network-access; clipboard-read; clipboard-write; fullscreen";
+
 // Caveat: a slow cold load (a cold disk, a loaded machine, a slow popup) can miss this and read as
 // "not running" while the node is up; "Check again" opens it once more. The page sends `ready` from
 // its light entry, before the VS Code bundle is requested, which is what makes a short bound safe.

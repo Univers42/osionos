@@ -229,6 +229,27 @@ test.describe("the published pages panel", () => {
     expect(appErrors(consoleErrors), "a disabled publish feature logged a console error").toEqual([]);
   });
 
+  // #293: Chrome logs the 404 above as "Failed to load resource", which appErrors() filters out.
+  // A bridge that advertises publish as off is not asked at all, so there is no 404 to log.
+  test("a bridge that advertises publish as off is never asked for the list", async ({ page, baseURL }) => {
+    const asked = [];
+    await enablePublishFlag(page);
+    await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);
+    await page.route("**/api/capabilities", (route) => route.fulfill({ json: { capabilities: { recs: false, publish: false } } }));
+    await page.route("**/api/account/published-pages", (route) => {
+      asked.push(route.request().url());
+      return route.fulfill({ status: 404, json: { ok: false, code: "publish_disabled" } });
+    });
+
+    await openFreshPage(page, baseURL);
+    // The capability is read per session token; the offline build has none until one is given.
+    await page.evaluate(() => globalThis.__playgroundUserStore.setState({ activePageJwt: () => "e2e-page-jwt" }));
+    await openPublishedPages(page);
+
+    await expect(region(page).getByText(/publishing is off on the server/i)).toBeVisible();
+    expect(asked).toEqual([]);
+  });
+
   test("at a phone width the table does not overflow the settings pane", async ({ page, baseURL }) => {
     await enablePublishFlag(page);
     await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);

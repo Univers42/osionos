@@ -22,6 +22,7 @@
 import { API_BASE, ApiError, api, getActivePageJwt } from "@/shared/api/client";
 
 import type { IdentityVerdict, MintResult } from "../../ide/vscode/machineLink";
+import { isResumeAssertion } from "../../ide/vscode/ideFrameProtocol";
 import { isLoopbackIdeOrigin, isMachineId } from "../model/machineShape";
 
 export interface Machine {
@@ -116,6 +117,11 @@ export function parseToken(body: unknown): { token: string; exp: number } | null
   return Number.isSafeInteger(body.exp) ? { token: body.token, exp: body.exp as number } : null;
 }
 
+/** The bridge's 60 s resume assertion, or null when the answer is not one. */
+export function parseResumeAssertion(body: unknown): string | null {
+  return isRecord(body) && isResumeAssertion(body.assertion) ? body.assertion : null;
+}
+
 /** The bridge a machine pairs with: the origin it reported, else the one this app calls. */
 export function machinesBridgeUrl(): string {
   return reportedBridgeOrigin ?? (API_BASE || globalThis.location.origin).replace(/\/+$/, "");
@@ -164,12 +170,25 @@ export async function verifyMachineIdentity(id: string, nonce: string, sig: stri
 /** A machine token for the IDE window; a step-up refusal is its own result so the view can retry.
  *  The bridge mints once per identity check (428 identity_required otherwise): call it only right
  *  after verifyMachineIdentity answered "ok", which linkMachineFrame guarantees. */
-export async function mintMachineToken(id: string): Promise<MintResult> {
+export async function mintMachineToken(id: string, { remember = false }: { remember?: boolean } = {}): Promise<MintResult> {
   try {
-    const minted = parseToken(await api.post<unknown>(item(id, "/token"), {}, jwt()));
+    // The bridge signs remember: true into the token only when the body says so (Amendment 1, R6).
+    const minted = parseToken(await api.post<unknown>(item(id, "/token"), remember ? { remember: true } : {}, jwt()));
     return minted ? { kind: "ok", token: minted.token } : { kind: "unavailable", reason: "error" };
   } catch (error) {
     if (error instanceof ApiError && error.code === "sudo_required") return { kind: "step-up" };
+    return { kind: "unavailable", reason: error instanceof ApiError ? error.code : "error" };
+  }
+}
+
+/** A remembered computer's second factor (Amendment 1, R2): no step-up, after the same identity
+ *  check. Any refusal (a removed machine, an older bridge's 404, no network) is "unavailable", and
+ *  the frame link then takes the token path. */
+export async function mintResumeAssertion(id: string): Promise<MintResult> {
+  try {
+    const assertion = parseResumeAssertion(await api.post<unknown>(item(id, "/resume"), {}, jwt()));
+    return assertion ? { kind: "resume", assertion } : { kind: "unavailable", reason: "error" };
+  } catch (error) {
     return { kind: "unavailable", reason: error instanceof ApiError ? error.code : "error" };
   }
 }

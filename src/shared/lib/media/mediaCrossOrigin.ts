@@ -1,7 +1,7 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   coverCrossOrigin.ts                                :+:      :+:    :+:   */
+/*   mediaCrossOrigin.ts                                :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
@@ -16,9 +16,9 @@
 // hosts known to send that header: elsewhere it would block the media outright.
 const CREDENTIALLESS_HOSTS = new Set(["cdn.pixabay.com"]);
 
-/** `crossOrigin` for a cover media element: "anonymous" for provider CDNs that
- *  allow it, so they cannot set cookies; undefined (a plain fetch) otherwise. */
-export function coverCrossOrigin(src: string | undefined): "anonymous" | undefined {
+/** `crossOrigin` for a media element (cover, video block, embed): "anonymous" for provider
+ *  CDNs that allow it, so they cannot set cookies; undefined (a plain fetch) otherwise. */
+export function mediaCrossOrigin(src: string | undefined): "anonymous" | undefined {
   if (!src) return undefined;
   try {
     return CREDENTIALLESS_HOSTS.has(new URL(src).hostname) ? "anonymous" : undefined;

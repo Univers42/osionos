@@ -239,7 +239,7 @@ export const ChatComposer: React.FC<Props> = ({
           <UserMarkdown markdown={value} />
         </div>
       ) : (
-      <textarea
+      <textarea name="message-the-assistant"
         data-writing-surface
         ref={ref}
         autoFocus={autoFocus}

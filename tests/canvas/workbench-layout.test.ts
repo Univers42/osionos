@@ -146,12 +146,10 @@ test("isDockTab: undefined returns false", () => {
 test("isDockTab: number 1 returns false", () => {
   assert.strictEqual(isDockTab(1), false);
 });
-// In the desktop app the dock's shell lives as long as the window, as in VS Code: closing the dock
-// hides it. On the web it unmounts, and its sandbox session reconnects on the next open.
-test("dockPresence: hidden after a close only where the dock keeps a local shell", () => {
-  assert.equal(dockPresence({ open: false, everOpened: false, keepsShell: true }), "absent");
-  assert.equal(dockPresence({ open: true, everOpened: true, keepsShell: true }), "shown");
-  assert.equal(dockPresence({ open: false, everOpened: true, keepsShell: true }), "hidden");
-  assert.equal(dockPresence({ open: false, everOpened: true, keepsShell: false }), "absent");
-  assert.equal(dockPresence({ open: true, everOpened: true, keepsShell: false }), "shown");
+// Once opened, the dock is hidden on close, never unmounted, on the web as on the desktop: the node
+// terminal's shell ends with its socket, so an unmount on close killed it (the web used to unmount).
+test("dockPresence: absent until first opened, then shown or hidden, never absent again", () => {
+  assert.equal(dockPresence({ open: false, everOpened: false }), "absent");
+  assert.equal(dockPresence({ open: true, everOpened: true }), "shown");
+  assert.equal(dockPresence({ open: false, everOpened: true }), "hidden");
 });

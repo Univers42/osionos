@@ -11,5 +11,8 @@
 # initializes; use `make sonar-up` which waits automatically.
 FROM sonarqube:community
 
+# Run unprivileged (the image ships a `sonarqube` user)
+USER sonarqube
+
 LABEL maintainer="dlesieur" \
       description="SonarQube CE for osionos-database-sys"

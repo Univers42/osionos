@@ -123,7 +123,7 @@ export const PublicPagesPanel = () => {
       <span key={`${page.pageId}-link`} className="flex min-w-0 items-center gap-1">
         {url ? (
           <>
-            <input
+            <input name="public-link"
               readOnly
               value={url}
               aria-label={`Public link of ${title}`}

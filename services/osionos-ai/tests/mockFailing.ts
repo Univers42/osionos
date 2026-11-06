@@ -20,7 +20,10 @@ export type Behaviour =
 	| 429
 	| 500
 	| 503
+	| 402
 	| 400
+	/** A 200 stream whose first chunk is the `body`: the error of a provider that already said 200. */
+	| 'stream_error'
 	/** The socket dies before the first byte. */
 	| 'reset'
 	/** One chunk of text, then the socket dies. */
@@ -34,6 +37,10 @@ export interface Scripted {
 	delayMs?: number;
 	/** The `Retry-After` header of a status answer. */
 	retryAfter?: string;
+	/** The body of a status answer, or the chunk of a `stream_error`. */
+	body?: string;
+	/** More headers of a status answer. */
+	headers?: Record<string, string>;
 }
 
 export interface FailingUpstream {
@@ -56,9 +63,10 @@ export interface FailingUpstream {
 
 const ERROR_BODY = JSON.stringify({ error: { message: 'scripted failure', type: 'scripted' } });
 
-function sendStatus(response: ServerResponse, status: number, retryAfter?: string): void {
-	response.writeHead(status, { 'content-type': 'application/json', ...(retryAfter ? { 'retry-after': retryAfter } : {}) });
-	response.end(ERROR_BODY);
+function sendStatus(response: ServerResponse, status: number, scripted: Pick<Scripted, 'retryAfter' | 'body' | 'headers'> = {}): void {
+	const { retryAfter, body = ERROR_BODY, headers } = scripted;
+	response.writeHead(status, { 'content-type': 'application/json', ...(retryAfter ? { 'retry-after': retryAfter } : {}), ...headers });
+	response.end(body);
 }
 
 export async function startFailingUpstream(): Promise<FailingUpstream> {
@@ -86,12 +94,18 @@ export async function startFailingUpstream(): Promise<FailingUpstream> {
 			requests.push(model);
 			bodies.push(body);
 			const next = scripts.get(model)?.shift() ?? { behaviour: steady.get(model) ?? ('ok' as const) };
-			setTimeout(() => answer(response, next.behaviour, askedForUsage(body), next.retryAfter), next.delayMs ?? 0);
+			setTimeout(() => answer(response, next, askedForUsage(body)), next.delayMs ?? 0);
 		});
 	});
 
-	function answer(response: ServerResponse, behaviour: Behaviour, sendUsage: boolean, retryAfter?: string): void {
-		if (typeof behaviour === 'number') return sendStatus(response, behaviour, retryAfter);
+	function answer(response: ServerResponse, scripted: Scripted, sendUsage: boolean): void {
+		const { behaviour, body } = scripted;
+		if (typeof behaviour === 'number') return sendStatus(response, behaviour, scripted);
+		if (behaviour === 'stream_error') {
+			response.writeHead(200, { 'content-type': 'text/event-stream' });
+			response.end(`data: ${body}\n\n`);
+			return;
+		}
 		if (behaviour === 'reset') return void response.socket?.destroy();
 		if (behaviour === 'text_then_break') {
 			response.writeHead(200, { 'content-type': 'text/event-stream' });

@@ -27,7 +27,7 @@ export const INVITEE_EMAIL = 'bob@example.com';
 const CONFIG = {
 	allowedOrigin: '*',
 	appUrl: 'http://app.test',
-	baasUrl: 'http://baas.local',
+	baasUrl: 'http://baas.local', // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 	serviceKey: 'service-key',
 };
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');

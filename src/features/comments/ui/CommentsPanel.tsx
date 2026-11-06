@@ -111,7 +111,7 @@ export const CommentsPanel: React.FC<Props> = ({ pageId, comments, loading, meId
             />
           )}
         </div>
-        <textarea
+        <textarea name="add-a-comment"
           ref={composerRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}

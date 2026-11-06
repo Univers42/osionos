@@ -41,8 +41,8 @@ export function makeFolder(base) {
 		version: '0.2.0',
 		configurations: [{ name: 'sentinel', type: 'node', request: 'launch', program: '${workspaceFolder}/debug-target.js' }],
 	}));
-	execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: folder });
-	execFileSync('git', ['-c', 'user.email=e2e@osionos', '-c', 'user.name=e2e', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: folder });
+	execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: folder }); // NOSONAR S4036: fixed tool name run from the pinned toolchain, PATH is the dev/CI image
+	execFileSync('git', ['-c', 'user.email=e2e@osionos', '-c', 'user.name=e2e', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: folder }); // NOSONAR S4036: fixed tool name run from the pinned toolchain, PATH is the dev/CI image
 	return folder;
 }
 
@@ -116,5 +116,5 @@ export async function startApp({ appPort, ideUrl, ideOrigin, mode = 'window' }) 
 
 export function tempRoot() {
 	// Short: the socket path (A1) must stay under 100 bytes.
-	return mkdtempSync('/tmp/om-');
+	return mkdtempSync('/tmp/om-'); // NOSONAR S5443: short socket path must stay under the 100 byte limit
 }

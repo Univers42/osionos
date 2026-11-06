@@ -49,7 +49,7 @@ export const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) =
         <form onSubmit={handleSubmit} className="space-y-3">
           <label className="block text-xs font-medium text-[var(--osio-fg-muted)]">
             <span>Name</span>
-            <input
+            <input name="color-profile-field"
               value={name}
               onChange={(event) => setName(event.target.value)}
               className="osio-field mt-1 w-full px-2 text-sm"
@@ -58,7 +58,7 @@ export const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) =
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
               <span>Text</span>
-              <input
+              <input name="text-color"
                 type="color"
                 value={textColor}
                 onChange={(event) => setTextColor(event.target.value)}
@@ -67,7 +67,7 @@ export const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) =
             </label>
             <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
               <span>Background</span>
-              <input
+              <input name="background-color"
                 type="color"
                 value={backgroundColor}
                 onChange={(event) => setBackgroundColor(event.target.value)}

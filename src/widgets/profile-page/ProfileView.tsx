@@ -25,6 +25,7 @@ import { ProfileSharedPosts } from './ProfileSharedPosts';
 import { ReadmeBlocks } from './ReadmeBlocks';
 import { toReadmeRecord } from './model/binding';
 import { useProfile } from './useProfile';
+import { isSafeImageSource } from '@/shared/lib/media/bridgeMediaUrl';
 
 interface ProfileViewProps {
   userId: string;
@@ -50,7 +51,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
   }
 
   // Only an https URL or a same-origin path is drawn; the field is the allowlisted bannerUrl, nothing else.
-  const bannerSrc = /^(https:\/\/|\/(?!\/))/.test(profile.bannerUrl ?? '') ? profile.bannerUrl : undefined;
+  const bannerSrc = isSafeImageSource(profile.bannerUrl) ? profile.bannerUrl : undefined;
 
   return (
     <div className="h-full overflow-auto bg-[var(--osio-bg-page)] text-[var(--osio-fg-default)]">

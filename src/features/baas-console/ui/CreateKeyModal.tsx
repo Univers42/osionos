@@ -66,13 +66,13 @@ function CreateKeyForm({ onCancel }: { onCancel: () => void }) {
       <h3 style={{ margin: 0 }}>Create API key</h3>
       <label style={{ display: 'grid', gap: 6 }}>
         <span>Name</span>
-        <Input value={name} onChange={(e) => setName(e.target.value)}
+        <Input name="key-name" value={name} onChange={(e) => setName(e.target.value)}
           placeholder="e.g. production server" required />
       </label>
       <fieldset style={{ border: 0, padding: 0, margin: 0, display: 'flex', gap: 16 }}>
         {ALL_SCOPES.map((scope) => (
           <label key={scope} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggle(scope)} />
+            <input name="scope" type="checkbox" checked={scopes.includes(scope)} onChange={() => toggle(scope)} />
             {scope}
           </label>
         ))}

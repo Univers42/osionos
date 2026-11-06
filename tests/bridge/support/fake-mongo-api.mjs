@@ -20,7 +20,7 @@
 
 import { randomBytes } from 'node:crypto';
 
-export const MONGO_URL = 'http://mongo.local';
+export const MONGO_URL = 'http://mongo.local'; // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
 

@@ -69,8 +69,8 @@ PAGES=https://github.com/Univers42/osionos/releases/download/node-pages/osionos-
 
 download_pages() {
     TMP_PAGES=$(mktemp -d "$DATA/pages.XXXXXX")
-    if curl -fsSL --retry 3 -o "$TMP_PAGES/pages.tar.gz" "$PAGES" \
-        && curl -fsSL --retry 3 -o "$TMP_PAGES/pages.sha256" "$PAGES.sha256" \
+    if curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$TMP_PAGES/pages.tar.gz" "$PAGES" \
+        && curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$TMP_PAGES/pages.sha256" "$PAGES.sha256" \
         && (cd "$TMP_PAGES" && sha256 -c pages.sha256 >/dev/null); then
         tar -xzf "$TMP_PAGES/pages.tar.gz" -C "$SRC/"
         rm -rf "$TMP_PAGES"
@@ -121,7 +121,7 @@ if [ ! -x "$SERVER/node" ]; then
     SHA=$(pin "s.upstream['$PLATFORM'].sha256")
     TMP=$(mktemp -d "$DATA/download.XXXXXX")
     trap 'rm -rf "$TMP"' EXIT
-    curl -fL --retry 3 -o "$TMP/$ASSET" \
+    curl -fL --proto '=https' --tlsv1.2 --retry 3 -o "$TMP/$ASSET" \
         "https://github.com/coder/code-server/releases/download/v$VERSION/$ASSET"
     echo "$SHA  $TMP/$ASSET" | sha256 -c - >/dev/null || fail "$ASSET does not match its pinned sha256"
     tar -xzf "$TMP/$ASSET" -C "$TMP"
@@ -131,14 +131,52 @@ if [ ! -x "$SERVER/node" ]; then
 fi
 link_home server
 
-[ "$#" -gt 0 ] || {
-    echo "osionos-node is installed in $HOME_DIR"
-    exit 0
-}
-
-# curl | sh gives this script the pipe as stdin; pairing asks its question on the terminal.
+# Define NODE and CLI before writing the binary wrapper
 NODE=$(command -v node)
 CLI=$SRC/packages/osionos-node/cli.mjs
+
+# Create binary wrapper BEFORE checking args
+BIN_DIR=$HOME/.local/bin
+mkdir -p "$BIN_DIR"
+{
+    echo '#!/bin/sh'
+    echo 'case "${1:-}" in'
+    echo '    update|--update)'
+    echo '        shift'
+    printf "        exec '%s' '%s' update \"\$@\"\n" "$NODE" "$CLI"
+    echo '        ;;'
+    echo '    *)'
+    printf "        exec '%s' '%s' open \"\$@\"\n" "$NODE" "$CLI"
+    echo '        ;;'
+    echo 'esac'
+} >"$BIN_DIR/osionos"
+chmod 755 "$BIN_DIR/osionos"
+
+# When $# -eq 0 (update/install without connect args):
+if [ "$#" -eq 0 ]; then
+    if [ -f "$HOME_DIR/start.sh" ]; then
+        if command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; then
+            systemctl --user daemon-reload
+            systemctl --user enable osionos-node.service >/dev/null 2>&1
+            systemctl --user restart osionos-node.service
+            echo "osionos-node is updated and running as a service. Stop it with: systemctl --user disable --now osionos-node"
+            exit 0
+        fi
+    fi
+    if [ "$(uname -s)" = Darwin ]; then
+        PLIST=$HOME/Library/LaunchAgents/com.osionos.node.plist
+        if [ -f "$PLIST" ]; then
+            launchctl unload "$PLIST" 2>/dev/null || true
+            launchctl load "$PLIST"
+            echo "osionos-node is updated. Stop it with: launchctl unload $PLIST"
+            exit 0
+        fi
+    fi
+    echo "osionos-node is installed in $HOME_DIR"
+    exit 0
+fi
+
+# curl | sh gives this script the pipe as stdin; pairing asks its question on the terminal.
 if [ -f "$HOME_DIR/machine.json" ]; then
     : # Paired already: nothing to ask, and a run from cron or a service has no terminal.
 elif ! (: </dev/tty) 2>/dev/null; then
@@ -158,15 +196,6 @@ START=$HOME_DIR/start.sh
     echo
 } >"$START"
 chmod 700 "$START"
-
-# `osionos <folder>` from any shell on this computer.
-BIN_DIR=$HOME/.local/bin
-mkdir -p "$BIN_DIR"
-{
-    echo '#!/bin/sh'
-    printf "exec '%s' '%s' open \"\$@\"\n" "$NODE" "$CLI"
-} >"$BIN_DIR/osionos"
-chmod 755 "$BIN_DIR/osionos"
 
 # The node stays up without a terminal: a service restarts it and starts it at login.
 if command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; then

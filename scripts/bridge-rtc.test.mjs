@@ -44,7 +44,7 @@ let failures = 0;
 function check(label, condition, detail = '') {
 	const status = condition ? 'PASS' : 'FAIL';
 	if (!condition) failures += 1;
-	console.log(`[${status}] ${label}${detail ? ` — ${detail}` : ''}`);
+	console.log(`[${status}] ${label}${detail ? ` — ${String(detail).replaceAll(/[\r\n]+/g, ' ')}` : ''}`);
 }
 
 async function listRooms(jwt) {

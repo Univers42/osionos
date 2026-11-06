@@ -78,7 +78,7 @@ export function rtcConfigFromEnv(env = process.env) {
 	return {
 		apiKey: safeText(env.LIVEKIT_API_KEY, 120),
 		apiSecret: String(env.LIVEKIT_API_SECRET ?? ''),
-		url: (env.LIVEKIT_URL ?? 'http://livekit:7880').replace(/\/$/, ''),
+		url: (env.LIVEKIT_URL ?? 'http://livekit:7880').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		clientUrl: (env.LIVEKIT_CLIENT_URL ?? 'ws://127.0.0.1:7880').replace(/\/$/, ''),
 		tokenTtlSeconds: Math.min(
 			Math.max(Number(env.LIVEKIT_TOKEN_TTL_SECONDS ?? DEFAULT_TOKEN_TTL_SECONDS) || DEFAULT_TOKEN_TTL_SECONDS, 60),

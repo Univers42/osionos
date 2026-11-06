@@ -25,7 +25,8 @@ import { mcpToolChars } from '../mcpClient/runTools.ts';
 import { config } from '../config.ts';
 import { readWebTaint } from '../web/settings.ts';
 import { newWebRun, webToolChars } from '../web/runWeb.ts';
-import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
+import { abortCode, pumpUpstream } from './streamPump.ts';
+import { classifyRunFailure, errorFrame, storedError } from './upstreamError.ts';
 import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
 import { scheduleSummary } from '../summary/summarize.ts';
 import { THREAD_SYSTEM_PROMPT, ThreadAccessLost } from '../threads/context.ts';
@@ -242,9 +243,6 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				system,
 				messages,
 				controller: attempt.controller,
-				// In a chain no attempt retries: the chain is the retry, and 3 models
-				// must be 3 requests, not 9 (devil C250).
-				...(steps.length > 1 ? { maxRetries: 0 } : {}),
 				...(tools ? { tools } : {}),
 				...(providerOptions ? { providerOptions } : {}),
 				// The ceiling of the loop: the money the run holds, and the cost
@@ -275,14 +273,18 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			failure = outcome.error;
 			const move = await moveOn({ db, redis, run: runState, steps, index, current, outcome, records, emit });
 			if (move.kind === 'stay') break;
+			if (move.kind === 'retry') {
+				outcome = await callModel(current);
+				continue;
+			}
 			if (move.kind === 'refused') {
 				// The old money is back and the row holds none: only the end is left.
 				research?.end('budget_exhausted', false);
 				await markRun(db, runId, 'failed', 'budget_exhausted', attemptsUsage(records));
-				await emit('error', { code: 'budget_exhausted', message: failureMessage('budget_exhausted', failure) });
+				await emit('error', { code: 'budget_exhausted' });
 				return;
 			}
-			index += 1;
+			index = move.index;
 			current = move.attempt;
 			outcome = await callModel(current);
 		}
@@ -359,9 +361,11 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			scheduleSummary({ db, target: current.target, runId, conversationId, ownerId, oldestKeptId: input.summarizeFrom.oldestKeptId, day });
 		}
 	} catch (error) {
-		const code = error instanceof ThreadAccessLost
+		const closed = error instanceof ThreadAccessLost
 			? 'access_revoked'
-			: abortCode(current.controller.signal) ?? (isDataPolicyRefusal(error) ? 'vision_unavailable' : 'upstream_error');
+			: abortCode(current.controller.signal) ?? (isDataPolicyRefusal(error) ? 'vision_unavailable' : null);
+		const failed = closed ? { code: closed } : classifyRunFailure(error, failure);
+		const { code } = failed;
 		// A cancelled or failed run settles what the upstream reported, or
 		// the estimate of what it streamed before it broke.
 		const billed = settled ?? usageForSettlement(runId, usage, {
@@ -379,8 +383,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// success path does the same.
 		research?.end(code, current.budget.deadlineHit === true);
 		const runStatus: RunStatus = code === 'cancelled' || code === 'access_revoked' ? 'cancelled' : 'failed';
-		const changed = await markRun(db, runId, runStatus, code, attemptsUsage(records, { target: current.target, outcome: code, billed: cost }));
-		await emit('error', { code, message: failureMessage(code, error) });
+		const changed = await markRun(db, runId, runStatus, storedError(failed), attemptsUsage(records, { target: current.target, outcome: code, billed: cost }));
+		await emit('error', errorFrame(failed));
 		if (changed) {
 			await settleTarget(db, current.target, { userId: ownerId, day, reserved: current.budget.reserved, actual: cost });
 		}

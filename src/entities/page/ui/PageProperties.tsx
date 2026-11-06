@@ -55,7 +55,7 @@ const PagePropertyValue: React.FC<{
 
   if (property.type === 'checkbox') {
     return (
-      <input
+      <input name={`property-${property.key}`}
         type="checkbox"
         aria-label={property.key}
         checked={Boolean(property.value)}

@@ -48,7 +48,7 @@ function runOne(url, preset, chrome) {
     "--output=json", `--output-path=${jsonPath}`,
   ];
   if (preset === "desktop") args.push("--preset=desktop");
-  const res = spawnSync("npx", args, { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, CHROME_PATH: chrome } });
+  const res = spawnSync("npx", args, { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, CHROME_PATH: chrome } }); // NOSONAR S4036: fixed tool name run from the pinned toolchain, PATH is the dev/CI image
   if (res.status !== 0) throw new Error(`lighthouse failed for ${url} (${preset})`);
   const r = JSON.parse(readFileSync(jsonPath, "utf8"));
   const score = (k) => Math.round((r.categories[k]?.score ?? 0) * 100);

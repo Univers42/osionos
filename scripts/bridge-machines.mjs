@@ -17,13 +17,14 @@
 //
 // Ownership answers follow the contract table: default, identity and delete say 404 for a row
 // that is not the caller's, so the id is no probe; the token mint says 403 not_allowed, which is
-// the refusal condition 1 names, for another account's row and for a revoked one.
+// the refusal condition 1 names, for another account's row and for a revoked one. The resume mint
+// answers the same way (devil verdict 2026-11-01, Amendment 1, R2).
 import { accountAddress, accountError, callerSession, clientMetaOf, noContent, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { clientAddress, clientMeta, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { writeJsonResponse } from './bridge-json-response.mjs';
 import { sendJson } from './bridge-social-core.mjs';
 import { fromB64url, verifyMessage } from './ide-agent-frames.mjs';
-import { heartbeatMessage, isLoopbackIdeOrigin, newMachineId, signMachineToken, whoamiMessage } from './ide-machine-protocol.mjs';
+import { heartbeatMessage, isLoopbackIdeOrigin, newMachineId, signMachineToken, signResumeAssertion, whoamiMessage } from './ide-machine-protocol.mjs';
 import { createMachinePairing } from './bridge-machines-pairing.mjs';
 import { createSlidingLimiter } from './ide-relay-limits.mjs';
 import { acceptHeartbeatTs, bridgeKeysOf, dropPresence, machineSetup, readPresence, writePresence } from './bridge-machines-presence.mjs';
@@ -34,7 +35,7 @@ const START = `${PREFIX}/pair/start`;
 const POLL = `${PREFIX}/pair/poll`;
 const HEARTBEAT = `${PREFIX}/heartbeat`;
 const OPEN_PATHS = new Set([START, POLL, HEARTBEAT]);
-const ITEM = /^\/api\/machines\/(m-[a-z2-7]{16})(?:\/(default|identity|token))?$/;
+const ITEM = /^\/api\/machines\/(m-[a-z2-7]{16})(?:\/(default|identity|token|resume))?$/;
 const MACHINE_ID = /^m-[a-z2-7]{16}$/;
 const NONCE = /^[A-Za-z0-9_-]{16,128}$/;
 // A beat is due every 30 s, so 20 a minute is ten machines behind one address.
@@ -197,21 +198,38 @@ function createItemRoutes({ config, pg, kv }) {
 		await kv.set(identityKey(session.userId, id, presence.ideOrigin), '1', IDENTITY_TTL_MS);
 		return sendJson(ctx.response, 200, { ok: true }, config);
 	}
-	async function token(ctx, session, id) {
-		await requireSudo(kv, session);
+	// One identity check buys one mint, of either kind, for this origin, within 60 s (condition 5, R2).
+	async function spendIdentityCheck(ctx, session, id) {
 		const row = await readMachine({ pg, id });
 		if (!row) throw notFound();
 		if (row.user_id !== session.userId || row.revoked_at != null) throw notAllowed();
 		const presence = await liveOrigin(kv, id);
 		if (!presence) throw offline();
-		// One identity check buys one mint, for this origin, within 60 s (condition 5).
 		if (await kv.getDel(identityKey(session.userId, id, presence.ideOrigin)) !== '1') {
 			throw accountError(428, 'identity_required', 'Check the machine\'s identity first.');
 		}
-		const minted = signMachineToken({ sub: session.userId, machine: id, aud: presence.ideOrigin, seed: ctx.setup.seed, now: ctx.now });
+		return presence;
+	}
+	async function token(ctx, session, id) {
+		await requireSudo(kv, session);
+		const body = await readBody(ctx.request);
+		const presence = await spendIdentityCheck(ctx, session, id);
+		const minted = signMachineToken({ sub: session.userId, machine: id, aud: presence.ideOrigin, seed: ctx.setup.seed, now: ctx.now, remember: body?.remember === true });
 		return sendJson(ctx.response, 200, minted, config);
 	}
-	return { list, makeDefault, remove, identity, token };
+	// A remembered computer's second factor (R1, R2): no step-up, which is the point. Removal,
+	// sign-out-everywhere and account deletion revoke it by this route refusing to mint.
+	// Caveat: callerSession checks the bridge's own osionos_v1 token (30 d on production,
+	// OSIONOS_APP_SESSION_TTL_SECONDS, measured 2026-11-04), not a GoTrue JWT. Sign-out-everywhere
+	// stops it through the per-user cut-off, which this process polls every 10 s, so this still mints
+	// for up to 10 s after it. A poll older than 60 s answers 503 instead (bridge-session-tracker.mjs,
+	// verdict R-U1, groot ADR 0041).
+	async function resume(ctx, session, id) {
+		const presence = await spendIdentityCheck(ctx, session, id);
+		const minted = signResumeAssertion({ sub: session.userId, machine: id, aud: presence.ideOrigin, seed: ctx.setup.seed, now: ctx.now });
+		return sendJson(ctx.response, 200, minted, config);
+	}
+	return { list, makeDefault, remove, identity, token, resume };
 }
 
 /** The dispatch of one session route: the path picks the handler, the method must match it. */
@@ -223,7 +241,7 @@ function sessionHandler(pathname, method, { pairingRoutes, items }) {
 	const item = ITEM.exec(pathname);
 	if (!item) return () => { throw notFound(); };
 	const [, id, action] = item;
-	const handler = { undefined: expect('DELETE', items.remove), default: expect('PUT', items.makeDefault), identity: expect('POST', items.identity), token: expect('POST', items.token) }[action];
+	const handler = { undefined: expect('DELETE', items.remove), default: expect('PUT', items.makeDefault), identity: expect('POST', items.identity), token: expect('POST', items.token), resume: expect('POST', items.resume) }[action];
 	return (ctx, session) => handler(ctx, session, id);
 }
 

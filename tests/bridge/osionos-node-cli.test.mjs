@@ -80,3 +80,18 @@ test('the terminal page comes from the checkout\'s build/terminal unless --termi
 	assert.match(readServeConfig(ARGS, ENV).terminal, /\/build\/terminal$/);
 	assert.equal(readServeConfig([...ARGS, '--terminal', '/srv/terminal'], ENV).terminal, '/srv/terminal');
 });
+
+// R5 as overridden by groot ADR 0041: production and the beta are both remember origins, each named.
+test('R5: --remember-origin repeats, defaults to none, and each must be an https --app-origin of a paired machine', () => {
+	const PROD = 'https://baas.tail10f2ea.ts.net:8443';
+	const BETA = 'https://baas-beta.tail10f2ea.ts.net';
+	const framed = [...PAIRED_ARGS, '--app-origin', PROD, '--app-origin', BETA, '--app-origin', 'app://osionos'];
+	const home = { HOME: '/home/me' };
+	assert.deepEqual(readServeConfig(framed, home, MACHINE).rememberOrigins, []);
+	assert.deepEqual(readServeConfig([...framed, '--remember-origin', PROD, '--remember-origin', BETA], home, MACHINE).rememberOrigins, [PROD, BETA]);
+	assert.throws(() => readServeConfig([...PAIRED_ARGS, '--remember-origin', PROD], home, MACHINE), /must also be an --app-origin/);
+	for (const origin of ['app://osionos', 'http://localhost:3001', `${PROD}/`]) {
+		assert.throws(() => readServeConfig([...framed, '--remember-origin', origin], home, MACHINE), /https app origin/, origin);
+	}
+	assert.throws(() => readServeConfig([...ARGS, '--app-origin', PROD, '--remember-origin', PROD], ENV), /paired machine/);
+});

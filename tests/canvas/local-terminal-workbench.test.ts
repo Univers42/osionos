@@ -107,9 +107,10 @@ test("the desktop terminal panel frames VS Code's terminal page on its own origi
 
 test("the web terminal panel frames this computer's node terminal page, calm until it connects", () => {
   const web = renderToStaticMarkup(React.createElement(NodeVsCodeTerminal));
-  // No `name`; local network access for the node, and the clipboard: paste needs clipboard-read
-  // (W13: measured refused without it; OSC 52 reads stay dropped by the page).
-  assert.match(web, /<iframe src="http:\/\/127.0.0.1:4100\/terminal\/index.html" title="Terminal" allow="local-network-access; clipboard-read; clipboard-write"/);
+  // No `name`; local network access for the node, the clipboard (paste needs clipboard-read, W13:
+  // measured refused without it; OSC 52 reads stay dropped by the page), and fullscreen for the
+  // node page's own fullscreen button (b65fa3b3).
+  assert.match(web, /<iframe src="http:\/\/127.0.0.1:4100\/terminal\/index.html" title="Terminal" allow="local-network-access; clipboard-read; clipboard-write; fullscreen"/);
   assert.doesNotMatch(web, / name=/);
   assert.match(web, /role="status"[^]*Connecting to this computer…/, "never a blank frame");
   assert.doesNotMatch(web, /osionos-node|~\/\.osionos|--app-origin/, "no command in the dock");

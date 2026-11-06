@@ -29,11 +29,12 @@ import { BannerUpload } from './BannerUpload';
 import { ImageAvatarUpload } from './ImageAvatarUpload';
 import { LinksField, TextField, TimezoneField } from './PublicProfileFields';
 import { diffProfile, formFromProfile, toPatch, validateField, type ProfileForm } from './profileFields';
+import { isSafeImageSource } from '@/shared/lib/media/bridgeMediaUrl';
 
 const ORDER = ['displayName', 'pronouns', 'headline', 'bio', 'location', 'company', 'website', 'links', 'timezone', 'orcid', 'patreon'] as const;
 
 function avatarIconValue(url: string | null | undefined): string | undefined {
-  return url && /^(https:\/\/|\/)/.test(url) ? `img:${url}` : undefined;
+  return isSafeImageSource(url) ? `img:${url}` : undefined;
 }
 
 function formErrors(draft: ProfileForm): Partial<Record<keyof ProfileForm, string>> {
@@ -142,7 +143,7 @@ export const PublicProfileSection: React.FC = () => {
           <form className="space-y-1" noValidate onSubmit={(event) => { event.preventDefault(); if (dirty && !saving && Object.keys(errors).length === 0) void submit(); }}>
             <PhotoRow avatarUrl={profile.avatarUrl} name={draft.displayName} onChanged={() => void hydrate()} />
             <BannerUpload bannerUrl={profile.bannerUrl} onChanged={() => void hydrate()} />
-            <TextField name="displayName" autoComplete="nickname" label="Display name" hint="1 to 100 characters, on one line." value={draft.displayName} error={shown('displayName')} onChange={(v) => edit('displayName', v)} />
+            <TextField name="displayName" autoComplete="name" label="Display name" hint="1 to 100 characters, on one line." value={draft.displayName} error={shown('displayName')} onChange={(v) => edit('displayName', v)} />
             <TextField name="pronouns" label="Pronouns" hint="Up to 40 characters." value={draft.pronouns} error={shown('pronouns')} onChange={(v) => edit('pronouns', v)} />
             <TextField name="headline" label="Headline" hint="Up to 200 characters." value={draft.headline} error={shown('headline')} onChange={(v) => edit('headline', v)} />
             <TextField name="bio" label="Bio" hint="Up to 2000 characters. Line breaks are kept." multiline max={2000} value={draft.bio} error={shown('bio')} onChange={(v) => edit('bio', v)} />

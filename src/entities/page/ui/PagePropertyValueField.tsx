@@ -47,7 +47,7 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
 
   if (property.type === "checkbox") {
     return (
-      <input
+      <input name="page-property-value-checkbox"
         type="checkbox"
         aria-label={property.label}
         checked={Boolean(property.value)}
@@ -86,7 +86,7 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
   }
 
   return (
-    <input
+    <input name="page-property-value-field"
       aria-label={property.label}
       type={inputType(property.type)}
       value={stringValue(property.value)}
@@ -110,7 +110,7 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
 const TextValueField: React.FC<Omit<Props, "editable">> = ({ property, onChange }) => {
   const text = stringValue(property.value);
   return (
-    <textarea
+    <textarea name="page-property-value-textarea"
       aria-label={property.label}
       value={text}
       rows={Math.min(text.split("\n").length, 8)}
@@ -150,7 +150,7 @@ const MultiSelectField: React.FC<Props> = ({ property, editable, onChange }) => 
 
   if (editable && !property.options?.length) {
     return (
-      <input
+      <input name="comma-separated-tags"
         aria-label={property.label}
         value={chosen.join(", ")}
         placeholder="Comma, separated, tags"

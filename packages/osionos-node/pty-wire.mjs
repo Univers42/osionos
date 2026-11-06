@@ -10,10 +10,14 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// What the web terminal frame may send on /api/pty (devil verdict 2026-11-01, W3 and W5; groot ADR
-// 0041). The first message opens one shell: a bridge-signed machine token, or the session secret
-// this node gave that frame, with the starting size. After it, only the desktop pty port's contract
-// (ADR 0039, T2) passes: write, resize, ack. Exact keys, exact bounds; anything else is null.
+// What the web terminal frame may send on /api/pty (devil verdict 2026-11-01, W3, W5 and Amendment 1;
+// groot ADR 0041). The first message opens one shell, with the starting size: a bridge-signed machine
+// token, or the session secret this node gave that frame, or a remembered computer's device secret
+// beside a fresh bridge-signed resume assertion (R1). A token or a remembered opening may name the
+// app origin the frame pinned (R4); a frame never names one to a node that did not offer to
+// remember, so an older node still reads every opening a new frame sends (R14). After it, only the
+// desktop pty port's contract (ADR 0039, T2) passes: write, resize, ack. Exact keys, exact bounds;
+// anything else is null.
 
 export const PTY_LIMITS = Object.freeze({
 	maxShells: 8,
@@ -41,8 +45,15 @@ export const PTY_CLOSE = Object.freeze({ protocol: 4400, auth: 4401, full: 4429,
 // The bridge-signed machine token only (scripts/ide-machine-protocol.mjs): the shared-secret
 // osionos_ide1 token opens no shell (W3).
 const MACHINE_TOKEN = /^osionos_mc1\.[a-z2-7]{8}\.[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{1,200}$/;
-// 32 random bytes, base64url without padding.
+const RESUME_ASSERTION = /^osionos_mr1\.[a-z2-7]{8}\.[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{1,200}$/;
+// 32 random bytes, base64url without padding: the session secret and the device secret alike.
 const SESSION_SECRET = /^[A-Za-z0-9_-]{43}$/;
+// Any app origin's shape, scheme to port: a frame under a dev app (http://localhost) names its origin
+// too, and simply gets no device secret. The remember origins themselves are https (cli.mjs).
+const APP_ORIGIN = /^[a-z][a-z0-9+.-]{0,15}:\/\/[a-z0-9.-]{1,200}(?::\d{1,5})?$/;
+const REMEMBER_ORIGIN = /^https:\/\/[a-z0-9.-]{1,200}(?::\d{1,5})?$/;
+
+export const isRememberOrigin = (value) => typeof value === 'string' && REMEMBER_ORIGIN.test(value);
 
 const isSize = (n) => Number.isInteger(n) && n >= 1 && n <= PTY_LIMITS.maxSize;
 
@@ -62,11 +73,17 @@ export function readPtyAuth(text) {
 	if (typeof text !== 'string' || Buffer.byteLength(text) > PTY_LIMITS.maxAuthBytes) return null;
 	const m = parseObject(text);
 	if (!m || !isSize(m.cols) || !isSize(m.rows)) return null;
-	if (hasExactly(m, ['token', 'cols', 'rows']) && typeof m.token === 'string' && MACHINE_TOKEN.test(m.token)) {
-		return { kind: 'token', token: m.token, cols: m.cols, rows: m.rows };
-	}
+	const size = { cols: m.cols, rows: m.rows };
+	const isToken = typeof m.token === 'string' && MACHINE_TOKEN.test(m.token);
+	if (hasExactly(m, ['token', 'cols', 'rows']) && isToken) return { kind: 'token', token: m.token, appOrigin: null, ...size };
+	const isOrigin = typeof m.appOrigin === 'string' && APP_ORIGIN.test(m.appOrigin);
+	if (hasExactly(m, ['token', 'appOrigin', 'cols', 'rows']) && isToken && isOrigin) return { kind: 'token', token: m.token, appOrigin: m.appOrigin, ...size };
 	if (hasExactly(m, ['secret', 'cols', 'rows']) && typeof m.secret === 'string' && SESSION_SECRET.test(m.secret)) {
-		return { kind: 'secret', secret: m.secret, cols: m.cols, rows: m.rows };
+		return { kind: 'secret', secret: m.secret, ...size };
+	}
+	if (hasExactly(m, ['device', 'assertion', 'appOrigin', 'cols', 'rows']) && isOrigin && typeof m.device === 'string' && SESSION_SECRET.test(m.device)
+		&& typeof m.assertion === 'string' && RESUME_ASSERTION.test(m.assertion)) {
+		return { kind: 'remembered', device: m.device, assertion: m.assertion, appOrigin: m.appOrigin, ...size };
 	}
 	return null;
 }

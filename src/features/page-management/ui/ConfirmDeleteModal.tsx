@@ -91,7 +91,7 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
       ) : null}
       {showRemember ? (
         <label className="mt-3 flex items-center gap-2 text-sm text-[var(--osio-fg-muted)] cursor-pointer select-none">
-          <input
+          <input name="remember"
             type="checkbox"
             checked={remember}
             onChange={(e) => setRemember(e.currentTarget.checked)}

@@ -120,7 +120,8 @@ export const LinksField: React.FC<{ value: string[]; error?: string | null; onCh
             <IconButton label={`Remove link ${index + 1}`} onClick={() => onChange(value.filter((_, i) => i !== index))}><Trash2 size={14} /></IconButton>
           </div>
         ))}
-        <Button disabled={value.length >= MAX_LINKS} onClick={() => onChange([...value, ''])}>Add link</Button>
+        {/* With no link yet, the label names the button: a `for` with no target is a console issue. */}
+        <Button id={value.length === 0 ? aria.id : undefined} disabled={value.length >= MAX_LINKS} onClick={() => onChange([...value, ''])}>Add link</Button>
       </div>
     )}
   </FieldFrame>
