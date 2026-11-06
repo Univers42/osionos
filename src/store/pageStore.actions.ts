@@ -14,6 +14,7 @@ import { api, ApiError, getActivePageJwt } from "@/shared/api/client";
 import { notifyCreateFailure } from "./pageCreateFeedback";
 import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
+import { serializeStoredIcon } from "@osionos/ui/shared/iconValue";
 import { planDuplicate } from "./duplicatePlan";
 import { settleMissingPage } from "./evictLocalPage";
 import {
@@ -269,6 +270,10 @@ export function createAddPage(set: SetFn, get: GetFn) {
       context,
       "private",
     );
+    const normalizedIcon =
+      typeof options.icon === "object" && options.icon !== null
+        ? serializeStoredIcon(options.icon)
+        : options.icon;
     const apiJwt = pageApiJwtFromSessionToken(jwt);
 
     if (apiJwt) {
@@ -280,7 +285,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
             title,
             parentPageId,
             content: options.content ?? [],
-            icon: options.icon,
+            icon: normalizedIcon,
             ownerId: context.userId,
             visibility: targetVisibility,
             collaborators: [],
@@ -294,6 +299,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
         );
         const pageWithTimestamp: PageEntry = {
           ...page,
+          icon: page.icon ?? normalizedIcon,
           surface: page.surface ?? options.surface,
           isTemplate: page.isTemplate ?? options.isTemplate ?? false,
           isDefaultTemplate: page.isDefaultTemplate ?? options.isDefaultTemplate ?? false,
@@ -321,7 +327,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
     const newPage: PageEntry = {
       _id: localId(),
       title,
-      icon: options.icon,
+      icon: normalizedIcon,
       updatedAt: new Date().toISOString(),
       workspaceId,
       ownerId: context.userId,
