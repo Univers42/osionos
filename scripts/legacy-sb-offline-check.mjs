@@ -2,6 +2,7 @@
 // render (read-only) instead of a void graph, and the offline indicator shows.
 //   node scripts/legacy-sb-offline-check.mjs   (run with the BaaS stopped)
 import { chromium } from "playwright";
+import { tmpdir } from 'node:os';
 
 const URL = process.env.SB_URL ?? "http://localhost:3001/";
 
@@ -50,5 +51,5 @@ console.log("status bar nodes:", statusMatch ? statusMatch[1] : "(not found)");
 console.log("offline indicator present:", body.includes("offline · cached") ? "YES ✅" : "NO ❌");
 console.log("graph rendered from cache (≥1 node, not void):", statusMatch && statusMatch[1] !== "0" ? "YES ✅" : "NO ❌");
 console.log("fatal page errors:", errors.length ? errors.slice(0, 3) : "none ✅");
-await page.screenshot({ path: "/tmp/sb-offline.png" }).catch(() => {});
+await page.screenshot({ path: `${tmpdir()}/sb-offline.png` }).catch(() => {});
 await browser.close();

@@ -32,7 +32,9 @@ test.describe("the profile banner", () => {
     await openProfile(page, baseURL, "Bob");
     await expect(heading(page, "Bob Jones")).toBeVisible();
     const banner = page.getByTestId("profile-banner");
-    await expect(banner).toHaveAttribute("src", BANNER);
+    // The bridge answers a path relative to itself; the page draws it from the bridge
+    // (mockApi points VITE_API_URL at the page's own origin).
+    await expect(banner).toHaveAttribute("src", new URL(BANNER, baseURL).href);
     const [bannerBox, headingBox] = [await banner.boundingBox(), await heading(page, "Bob Jones").boundingBox()];
     expect(bannerBox.y + bannerBox.height).toBeLessThanOrEqual(headingBox.y);
   });

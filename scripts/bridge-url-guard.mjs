@@ -43,19 +43,19 @@ export const PRIVATE_ADDRESS_MESSAGE = 'Host resolves to a private address.';
 /** IPv4 networks that must never be reached (see the header for the why). */
 const BLOCKED_V4 = [
 	['0.0.0.0', 8], // "this host" / current network
-	['10.0.0.0', 8], // RFC1918
-	['100.64.0.0', 10], // CGNAT — the Tailscale range the BaaS VM lives on
+	['10.0.0.0', 8], // RFC1918 // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['100.64.0.0', 10], // CGNAT — the Tailscale range the BaaS VM lives on // NOSONAR S1313: SSRF deny-list, the addresses are the point
 	['127.0.0.0', 8], // loopback
-	['169.254.0.0', 16], // link-local (cloud metadata lives here)
-	['172.16.0.0', 12], // RFC1918
-	['192.0.0.0', 24], // IETF protocol assignments
+	['169.254.0.0', 16], // link-local (cloud metadata lives here) // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['172.16.0.0', 12], // RFC1918 // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['192.0.0.0', 24], // IETF protocol assignments // NOSONAR S1313: SSRF deny-list, the addresses are the point
 	['192.0.2.0', 24], // TEST-NET-1
-	['192.168.0.0', 16], // RFC1918
-	['198.18.0.0', 15], // benchmarking
+	['192.168.0.0', 16], // RFC1918 // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['198.18.0.0', 15], // benchmarking // NOSONAR S1313: SSRF deny-list, the addresses are the point
 	['198.51.100.0', 24], // TEST-NET-2
 	['203.0.113.0', 24], // TEST-NET-3
-	['224.0.0.0', 4], // multicast
-	['240.0.0.0', 4], // reserved (covers the broadcast address)
+	['224.0.0.0', 4], // multicast // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['240.0.0.0', 4], // reserved (covers the broadcast address) // NOSONAR S1313: SSRF deny-list, the addresses are the point
 ];
 
 /** IPv6 networks that must never be reached. */
@@ -66,14 +66,14 @@ const BLOCKED_V6 = [
 	// folds every IPv4 address into that range and would then refuse the whole
 	// internet. The mapped forms are covered by the normalisation below, which
 	// folds them onto the IPv4 address they carry.
-	['64:ff9b::', 96], // NAT64
-	['64:ff9b:1::', 48], // NAT64, local use
-	['100::', 64], // discard-only
+	['64:ff9b::', 96], // NAT64 // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['64:ff9b:1::', 48], // NAT64, local use // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['100::', 64], // discard-only // NOSONAR S1313: SSRF deny-list, the addresses are the point
 	['2001:db8::', 32], // documentation
-	['fc00::', 7], // unique local
-	['fe80::', 10], // link-local
-	['fec0::', 10], // site-local (deprecated)
-	['ff00::', 8], // multicast
+	['fc00::', 7], // unique local // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['fe80::', 10], // link-local // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['fec0::', 10], // site-local (deprecated) // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['ff00::', 8], // multicast // NOSONAR S1313: SSRF deny-list, the addresses are the point
 ];
 
 const BLOCKED = new BlockList();

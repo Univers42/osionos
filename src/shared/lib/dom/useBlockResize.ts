@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState, type PointerEvent, type RefObject } from "react";
 
-import { blockWidthStyle, resizeLimits, resizedBox, widthPercentOf, type BoxSize, type ResizeEdge, type ResizeLimits } from "./blockResize";
+import { breakoutStyles, resizeLimits, resizedBox, widthPercentOf, type BoxSize, type ResizeEdge, type ResizeLimits } from "./blockResize";
 import { toCssPx } from "./cssZoom";
+import { measureBreakout } from "./useBreakoutLayout";
 
 export interface BlockResizeCommit {
   /** Set when the drag moved a side: the new share of the column, as `mediaWidth` stores it. */
@@ -12,8 +13,12 @@ export interface BlockResizeCommit {
 
 export interface BlockResizeOptions {
   frameRef: RefObject<HTMLElement | null>;
+  /** The frame's parent: its own parent is the text column the width is a share of. */
+  bandRef: RefObject<HTMLElement | null>;
   /** Floor in px; gives way to a narrower column. */
   minWidth: number;
+  /** Whether the block may grow past its column into the pane (an image may not). */
+  breaksOut: boolean;
   minHeight?: number;
   maxHeight?: number;
   /** The element inside the frame that owns the height; the frame itself when unset.
@@ -29,9 +34,18 @@ interface Drag {
   startY: number;
   start: BoxSize;
   column: number;
+  available: number;
   limits: ResizeLimits;
   heightEl: HTMLElement | null;
   latest: BoxSize | null;
+}
+
+// Every frame style a drag may write: release clears them all, then writes the settled style.
+const DRAGGED_STYLE = { width: "", maxWidth: "", marginInline: "", marginLeft: "", marginRight: "" };
+
+function marginWhileDragging(width: number, drag: Pick<Drag, "column" | "available" | "start">): string {
+  if (drag.start.width > drag.available) return "0px";
+  return width > drag.column ? `${(drag.column - width) / 2}px` : "auto";
 }
 
 function resolveHeightEl(frame: HTMLElement, selector: string | undefined): HTMLElement | null {
@@ -41,35 +55,40 @@ function resolveHeightEl(frame: HTMLElement, selector: string | undefined): HTML
 /** The drag of a centred block's eight grips. A drag writes the frame's style directly and
  *  commits once on release; committing per move would run the page-save pipeline at pointer
  *  rate. `isDragging` lets the caller freeze iframes, which would swallow the pointer.
- *  Caveat: the column is the frame's parent `clientWidth`, which counts the parent's padding
- *  while a CSS percentage does not; a padded parent would store a share slightly too small.
- *  blockResize.spec.mjs holds a page-body table to 2 px across a reload. */
-export function useBlockResize({ frameRef, minWidth, minHeight = 0, maxHeight, heightTarget, onCommit }: BlockResizeOptions) {
+ *  Caveat: the column is the band's parent's content box, measured once at pointer-down; a
+ *  column that changes width mid-drag (a sidebar animating) stores a share of the old one. */
+export function useBlockResize({ frameRef, bandRef, minWidth, breaksOut, minHeight = 0, maxHeight, heightTarget, onCommit }: BlockResizeOptions) {
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<Drag | null>(null);
 
   const begin = useCallback(
     (edge: ResizeEdge, event: PointerEvent<HTMLElement>) => {
       const frame = frameRef.current;
-      const column = frame?.parentElement?.clientWidth ?? 0;
-      if (!frame || column <= 0) return;
+      const band = bandRef.current;
+      if (!frame || !band) return;
+      const measured = measureBreakout(band);
+      const { column } = measured;
+      if (column <= 0) return;
       event.preventDefault();
       event.stopPropagation();
+      const available = breaksOut ? measured.available : column;
       const heightEl = resolveHeightEl(frame, heightTarget);
+      const start = { width: frame.offsetWidth, height: heightEl?.offsetHeight ?? 0 };
       dragRef.current = {
         edge,
         startX: event.clientX,
         startY: event.clientY,
-        start: { width: frame.offsetWidth, height: heightEl?.offsetHeight ?? 0 },
+        start,
         column,
-        limits: resizeLimits({ column, minWidth, minHeight, maxHeight }),
+        available,
+        limits: resizeLimits({ column, available, current: start.width, minWidth, minHeight, maxHeight }),
         heightEl,
         latest: null,
       };
       event.currentTarget.setPointerCapture(event.pointerId);
       setIsDragging(true);
     },
-    [frameRef, heightTarget, minWidth, minHeight, maxHeight],
+    [frameRef, bandRef, breaksOut, heightTarget, minWidth, minHeight, maxHeight],
   );
 
   const move = useCallback(
@@ -81,7 +100,10 @@ export function useBlockResize({ frameRef, minWidth, minHeight = 0, maxHeight, h
       const next = resizedBox(drag.start, drag.edge, { x: delta.x, y: drag.heightEl ? delta.y : 0 }, drag.limits);
       drag.latest = next;
       if (next.width !== drag.start.width) {
-        Object.assign(frame.style, { width: `${next.width}px`, maxWidth: "100%", marginInline: "auto" });
+        // Centred on the column: past it, equal negative margins push both sides out alike. A
+        // block already wider than the pane scrolls in its band, from the band's left edge.
+        const margin = marginWhileDragging(next.width, drag);
+        Object.assign(frame.style, DRAGGED_STYLE, { width: `${next.width}px`, maxWidth: "none", marginLeft: margin, marginRight: margin });
       }
       if (drag.heightEl && next.height !== drag.start.height) drag.heightEl.style.height = `${next.height}px`;
     },
@@ -91,19 +113,21 @@ export function useBlockResize({ frameRef, minWidth, minHeight = 0, maxHeight, h
   const end = useCallback(() => {
     const drag = dragRef.current;
     const frame = frameRef.current;
+    const band = bandRef.current;
     dragRef.current = null;
     setIsDragging(false);
-    if (!drag?.latest || !frame) return;
+    if (!drag?.latest || !frame || !band) return;
     const commit: BlockResizeCommit = {};
     if (drag.latest.width !== drag.start.width) {
       commit.widthPercent = widthPercentOf(drag.latest.width, drag.column);
-      // The render that follows writes the same value: React skips an unchanged style, so the
+      // The render that follows writes the same values: React skips an unchanged style, so the
       // px the drag left behind would otherwise outlive a later column change.
-      Object.assign(frame.style, { width: "", maxWidth: "", marginInline: "" }, blockWidthStyle(commit.widthPercent, minWidth));
+      const settled = breakoutStyles({ percent: commit.widthPercent, minWidth, column: drag.column, available: drag.available });
+      Object.assign(frame.style, DRAGGED_STYLE, settled.frame);
     }
     if (drag.heightEl && drag.latest.height !== drag.start.height) commit.height = drag.latest.height;
     if (commit.widthPercent !== undefined || commit.height !== undefined) onCommit(commit);
-  }, [frameRef, minWidth, onCommit]);
+  }, [frameRef, bandRef, minWidth, onCommit]);
 
   const handleProps = useCallback(
     (edge: ResizeEdge) => ({

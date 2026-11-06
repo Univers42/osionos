@@ -53,7 +53,6 @@ import { SqlRunButton } from "@/features/sql-runner/ui/SqlRunButton";
 import { CodeGutter } from "@/entities/block/ui/CodeGutter";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
-import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
 import { BoundFieldEditor } from "@/features/profile-binding/ui/BoundFieldEditor";
@@ -115,22 +114,8 @@ const RENDERABLE_LANGUAGES = new Set(["mermaid"]);
 
 
 const CODE_LINE_HEIGHT = 24;
-const CODE_MIN_LINES = 3;
-
-function startCodeDrag(move: (e: PointerEvent) => void, up: () => void, cancel: () => void) {
-  document.body.style.cursor = "ns-resize";
-  document.body.style.userSelect = "none";
-  globalThis.addEventListener("pointermove", move);
-  globalThis.addEventListener("pointerup", up, { once: true });
-  globalThis.addEventListener("pointercancel", cancel, { once: true });
-}
-function stopCodeDrag(move: (e: PointerEvent) => void, up: () => void, cancel: () => void) {
-  document.body.style.cursor = "";
-  document.body.style.userSelect = "";
-  globalThis.removeEventListener("pointermove", move);
-  globalThis.removeEventListener("pointerup", up);
-  globalThis.removeEventListener("pointercancel", cancel);
-}
+// Three lines and the padding: the smallest code body that still reads as one.
+const CODE_MIN_HEIGHT = 3 * CODE_LINE_HEIGHT + CODE_LINE_HEIGHT;
 
 
 interface BlockEditorProps {
@@ -176,15 +161,12 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
   const [langQuery, setLangQuery] = useState("");
   const [showCalloutIconPicker, setShowCalloutIconPicker] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
-  const [dragHeightLines, setDragHeightLines] = useState<number | null>(null);
   const [isEquationEditing, setIsEquationEditing] = useState(false);
   const equationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const langPickerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const codeHighlightRef = useRef<HTMLDivElement | null>(null);
   const codeGutterRef = useRef<HTMLDivElement | null>(null);
-  const codeBodyRef = useRef<HTMLDivElement | null>(null);
-  const activeDragRef = useRef<{ move: (e: PointerEvent) => void; up: () => void; cancel: () => void } | null>(null);
   const editableStyle = useMemo(
     () => getBlockTextStyle(block),
     [block],
@@ -203,10 +185,9 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
   // their text starts just past the gutter (ch units keep both perfectly aligned).
   const codeGutterWidth = `calc(${codeLnDigits}ch + 2.5rem)`;
   const codeTextLeft = codeShowLineNumbers ? `calc(${codeLnDigits}ch + 3.25rem)` : "1rem";
-  const activeHeightLines = dragHeightLines ?? (block.heightLines as number | undefined);
-  const codeHeightPx = activeHeightLines
-    ? activeHeightLines * CODE_LINE_HEIGHT + CODE_LINE_HEIGHT
-    : undefined;
+  // A px height from the resize frame wins; a page saved before it keeps its height in lines.
+  const codeHeightPx = block.blockHeight
+    ?? (block.heightLines ? block.heightLines * CODE_LINE_HEIGHT + CODE_LINE_HEIGHT : undefined);
   const renderSurfaceBlockEditor = useCallback((props: SurfaceBlockEditorProps) => <BlockEditor {...props} />, []);
 
   const commitBlockUpdate = useCallback(
@@ -253,33 +234,6 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
     [block.id, pageId],
   );
 
-  const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const startY = e.clientY;
-    const startHeightPx = codeBodyRef.current?.offsetHeight ?? 150;
-    let latestLines = Math.max(CODE_MIN_LINES, Math.round((startHeightPx - CODE_LINE_HEIGHT) / CODE_LINE_HEIGHT));
-    // const + mutual closure capture: `up`/`cancel` reference each other but
-    // only CALL at event time, well after all three initializers ran.
-    const move = (ev: PointerEvent) => {
-      const newPx = startHeightPx + toCssPx(ev.clientY - startY, codeBodyRef.current);
-      latestLines = Math.max(CODE_MIN_LINES, Math.round((newPx - CODE_LINE_HEIGHT) / CODE_LINE_HEIGHT));
-      setDragHeightLines(latestLines);
-    };
-    const up = () => {
-      stopCodeDrag(move, up, cancel);
-      activeDragRef.current = null;
-      commitBlockUpdate(block.id, { heightLines: latestLines });
-    };
-    const cancel = () => {
-      stopCodeDrag(move, up, cancel);
-      activeDragRef.current = null;
-      setDragHeightLines(null);
-    };
-    activeDragRef.current = { move, up, cancel };
-    startCodeDrag(move, up, cancel);
-  }, [block.id, commitBlockUpdate]);
-
   useEffect(() => {
     const ta = textareaRef.current;
     const hl = codeHighlightRef.current;
@@ -297,26 +251,10 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
     };
     ta.addEventListener("scroll", sync, { passive: true });
     return () => ta.removeEventListener("scroll", sync);
-  // block.heightLines: re-register after committed resize so the listener is
+  // The height: re-register after a committed resize so the listener is
   // guaranteed present when hl first becomes scrollable, regardless of what
   // mount/unmount sequences occurred before the drag completed.
-  }, [codeView, block.heightLines, block.lineNumbers]);
-
-  // Render-adjust (not an effect): once the committed heightLines arrives,
-  // drop the optimistic drag value in the SAME render pass — a sync setState
-  // inside an effect would force an extra cascading render.
-  const [seenHeightLines, setSeenHeightLines] = useState(block.heightLines);
-  if (seenHeightLines !== block.heightLines) {
-    setSeenHeightLines(block.heightLines);
-    setDragHeightLines(null);
-  }
-
-  useEffect(() => {
-    return () => {
-      const d = activeDragRef.current;
-      if (d) stopCodeDrag(d.move, d.up, d.cancel);
-    };
-  }, []);
+  }, [codeView, codeHeightPx, block.lineNumbers]);
 
   const handleCodeTextareaKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -795,12 +733,19 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
 
     case "code":
       return (
-        <div
+        <BlockResizeFrame
+          label="code block"
+          widthPercent={block.mediaWidth}
+          minWidth={BLOCK_MIN_WIDTH}
+          resizesHeight={!(isRenderable && codeView === "preview")}
+          minHeight={CODE_MIN_HEIGHT}
+          heightTarget="[data-code-height]"
+          onCommit={(commit) => commitBlockUpdate(block.id, blockSizeUpdate(commit, "blockHeight"))}
           data-code-theme={block.codeTheme ?? "app"}
-          className="osio-code-card group/code relative my-0 rounded-xl border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]"
+          className="osio-code-card group/code my-0 rounded-xl border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]"
         >
           {codeBlockHeader}
-          <div ref={codeBodyRef} className="overflow-hidden rounded-b-xl">
+          <div className="overflow-hidden rounded-b-xl">
             {isRenderable && codeView === "preview" ? (
               <div data-osio-fixed-scale>
                 <MermaidDiagram
@@ -810,15 +755,13 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               </div>
             ) : (
               <div
-                className="relative"
-                style={codeHeightPx
-                  ? { height: codeHeightPx, overflow: "hidden" }
-                  : { minHeight: 150 }}
+                data-code-height
+                className="relative overflow-hidden"
+                style={codeHeightPx ? { height: codeHeightPx } : { minHeight: 150 }}
               >
                 <div
                   ref={codeHighlightRef}
-                  className="overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                  style={codeHeightPx ? { height: codeHeightPx } : undefined}
+                  className="h-full overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
                   <CodeSyntaxHighlight
                     code={block.content || " "}
@@ -862,20 +805,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           {isSqlRunEnabled() && block.language === "sql" && (
             <SqlRunButton block={block} onUpdateBlock={commitBlockUpdate} />
           )}
-          {/* This handle drives codeHeightPx, which only the source-mode textarea/
-              highlight branch above ever applies — MermaidDiagram (preview branch)
-              owns its own independent pane-height resize handle. Rendering both at
-              once for a renderable-preview block put two .cursor-ns-resize hit
-              targets on screen, one of them a dead no-op. Render this one only when
-              it actually does something. */}
-          {!(isRenderable && codeView === "preview") && (
-            <div
-              role="separator" aria-label="Resize code block" aria-orientation="horizontal"
-              className="absolute bottom-1 right-1 h-3.5 w-3.5 cursor-ns-resize rounded-sm opacity-0 transition-opacity group-hover/code:opacity-100 z-[1] bg-[linear-gradient(135deg,transparent_50%,var(--osio-code-fg-muted)_50%,var(--osio-code-fg-muted)_60%,transparent_60%,transparent_72%,var(--osio-code-fg-muted)_72%,var(--osio-code-fg-muted)_82%,transparent_82%)]"
-              onPointerDown={handleResizePointerDown}
-            />
-          )}
-        </div>
+        </BlockResizeFrame>
       );
 
     case "quote":

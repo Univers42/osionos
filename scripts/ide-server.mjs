@@ -26,7 +26,7 @@ import { sendJson, routeIdeApi } from './ide-http-edge.mjs';
 const DEFAULT_PORT = 4100;
 
 async function dispatch(request, response, ctx) {
-	const url = new URL(request.url ?? '/', 'http://ide.local');
+	const url = new URL(request.url ?? '/', 'https://ide.local');
 	if (url.pathname === '/healthz' && request.method === 'GET') {
 		sendJson(response, 200, { ok: true });
 		return;

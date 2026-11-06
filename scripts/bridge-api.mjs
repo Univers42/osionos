@@ -222,21 +222,21 @@ export function configFromEnv(env = process.env) {
 		// DNS, when grobase shares this daemon. Behind a link only Kong is relayed, so the link
 		// sets Kong's public route (http://mini-baas-kong:8000/query/v1); a blank value means
 		// the default, as the link writes one for a local grobase.
-		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL || 'http://mini-baas-query-router:4001').replace(/\/$/, ''),
+		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL || 'http://mini-baas-query-router:4001').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		baasApiKey: env.OSIONOS_BAAS_API_KEY ?? env.BAAS_API_KEY ?? env.VITE_BAAS_API_KEY ?? '',
 		// Adapter-registry lists the tenant's databases; it trusts X-Baas-Tenant-Id
 		// (no Kong route works from the browser — anon key 401s on /admin/v1). The
 		// tenant id is taken from env, or derived from the api-key via tenant-control.
 		// Behind a link the registry is not relayed, so the link sets Kong's
 		// service_role-only route (http://mini-baas-kong:8000/admin/v1); blank = default.
-		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL || 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''),
+		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL || 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		// Set by a link that reaches grobase over Tailscale Funnel, where the WAF refuses
 		// /admin/v1 (rule 10130): the tenant's own mount list, opened by the tenant api-key.
 		// Blank = the registry above.
 		tenantMountsUrl: (env.OSIONOS_TENANT_MOUNTS_URL ?? '').trim().replace(/\/$/, ''),
-		tenantControlUrl: (env.OSIONOS_TENANT_CONTROL_URL ?? 'http://mini-baas-tenant-control:3022').replace(/\/$/, ''),
+		tenantControlUrl: (env.OSIONOS_TENANT_CONTROL_URL ?? 'http://mini-baas-tenant-control:3022').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		baasTenantId: env.OSIONOS_BAAS_TENANT_ID ?? env.VITE_BAAS_TENANT_ID ?? env.BAAS_TENANT_ID ?? '',
-		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
+		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''), // NOSONAR S5332: internal docker-network / test-double URL, TLS ends at the edge
 		publicApiKey: env.PUBLIC_BAAS_ANON_KEY ?? env.KONG_PUBLIC_API_KEY ?? '',
 		...turnstileConfigFromEnv(env),
 		serviceKey: env.SERVICE_ROLE_KEY ?? env.KONG_SERVICE_API_KEY ?? env.BAAS_SERVICE_ROLE_KEY ?? '',
@@ -3854,15 +3854,54 @@ async function handleDatabaseList(url, request, response, config, fetchImpl) {
 }
 
 /** GET /api/databases/:dbId/schema — engine-agnostic schema via the query-router. */
+// Caveat: a source that comes back is still reported unavailable for up to
+// UNREACHABLE_SOURCE_TTL_MS; a schema read in that window answers from this memory, not
+// from the engine. Lower the TTL if a revived mount must show sooner.
+const UNREACHABLE_SOURCE_TTL_MS = 30_000;
+const unreachableSources = new WeakMap();
+
+function unreachableUntil(config) {
+	let sources = unreachableSources.get(config);
+	if (!sources) {
+		sources = new Map();
+		unreachableSources.set(config, sources);
+	}
+	return sources;
+}
+
+/** A mount whose engine did not answer is an expected state, not a fault: the browser
+ *  logs every non-2xx as a console error and the app reads every mount's schema on each
+ *  load. It answers 200 `unavailable`, and the client throws it as before. "Did not
+ *  answer" is the 503 that engineFetchOrUnavailable and queryRouterStatus already make of
+ *  a timeout, a refused connection or a failed data-plane forward. A broken body stays a
+ *  502, and a bridge without query-router access stays a 503. */
+function isUnreachableSource(error) {
+	return error?.status === 503 && !/not configured/i.test(String(error?.message ?? ''));
+}
+
+function answerUnavailable(response, config, dbId, message) {
+	json(response, 200, { dbId, tables: [], unavailable: true, message }, config);
+	return true;
+}
+
 async function handleDatabaseSchema(match, request, response, config, fetchImpl) {
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
 	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
 	// The schema is a READ of the database: it takes the read capability.
 	if (!canReadDatabase(member)) throw databasePermissionError('read');
+	const sources = unreachableUntil(config);
+	const remembered = sources.get(dbId);
+	if (remembered && remembered.until > Date.now()) return answerUnavailable(response, config, dbId, remembered.message);
 	let schema;
 	try {
 		schema = await baasQueryGet(config, fetchImpl, `/${dbId}/schema`);
+		sources.delete(dbId);
 	} catch (error) {
+		if (isUnreachableSource(error)) {
+			const message = error instanceof Error ? error.message : 'The database did not answer.';
+			sources.set(dbId, { until: Date.now() + UNREACHABLE_SOURCE_TTL_MS, message });
+			return answerUnavailable(response, config, dbId, message);
+		}
 		// Schemaless engines (dynamodb, …) reject introspection (422
 		// unsupported_capability). Surface that as an empty-but-OK schema so the
 		// database still LISTS — just without tables — instead of failing the

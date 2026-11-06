@@ -8,6 +8,7 @@ import { findCommand, renderTemplate } from '../commands/builtins.ts';
 import type { Command } from '../commands/builtins.ts';
 import { estimateMicroUsd, promptCharCount } from '../runs/estimate.ts';
 import { today } from '../runs/runner.ts';
+import { quotaClosedSeconds, recordFailure } from '../runs/cooldown.ts';
 import { abortCode, pumpUpstream } from '../runs/streamPump.ts';
 import { classifyRunFailure, errorFrame } from '../runs/upstreamError.ts';
 import { usageForSettlement } from '../gateway/usage.ts';
@@ -84,6 +85,12 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 		sendError(ctx.response, 429, 'rate_limited');
 		return 429;
 	}
+	const closedFor = await quotaClosedSeconds(ctx.deps.redis, [target]);
+	if (closedFor !== undefined) {
+		ctx.response.setHeader('retry-after', String(closedFor));
+		sendError(ctx.response, 429, 'rate_limited');
+		return 429;
+	}
 	const day = today();
 	const amount = estimateMicroUsd(target.pricing, { text: turn, historyChars: 0 });
 	const reserved = await reserveTarget(ctx.deps.db, target, { userId: user.userId, day, amount });
@@ -121,7 +128,10 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 		});
 		usage = outcome.usage;
 		attemptError = outcome.error;
-		if (outcome.error !== undefined) throw outcome.error;
+		if (outcome.error !== undefined) {
+			await recordFailure(ctx.deps.redis, { target, userId: user.userId, error: outcome.error, attemptAborted: controller.signal.aborted });
+			throw outcome.error;
+		}
 		// The usage the upstream reported, or the estimate of what it did not.
 		settled = usageForSettlement(body.runId, outcome.usage, {
 			promptChars: promptCharCount({ text: turn, historyChars: 0 }),

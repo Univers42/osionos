@@ -2,6 +2,7 @@ import React from "react";
 
 import type { LocalPtyApi } from "@/features/ide/model/localPty";
 import { handOffTerminalPort, refusePtyPort, type PortOffer, type PtyPortRouter } from "@/features/ide/model/ptyPortRouter";
+import { APP_ORIGIN } from "@/features/ide/model/terminalPort";
 import { dockColors } from "./dockColors";
 
 /** The terminal page, on its own origin so it runs in its own renderer process (groot ADR 0039). */
@@ -23,6 +24,7 @@ export const LocalVsCodeTerminal: React.FC<{ api: LocalPtyApi }> = ({ api }) => 
 
   React.useEffect(() => {
     const onMessage = (event: MessageEvent) => {
+      if (event.origin !== APP_ORIGIN) return;
       const offer = event as unknown as PortOffer;
       if (router.current) router.current.offer(offer);
       else refusePtyPort(offer);

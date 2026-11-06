@@ -22,6 +22,11 @@ import {
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
 
+// The source-mode code block resizes through the shared block frame: its bottom edge is the
+// named height grip (the corner handle it replaced was the only .cursor-ns-resize). Mermaid
+// previews keep their own pane handle, which the cases below still find by class.
+const codeResizeGrip = (page) => page.getByRole("separator", { name: "Resize code block" });
+
 const RENDERABLE = new Set(["mermaid"]);
 
 async function insertCodeBlock(page, language) {
@@ -263,7 +268,7 @@ export const codeBlockScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await insertCodeBlock(page, "typescript");
-      await expect(page.locator(".cursor-ns-resize")).toHaveCount(1);
+      await expect(codeResizeGrip(page)).toHaveCount(1);
     },
   ),
 
@@ -287,7 +292,7 @@ export const codeBlockScenarios = [
 
       const before = await getSourceHeight();
 
-      const handle = page.locator(".cursor-ns-resize");
+      const handle = codeResizeGrip(page);
       const box = await handle.boundingBox();
       const cx = box.x + box.width / 2;
       const cy = box.y + box.height / 2;
@@ -310,7 +315,7 @@ export const codeBlockScenarios = [
       await openFreshPage(page, appUrl);
       await insertCodeBlock(page, "typescript");
 
-      const handle = page.locator(".cursor-ns-resize");
+      const handle = codeResizeGrip(page);
       const box = await handle.boundingBox();
       const cx = box.x + box.width / 2;
       const cy = box.y + box.height / 2;
@@ -338,7 +343,7 @@ export const codeBlockScenarios = [
       await page.getByRole("textbox", { name: "Page title" }).fill(uniqueTitle);
       await insertCodeBlock(page, "typescript");
 
-      const handle = page.locator(".cursor-ns-resize");
+      const handle = codeResizeGrip(page);
       const box = await handle.boundingBox();
       const cx = box.x + box.width / 2;
       const cy = box.y + box.height / 2;
@@ -440,7 +445,7 @@ export const codeBlockScenarios = [
       await ta.fill(Array.from({ length: 20 }, (_, i) => `const line${i} = ${i};`).join("\n"));
       await waitForRenderStability(page);
 
-      const handle = page.locator(".cursor-ns-resize");
+      const handle = codeResizeGrip(page);
       const box = await handle.boundingBox();
       const cx = box.x + box.width / 2;
       const cy = box.y + box.height / 2;
@@ -504,7 +509,7 @@ export const codeBlockScenarios = [
       await ta.fill(`const x = "${"A".repeat(300)}";`);
       await waitForRenderStability(page);
 
-      const handle = page.locator(".cursor-ns-resize");
+      const handle = codeResizeGrip(page);
       const box = await handle.boundingBox();
       const cx = box.x + box.width / 2;
       const cy = box.y + box.height / 2;
@@ -642,7 +647,7 @@ export const codeBlockScenarios = [
         if (btn) btn.addEventListener("transitionstart", () => { globalThis.__t7cHeaderTransitions++; });
       });
 
-      const handle = page.locator(".cursor-ns-resize");
+      const handle = codeResizeGrip(page);
       const box = await handle.boundingBox();
       const cx = box.x + box.width / 2;
       const cy = box.y + box.height / 2;
@@ -666,7 +671,7 @@ export const codeBlockScenarios = [
       await insertCodeBlock(page, "typescript");
       await waitForRenderStability(page);
 
-      const handle = page.locator(".cursor-ns-resize");
+      const handle = codeResizeGrip(page);
       const box = await handle.boundingBox();
       const cx = box.x + box.width / 2;
       const cy = box.y + box.height / 2;
@@ -695,7 +700,7 @@ export const codeBlockScenarios = [
       await insertCodeBlock(page, "typescript");
       await waitForRenderStability(page);
 
-      const handle = page.locator(".cursor-ns-resize");
+      const handle = codeResizeGrip(page);
       const box = await handle.boundingBox();
       const cx = box.x + box.width / 2;
       const cy = box.y + box.height / 2;

@@ -243,9 +243,6 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				system,
 				messages,
 				controller: attempt.controller,
-				// In a chain no attempt retries: the chain is the retry, and 3 models
-				// must be 3 requests, not 9 (devil C250).
-				...(steps.length > 1 ? { maxRetries: 0 } : {}),
 				...(tools ? { tools } : {}),
 				...(providerOptions ? { providerOptions } : {}),
 				// The ceiling of the loop: the money the run holds, and the cost
@@ -276,6 +273,10 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			failure = outcome.error;
 			const move = await moveOn({ db, redis, run: runState, steps, index, current, outcome, records, emit });
 			if (move.kind === 'stay') break;
+			if (move.kind === 'retry') {
+				outcome = await callModel(current);
+				continue;
+			}
 			if (move.kind === 'refused') {
 				// The old money is back and the row holds none: only the end is left.
 				research?.end('budget_exhausted', false);
@@ -283,7 +284,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				await emit('error', { code: 'budget_exhausted' });
 				return;
 			}
-			index += 1;
+			index = move.index;
 			current = move.attempt;
 			outcome = await callModel(current);
 		}

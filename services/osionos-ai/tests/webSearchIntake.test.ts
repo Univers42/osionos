@@ -83,7 +83,7 @@ describe('intakeResults and renderResults', () => {
 	});
 
 	it('C354 control characters in title and snippet are stripped and newlines fold', () => {
-		const [result] = intakeResults([hit('https://a.example.com/', 'a‮b\nc', 'x\u0000y\r\nz')], 1);
+		const [result] = intakeResults([hit('https://a.example.com/', 'a\u202eb\nc', 'x\u0000y\r\nz')], 1);
 		assert.equal(result?.title, 'ab c');
 		assert.equal(result?.snippet, 'xy z');
 	});

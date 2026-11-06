@@ -100,7 +100,7 @@ describe('suggest_agent', () => {
 	});
 
 	it('cleans control and format characters, and refuses a reason that is too long or empty', async () => {
-		const dirty = await suggestAgent.run(caller(null), { agentId: 'guide', reason: 'a\u0000b‮c​d\n' });
+		const dirty = await suggestAgent.run(caller(null), { agentId: 'guide', reason: 'a\u0000b\u202ec​d\n' });
 		assert.equal(dirty.ok && dirty.data.reason, 'abcd');
 		assert.equal((await suggestAgent.run(caller(null), { agentId: 'guide', reason: 'x'.repeat(201) })).ok, false);
 		assert.equal((await suggestAgent.run(caller(null), { agentId: 'guide', reason: ' ​ ' })).ok, false);

@@ -46,7 +46,7 @@ async function timed(path) {
 	const text = await response.text();
 	const elapsed = performance.now() - started;
 	if (!response.ok) {
-		console.error(`[share-rules-bench] ${path} answered ${response.status}: ${text.slice(0, 160)}`);
+		console.error(`[share-rules-bench] ${path} answered ${response.status}: ${text.slice(0, 160).replaceAll(/[\r\n]+/g, ' ')}`);
 		process.exit(1);
 	}
 	return elapsed;

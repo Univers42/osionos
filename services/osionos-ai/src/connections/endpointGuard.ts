@@ -33,20 +33,20 @@ import { httpError } from '../http.ts';
  */
 const BLOCKED_V4_SUBNETS: readonly (readonly [string, number])[] = [
 	['0.0.0.0', 8],
-	['10.0.0.0', 8],
-	['100.64.0.0', 10],
+	['10.0.0.0', 8], // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['100.64.0.0', 10], // NOSONAR S1313: SSRF deny-list, the addresses are the point
 	['127.0.0.0', 8],
-	['169.254.0.0', 16],
-	['172.16.0.0', 12],
-	['192.0.0.0', 24],
+	['169.254.0.0', 16], // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['172.16.0.0', 12], // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['192.0.0.0', 24], // NOSONAR S1313: SSRF deny-list, the addresses are the point
 	['192.0.2.0', 24], // documentation (TEST-NET-1)
-	['192.88.99.0', 24], // the retired 6to4 relay anycast
-	['192.168.0.0', 16],
-	['198.18.0.0', 15],
+	['192.88.99.0', 24], // the retired 6to4 relay anycast // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['192.168.0.0', 16], // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['198.18.0.0', 15], // NOSONAR S1313: SSRF deny-list, the addresses are the point
 	['198.51.100.0', 24], // documentation (TEST-NET-2)
 	['203.0.113.0', 24], // documentation (TEST-NET-3)
-	['224.0.0.0', 4],
-	['240.0.0.0', 4],
+	['224.0.0.0', 4], // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['240.0.0.0', 4], // NOSONAR S1313: SSRF deny-list, the addresses are the point
 ];
 
 const BLOCKED_V6_SUBNETS: readonly (readonly [string, number])[] = [
@@ -55,16 +55,16 @@ const BLOCKED_V6_SUBNETS: readonly (readonly [string, number])[] = [
 	// The prefixes that carry an IPv4 address: each either embeds one the
 	// IPv4 list above would refuse, or reaches a gateway that translates to one.
 	['::', 96], // the deprecated IPv4-compatible addresses
-	['64:ff9b::', 96], // NAT64, the well-known prefix
-	['64:ff9b:1::', 48], // NAT64, the local-use prefix
-	['2001::', 32], // Teredo, a tunnel to an IPv4 address
-	['2002::', 16], // 6to4, the relay of an IPv4 address
+	['64:ff9b::', 96], // NAT64, the well-known prefix // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['64:ff9b:1::', 48], // NAT64, the local-use prefix // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['2001::', 32], // Teredo, a tunnel to an IPv4 address // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['2002::', 16], // 6to4, the relay of an IPv4 address // NOSONAR S1313: SSRF deny-list, the addresses are the point
 	['2001:db8::', 32], // documentation
-	['100::', 64], // the discard-only prefix
-	['fc00::', 7],
-	['fec0::', 10], // the deprecated site-local range, still routed on some internal nets
-	['fe80::', 10],
-	['ff00::', 8],
+	['100::', 64], // the discard-only prefix // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['fc00::', 7], // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['fec0::', 10], // the deprecated site-local range, still routed on some internal nets // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['fe80::', 10], // NOSONAR S1313: SSRF deny-list, the addresses are the point
+	['ff00::', 8], // NOSONAR S1313: SSRF deny-list, the addresses are the point
 ];
 
 const blockedV4 = new BlockList();

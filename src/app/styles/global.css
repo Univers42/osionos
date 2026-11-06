@@ -17,6 +17,8 @@
    in the chunk with identical declarations (measured 2026-10-14). The app's own
    classes are still scanned; a class both write is generated from the app's side. */
 @source not "../../shared/notion-database-sys";
+/* Built hydrawn output: its class-like strings would grow the entry CSS (vendor/hydrawn-board). */
+@source not "../../../vendor/hydrawn-board";
 /* Every colour that differs by palette or mode (surfaces, text, borders, accent,
    status, block tints, syntax, shadow tint, scrim, graph inks), for all nine
    palettes. This file keeps what is the same in every palette: geometry, type,

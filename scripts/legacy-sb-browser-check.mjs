@@ -3,6 +3,7 @@
 // network results, console errors, and whether a sized canvas renders.
 //   node scripts/legacy-sb-browser-check.mjs
 import { chromium } from "playwright";
+import { tmpdir } from 'node:os';
 
 const URL = process.env.SB_URL ?? "http://localhost:3001/";
 const browser = await chromium.launch();
@@ -23,7 +24,7 @@ page.on("pageerror", (e) => errors.push(`[pageerror] ${e.message}`.slice(0, 300)
 
 await page.goto(URL, { waitUntil: "domcontentloaded" }).catch((e) => errors.push("goto: " + e.message));
 await page.waitForTimeout(2500);
-await page.screenshot({ path: "/tmp/sb-1-loaded.png" }).catch(() => {});
+await page.screenshot({ path: `${tmpdir()}/sb-1-loaded.png` }).catch(() => {});
 
 // Reach the Second Brain graph: sidebar Home → open the variant dropdown → Second Brain.
 await page.getByText("Home", { exact: true }).first().click({ timeout: 2000 }).catch(() => {});
@@ -32,9 +33,9 @@ await page.locator(".osionos-home-variant-menu > button").first().click({ timeou
 await page.waitForTimeout(500);
 await page.locator('.osionos-home-variant-dropdown button:has-text("Second Brain")').click({ timeout: 2000 }).catch(() => {});
 await page.waitForTimeout(11000); // let overview fetch (+retries) + render
-await page.screenshot({ path: "/tmp/sb-3-graph.png" }).catch(() => {});
+await page.screenshot({ path: `${tmpdir()}/sb-3-graph.png` }).catch(() => {});
 
-await page.screenshot({ path: "/tmp/sb-2-after-nav.png" }).catch(() => {});
+await page.screenshot({ path: `${tmpdir()}/sb-2-after-nav.png` }).catch(() => {});
 const navItems = await page.locator("button, a, [role=button]").allInnerTexts().catch(() => []);
 console.log("=== clickable items (first 40) ===\n" + navItems.map((t) => t.replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, 40).join(" | "));
 console.log("\n=== failed requests (last 8) ===\n" + (failed.slice(-8).join("\n") || "(none)"));

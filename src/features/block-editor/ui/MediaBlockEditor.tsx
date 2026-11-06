@@ -74,6 +74,7 @@ const ImageBlockEditor: React.FC<{
       label="image"
       widthPercent={block.mediaWidth}
       minWidth={IMAGE_MIN_WIDTH}
+      breaksOut={false}
       onCommit={(commit) => onResize(blockSizeUpdate(commit))}
     >
       <button
