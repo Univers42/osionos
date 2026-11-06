@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block, BlockType } from "@/entities/block";
-import type { StoredIcon } from "@osionos/ui";
+import type { StoredIcon } from "@osionos/ui/shared/iconValue";
 
 /** Access model for page visibility. */
 export type PageVisibility = "private" | "shared" | "public";
@@ -54,8 +54,7 @@ export interface PagePropertyEntry {
 export interface PageEntry {
   _id: string;
   title: string;
-  get icon(): string | undefined;
-  set icon(value: string | StoredIcon | undefined);
+  icon?: string;
   /** Cover image URL or CSS gradient. */
   cover?: string;
   /** Vertical focal point (%) of the cover image (CSS object-position); default 50 (centered). */
@@ -262,7 +261,7 @@ export interface PageStore {
   setPageContentVersion: (pageId: string, version: number) => void;
   patchPage: (
     pageId: string,
-    patch: Partial<PageEntry> | ((page: PageEntry) => Partial<PageEntry>),
+    patch: PagePatchInput | ((page: PageEntry) => PagePatchInput),
   ) => void;
   updatePageTitle: (pageId: string, title: string) => void;
 
@@ -281,9 +280,13 @@ export interface PageStore {
   pageById: (pageId: string) => PageEntry | undefined;
 }
 
+export type PagePatchInput = Partial<Omit<PageEntry, "icon">> & {
+  icon?: string | StoredIcon;
+};
+
 export interface AddPageOptions {
   visibility?: PageVisibility;
-  icon?: string;
+  icon?: string | StoredIcon;
   content?: Block[];
   surface?: PageEntry["surface"];
   isTemplate?: boolean;
