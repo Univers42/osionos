@@ -96,12 +96,12 @@ export function normalizeOptionColor(raw?: string | null): SemanticColor {
   }
 
   // 2. Direct alias match
-  if (trimmed in COLOR_ALIASES) {
+  if (Object.hasOwn(COLOR_ALIASES, trimmed)) {
     return COLOR_ALIASES[trimmed];
   }
 
   // 3. Known full legacy string match
-  if (trimmed in LEGACY_TAILWIND_MAP) {
+  if (Object.hasOwn(LEGACY_TAILWIND_MAP, trimmed)) {
     return LEGACY_TAILWIND_MAP[trimmed];
   }
 
