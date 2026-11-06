@@ -29,8 +29,10 @@ import { useIdeRevealBus } from "../model/ideRevealBus";
 import { useIdeSyncConflicts } from "../model/ideSyncConflicts";
 import { useTerminalRunBus } from "../model/terminalRunBus";
 import type { IDisposable } from "../model/monacoRuntime";
+import { previewFlavorOf } from "../model/markdownPreview";
 import { attachBreakpoints } from "./monacoBreakpoints";
 import { replaceEditorText, useMonacoEditor, type EditorStatus } from "./useMonacoEditor";
+import { MarkdownPreviewSplit, PreviewModeToggle, useMarkdownPreview } from "./MarkdownPreviewSplit";
 import { RunConsole } from "./RunConsole";
 import "./monacoEditor.css";
 
@@ -76,6 +78,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const blockId = block?.id;
   const languageId = block?.language ?? (page ? languageForFileName(page.title).id : "plaintext");
   const lang = languageById(languageId);
+  const flavor = previewFlavorOf(page?.title ?? "", lang.id);
 
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = React.useState<EditorStatus>({ line: 1, col: 1, lines: 1 });
@@ -98,15 +101,21 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   // (updated in effects, never during render — the repo forbids ref writes in render).
   const runRef = React.useRef<() => void>(() => undefined);
   const formatRef = React.useRef<() => void>(() => undefined);
+  const readInitialText = React.useCallback(
+    () => codeBlockOf(usePageStore.getState().pageById(pageId))?.content ?? "",
+    [pageId],
+  );
+  const preview = useMarkdownPreview(flavor, readInitialText);
   const editorRef = useMonacoEditor(hostRef, {
     attachGutter: attachBreakpoints,
     pageId,
     blockId,
     monacoId: lang.monacoId,
     uri: `file:///workspace/${pagePathOf(pageId)}`,
-    readInitialText: () => codeBlockOf(usePageStore.getState().pageById(pageId))?.content ?? "",
+    readInitialText,
     onSave: save,
     onStatus: setStatus,
+    onText: preview.onText,
     onRun: () => runRef.current(),
     onFormat: () => formatRef.current(),
   });
@@ -224,7 +233,9 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           </button>
         </div>
       )}
-      <div ref={hostRef} className="min-h-0 flex-1 overflow-hidden" />
+      <MarkdownPreviewSplit flavor={flavor} mode={preview.mode} source={preview.source}>
+        <div ref={hostRef} className="h-full min-h-0 overflow-hidden" />
+      </MarkdownPreviewSplit>
       <EnvFileStatus pageId={pageId} />
       {showConsole && (
         <div className="h-56 shrink-0 overflow-hidden">
@@ -236,6 +247,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: lang.accent }} />
           {lang.label}
         </span>
+        {flavor !== null && <PreviewModeToggle mode={preview.mode} onMode={preview.setMode} buttonClass={CODE_BTN} />}
         {lang.runnable && (
           <Tooltip label="Run (Ctrl/Cmd + Enter)">
             <button type="button" onClick={runNow} disabled={runner.running} className={CODE_BTN}>
