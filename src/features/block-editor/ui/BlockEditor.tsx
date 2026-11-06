@@ -28,6 +28,7 @@ import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
 import { PlaceholderBlock } from "./PlaceholderBlock";
 import {
   getBlockPlaceholder,
+  CALLOUT_TYPES,
   calloutAccent,
   calloutSurface,
   resolveCalloutProps,
@@ -871,10 +872,11 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               <CalloutTypePicker
                 current={calloutIcon}
                 onSelect={(value) => {
-                  const preset = resolveCalloutType(value);
+                  const matchingPreset = CALLOUT_TYPES.find((t) => t.icon === value || t.id === value);
+                  const newTone = matchingPreset ? matchingPreset.tone : (block.calloutTone ?? calloutType.tone);
                   commitBlockUpdate(block.id, {
                     calloutIcon: value,
-                    calloutTone: preset.tone,
+                    calloutTone: newTone,
                     color: value,
                   });
                 }}
