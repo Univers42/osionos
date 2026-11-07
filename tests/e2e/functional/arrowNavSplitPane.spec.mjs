@@ -47,12 +47,13 @@ test.describe("arrow-nav across a split of the same page", () => {
     await page.locator('button[title="Split right"]').first().click();
     await waitForRenderStability(page);
 
-    // Sanity: the ids really are duplicated (else this test proves nothing).
-    const duplicated = await page.evaluate(() => {
+    // Sanity: the ids really are duplicated (else this test proves nothing). The second pane's
+    // blocks can land later than two frames after the click: CI run 42334740477's trace holds 3
+    // block ids when the check ran 80 ms after the click and 6 right after it. Wait for them.
+    await expect.poll(() => page.evaluate(() => {
       const ids = [...document.querySelectorAll("[data-block-id]")].map((e) => e.dataset.blockId);
       return ids.length > new Set(ids).size;
-    });
-    expect(duplicated).toBe(true);
+    }), { timeout: 15_000 }).toBe(true);
 
     // Edit the RIGHT pane's "bravo" (the last matching editor), caret at end.
     const rightBravo = getEditors(page).filter({ hasText: "bravo" }).last();
