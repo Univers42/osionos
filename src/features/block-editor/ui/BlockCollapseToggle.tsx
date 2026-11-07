@@ -22,7 +22,7 @@ export function BlockCollapseToggle({ collapsed, onToggle }: Readonly<{ collapse
       aria-label={collapsed ? "Expand" : "Collapse"}
       aria-expanded={!collapsed}
       onClick={onToggle}
-      className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+      className="mt-0.5 -ml-0.5 flex h-6 w-6 min-h-[24px] min-w-[24px] shrink-0 items-center justify-center rounded-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
     >
       <ChevronRight size={14} className={`transition-transform duration-(--osio-dur-fast) ${collapsed ? "" : "rotate-90"}`} />
     </button>

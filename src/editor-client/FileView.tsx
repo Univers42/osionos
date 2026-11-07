@@ -6,6 +6,9 @@ import { FileWarning, TriangleAlert } from "lucide-react";
 import React from "react";
 
 import { languageForFileName } from "../features/ide/model/ideLanguages";
+import { previewFlavorOf } from "../features/ide/model/markdownPreview";
+import { MarkdownDocument } from "../features/ide/ui/MarkdownDocument";
+import { MarkdownPreviewSplit, PreviewModeToggle, useMarkdownPreview } from "../features/ide/ui/MarkdownPreviewSplit";
 import { replaceEditorText, useMonacoEditor, type EditorStatus } from "../features/ide/ui/useMonacoEditor";
 import "../features/ide/ui/monacoEditor.css";
 import { decodeEditable, sha256Hex } from "../features/ide/vfs/diskBytes";
@@ -24,6 +27,10 @@ import type { EditorSession } from "./session";
 
 type Loaded = { text: string; hash: string };
 type Load = { kind: "loading" } | { kind: "ready"; loaded: Loaded } | { kind: "missing" } | { kind: "notText" } | { kind: "tooLarge" } | { kind: "failed" };
+
+// The status bar is 24px tall, so its buttons are 20px, not the code card's 24px.
+const BAR_BTN = "inline-flex h-5 shrink-0 items-center gap-1 rounded-[var(--osio-radius-control)] px-1.5 " +
+  "hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]";
 
 const pathOf = (file: DiskFile) => buildVPath(DISK_SCHEME, file.root, file.rel.split("/"));
 const baseOf = (rel: string): string => rel.split("/").at(-1) ?? rel;
@@ -49,6 +56,10 @@ const Editor: React.FC<{ session: EditorSession; provider: DiskProvider; file: D
   const [saveState, setSaveState] = React.useState<"saved" | "saving" | "conflict" | "failed">("saved");
   const language = languageForFileName(baseOf(file.rel));
   const uri = pathOf(file).uri;
+  const flavor = previewFlavorOf(baseOf(file.rel), language.id);
+  // Stable per file: the preview restarts its text whenever this function changes.
+  const readInitialText = React.useCallback(() => loaded.text, [loaded.text]);
+  const preview = useMarkdownPreview(flavor, readInitialText);
 
   const announce = React.useCallback((dirty: boolean) => {
     session.link.tell({ type: EDITOR_TITLE, key: fileKey, title: baseOf(file.rel), dirty });
@@ -74,7 +85,8 @@ const Editor: React.FC<{ session: EditorSession; provider: DiskProvider; file: D
     blockId: "file",
     monacoId: language.monacoId,
     uri,
-    readInitialText: () => loaded.text,
+    readInitialText,
+    onText: preview.onText,
     onSave: (text) => { void write(text, hash.current); },
     onStatus: (next) => {
       setStatus(next);
@@ -86,6 +98,7 @@ const Editor: React.FC<{ session: EditorSession; provider: DiskProvider; file: D
     onFormat: () => undefined,
   });
   React.useEffect(() => { editorHandle.current = editorRef; }, [editorRef]);
+  const focusEditor = React.useCallback(() => editorHandle.current?.current?.focus(), []);
 
   const takeDisk = React.useCallback(async () => {
     const fresh = await readFile(provider, file).catch(() => null);
@@ -126,11 +139,20 @@ const Editor: React.FC<{ session: EditorSession; provider: DiskProvider; file: D
           <Button size="sm" onClick={() => void takeDisk()}>Take the disk</Button>
         </div>
       )}
-      <div ref={hostRef} className="min-h-0 flex-1" />
+      <MarkdownPreviewSplit
+        flavor={flavor}
+        mode={preview.mode}
+        onToggle={preview.toggle}
+        focusEditor={focusEditor}
+        preview={<MarkdownDocument key={uri} source={preview.source} images="alt" />}
+      >
+        <div ref={hostRef} className="h-full min-h-0 overflow-hidden" />
+      </MarkdownPreviewSplit>
       <div className="flex h-6 shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] px-3 text-xs text-[var(--osio-code-comment,var(--osio-code-fg))]">
         <span className="min-w-0 flex-1 truncate" title={file.rel}>{file.rel}</span>
         <span role="status">{words}</span>
         <span>Ln {status.line}, Col {status.col}</span>
+        {flavor !== null && <PreviewModeToggle mode={preview.mode} onMode={preview.setMode} buttonClass={BAR_BTN} />}
         <span>{language.label}</span>
       </div>
     </div>

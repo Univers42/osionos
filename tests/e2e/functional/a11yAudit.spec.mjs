@@ -18,7 +18,14 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { createParagraphs, openFreshPage, openPageMenuPanel } from "../../browser/core/app.mjs";
+import {
+  activateFirstEditor,
+  createBlockViaSlash,
+  createParagraphs,
+  openFreshPage,
+  openPageMenuPanel,
+  selectText,
+} from "../../browser/core/app.mjs";
 import { insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 const WCAG_AA = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -147,6 +154,75 @@ for (const theme of ["light", "dark"]) {
       await page.getByRole("button", { name: "Marketplace", exact: true }).first().click();
       await expect(page.getByRole("region", { name: "Marketplace" }).or(page.getByRole("tab", { name: /Marketplace/ })).first()).toBeVisible();
       expect(await violations(page)).toEqual([]);
+    });
+
+    test("the inline text selection toolbar has no AA violation", async ({ page, baseURL }) => {
+      await openFreshPage(page, baseURL);
+      const editor = await activateFirstEditor(page);
+      await editor.type("Sample sentence for testing inline formatting selection toolbar.");
+      await selectText(editor, "testing");
+      const toolbar = page.getByTestId("inline-selection-toolbar");
+      await expect(toolbar).toBeVisible();
+      expect(await violations(page, '[data-testid="inline-selection-toolbar"]')).toEqual([]);
+    });
+
+    test("the block drag handle satisfies WCAG 2.2 target size and focus visibility", async ({ page, baseURL }) => {
+      await openFreshPage(page, baseURL);
+      const editor = await activateFirstEditor(page);
+      await editor.type("Test paragraph for block drag handle inspection.");
+      const block = page.locator('[data-testid="draggable-block"]').first();
+      await block.hover();
+      const handle = block.locator('> [data-testid="block-drag-handle"]');
+      await expect(handle).toBeAttached();
+      const box = await handle.boundingBox();
+      expect(box).toBeDefined();
+      expect(box.width).toBeGreaterThanOrEqual(24);
+      expect(box.height).toBeGreaterThanOrEqual(24);
+      await handle.focus();
+      const opacity = await handle.evaluate((el) => window.getComputedStyle(el).opacity);
+      expect(Number(opacity)).toBeGreaterThan(0);
+    });
+
+    test("toggle and collapse controls satisfy WCAG 2.2 target size and focus visibility", async ({ page, baseURL }) => {
+      await openFreshPage(page, baseURL);
+      await createBlockViaSlash(page, "toggle", "Toggle");
+      const toggleBtn = page.getByRole("button", { name: /expand toggle|collapse toggle/i });
+      await expect(toggleBtn).toBeVisible();
+      const toggleBox = await toggleBtn.boundingBox();
+      expect(toggleBox).toBeDefined();
+      expect(toggleBox.width).toBeGreaterThanOrEqual(24);
+      expect(toggleBox.height).toBeGreaterThanOrEqual(24);
+      await toggleBtn.focus();
+      await expect(toggleBtn).toHaveClass(/focus-visible:ring-2/);
+    });
+
+    test("todo due date controls satisfy WCAG 2.2 target size and focus visibility", async ({ page, baseURL }) => {
+      await openFreshPage(page, baseURL);
+      await createBlockViaSlash(page, "todo", "To-do");
+      const addDateBtn = page.getByRole("button", { name: "Add date" });
+      await expect(addDateBtn).toBeAttached();
+      const box = await addDateBtn.boundingBox();
+      expect(box).toBeDefined();
+      expect(box.width).toBeGreaterThanOrEqual(24);
+      expect(box.height).toBeGreaterThanOrEqual(24);
+      await addDateBtn.focus();
+      await expect(addDateBtn).toHaveClass(/focus-visible:ring-2/);
+    });
+
+    test("table add axis flyout controls satisfy WCAG 2.2 target size and focus visibility", async ({ page, baseURL }) => {
+      await openFreshPage(page, baseURL);
+      await createBlockViaSlash(page, "table", "Table");
+      const addRowBtn = page.getByRole("button", { name: "Add row" });
+      await expect(addRowBtn).toBeAttached();
+      await addRowBtn.focus();
+      const add2Btn = page.getByRole("button", { name: "Add 2 rows" });
+      await expect(add2Btn).toBeVisible();
+      const box = await add2Btn.boundingBox();
+      expect(box).toBeDefined();
+      expect(box.width).toBeGreaterThanOrEqual(24);
+      expect(box.height).toBeGreaterThanOrEqual(24);
+      await add2Btn.focus();
+      await expect(add2Btn).toHaveClass(/focus-visible:ring-2/);
     });
   });
 }

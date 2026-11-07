@@ -1,0 +1,66 @@
+/* The preview of a plain .md file, in both the app and the editor page. Scoped to the
+   root class: the editor page loads no other prose styles, and the app's must not leak in. */
+.osio-md-document {
+  box-sizing: border-box;
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem 3rem;
+  color: var(--osio-code-fg);
+  font: 0.9375rem/1.65 "Inter Variable", system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.osio-md-document-error {
+  color: var(--osio-code-fg-muted);
+}
+
+.osio-md-document :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1.4em 0 0.5em;
+  line-height: 1.25;
+  font-weight: 650;
+}
+.osio-md-document h1 { font-size: 1.75em; }
+.osio-md-document h2 { font-size: 1.4em; }
+.osio-md-document h3 { font-size: 1.15em; }
+.osio-md-document :is(h1, h2) {
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--osio-code-border);
+}
+
+.osio-md-document :is(p, ul, ol, blockquote, pre, table, dl, details) {
+  margin: 0 0 0.9em;
+}
+.osio-md-document :is(ul, ol) { padding-left: 1.5em; }
+.osio-md-document .md-task-list { list-style: none; padding-left: 0.25em; }
+
+.osio-md-document a { color: var(--osio-accent); text-decoration: underline; }
+
+.osio-md-document blockquote,
+.osio-md-document .md-callout {
+  padding: 0.25em 1em;
+  border-left: 3px solid var(--osio-code-border);
+  color: var(--osio-code-fg-muted);
+}
+
+.osio-md-document code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--osio-code-btn-active);
+  font: 0.875em "JetBrains Mono", ui-monospace, monospace;
+}
+.osio-md-document pre {
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  border: 1px solid var(--osio-code-border);
+  border-radius: 6px;
+}
+.osio-md-document pre code { padding: 0; background: none; }
+
+.osio-md-document table { border-collapse: collapse; display: block; overflow-x: auto; }
+.osio-md-document :is(th, td) {
+  padding: 0.35em 0.75em;
+  border: 1px solid var(--osio-code-border);
+}
+
+.osio-md-document hr { border: 0; border-top: 1px solid var(--osio-code-border); margin: 1.5em 0; }
+.osio-md-document img { max-width: 100%; }

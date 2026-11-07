@@ -132,13 +132,13 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
 
   return (
     <div className="pl-0.5">
-      <div className="flex items-start gap-1">
+      <div className="flex items-start gap-0.5">
         <button
           type="button"
           onClick={handleToggle}
           aria-label={expanded ? "Collapse toggle" : "Expand toggle"}
           aria-expanded={expanded}
-          className={`osio-line-marker ${getToggleHeadingClass(block.headingLevel)} shrink-0 w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center`}
+          className={`osio-line-marker ${getToggleHeadingClass(block.headingLevel)} -ml-0.5 shrink-0 w-6 h-6 min-w-[24px] min-h-[24px] rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]`}
         >
           <ChevronRight
             size={14}

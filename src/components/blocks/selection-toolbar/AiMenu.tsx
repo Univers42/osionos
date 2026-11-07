@@ -57,7 +57,6 @@ export const AiSkillsSection: React.FC<{
       <button
         key={skill.label}
         type="button"
-        role="menuitem"
         title={skill.label}
         data-selection-panel-control
         disabled={!selectionText}
@@ -79,7 +78,6 @@ export const AiEditRow: React.FC<{
 }> = ({ selectionText, onAskAI }) => (
   <ToolbarRowButton
     title="Ask AI"
-    role="menuitem"
     disabled={!selectionText}
     onClick={() => onAskAI(selectionText)}
   >

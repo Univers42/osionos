@@ -39,6 +39,8 @@ export interface MonacoEditorConfig {
   onStatus(status: EditorStatus): void;
   onRun(): void;
   onFormat(): void;
+  /** Every change's full text, undebounced (a live preview debounces it itself). */
+  onText?: (text: string) => void;
   /** Extra gutters for this editor; the answer detaches them. The debugger's lives in the app. */
   attachGutter?: (instance: editor.IStandaloneCodeEditor, uri: string) => () => void;
 }
@@ -161,6 +163,7 @@ export function useMonacoEditor(
     const subscriptions = [
       model.onDidChangeContent(() => {
         pending = model.getValue();
+        configRef.current.onText?.(pending);
         if (saveTimer) clearTimeout(saveTimer);
         saveTimer = setTimeout(flush, SAVE_DEBOUNCE_MS);
         reportStatus();
@@ -168,6 +171,9 @@ export function useMonacoEditor(
       instance.onDidChangeCursorPosition(reportStatus),
     ];
     reportStatus();
+    // The model is rebuilt when the block arrives after mount (content fetched late);
+    // a live preview mirrors the model, so it hears the rebuilt text, not only edits.
+    configRef.current.onText?.(model.getValue());
     // The mono web font may land after the first paint; Monaco caches glyph
     // widths at creation, so re-measure once the fonts are in.
     void document.fonts.ready.then(() => { if (editorRef.current === instance) editor.remeasureFonts(); });

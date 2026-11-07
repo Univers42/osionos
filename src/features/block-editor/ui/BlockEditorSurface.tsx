@@ -1635,7 +1635,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 				type="button"
 				data-testid="block-drag-handle"
 				onPointerDown={handlePointerDown}
-				className={`absolute -left-7 ${handleTop} cursor-grab touch-none rounded-md p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] osio-drag-handle active:cursor-grabbing`}
+				className={`absolute -left-7 ${handleTop} flex h-6 w-6 min-h-[24px] min-w-[24px] items-center justify-center cursor-grab touch-none rounded-md text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] osio-drag-handle active:cursor-grabbing`}
 				aria-label="Open block menu, or drag to reorder block"
 				title="Click for menu · Drag to reorder"
 			>
