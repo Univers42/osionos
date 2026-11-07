@@ -4,7 +4,7 @@
 // tokens and resume assertions for it. The pty socket is routed by Playwright into the node's real
 // /api/pty service; the shells are fakes that print a prompt. Nothing leaves the container.
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { createIdeOriginServer } from "../../../packages/osionos-node/ide-origin.mjs";
 import { createMachineSession } from "../../../packages/osionos-node/machine-identity.mjs";
 import { createRememberedComputers } from "../../../packages/osionos-node/remembered-computers.mjs";
+import { createRootStore } from "../../../packages/osionos-node/fs-roots.mjs";
 import { createClientHandler } from "../../../packages/osionos-node/static-client.mjs";
 import { bridgeKeyFromSeed, signMachineToken, signResumeAssertion } from "../../../scripts/ide-machine-protocol.mjs";
 import { FakeConn } from "../../bridge/support/pty-fakes.mjs";
@@ -20,8 +21,21 @@ import { stubBridge } from "./bridgeStub.mjs";
 
 export const NODE_ORIGIN = "http://127.0.0.1:4100";
 const TERMINAL_BUILD = fileURLToPath(new URL("../../../build/terminal", import.meta.url));
+const EDITOR_BUILD = fileURLToPath(new URL("../../../build/editor", import.meta.url));
 
 export const terminalPageBuilt = () => existsSync(join(TERMINAL_BUILD, "index.html"));
+export const editorPageBuilt = () => existsSync(join(EDITOR_BUILD, "index.html"));
+
+/** The editor on disk: one project folder of `files` ({ name: text }), already opened for the app. */
+async function projectDisk(dir, appOrigin, files) {
+  const project = join(dir, "project");
+  mkdirSync(project);
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(project, name), text);
+  const roots = createRootStore({ file: join(dir, "roots.json"), home: dir, nodeHome: join(dir, ".osionos") });
+  await roots.add(project, appOrigin);
+  // Never called: Playwright routes the frame's socket to `attach` (routeFsToNode).
+  return { accept: async () => null, home: dir, appOrigins: [appOrigin], roots };
+}
 
 /** A pty host whose shells print one prompt and record what is typed. */
 function promptingHost() {
@@ -33,8 +47,9 @@ function promptingHost() {
   return host;
 }
 
-/** Starts the node; `stop()` closes it and deletes its state. */
-export async function startRememberingNode(appOrigin) {
+/** Starts the node; `stop()` closes it and deletes its state. With `project`, it also serves the
+ *  built editor page and that folder's files over /api/fs. */
+export async function startRememberingNode(appOrigin, { project = null } = {}) {
   const seed = randomBytes(32).toString("base64url");
   const dir = mkdtempSync(join(tmpdir(), "remembered-node-"));
   chmodSync(dir, 0o700);
@@ -44,7 +59,8 @@ export async function startRememberingNode(appOrigin) {
     ...createMachineSession({ machine: pairedMachine(bridgeKeyFromSeed(seed)), home: dir }).originOptions,
     ownerId: OWNER, ideOrigin: NODE_ORIGIN, commit: "c".repeat(40),
     nodes: { [MACHINE]: { socketPath: join(dir, "none.sock"), extensionRoots: [] } },
-    client: createClientHandler({ root: TERMINAL_BUILD, terminalRoot: TERMINAL_BUILD, appOrigins: [appOrigin] }),
+    client: createClientHandler({ root: TERMINAL_BUILD, terminalRoot: TERMINAL_BUILD, editorRoot: project ? EDITOR_BUILD : null, appOrigins: [appOrigin] }),
+    fs: project ? await projectDisk(dir, appOrigin, project) : undefined,
     // Never called: Playwright routes the frame's socket to `attach` below.
     pty: { host, accept: async () => null },
     devices,
@@ -57,18 +73,21 @@ export async function startRememberingNode(appOrigin) {
   return { seed, host, devices, origin, stop };
 }
 
-/** Every /api/pty socket of `context` goes to the node's real pty service, unchanged. */
-export async function routePtyToNode(context, node) {
-  await context.routeWebSocket(`${NODE_ORIGIN.replace("http", "ws")}/api/pty`, (socket) => {
+/** Every socket of `context` to `path` goes to the node's real `service`, unchanged. */
+async function routeSocketToNode(context, path, service) {
+  await context.routeWebSocket(`${NODE_ORIGIN.replace("http", "ws")}${path}`, (socket) => {
     const conn = new FakeConn();
     conn.send = (text) => { if (conn.closeCode === null) socket.send(text); };
     const close = conn.close.bind(conn);
     conn.close = (code = 1005) => { if (conn.closeCode === null) socket.close({ code }); close(code); };
     socket.onMessage((message) => conn.receive(String(message)));
     socket.onClose(() => close(1006));
-    node.origin.pty.attach(conn);
+    service.attach(conn);
   });
 }
+
+export const routePtyToNode = (context, node) => routeSocketToNode(context, "/api/pty", node.origin.pty);
+export const routeFsToNode = (context, node) => routeSocketToNode(context, "/api/fs", node.origin.fs);
 
 const json = (status, body) => ({ status, json: body });
 
