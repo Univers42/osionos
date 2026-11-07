@@ -33,6 +33,7 @@ import { previewFlavorOf } from "../model/markdownPreview";
 import { attachBreakpoints } from "./monacoBreakpoints";
 import { replaceEditorText, useMonacoEditor, type EditorStatus } from "./useMonacoEditor";
 import { MarkdownPreviewSplit, PreviewModeToggle, useMarkdownPreview } from "./MarkdownPreviewSplit";
+import { CodePreviewPane } from "./CodePreviewPane";
 import { RunConsole } from "./RunConsole";
 import "./monacoEditor.css";
 
@@ -119,6 +120,8 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     onRun: () => runRef.current(),
     onFormat: () => formatRef.current(),
   });
+
+  const focusEditor = React.useCallback(() => editorRef.current?.focus(), [editorRef]);
 
   // Run the CURRENT editor text. When the workspace is bound to a sandbox, run in its REAL
   // interactive PTY so stdin/input() work (the one-shot runner has no stdin →
@@ -233,7 +236,13 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           </button>
         </div>
       )}
-      <MarkdownPreviewSplit flavor={flavor} mode={preview.mode} source={preview.source}>
+      <MarkdownPreviewSplit
+        flavor={flavor}
+        mode={preview.mode}
+        onToggle={preview.toggle}
+        focusEditor={focusEditor}
+        preview={flavor === null ? null : <CodePreviewPane key={pageId} flavor={flavor} source={preview.source} />}
+      >
         <div ref={hostRef} className="h-full min-h-0 overflow-hidden" />
       </MarkdownPreviewSplit>
       <EnvFileStatus pageId={pageId} />
