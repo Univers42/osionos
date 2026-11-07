@@ -27,6 +27,28 @@ describe('page content', () => {
 		for (let depth = 0; depth < 70; depth += 1) block = { type: 'p', children: [block] };
 		refused(() => validatedPageContent([block]), /nests deeper/);
 	});
+	it('refuses raw CSS class strings in block color or calloutTone, accepting semantic colors', () => {
+		refused(
+			() => validatedPageContent([{ type: 'callout', color: 'bg-danger-surface-muted text-danger-text-tag' }]),
+			/content\[0\]\.color/
+		);
+		refused(
+			() => validatedPageContent([{ type: 'callout', color: 'bg-[#ff0000]' }]),
+			/content\[0\]\.color/
+		);
+		refused(
+			() => validatedPageContent([{ type: 'callout', calloutTone: 'text-orange-500' }]),
+			/content\[0\]\.calloutTone/
+		);
+		refused(
+			() => validatedPageContent([{ type: 'callout', calloutTone: 'warning' }]),
+			/content\[0\]\.calloutTone/
+		);
+		assert.doesNotThrow(() => validatedPageContent([{ type: 'callout', calloutIcon: '⚠️', calloutTone: 'orange' }]));
+		assert.doesNotThrow(() => validatedPageContent([{ type: 'callout', color: 'icon:text-quote' }]));
+		assert.doesNotThrow(() => validatedPageContent([{ type: 'callout', color: 'img:https://x.test/bg-hero.png' }]));
+		assert.doesNotThrow(() => validatedPageContent([{ type: 'callout', color: '💡' }]));
+	});
 });
 
 describe('database state', () => {
@@ -38,5 +60,38 @@ describe('database state', () => {
 		refused(() => validatedDatabaseState({ nonsense: 1 }), /must hold/);
 		refused(() => validatedDatabaseState({ pages: [] }), /state\.pages/);
 		refused(() => validatedDatabaseState(undefined), /must be an object/);
+	});
+	it('refuses database options with raw CSS classes and accepts semantic colors', () => {
+		const badState = {
+			databases: {
+				db1: {
+					properties: {
+						status: {
+							type: 'select',
+							options: [{ id: 'opt1', value: 'Urgent', color: 'bg-danger-surface-muted text-danger-text-tag' }],
+						},
+					},
+				},
+			},
+			pages: {},
+			views: {},
+		};
+		refused(() => validatedDatabaseState(badState), /state\.databases\.db1\.properties\.status\.options\[0\]\.color/);
+
+		const goodState = {
+			databases: {
+				db1: {
+					properties: {
+						status: {
+							type: 'select',
+							options: [{ id: 'opt1', value: 'Urgent', color: 'red' }],
+						},
+					},
+				},
+			},
+			pages: {},
+			views: {},
+		};
+		assert.equal(validatedDatabaseState(goodState), goodState);
 	});
 });

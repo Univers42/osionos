@@ -13,6 +13,8 @@ What a page holds in `osionos_pages.content`, for anyone writing through
 - `block.content` is a string, or absent
 - `block.children` is an array, or absent, at most 64 levels deep
 - a `diagram` block's `diagramSpec.kind` is a known kind
+- `block.color` and `block.calloutTone` must not hold raw CSS class strings (e.g. Tailwind `bg-*`, `text-*`)
+- database select options in `state` must hold semantic color names, never raw CSS class strings
 
 It does **not** enforce the rest of this page. An unknown `type` with a sound
 shape is stored on purpose, so a save from a newer client is never refused.
@@ -32,7 +34,9 @@ Validate your own output.
 | `children` | Nested blocks: toggles, lists, callouts, columns |
 | `checked`, `dueAt` | `to_do` state; `dueAt` is `YYYY-MM-DD` |
 | `language`, `fileName` | `code` blocks |
-| `color` | `callout` type; it holds the callout's kind, not a CSS colour |
+| `calloutIcon`, `calloutTone` | `callout` block icon (emoji/icon) and semantic tone (`gray`, `blue`, etc.) |
+| `color` | Legacy callout color field (deprecated; fallback on read) |
+| `buttonLabel` | Legacy button label field (deprecated; canonical label is in `content`) |
 | `textColor`, `backgroundColor` | Block colours |
 | `headingLevel` | Heading style inside a composed block, 1 to 6 |
 | `widthRatio` | Relative width of a `column` |
@@ -90,6 +94,16 @@ Columns nest: a `column_list` holds `column` children, each holding blocks.
 
 A folder is a page with `surface: "folder"`, not a block. `surface: "code"`
 pages store one whole file as a single `code` block.
+
+## Icons
+
+Page and block icons support a discriminated union (`StoredIcon`) or legacy strings:
+
+- `{ "type": "emoji", "value": "🚀", "bg": "#hex" }`
+- `{ "type": "icon", "name": "rocket", "color": "#hex" }`
+- `{ "type": "image", "url": "https://...", "color": "#hex" }`
+
+Legacy prefixed strings (`"icon:rocket"`, `"img:https://..."`, bare emoji `"🚀"`) are accepted on read and normalized.
 
 ## Writing
 

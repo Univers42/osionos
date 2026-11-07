@@ -13,7 +13,7 @@
 import React, { lazy, Suspense, useState, useMemo } from "react";
 import { EquationView } from "@/shared/ui";
 import type { Block } from '@/entities/block';
-import { flattenColumns } from '@/entities/block';
+import { buttonBlockLabel, flattenColumns } from '@/entities/block';
 import { getNumberedMarker, getBulletMarker } from '@/entities/block/model/listMarkers';
 import { getToggleHeadingClass } from '@/entities/block/model/toggleHeading';
 import { ChevronRight } from "lucide-react";
@@ -654,7 +654,7 @@ function buttonPageRef(href: string | undefined): string | null {
  * `hostPageId` is given by the editor; read-only callers do not know their page.
  */
 export const ButtonBlockReadOnly: React.FC<{ block: Block; hostPageId?: string }> = ({ block, hostPageId }) => {
-  const label = block.buttonLabel || block.content || "Button";
+  const label = buttonBlockLabel(block);
   const href = block.buttonHref;
   const className = `${BUTTON_BASE_CLASS} ${buttonVariantClass(block.buttonVariant)}`;
   const pageId = buttonPageRef(href);
