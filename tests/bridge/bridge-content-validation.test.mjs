@@ -33,10 +33,20 @@ describe('page content', () => {
 			/content\[0\]\.color/
 		);
 		refused(
+			() => validatedPageContent([{ type: 'callout', color: 'bg-[#ff0000]' }]),
+			/content\[0\]\.color/
+		);
+		refused(
 			() => validatedPageContent([{ type: 'callout', calloutTone: 'text-orange-500' }]),
 			/content\[0\]\.calloutTone/
 		);
-		assert.doesNotThrow(() => validatedPageContent([{ type: 'callout', calloutIcon: '⚠️', calloutTone: 'warning' }]));
+		refused(
+			() => validatedPageContent([{ type: 'callout', calloutTone: 'warning' }]),
+			/content\[0\]\.calloutTone/
+		);
+		assert.doesNotThrow(() => validatedPageContent([{ type: 'callout', calloutIcon: '⚠️', calloutTone: 'orange' }]));
+		assert.doesNotThrow(() => validatedPageContent([{ type: 'callout', color: 'icon:text-quote' }]));
+		assert.doesNotThrow(() => validatedPageContent([{ type: 'callout', color: 'img:https://x.test/bg-hero.png' }]));
 		assert.doesNotThrow(() => validatedPageContent([{ type: 'callout', color: '💡' }]));
 	});
 });
