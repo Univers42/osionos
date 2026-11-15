@@ -13,7 +13,7 @@
 import React, { useEffect, useId, useState } from 'react';
 
 import { requestSudoCode, sudoStatus, verifySudoCode, type AccountSecurityOutcome } from '@/shared/api/accountSecurityApi';
-import { Button, Modal } from '@/shared/ui';
+import { Button, Input, Modal } from '@/shared/ui';
 import { startSudoListener, sudoSentence, useSudoPromptStore } from './sudoPromptModel';
 
 function sentenceOf(outcome: AccountSecurityOutcome<unknown>): string {
@@ -24,7 +24,6 @@ function sentenceOf(outcome: AccountSecurityOutcome<unknown>): string {
 }
 
 const CODE_INPUT = 'w-40 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-center text-lg tracking-widest outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]';
-const PASSWORD_INPUT = 'w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]';
 
 const PromptBody: React.FC<{ onClose: () => void; extra?: React.ReactNode }> = ({ onClose, extra }) => {
   const granted = useSudoPromptStore((state) => state.granted);
@@ -76,10 +75,9 @@ const PromptBody: React.FC<{ onClose: () => void; extra?: React.ReactNode }> = (
           <p className="text-sm text-[var(--osio-fg-muted)]">For your safety, we email you a six-digit code before this change.</p>
           {needsPassword && (
             <div className="space-y-2">
-              <label htmlFor={passwordId} className="block text-sm font-medium text-[var(--osio-fg-default)]">Account password</label>
-              <input
+              <label htmlFor={passwordId} className="block text-sm font-medium">Account password</label>
+              <Input
                 id={passwordId}
-                className={PASSWORD_INPUT}
                 type="password"
                 autoComplete="current-password"
                 value={password}
