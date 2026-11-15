@@ -163,7 +163,11 @@ export const PageOptionsPanel: React.FC<Props> = ({
 
     // This portal cannot follow its trigger during scrolling without repeatedly
     // rewriting top/left. Close it on scroll instead; resize can still reposition it.
-    const closeMenuOnScroll = () => closeMenu();
+    const closeMenuOnScroll = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && menuRef.current?.contains(target)) return;
+      closeMenu();
+    };
     window.addEventListener("scroll", closeMenuOnScroll, true);
 
     return () => {
