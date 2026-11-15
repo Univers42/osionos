@@ -165,7 +165,11 @@ export const PageOptionsPanel: React.FC<Props> = ({
     // rewriting top/left. Close it on scroll instead; resize can still reposition it.
     const closeMenuOnScroll = (event: Event) => {
       const target = event.target;
-      if (target instanceof Node && menuRef.current?.contains(target)) return;
+      if (target instanceof Node) {
+        const triggerElement = triggerRef.current;
+        if (menuRef.current?.contains(target)) return;
+        if (!triggerElement || !target.contains(triggerElement)) return;
+      }
       closeMenu();
     };
     window.addEventListener("scroll", closeMenuOnScroll, true);
