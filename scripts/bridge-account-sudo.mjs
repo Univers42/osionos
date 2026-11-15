@@ -39,6 +39,7 @@
 
 import { clientMeta, grantSudo, rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { createOtpClient } from './bridge-account-otp.mjs';
+import { createPasswordGate } from './bridge-account-sudo-password.mjs';
 import { readGotrueUser } from './bridge-gotrue-user.mjs';
 import { bearerToken, readJsonBody, sendJson } from './bridge-social-core.mjs';
 
@@ -48,6 +49,8 @@ const SUDO_PATHS = new Set([EMAIL_PATH, VERIFY_PATH, '/api/account/sudo']);
 const POST_ONLY = new Set([EMAIL_PATH, VERIFY_PATH]);
 const SEND_LIMIT = 5;
 const SEND_WINDOW_MS = 600_000;
+const PASSWORD_ATTEMPT_LIMIT = 5;
+const PASSWORD_WINDOW_MS = 900_000;
 const SUDO_TTL_MS = 600_000;
 const BODY_LIMIT = 4 * 1024;
 const CODE_SHAPE = /^[0-9]{6}$/;
@@ -150,9 +153,19 @@ async function rememberExpiry(kv, session, now) {
 	await kv.set(`sudo-expires:${jti}`, new Date(now + SUDO_TTL_MS).toISOString(), SUDO_TTL_MS).catch(() => {});
 }
 
-async function sendCode({ config, kv, fetchImpl, pg }, session, request, response, clientConfig) {
+/** The password of a session that was opened with one, checked through the gateway. */
+async function requirePassword({ config, kv, password }, session, request, address) {
+	await rateLimit(kv, ['sudo-password', session.userId], { limit: PASSWORD_ATTEMPT_LIMIT, windowMs: PASSWORD_WINDOW_MS });
+	const body = await readBody(request);
+	const value = typeof body?.password === 'string' ? body.password : '';
+	if (value === '') throw accountError(403, 'password_required', 'Enter your account password to request a step-up code.');
+	await password.verify({ config, request }, address, value);
+}
+
+async function sendCode({ config, kv, fetchImpl, pg, password }, session, request, response, clientConfig) {
 	await rateLimit(kv, ['sudo-email', session.userId], { limit: SEND_LIMIT, windowMs: SEND_WINDOW_MS });
 	const address = await accountAddress({ config, fetchImpl }, session.userId);
+	if (await password.required({ config, session })) await requirePassword({ config, kv, password }, session, request, address);
 	await auditSudo(pg, session, request, config, 'sudo.code_sent');
 	await requestCode({ config, fetchImpl }, address);
 	return sendJson(response, 202, { method: 'email', sentTo: maskAddress(address) }, clientConfig);
@@ -178,7 +191,7 @@ async function verifySudo({ config, kv, fetchImpl, now, pg, secret }, session, r
 	return noContent(response, clientConfig);
 }
 
-async function sudoState({ kv }, session, response, clientConfig) {
+async function sudoState({ config, kv, password }, session, response, clientConfig) {
 	let active = false;
 	try {
 		await requireSudo(kv, session);
@@ -186,9 +199,12 @@ async function sudoState({ kv }, session, response, clientConfig) {
 	} catch (error) {
 		if (error?.status !== 403) throw error;
 	}
+	// The hint the prompt reads before it asks for a code; a read failure hides the
+	// field instead of blocking the step-up, which sendCode still gates fail-closed.
+	const passwordRequired = await password.required({ config, session }).catch(() => false);
 	const jti = session?.raw?.jti;
 	const expiresAt = active && typeof jti === 'string' ? await kv.get(`sudo-expires:${jti}`) : null;
-	const body = typeof expiresAt === 'string' && expiresAt !== '' ? { active, expiresAt } : { active };
+	const body = typeof expiresAt === 'string' && expiresAt !== '' ? { active, expiresAt, passwordRequired } : { active, passwordRequired };
 	return sendJson(response, 200, body, clientConfig);
 }
 
@@ -209,6 +225,7 @@ export function createAccountSudoRoutes({ config, pg, kv, verifySession, env = p
 			// Without the secret the proof can never be checked, so the whole step-up is
 			// unavailable — and no code is sent either.
 			const deps = { config, kv, fetchImpl: call, now: clock(), pg, secret: proofSecret(env) };
+			deps.password = createPasswordGate({ pg, fetchImpl: call, now: clock, fail: accountError });
 			if (method !== (POST_ONLY.has(pathname) ? 'POST' : 'GET')) throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
 			if (pathname === EMAIL_PATH) return await sendCode(deps, session, request, response, config);
 			if (pathname === VERIFY_PATH) return await verifySudo(deps, session, request, response, config);

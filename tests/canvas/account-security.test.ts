@@ -67,11 +67,11 @@ interface Call { url: string; init: RequestInit | undefined }
 // answers "active" and is not recorded: these tests assert the request that follows it.
 const isStepUpRead = (input: string, init?: RequestInit) => (init?.method ?? "GET") === "GET" && String(input).endsWith("/api/account/sudo");
 
-async function withFetch<T>(answer: (call: Call) => Response, run: () => Promise<T>): Promise<{ result: T; calls: Call[] }> {
+async function withFetch<T>(answer: (call: Call) => Response, run: () => Promise<T>, { interceptStepUp = true } = {}): Promise<{ result: T; calls: Call[] }> {
   const original = globalThis.fetch;
   const calls: Call[] = [];
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
-    if (isStepUpRead(input, init)) return new Response(JSON.stringify({ active: true }), { status: 200 });
+    if (interceptStepUp && isStepUpRead(input, init)) return new Response(JSON.stringify({ active: true }), { status: 200 });
     const call = { url: String(input), init };
     calls.push(call);
     return answer(call).clone();
@@ -91,6 +91,28 @@ test("requestSudoCode: 202 -> the masked address", async () => {
   assert.deepEqual(result, { ok: true, data: { sentTo: "a***@example.com" } });
   assert.equal(calls[0].url, "https://bridge.test/api/account/sudo/email");
   assert.equal(calls[0].init?.method, "POST");
+});
+
+test("requestSudoCode: the password of a password session travels in the body", async () => {
+  useSession("osionos_v1.tok");
+  const { calls } = await withFetch(() => json(202, { method: "email", sentTo: "a***@example.com" }), () => api.requestSudoCode("correct horse battery staple"));
+  assert.equal(calls[0].init?.body, JSON.stringify({ password: "correct horse battery staple" }));
+});
+
+test("sudoStatus: passwordRequired is read from the state route", async () => {
+  useSession("osionos_v1.tok");
+  const need = await withFetch(() => json(200, { active: false, passwordRequired: true }), () => api.sudoStatus(), { interceptStepUp: false });
+  assert.equal(need.result.ok && need.result.data.passwordRequired, true);
+  const noNeed = await withFetch(() => json(200, { active: false }), () => api.sudoStatus(), { interceptStepUp: false });
+  assert.equal(noNeed.result.ok && noNeed.result.data.passwordRequired, false);
+});
+
+test("a password refusal keeps its code and has its own sentence", async () => {
+  useSession("osionos_v1.tok");
+  const { result } = await withFetch(() => json(403, { code: "password_invalid", message: "x" }), () => api.requestSudoCode("wrong"));
+  assert.deepEqual(result.ok === false && [result.reason, result.code], ["refused", "password_invalid"]);
+  assert.notEqual(sudoSentence({ code: "password_invalid" }), sudoSentence({ code: "other" }));
+  assert.notEqual(sudoSentence({ code: "password_required" }), sudoSentence({ code: "other" }));
 });
 
 test("verifySudoCode: 204 -> ok; a bad code keeps its server code", async () => {

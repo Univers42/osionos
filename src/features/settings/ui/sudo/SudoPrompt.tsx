@@ -12,7 +12,7 @@
 
 import React, { useEffect, useId, useState } from 'react';
 
-import { requestSudoCode, verifySudoCode, type AccountSecurityOutcome } from '@/shared/api/accountSecurityApi';
+import { requestSudoCode, sudoStatus, verifySudoCode, type AccountSecurityOutcome } from '@/shared/api/accountSecurityApi';
 import { Button, Modal } from '@/shared/ui';
 import { startSudoListener, sudoSentence, useSudoPromptStore } from './sudoPromptModel';
 
@@ -24,22 +24,40 @@ function sentenceOf(outcome: AccountSecurityOutcome<unknown>): string {
 }
 
 const CODE_INPUT = 'w-40 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-center text-lg tracking-widest outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]';
+const PASSWORD_INPUT = 'w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]';
 
 const PromptBody: React.FC<{ onClose: () => void; extra?: React.ReactNode }> = ({ onClose, extra }) => {
   const granted = useSudoPromptStore((state) => state.granted);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [needsPassword, setNeedsPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const inputId = useId();
+  const passwordId = useId();
+
+  // The hint the server gives before a code is asked for; an older bridge says no field.
+  useEffect(() => {
+    let alive = true;
+    void sudoStatus().then((outcome) => {
+      if (alive && outcome.ok) setNeedsPassword(outcome.data.passwordRequired);
+    });
+    return () => { alive = false; };
+  }, []);
 
   async function sendCode() {
     setBusy(true);
     setProblem('');
-    const outcome = await requestSudoCode();
+    const outcome = await requestSudoCode(needsPassword ? password : undefined);
     setBusy(false);
-    if (outcome.ok) setSentTo(outcome.data.sentTo);
-    else setProblem(sentenceOf(outcome));
+    if (outcome.ok) {
+      setSentTo(outcome.data.sentTo);
+      setPassword('');
+      return;
+    }
+    if ('code' in outcome && outcome.code === 'password_required') setNeedsPassword(true);
+    setProblem(sentenceOf(outcome));
   }
 
   async function confirmCode() {
@@ -56,7 +74,21 @@ const PromptBody: React.FC<{ onClose: () => void; extra?: React.ReactNode }> = (
       {sentTo === null ? (
         <>
           <p className="text-sm text-[var(--osio-fg-muted)]">For your safety, we email you a six-digit code before this change.</p>
-          <Button tone="primary" disabled={busy} onClick={() => { void sendCode(); }}>Email me a code</Button>
+          {needsPassword && (
+            <div className="space-y-2">
+              <label htmlFor={passwordId} className="block text-sm font-medium text-[var(--osio-fg-default)]">Account password</label>
+              <input
+                id={passwordId}
+                className={PASSWORD_INPUT}
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                aria-invalid={problem ? true : undefined}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </div>
+          )}
+          <Button tone="primary" disabled={busy || (needsPassword && password.length === 0)} onClick={() => { void sendCode(); }}>Email me a code</Button>
         </>
       ) : (
         <div className="space-y-2">
