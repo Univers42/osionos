@@ -81,7 +81,10 @@ test.describe("Notion-style page chrome", () => {
     const filesScroller = filesTree.locator("xpath=..");
 
     // A nested sidebar scroll is captured at window in Firefox, just like a page scroll.
-    await filesScroller.evaluate((scroller) => scroller.dispatchEvent(new Event("scroll")));
+    await filesScroller.evaluate((scroller) => {
+      scroller.scrollTop = scroller.scrollHeight;
+      scroller.dispatchEvent(new Event("scroll"));
+    });
     await expect(menu).toHaveCount(0);
   });
 
