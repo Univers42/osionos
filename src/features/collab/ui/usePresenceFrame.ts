@@ -11,17 +11,14 @@
 /* ************************************************************************** */
 
 /**
- * Keeps one PresenceFrame current for the overlay. Measuring is coalesced to one
- * animation frame however many triggers fire (scroll, resize, a remote move, a
- * local edit, an idle timer), and the frame is the only React state: nothing here
- * re-renders the editor, which is only observed.
+ * Keeps one PresenceFrame current for the overlay. Measurements are coalesced to
+ * one animation frame for remote moves, edits and resizes. During scrolling, it
+ * defers geometry reads and React updates until the scroll settles, so the fixed
+ * overlay does not track scroll position with JavaScript.
  *
- * `data-scrolling` is flipped on the layer as a DOM attribute rather than state, so
- * starting and stopping a scroll costs the overlay no render: CSS drops the 90 ms
- * glide while content moves under it every frame and restores it once the scroll
- * settles. It has its own effect, keyed on neither cursors nor members: a remote
- * caret event landing inside the settle window must not cancel the timer that
- * removes the attribute, or the glide stays off until the next scroll.
+ * `data-scrolling` is toggled directly on the layer rather than through React state.
+ * CSS hides the stale frame while its content moves, then the overlay is measured
+ * once and shown again after that frame has rendered.
  */
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
