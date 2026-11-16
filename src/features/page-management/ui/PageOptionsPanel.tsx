@@ -160,25 +160,13 @@ export const PageOptionsPanel: React.FC<Props> = ({
     updateMenuPosition();
 
     window.addEventListener("resize", updateMenuPosition);
-
-    // This portal cannot follow its trigger during scrolling without repeatedly
-    // rewriting top/left. Close it on scroll instead; resize can still reposition it.
-    const closeMenuOnScroll = (event: Event) => {
-      const target = event.target;
-      if (target instanceof Node) {
-        const triggerElement = triggerRef.current;
-        if (menuRef.current?.contains(target)) return;
-        if (!triggerElement || !target.contains(triggerElement)) return;
-      }
-      closeMenu();
-    };
-    window.addEventListener("scroll", closeMenuOnScroll, true);
+    window.addEventListener("scroll", updateMenuPosition, true);
 
     return () => {
       window.removeEventListener("resize", updateMenuPosition);
-      window.removeEventListener("scroll", closeMenuOnScroll, true);
+      window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [closeMenu, isMenuOpen, triggerRef]);
+  }, [isMenuOpen, triggerRef]);
 
   const handleArchiveClick = (e: React.MouseEvent) => {
     e.stopPropagation();
