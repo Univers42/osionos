@@ -39,11 +39,19 @@ const ROW_IDLE = "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] ho
  *  that measures its real height. */
 export type LinePlacement = { index: number; start: number; measure: (node: Element | null) => void };
 
-const placed = ({ index, start, measure }: LinePlacement) => ({
-  ref: measure,
-  "data-index": index,
-  style: { position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${start}px)` } as const,
-});
+const placed = (placement?: LinePlacement): {
+  ref?: React.RefCallback<HTMLLIElement>;
+  "data-index"?: number;
+  style?: React.CSSProperties;
+} => {
+  if (!placement) return {};
+  const { index, start, measure } = placement;
+  return {
+    ref: measure,
+    "data-index": index,
+    style: { position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${start}px)` },
+  };
+};
 
 // The focus ring is the global :focus-visible rule on the li (it has a tabindex); the
 // radius makes that ring follow the row's corners. The li is as wide as its overflow:auto
@@ -86,7 +94,7 @@ function useRowDnd(rel: string, dropDir: string, renaming: boolean, pageId: stri
 }
 
 /** One treeitem. The tree is flat: aria-level/setsize/posinset carry the nesting. */
-export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: LinePlacement }> = ({ item, placement }) => {
+export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement?: LinePlacement }> = ({ item, placement }) => {
   const ctx = useExplorer();
   const { rel, row, level } = item;
   const isDir = row.kind === "dir";
@@ -107,7 +115,7 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
   return (
     <li
       {...line}
-      style={{ ...line.style, ...RING_INSET }}
+      style={{ ...(line.style ?? {}), ...RING_INSET }}
       role="treeitem"
       // Chrome computed no name from the row's text (live a11y snapshot: bare
       // "treeitem", 2026-10-26), so screen readers announced nothing.
@@ -147,7 +155,7 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
 };
 
 /** Loading / error line of an expanded folder whose rows are not there yet. */
-export const ExplorerStatusRow: React.FC<{ dir: string; level: number; placement: LinePlacement }> = ({ dir, level, placement }) => {
+export const ExplorerStatusRow: React.FC<{ dir: string; level: number; placement?: LinePlacement }> = ({ dir, level, placement }) => {
   const ctx = useExplorer();
   const state = ctx.dirs[dir];
   return (
@@ -165,19 +173,19 @@ export const ExplorerStatusRow: React.FC<{ dir: string; level: number; placement
 };
 
 /** One muted line in an expanded folder that holds nothing (the Private / Shared hints). */
-export const ExplorerHintRow: React.FC<{ text: string; level: number; placement: LinePlacement }> = ({ text, level, placement }) => (
+export const ExplorerHintRow: React.FC<{ text: string; level: number; placement?: LinePlacement }> = ({ text, level, placement }) => (
   <li {...placed(placement)} role="none">
     <div style={indentOf(level)} className="py-[3px] pr-2 text-xs text-[var(--osio-code-fg-muted)]">{text}</div>
   </li>
 );
 
 /** The inline name input of a pending create, first among its folder's rows. */
-export const ExplorerCreateRow: React.FC<{ level: number; kind: "file" | "dir"; placement: LinePlacement }> = ({ level, kind, placement }) => {
+export const ExplorerCreateRow: React.FC<{ level: number; kind: "file" | "dir"; placement?: LinePlacement }> = ({ level, kind, placement }) => {
   const ctx = useExplorer();
   const label = kind === "dir" ? "New folder name" : "New file name";
   const line = placed(placement);
   return (
-    <li {...line} role="none" style={{ ...line.style, ...indentOf(level) }} className="flex h-7 items-center pr-2">
+    <li {...line} role="none" style={{ ...(line.style ?? {}), ...indentOf(level) }} className="flex h-7 items-center pr-2">
       <IdeInlineInput label={label} placeholder={label} onSubmit={ctx.submitCreate} onCancel={ctx.cancelEdit} />
     </li>
   );

@@ -71,6 +71,54 @@ test("a file row and a page row paint the same hover fill", async ({ page }) => 
   await expect.poll(async () => (await read(pageRow(page, "Getting Started"), ["backgroundColor"])).backgroundColor).toBe(fill);
 });
 
+test("right-clicking a recent page opens the Osionos context menu", async ({ page }) => {
+  test.setTimeout(120_000);
+  await bootExplorer(page);
+  await visitTwoPages(page);
+  await page.evaluate(() => globalThis.__perfSeedFolder(40));
+  await explorerRow(page, "perf-folder").click();
+
+  await pageRow(page, "Project Roadmap").click({ button: "right" });
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem", { name: "Rename", exact: true })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Duplicate", exact: true })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Copy path", exact: true })).toBeVisible();
+
+  const sidebar = page.locator(`${FILES} nav[aria-label="Pages"]`);
+  expect(await sidebar.evaluate((nav) => nav.scrollHeight > nav.clientHeight)).toBe(true);
+  await sidebar.evaluate((nav) => { nav.scrollTop = nav.scrollHeight; });
+  await expect(menu).toBeVisible();
+});
+
+test("sidebar files stay in document flow inside the Recents scroll surface", async ({ page }) => {
+  test.setTimeout(120_000);
+  await bootExplorer(page);
+  await visitTwoPages(page);
+  await page.evaluate(() => globalThis.__perfSeedFolder(40));
+  await explorerRow(page, "perf-folder").click();
+
+  const sidebar = page.locator(`${FILES} nav[aria-label="Pages"]`);
+  const metrics = await sidebar.evaluate((nav) => {
+    const row = nav.querySelector('[role="treeitem"]');
+    const scrollAreas = [];
+    for (let el = row; el && nav.contains(el); el = el.parentElement) {
+      const overflowY = getComputedStyle(el).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") scrollAreas.push(el);
+      if (el === nav) break;
+    }
+    return {
+      position: row && getComputedStyle(row).position,
+      transform: row && getComputedStyle(row).transform,
+      scrollAreas: scrollAreas.length,
+      navScrolls: scrollAreas.includes(nav),
+    };
+  });
+  expect(metrics.position).not.toBe("absolute");
+  expect(metrics.transform).toBe("none");
+  expect(metrics.scrollAreas).toBe(1);
+  expect(metrics.navScrolls).toBe(true);
+});
+
 test("nesting indents by the page row's step, from the page row's gutter", async ({ page }) => {
   test.setTimeout(120_000);
   await bootExplorer(page);
