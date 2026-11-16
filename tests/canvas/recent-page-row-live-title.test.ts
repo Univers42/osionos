@@ -42,7 +42,7 @@ type RowProps = { label: string; icon: React.ReactElement<{ value: string }>; on
 /** Renders the row inside a host component and hands back the item it returned. */
 function renderRow(recent: ActivePage): { props: RowProps; opened: ActivePage[] } {
   const opened: ActivePage[] = [];
-  let item: React.ReactElement<RowProps> | null = null;
+  let item: React.ReactElement<{ children?: React.ReactNode }> | null = null;
   const Host = () => {
     item = RecentPageRow({ recent, activePageId: null, onOpenPage: (page) => opened.push(page) }) as React.ReactElement<{ children?: React.ReactNode }>;
     return null;
