@@ -98,6 +98,7 @@ import { createBaasTransport } from './bridge-baas-transport.mjs';
 import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 import { createEmbedHandler } from './bridge-embed.mjs';
 import { validatedDatabaseState, validatedPageContent } from './bridge-content-validation.mjs';
+import { linkedTablesSchema } from './bridge-schemaless-tables.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -3886,7 +3887,7 @@ function answerUnavailable(response, config, dbId, message) {
 
 async function handleDatabaseSchema(match, request, response, config, fetchImpl) {
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
-	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const { member, mount } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
 	// The schema is a READ of the database: it takes the read capability.
 	if (!canReadDatabase(member)) throw databasePermissionError('read');
 	const sources = unreachableUntil(config);
@@ -3902,13 +3903,16 @@ async function handleDatabaseSchema(match, request, response, config, fetchImpl)
 			sources.set(dbId, { until: Date.now() + UNREACHABLE_SOURCE_TTL_MS, message });
 			return answerUnavailable(response, config, dbId, message);
 		}
-		// Schemaless engines (dynamodb, …) reject introspection (422
-		// unsupported_capability). Surface that as an empty-but-OK schema so the
-		// database still LISTS — just without tables — instead of failing the
-		// whole mount. The frontend flags it via `capabilities.introspect`.
+		// Schemaless engines (redis, …) reject introspection (422
+		// unsupported_capability). The database still LISTS, with the tables its
+		// workspace link names (bridge-schemaless-tables.mjs); the frontend flags
+		// it via `capabilities.introspect`.
 		const message = error instanceof Error ? error.message : '';
 		if (/unsupported_capability|introspect/i.test(message)) {
-			json(response, 200, { dbId, tables: [], capabilities: { introspect: false } }, config);
+			const tables = await linkedTablesSchema(mount?.tables, (table, limit) =>
+				baasQueryPost(config, fetchImpl, queryRouterTablePath(dbId, table), { op: 'list', limit })
+					.then((result) => result?.rows ?? result?.data ?? []));
+			json(response, 200, { dbId, tables, capabilities: { introspect: false } }, config);
 			return true;
 		}
 		throw error;
