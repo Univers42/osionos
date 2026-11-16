@@ -20,12 +20,12 @@ import { ExplorerToolbar } from "./ExplorerToolbar";
 import { ExplorerVirtualList } from "./ExplorerVirtualList";
 import { EXPLORER_DRAG_MIME } from "./WorkspaceExplorerRow";
 
-export type WorkspaceExplorerProps = ExplorerControllerProps & { copy?: ExplorerCopy };
+export type WorkspaceExplorerProps = ExplorerControllerProps & { copy?: ExplorerCopy; virtualized?: boolean };
 
 /** The one workspace tree: lazy, keyboard-navigable (WAI-ARIA tree), reads and
  *  writes only through `ops`. `onOpen` gets a path: the caller maps it to a page
  *  or editor. */
-export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({ copy = WORKSPACE_EXPLORER_COPY, ...props }) => {
+export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({ copy = WORKSPACE_EXPLORER_COPY, virtualized = true, ...props }) => {
   const { tree, actions, value, rootRef, onKeyDown, onRootDrop, cancelEdit, newIn, rows, scrollRef, virtualizer } = useExplorerController(props);
   const root = tree.dirs[""];
   const { pending } = actions;
@@ -52,11 +52,11 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = ({ copy = WOR
         />
         {actions.notice && <ExplorerNotice message={actions.notice} onDismiss={actions.dismissNotice} />}
         {tree.watchNotice && <ExplorerNotice message={tree.watchNotice} />}
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
+        <div ref={scrollRef} data-workspace-explorer-scroll className={virtualized ? "min-h-0 flex-1 overflow-auto" : "flex-none overflow-visible"}>
           {(!root || root.status === "loading") && <ExplorerLoading text={copy.loading} />}
           {root?.status === "error" && <ExplorerError title={copy.errorTitle} message={root.message} onRetry={() => void tree.load("")} />}
           {isEmpty && <ExplorerEmpty title={copy.emptyTitle} onNewFile={newIn("file")} onNewFolder={newIn("dir")} />}
-          {root?.status === "ready" && !isEmpty && <ExplorerVirtualList rows={rows} virtualizer={virtualizer} />}
+          {root?.status === "ready" && !isEmpty && <ExplorerVirtualList rows={rows} virtualizer={virtualizer} virtualized={virtualized} />}
         </div>
         {deleting !== null && (
           <ExplorerDeleteConfirm copy={copy} name={baseName(deleting)} onCancel={cancelEdit} onConfirm={() => actions.confirmDelete(deleting)} />
