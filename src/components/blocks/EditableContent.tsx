@@ -704,32 +704,18 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     return () => document.removeEventListener("selectionchange", handleSelectionChange);
   }, [hasFocus, updateSelectionSnapshot]);
 
-  // Keep the floating toolbar anchored when the viewport changes size, but
-  // dismiss it when scrolling instead of rewriting top/left on every scroll tick.
-  // A new selection opens it again at the selection's current position.
+  // Reposition the floating toolbar on scroll/resize — but ONLY for the block
+  // that currently has a selection. Previously every block attached a
+  // capture-phase window scroll listener, so scrolling fired O(blocks) handlers
+  // per tick and stuttered. Now at most one block (the selected one) listens.
   useEffect(() => {
     if (!selectionSnapshot) return;
-    const repositionOnResize = () => updateSelectionSnapshot();
-    const dismissOnScroll = (event: Event) => {
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest('[data-testid="inline-selection-toolbar"]')
-      ) {
-        return;
-      }
-      lastSelectionSnapshotRef.current = null;
-      setSelectionSnapshot(null);
-      setOpenPalette(null);
-      setShowShortcuts(false);
-      setLinkPicker(null);
-    };
-
-    window.addEventListener("resize", repositionOnResize);
-    window.addEventListener("scroll", dismissOnScroll, true);
+    const reposition = () => updateSelectionSnapshot();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
     return () => {
-      window.removeEventListener("resize", repositionOnResize);
-      window.removeEventListener("scroll", dismissOnScroll, true);
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
     };
   }, [selectionSnapshot, updateSelectionSnapshot]);
 
