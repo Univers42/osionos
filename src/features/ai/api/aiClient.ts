@@ -57,6 +57,7 @@ import type {
 import { bearerFetch } from "@/shared/agent/bearerFetch";
 import { getActivePageJwt, reportRevokedSession } from "@/shared/api/client";
 import { revocationAwareFetch } from "@/shared/api/sessionRevocation";
+import { networkRetryFetch } from "@/shared/api/networkRetry";
 import { createCapabilityReader } from "@/shared/api/capabilityReader";
 
 /** The minimal fetch shape, so a test can inject a stub without a network. */
@@ -133,7 +134,7 @@ export function isAiConfigured(): boolean {
  * own, the way the bridge's own agent stream does (packages/http-gate/src/sse.ts).
  */
 const sessionFetch: FetchLike = bearerFetch(
-  revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
+  revocationAwareFetch(networkRetryFetch((input, init) => fetch(input, init)), reportRevokedSession),
   getActivePageJwt,
 );
 
