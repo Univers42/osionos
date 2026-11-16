@@ -116,7 +116,7 @@ test("chart-engine: single group keeps colors from select options", () => {
   const pages = [page("p1", { status: "opt-b" })];
   const result = buildChartData(input({ pages, omitZero: true }));
   assert.equal(result.categories.length, 1);
-  assert.equal(result.categories[0].color, "green");
+  assert.equal(result.categories[0].color, "var(--color-success)");
   assert.equal(result.series.length, 1);
   assert.equal(result.series[0].key, VALUE_SERIES_KEY);
 });

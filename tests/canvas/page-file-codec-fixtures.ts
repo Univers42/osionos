@@ -90,6 +90,8 @@ export const OVERLAY_PROBES: Record<string, Probe> = {
   recordRef: probe(mk({ type: "paragraph", content: "p", recordRef: "$record" }), "recordRef"),
   fieldBind: probe(mk({ type: "paragraph", content: "p", fieldBind: "headline" }), "fieldBind"),
   headingLevel: probe(mk({ type: "callout", content: "c", headingLevel: 3 }), "headingLevel"),
+  calloutIcon: probe(mk({ type: "callout", content: "c", calloutIcon: "🚀" }), "calloutIcon"),
+  calloutTone: probe(mk({ type: "callout", content: "c", calloutTone: "purple" }), "calloutTone"),
   tableConfig: probe(
     mk({ type: "table_block", tableData: [["A", "B", "C"], ["1", "2", "3"]], tableConfig: { columnWidths: [120, 80, 80] } }),
     "tableConfig",

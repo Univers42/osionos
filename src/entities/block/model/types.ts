@@ -13,6 +13,8 @@
 import type { EmbedSnapshot } from '@/shared/lib/embed/embedInfo';
 import type { ButtonProgram } from './buttonProgram';
 import type { BlockStyle } from './blockStyle';
+import type { CalloutTone } from './calloutTypes';
+export type { CalloutTone };
 
 /**
  * Standalone Block types for the playground application.
@@ -156,7 +158,9 @@ export interface Block {
   lineNumbers?: boolean;				/** Show a line-number gutter in a code block */
   sqlMountId?: string;		/** Live-DB mount a `sql` code block runs against (read-only) */
   heightLines?: number;					/** Persisted height in lines for code blocks */
-  color?: string;			/** Color for callouts, etc. */
+	calloutIcon?: string;     /** Display emoji or icon for a callout block */
+	calloutTone?: CalloutTone; /** Semantic tint tone for the callout block */
+  color?: string;			/** @deprecated Legacy callout color field (kept for read backward compatibility) */
   textColor?: string;		/** Optional block text color */
   backgroundColor?: string; /** Optional block background color */
   style?: BlockStyle;		/** Typed style overrides (SB-1a); wins over flat fields */
@@ -180,7 +184,7 @@ export interface Block {
   diagramSpec?: unknown;    /** 'diagram' block: the stored SPEC (never the rendered output). Validated at use by parseDiagramSpec, never trusted as typed. */
   embed?: EmbedSnapshot;    /** Resolved link metadata for 'embed'/'bookmark' (and later media blocks). UNTRUSTED: parseEmbedSnapshot before use. `content` keeps the URL. */
   embedHeight?: number;     /** 'embed' block frame height in px for a generic page; clampEmbedHeight at use. */
-  buttonLabel?: string;     /** Visible label for a 'button' block (falls back to content) */
+  buttonLabel?: string;     /** @deprecated Canonical label is stored in `content`. Kept for read backward compatibility. */
   buttonHref?: string;      /** Button target: internal page link `page://<id>`, a `/...` path, else presentational */
   buttonVariant?: 'primary' | 'secondary'; /** Button style for a 'button' block (default: primary) */
   buttonProgram?: ButtonProgram; /** The steps a 'button' block runs on click (re-parsed on every click) */

@@ -12,7 +12,7 @@
 
 import React from "react";
 import type { Block } from "@/entities/block";
-import { calloutDisplayIcon, calloutSurface, resolveCalloutType } from "@/entities/block";
+import { calloutSurface, resolveCalloutProps } from "@/entities/block";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { IconValueView } from "@/shared/ui";
 import { parseInlineMarkdown } from "@osionos/markdown-engine";
@@ -28,8 +28,7 @@ import { ReadOnlyBlock } from "./ReadOnlyBlock";
  * here on purpose so legacy-collapsed callouts never hide content without an affordance.
  */
 export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
-  const type = resolveCalloutType(block.color);
-  const icon = calloutDisplayIcon(block.color);
+  const { icon, type } = resolveCalloutProps(block);
   const hasChildren = Boolean(block.children?.length);
   useVariablesVersion(block.content);
   const content = block.content

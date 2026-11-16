@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block, BlockType } from "@/entities/block";
+import type { StoredIcon } from "@osionos/ui/shared/iconValue";
 
 /** Access model for page visibility. */
 export type PageVisibility = "private" | "shared" | "public";
@@ -101,6 +102,8 @@ export interface PageEntry {
   /** Recurrence config — only meaningful on a template page. */
   recurrence?: PageRecurrence | null;
 }
+
+export type Page = PageEntry;
 
 /** Discriminator for the type of page currently active. */
 export type ActivePageKind = "page" | "database" | "home" | "channel";
@@ -258,7 +261,7 @@ export interface PageStore {
   setPageContentVersion: (pageId: string, version: number) => void;
   patchPage: (
     pageId: string,
-    patch: Partial<PageEntry> | ((page: PageEntry) => Partial<PageEntry>),
+    patch: PagePatchInput | ((page: PageEntry) => PagePatchInput),
   ) => void;
   updatePageTitle: (pageId: string, title: string) => void;
 
@@ -277,9 +280,13 @@ export interface PageStore {
   pageById: (pageId: string) => PageEntry | undefined;
 }
 
+export type PagePatchInput = Partial<Omit<PageEntry, "icon">> & {
+  icon?: string | StoredIcon;
+};
+
 export interface AddPageOptions {
   visibility?: PageVisibility;
-  icon?: string;
+  icon?: string | StoredIcon;
   content?: Block[];
   surface?: PageEntry["surface"];
   isTemplate?: boolean;

@@ -28,10 +28,10 @@ import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
 import { PlaceholderBlock } from "./PlaceholderBlock";
 import {
   getBlockPlaceholder,
+  CALLOUT_TYPES,
   calloutAccent,
-  calloutDisplayIcon,
   calloutSurface,
-  resolveCalloutType,
+  resolveCalloutProps,
   WHITEBOARD_BLOCK_DEFAULT_HEIGHT,
   WHITEBOARD_MIN_HEIGHT,
   BLOCK_MIN_WIDTH,
@@ -839,7 +839,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
       // border, no rail, never collapsible (that's the `toggle` block's job; a nested quote/
       // citation child draws its own vertical bar). `collapsed` is ignored on purpose so
       // legacy-collapsed callouts never hide content without an affordance.
-      const calloutType = resolveCalloutType(block.color);
+      const { icon: calloutIcon, type: calloutType } = resolveCalloutProps(block);
       const accent = calloutAccent(calloutType);
       const hasChildren = Boolean(block.children?.length);
       return (
@@ -865,12 +865,20 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               title="Change callout type"
               onClick={() => setShowCalloutIconPicker((prev) => !prev)}
             >
-              <IconValueView value={calloutDisplayIcon(block.color)} size={20} />
+              <IconValueView value={calloutIcon} size={20} />
             </button>
             {showCalloutIconPicker && (
               <CalloutTypePicker
-                current={block.color}
-                onSelect={(value) => commitBlockUpdate(block.id, { color: value })}
+                current={calloutIcon}
+                onSelect={(value) => {
+                  const matchingPreset = CALLOUT_TYPES.find((t) => t.icon === value || t.id === value);
+                  const newTone = matchingPreset ? matchingPreset.tone : (block.calloutTone ?? calloutType.tone);
+                  commitBlockUpdate(block.id, {
+                    calloutIcon: value,
+                    calloutTone: newTone,
+                    color: value,
+                  });
+                }}
                 onClose={() => setShowCalloutIconPicker(false)}
               />
             )}

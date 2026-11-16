@@ -64,7 +64,8 @@ import {
   getActivePageJwt,
   registerPageLookup,
 } from "./pageStore.persistence";
-import type { PageEntry, PageStore, ActivePage } from "@/entities/page";
+import type { PageEntry, PageStore, ActivePage, PagePatchInput } from "@/entities/page";
+import { serializeStoredIcon, type StoredIcon } from "@osionos/ui/shared/iconValue";
 import {
   canEditPage,
   canReadPage,
@@ -116,13 +117,21 @@ function applyPageContentUpdate(blocks: NonNullable<PageEntry["content"]>) {
   });
 }
 
-type PagePatch = Partial<PageEntry> | ((page: PageEntry) => Partial<PageEntry>);
+type PagePatch = PagePatchInput | ((page: PageEntry) => PagePatchInput);
+
+function normalizePatchIcon(icon: string | StoredIcon | undefined): string | undefined {
+  if (typeof icon === "object" && icon !== null) {
+    return serializeStoredIcon(icon);
+  }
+  return icon;
+}
 
 function applyPagePatch(page: PageEntry, patch: PagePatch): PageEntry {
   const resolvedPatch = typeof patch === "function" ? patch(page) : patch;
   return {
     ...page,
     ...resolvedPatch,
+    icon: "icon" in resolvedPatch ? normalizePatchIcon(resolvedPatch.icon) : page.icon,
   };
 }
 
@@ -455,7 +464,7 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
     if (typeof patch !== "function") {
       const tabPatch: { title?: string; icon?: string } = {};
       if ("title" in patch) tabPatch.title = patch.title;
-      if ("icon" in patch) tabPatch.icon = patch.icon;
+      if ("icon" in patch) tabPatch.icon = normalizePatchIcon(patch.icon);
       notifyTabsOfPagePatch(pageId, tabPatch);
     }
   },

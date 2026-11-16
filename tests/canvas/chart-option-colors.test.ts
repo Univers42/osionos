@@ -35,9 +35,10 @@ test("chart-option-colors: every seeded tag class maps to its family's color var
 });
 
 test("chart-option-colors: real colors pass through, unknown and empty fall back to ''", () => {
-  for (const color of ["green", "#2383e2", "rgb(1, 2, 3)", "oklch(0.7 0.1 30)", "var(--color-chart-3)"]) {
+  for (const color of ["limegreen", "#2383e2", "rgb(1, 2, 3)", "oklch(0.7 0.1 30)", "var(--color-chart-3)"]) {
     assert.equal(optionColorToCss(color), color);
   }
+  assert.equal(optionColorToCss("green"), "var(--color-success)");
   assert.equal(optionColorToCss(""), "");
   assert.equal(optionColorToCss(undefined), "");
   assert.equal(optionColorToCss("bg-brand-500 text-white"), "");

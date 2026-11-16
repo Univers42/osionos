@@ -9,6 +9,8 @@
 const DIAGRAM_KINDS = new Set(['mermaid', 'schema', 'graph', 'hierarchy', 'pipeline']);
 const MAX_BLOCK_DEPTH = 64;
 const STATE_TABLES = ['databases', 'pages', 'views'];
+const RAW_CSS_CLASS_TOKEN_RE = /^(?:(?:dark|hover|focus|active|sm|md|lg|xl|2xl):)*-?(?:bg|text|px|py|border)-\S+$/i;
+const VALID_CALLOUT_TONES = new Set(['gray', 'blue', 'green', 'yellow', 'orange', 'red', 'purple']);
 
 function refuse(path, reason) {
 	throw Object.assign(new Error(`${path} ${reason}`), { status: 422 });
@@ -18,11 +20,33 @@ function isPlainObject(value) {
 	return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function hasRawCssClass(value) {
+	if (typeof value !== 'string') return false;
+	const trimmed = value.trim();
+	if (!trimmed) return false;
+	return trimmed.split(/\s+/).some((token) => RAW_CSS_CLASS_TOKEN_RE.test(token));
+}
+
+function assertNoPresentationStyles(value, path, label = 'value') {
+	if (typeof value === 'string' && hasRawCssClass(value)) {
+		refuse(path, `must be a semantic ${label}, not raw CSS classes.`);
+	}
+}
+
 function assertBlock(block, path, depth) {
 	if (!isPlainObject(block)) refuse(path, 'must be a block object.');
 	if (typeof block.type !== 'string' || !block.type) refuse(`${path}.type`, 'must be a non-empty string.');
-	const { content, children, diagramSpec, type } = block;
+	const { content, children, diagramSpec, type, color, calloutTone } = block;
 	if (content !== undefined && content !== null && typeof content !== 'string') refuse(`${path}.content`, 'must be a string.');
+	if (color !== undefined && color !== null) {
+		assertNoPresentationStyles(color, `${path}.color`, 'value');
+	}
+	if (calloutTone !== undefined && calloutTone !== null) {
+		assertNoPresentationStyles(calloutTone, `${path}.calloutTone`, 'tone');
+		if (typeof calloutTone !== 'string' || !VALID_CALLOUT_TONES.has(calloutTone.trim())) {
+			refuse(`${path}.calloutTone`, `must be one of ${[...VALID_CALLOUT_TONES].join(', ')}.`);
+		}
+	}
 	if (type === 'diagram' && diagramSpec != null && !DIAGRAM_KINDS.has(diagramSpec.kind)) {
 		refuse(`${path}.diagramSpec.kind`, `must be one of ${[...DIAGRAM_KINDS].join(', ')}.`);
 	}
@@ -46,5 +70,24 @@ export function validatedDatabaseState(value) {
 	const tables = STATE_TABLES.filter((name) => name in value);
 	if (tables.length === 0) refuse('state', `must hold ${STATE_TABLES.join(', ')}.`);
 	for (const name of tables) if (!isPlainObject(value[name])) refuse(`state.${name}`, 'must be an object.');
+	if (isPlainObject(value.databases)) {
+		for (const [dbId, db] of Object.entries(value.databases)) {
+			if (isPlainObject(db) && isPlainObject(db.properties)) {
+				for (const [propId, prop] of Object.entries(db.properties)) {
+					if (isPlainObject(prop) && Array.isArray(prop.options)) {
+						prop.options.forEach((opt, idx) => {
+							if (isPlainObject(opt) && opt.color !== undefined && opt.color !== null) {
+								assertNoPresentationStyles(
+									opt.color,
+									`state.databases.${dbId}.properties.${propId}.options[${idx}].color`,
+									'color name'
+								);
+							}
+						});
+					}
+				}
+			}
+		}
+	}
 	return value;
 }

@@ -13,6 +13,7 @@
 import { useCallback } from "react";
 
 import {
+  CALLOUT_TYPES,
   createLinkBlock,
   createMediaBlock,
   DEFAULT_DIAGRAM_SPEC,
@@ -243,7 +244,12 @@ export function useSlashSelect({
       changeBlockType(pageId, blockId, selectedType);
 
       if (selectedType === "callout") {
-        updateBlock(pageId, blockId, { color: options?.calloutIcon || "💡" });
+        const preset = CALLOUT_TYPES.find((t) => t.icon === options?.calloutIcon) ?? CALLOUT_TYPES.find((t) => t.id === "tip")!;
+        updateBlock(pageId, blockId, {
+          calloutIcon: options?.calloutIcon || "💡",
+          calloutTone: preset.tone,
+          color: options?.calloutIcon || "💡",
+        });
       }
 
       if (selectedType === "code") {

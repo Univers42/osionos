@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 export * from './model/types';
+export * from './model/buttonBlock';
 export * from './model/buttonEffect';
 export * from './model/blockStyle';
 export * from './model/mediaBlocks';
