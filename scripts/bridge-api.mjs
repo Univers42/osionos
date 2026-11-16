@@ -4762,13 +4762,16 @@ async function handleObjectDatabasesGet(url, request, response, config, fetchImp
 	const workspaceFilter = workspaceId ? { or: `(workspace_id.eq.${requireUuid(workspaceId, 'workspaceId')},workspace_id.is.null)` } : {};
 	const rows = await baasRest(config, fetchImpl,
 		`osionos_object_databases?${postgrestQuery({ ...workspaceFilter, ...keyFilter, owner_id: `eq.${authContext.userId}`, select: 'db_key,title,state,workspace_id,updated_at' })}`);
-	const databases = Array.isArray(rows) ? rows.map((row) => ({
+	// Only a real [] is "no databases": anything else read as empty looks to the client like an
+	// account that owns nothing (groot ADR 0051).
+	if (!Array.isArray(rows)) throw baasFail('BaaS object-database list was not an array.');
+	const databases = rows.map((row) => ({
 		dbKey: row.db_key,
 		title: row.title ?? 'Untitled',
 		state: row.state ?? {},
 		workspaceId: row.workspace_id ?? null,
 		updatedAt: row.updated_at ?? null,
-	})) : [];
+	}));
 	json(response, 200, { databases }, config);
 	return true;
 }
