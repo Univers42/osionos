@@ -130,6 +130,7 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
             <ExplorerRecents activeWorkspaceId={activeWorkspaceId} />
             <WorkspaceExplorer
               ops={ops}
+              virtualized={false}
               onOpen={onOpenFile}
               pageIdOf={pageIdOf}
               defaultExpanded={sectioned ? OPEN_SECTIONS : undefined}
