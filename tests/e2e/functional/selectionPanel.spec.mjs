@@ -94,6 +94,18 @@ test.describe("selection panel", () => {
     await page.screenshot({ path: "test-results/selpanel-flyout.png" });
   });
 
+  test("scrolling dismisses the floating panel instead of repositioning it", async ({ page, baseURL }) => {
+    await openPanel(page, baseURL);
+    const panel = page.getByTestId("inline-selection-toolbar");
+    await expect(panel).toBeVisible();
+
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("scroll"));
+    });
+
+    await expect(panel).toHaveCount(0);
+  });
+
   test("Bold still bolds the selection and Escape closes the panel", async ({ page, baseURL }) => {
     const editor = await openPanel(page, baseURL);
     await toolbarButton(page, "Bold").click();
