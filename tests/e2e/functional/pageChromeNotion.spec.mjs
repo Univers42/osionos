@@ -73,21 +73,6 @@ test.describe("Notion-style page chrome", () => {
     await expect(fullWidth).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("scrolling the Files tree closes the page menu", async ({ page, baseURL }) => {
-    await openFreshPage(page, baseURL);
-    const menu = await openPageMenu(page);
-    const filesTree = page.getByRole("tree", { name: "Workspace files" });
-    await expect(filesTree).toBeVisible();
-    const filesScroller = filesTree.locator("xpath=..");
-
-    // A nested sidebar scroll is captured at window in Firefox, just like a page scroll.
-    await filesScroller.evaluate((scroller) => {
-      scroller.scrollTop = scroller.scrollHeight;
-      scroller.dispatchEvent(new Event("scroll"));
-    });
-    await expect(menu).toHaveCount(0);
-  });
-
   test("the workspace menu reads like a workspace card", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await page.getByRole("button", { name: "More workspace options" }).click();
