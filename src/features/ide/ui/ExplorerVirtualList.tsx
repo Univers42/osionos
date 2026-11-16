@@ -23,7 +23,7 @@ type Props = {
   virtualized?: boolean;
 };
 
-function renderRow(row: RenderRow, key: string, placement?: LinePlacement): React.ReactNode {
+function renderRow(row: RenderRow, key: React.Key, placement?: LinePlacement): React.ReactNode {
   if (row.type === "item") return <WorkspaceExplorerRow key={key} item={row.item} placement={placement} />;
   if (row.type === "status") return <ExplorerStatusRow key={key} dir={row.dir} level={row.level} placement={placement} />;
   if (row.type === "hint") return <ExplorerHintRow key={key} text={row.text} level={row.level} placement={placement} />;
