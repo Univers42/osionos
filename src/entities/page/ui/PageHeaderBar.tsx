@@ -78,12 +78,16 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
     return () => document.removeEventListener('mousedown', onPointerDown);
   }, [closeConfig, configOpen]);
 
-  // The menu is anchored below a sticky page header. Close it when any scroll
-  // starts, including a nested sidebar scroll, so it cannot remain visually detached
-  // from the page chrome while another pane moves.
+  // The menu is anchored below a sticky page header. Close it when another pane
+  // scrolls so it cannot remain detached from the page chrome; keep it open when
+  // the user scrolls inside the menu itself.
   useEffect(() => {
     if (!configOpen) return undefined;
-    const closeOnScroll = () => closeConfig();
+    const closeOnScroll = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && menuRef.current?.contains(target)) return;
+      closeConfig();
+    };
     window.addEventListener('scroll', closeOnScroll, true);
     return () => window.removeEventListener('scroll', closeOnScroll, true);
   }, [closeConfig, configOpen]);
