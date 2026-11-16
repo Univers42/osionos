@@ -60,7 +60,7 @@ export type ObjectDatabaseSyncHooks = {
 let pushInFlight = false;
 let hydrationDone = false; // hydrate() has been launched with a session this account
 let hydrationWait: SessionWait | null = null; // the wait for the session token, one per account
-let hydrationCompleted = false; // hydrate() finished — gates delete propagation
+let hydrationCompleted = false; // hydrate() finished — gates every push
 
 /** Sync is possible only client-side, with the flag on and a bridge URL set
  *  (the offline/Playwright build blanks `VITE_API_URL`, so it no-ops there). */
@@ -122,12 +122,8 @@ export function objectDatabasePushBodyFor(
   return objectDatabasePushBody(dbKey, title, slice, databaseWorkspace(dbKey));
 }
 
-async function deleteDatabaseRemote(jwt: string, dbKey: string): Promise<void> {
-  await api.delete(`/api/object-databases/${encodeURIComponent(dbKey)}`, jwt);
-}
-
 /** Flush hook: upload every user database whose slice changed since its last
- *  successful push, and propagate local deletions. Gated on `hydrationCompleted`
+ *  successful push. Gated on `hydrationCompleted`
  *  — a browser MUST pull the server's copy before it may push, otherwise a fresh
  *  session (whose store is briefly empty, or holds an auto-created placeholder)
  *  could overwrite real server data before it ever saw it. Once hydration has run
@@ -166,8 +162,12 @@ export function pushDirtyObjectDatabases(
     .map((dbKey) => ({ dbKey, title: databaseTitle(state, dbKey), slice: slices.get(dbKey) ?? emptySlice() }))
     .map((item) => ({ ...item, hash: hashSlice(item.slice) }))
     .filter((item) => pushed[item.dbKey] !== item.hash && !isPristinePlaceholder(item.dbKey, item.slice));
-  const removed = Object.keys(pushed).filter((dbKey) => !userIds.has(dbKey));
-  if (dirty.length === 0 && removed.length === 0) return;
+  // A database missing from `state` is never deleted remotely. Absence is not intent: a
+  // state that did not persist (storage full), an empty or partial server list, or a flush
+  // captured before hydrate all look like "every database was deleted". No delete action
+  // exists in the UI ("Delete database" only closes the menu), so a remote delete needs an
+  // explicit intent once one ships (groot ADR 0051).
+  if (dirty.length === 0) return;
 
   pushInFlight = true;
   void (async () => {
@@ -187,14 +187,6 @@ export function pushDirtyObjectDatabases(
             delete next[item.dbKey]; // keep dirty → retried next flush
             noticeRefusedDatabaseSave(item.dbKey, item.title, item.hash, (error as { status?: number }).status);
           }
-        }
-      }
-      for (const dbKey of removed) {
-        try {
-          await deleteDatabaseRemote(jwt, dbKey);
-          delete next[dbKey];
-        } catch {
-          // leave the hash so the delete retries next flush
         }
       }
       pushBaseline.save(next);
