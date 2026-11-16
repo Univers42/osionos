@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { isPushEnabled } from "@/shared/config/featureFlags";
+import { registerAppWorker } from "@/shared/lib/service-worker/appWorker";
 
 type PushState = "unsupported" | "off" | "on" | "denied" | "busy";
 
@@ -47,7 +48,7 @@ export function usePushSubscription() {
     setState("busy");
     try {
       if ((await Notification.requestPermission()) !== "granted") { setState("denied"); return; }
-      const registration = await navigator.serviceWorker.register("/sw.js");
+      const registration = await registerAppWorker(navigator.serviceWorker);
       await navigator.serviceWorker.ready;
       const { publicKey } = await api.get<{ publicKey?: string }>("/api/push/vapid-public-key");
       if (!publicKey) { setState("off"); return; } // server dormant (no VAPID keypair)

@@ -18,6 +18,7 @@ import App from "./App.tsx";
 import { setInferencePort } from "@/features/chat/model/useChatStore";
 import { selectInferencePort } from "@/features/ai/model/aiInferencePort";
 import { installLinkFaviconFallback } from "@/shared/lib/embed/linkFaviconFallback";
+import { isWorkerReloadSafe, keepAppWorkerCurrent } from "@/shared/lib/service-worker/appWorker";
 
 // Public published-page view (/p/:token) — a standalone read-only render mounted
 // BEFORE the app + its auth so an unauthenticated visitor never boots the editor.
@@ -71,8 +72,20 @@ installLinkFaviconFallback();
 // The offline app shell (#176): a reload without a connection opens the app. Not in dev,
 // where a cached shell would fight Vite's module server.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  let userHasTyped = false;
+  for (const type of ["keydown", "paste"]) {
+    globalThis.addEventListener(type, () => { userHasTyped = true; }, { once: true, capture: true });
+  }
+  const reloadIfSafe = () => {
+    const key = "osionos:worker-reloaded-at";
+    const msSinceLastReload = Date.now() - Number(globalThis.sessionStorage?.getItem(key) ?? 0);
+    if (!isWorkerReloadSafe({ address: globalThis.location.href, userHasTyped, msSinceLastReload })) return;
+    globalThis.sessionStorage?.setItem(key, String(Date.now()));
+    globalThis.location.reload();
+  };
   globalThis.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((error: unknown) => console.warn("[osionos] offline shell unavailable:", error));
+    keepAppWorkerCurrent(navigator.serviceWorker, reloadIfSafe)
+      .catch((error: unknown) => console.warn("[osionos] offline shell unavailable:", error));
   });
 }
 
