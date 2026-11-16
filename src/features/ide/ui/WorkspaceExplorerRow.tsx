@@ -39,13 +39,17 @@ const ROW_IDLE = "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] ho
  *  that measures its real height. */
 export type LinePlacement = { index: number; start: number; measure: (node: Element | null) => void };
 
-const placed = (placement?: LinePlacement) => {
+const placed = (placement?: LinePlacement): {
+  ref?: React.RefCallback<HTMLLIElement>;
+  "data-index"?: number;
+  style?: React.CSSProperties;
+} => {
   if (!placement) return {};
   const { index, start, measure } = placement;
   return {
     ref: measure,
     "data-index": index,
-    style: { position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${start}px)` } as const,
+    style: { position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${start}px)` },
   };
 };
 
