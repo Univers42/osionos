@@ -84,6 +84,10 @@ export function usePresenceFrame(layerRef: RefObject<HTMLElement | null>): Prese
     };
     const onScroll = (): void => {
       scrolling = true;
+      if (raf !== null) {
+        cancelAnimationFrame(raf);
+        raf = null;
+      }
       flagged = layerRef.current;
       flagged?.setAttribute('data-scrolling', '');
       clearTimeout(settleTimer);
