@@ -75,6 +75,8 @@ test("right-clicking a recent page opens the Osionos context menu", async ({ pag
   test.setTimeout(120_000);
   await bootExplorer(page);
   await visitTwoPages(page);
+  await page.evaluate(() => globalThis.__perfSeedFolder(40));
+  await explorerRow(page, "perf-folder").click();
 
   await pageRow(page, "Project Roadmap").click({ button: "right" });
   const menu = page.getByRole("menu");
@@ -83,6 +85,7 @@ test("right-clicking a recent page opens the Osionos context menu", async ({ pag
   await expect(menu.getByRole("menuitem", { name: "Copy path", exact: true })).toBeVisible();
 
   const sidebar = page.locator(`${FILES} nav[aria-label="Pages"]`);
+  expect(await sidebar.evaluate((nav) => nav.scrollHeight > nav.clientHeight)).toBe(true);
   await sidebar.evaluate((nav) => { nav.scrollTop = nav.scrollHeight; });
   await expect(menu).toBeVisible();
 });
@@ -91,6 +94,8 @@ test("sidebar files stay in document flow inside the Recents scroll surface", as
   test.setTimeout(120_000);
   await bootExplorer(page);
   await visitTwoPages(page);
+  await page.evaluate(() => globalThis.__perfSeedFolder(40));
+  await explorerRow(page, "perf-folder").click();
 
   const sidebar = page.locator(`${FILES} nav[aria-label="Pages"]`);
   const metrics = await sidebar.evaluate((nav) => {
