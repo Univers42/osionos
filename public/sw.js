@@ -36,15 +36,21 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
-/* Offline shell (#176). A navigation goes to the network first and keeps a copy, so a
-   reload without a connection opens the last app shell instead of the browser's error
-   page. Build files carry a content hash in their name, so one never changes: once
+/* Offline shell (#176). A reload without a connection opens the last app shell instead of
+   the browser's error page. Online, the browser loads the page itself and the shell is
+   refreshed beside it: Firefox records a page's network zone only from a page load it made
+   (nsHttpChannel::UpdateCurrentIpAddressSpace), so a page answered here kept the zone of the
+   public sign-in page before it, and Firefox 158 held every bridge call on a local-network
+   permission check (reproduced 2026-11-16: 0 of 2 bridge calls finished, 88 of 88 without).
+   Build files carry a content hash in their name, so one never changes: once
    fetched it is served from the cache. The bridge (/api/), other origins and writes are
    never intercepted.
    Caveat: only build files fetched while online are kept. A part of the app split into
    its own file and never opened online (a view first visited offline) still fails to
-   load. The install step finds the shell's files with a regex over its HTML: a file the
-   HTML names some other way is kept on first use instead. */
+   load. "Without a connection" is the browser's navigator.onLine: with the device online and
+   the server down, a reload shows the browser's error page. The install step finds the
+   shell's files with a regex over its HTML: a file the HTML names some other way is kept on
+   first use instead. */
 const SHELL_CACHE = "osionos-shell-v1";
 const SHELL_KEY = "/";
 // Old builds' files are dropped first; enough room for a few builds of the app.
@@ -55,12 +61,18 @@ const MAX_KEPT_FILES = 400;
 const isShell = (response) => response.ok && !response.redirected && (response.headers.get("content-type") || "").includes("text/html");
 const isBuildFile = (url) => url.pathname.startsWith("/assets/") || url.pathname.startsWith("/fonts/");
 
-async function keepShell() {
-  const cache = await caches.open(SHELL_CACHE);
+// The app page only, as it is now; resolves with its HTML, or "" when the answer isn't the app page.
+async function keepPage(cache) {
   const response = await fetch(SHELL_KEY, { cache: "no-store" });
-  if (!isShell(response)) return;
+  if (!isShell(response)) return "";
   const html = await response.clone().text();
   await cache.put(SHELL_KEY, response);
+  return html;
+}
+
+async function keepShell() {
+  const cache = await caches.open(SHELL_CACHE);
+  const html = await keepPage(cache);
   const files = [...html.matchAll(/(?:src|href)="(\/(?:assets|fonts)\/[^"]+)"/g)].map((match) => match[1]);
   await cache.addAll([...new Set(files)]);
 }
@@ -98,6 +110,8 @@ async function buildFile(request) {
 
 self.addEventListener("install", (event) => {
   // A shell that can't be kept now is kept on the next navigation; push must install anyway.
+  // Without skipWaiting a new worker waits until every app tab closes (a reload is not enough).
+  self.skipWaiting();
   event.waitUntil(keepShell().catch((error) => console.warn("[osionos] offline shell not kept:", error)));
 });
 
@@ -114,6 +128,9 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
-  if (request.mode === "navigate") event.respondWith(navigate(request));
-  else if (isBuildFile(url)) event.respondWith(buildFile(request));
+  if (request.mode !== "navigate") {
+    if (isBuildFile(url)) event.respondWith(buildFile(request));
+  } else if (self.navigator.onLine) {
+    event.waitUntil(caches.open(SHELL_CACHE).then(keepPage).catch((error) => console.warn("[osionos] offline shell not refreshed:", error)));
+  } else event.respondWith(navigate(request));
 });

@@ -11,7 +11,8 @@
 /* ************************************************************************** */
 
 // #176: a reload without a connection showed the browser's offline page, and the app
-// could not be installed. public/sw.js runs here in a fake worker scope: its own
+// could not be installed. 2026-11-16: answering online navigations hid the page's own
+// server address from Firefox 158, so every bridge call waited on a local-network check. public/sw.js runs here in a fake worker scope: its own
 // install and fetch handlers, a Map-backed Cache Storage and a scripted network.
 
 import assert from "node:assert/strict";
@@ -28,11 +29,11 @@ type FakeRequest = { url: string; method: string; mode: string };
 type Handler = (event: Record<string, unknown>) => void;
 const keyOf = (request: string | FakeRequest) => new URL(typeof request === "string" ? request : request.url, ORIGIN).href;
 
-/** A worker scope over `network`; `online` flips what the network does. */
+/** A worker scope over `network`; `online` flips what the network does, `link` what the browser reports. */
 function boot() {
   const handlers: Record<string, Handler> = {};
   const store = new Map<string, Response>();
-  const world = { online: true, fetched: [] as string[] };
+  const world = { online: true, link: true, tookOver: false, fetched: [] as string[] };
   const network = async (request: string | FakeRequest) => {
     const url = keyOf(request);
     world.fetched.push(url);
@@ -52,7 +53,9 @@ function boot() {
   const scope = {
     addEventListener: (type: string, handler: Handler) => { handlers[type] = handler; },
     location: { origin: ORIGIN },
+    navigator: { get onLine() { return world.link; } },
     clients: { claim: async () => undefined },
+    skipWaiting: async () => { world.tookOver = true; },
   };
   new Function("self", "caches", "fetch", SOURCE)(scope, caches, network);
   return { handlers, store, world };
@@ -78,29 +81,40 @@ test("installing keeps the app shell and every build file it names", async () =>
   }
 });
 
+test("a new worker takes over at once: a fix must not wait for every app tab to close", async () => {
+  const { handlers, world } = boot();
+  await fire(handlers.install);
+  assert.equal(world.tookOver, true);
+});
+
 test("a reload without a connection opens the last app shell, on any app path", async () => {
   const { handlers, world } = boot();
   await fire(handlers.install);
-  world.online = false;
+  Object.assign(world, { online: false, link: false });
   for (const path of ["/", "/?home=1", "/p/some-token"]) {
     const answer = await fire(handlers.fetch, navigation(path));
     assert.equal(await answer?.text(), SHELL, path);
   }
 });
 
-test("online, a navigation goes to the network and refreshes the kept shell", async () => {
-  const { handlers, store, world } = boot();
-  const answer = await fire(handlers.fetch, navigation("/?home=1"));
-  assert.equal(await answer?.text(), SHELL);
-  assert.ok(world.fetched.includes(`${ORIGIN}/?home=1`));
-  assert.ok(store.has(`${ORIGIN}/`));
+test("online, the browser loads the page itself and the kept shell is refreshed", async () => {
+  const { handlers, store } = boot();
+  assert.equal(await fire(handlers.fetch, navigation("/?home=1")), null);
+  assert.equal(await store.get(`${ORIGIN}/`)?.text(), SHELL);
+});
+
+test("with the browser online and the server down, the browser still loads the page", async () => {
+  const { handlers, world } = boot();
+  await fire(handlers.install);
+  world.online = false;
+  assert.equal(await fire(handlers.fetch, navigation("/")), null);
 });
 
 test("a file opened in a tab does not replace the kept shell", async () => {
   const { handlers, world } = boot();
   await fire(handlers.install);
   await fire(handlers.fetch, navigation("/favicon.svg"));
-  world.online = false;
+  Object.assign(world, { online: false, link: false });
   assert.equal(await (await fire(handlers.fetch, navigation("/")))?.text(), SHELL);
 });
 
