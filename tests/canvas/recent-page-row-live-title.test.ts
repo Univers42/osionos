@@ -44,12 +44,15 @@ function renderRow(recent: ActivePage): { props: RowProps; opened: ActivePage[] 
   const opened: ActivePage[] = [];
   let item: React.ReactElement<RowProps> | null = null;
   const Host = () => {
-    item = RecentPageRow({ recent, activePageId: null, onOpenPage: (page) => opened.push(page) }) as React.ReactElement<RowProps>;
+    item = RecentPageRow({ recent, activePageId: null, onOpenPage: (page) => opened.push(page) }) as React.ReactElement<{ children?: React.ReactNode }>;
     return null;
   };
   renderToStaticMarkup(React.createElement(Host));
   assert.ok(item, "the row rendered nothing for a loaded, readable page");
-  return { props: (item as React.ReactElement<RowProps>).props, opened };
+  const row = item as React.ReactElement<{ children?: React.ReactNode }>;
+  const navItem = React.Children.toArray(row.props.children).find(React.isValidElement);
+  assert.ok(navItem, "the recent row contains no navigation item");
+  return { props: navItem.props as RowProps, opened };
 }
 
 test("the row shows the loaded page's title and icon, not the visit-time snapshot", () => {
