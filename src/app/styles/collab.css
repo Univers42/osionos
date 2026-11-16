@@ -104,6 +104,12 @@ button.collab-avatar:focus-visible {
   to { opacity: 1; transform: scale(1); }
 }
 
+/* Presence is a fixed viewport overlay. Hide its stale snapshot while a pane
+   scrolls; usePresenceFrame remeasures after scroll settles to avoid JS-linked motion. */
+.collab-layer[data-scrolling] {
+  visibility: hidden;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   /* A mark follows its target in 90 ms. Off while the page scrolls: content
      moves under the overlay every frame, and a lagging mark would drift off its
