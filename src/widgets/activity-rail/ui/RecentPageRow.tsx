@@ -40,6 +40,7 @@ export const RecentPageRow: React.FC<RecentPageRowProps> = ({ recent, activePage
   const accessContext = usePageAccessContext();
   const jwt = useUserStore((s) => s.activePageJwt() ?? "");
   const rowRef = useRef<HTMLDivElement | null>(null);
+  const renameHandled = useRef(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -57,7 +58,7 @@ export const RecentPageRow: React.FC<RecentPageRowProps> = ({ recent, activePage
     layout: useWorkspaceLayout,
     clipboard: usePageContextClipboard,
     toast: useToastStore.getState().push,
-    onRename: () => setRenaming(true),
+    onRename: () => { renameHandled.current = false; setRenaming(true); },
     onDelete: () => setConfirmDelete(true),
     workspacePages: () => usePageStore.getState().pages[page.workspaceId] ?? [],
   };
@@ -73,6 +74,8 @@ export const RecentPageRow: React.FC<RecentPageRowProps> = ({ recent, activePage
   };
 
   const submitRename = (name: string): void => {
+    if (renameHandled.current) return;
+    renameHandled.current = true;
     try {
       usePageStore.getState().updatePageTitle(page._id, validateName(name));
     } catch (error) {
@@ -111,7 +114,7 @@ export const RecentPageRow: React.FC<RecentPageRowProps> = ({ recent, activePage
             label={`Rename ${current.title || "Untitled"}`}
             placeholder="Rename"
             onSubmit={submitRename}
-            onCancel={() => { setRenaming(false); restoreFocus(); }}
+            onCancel={() => { renameHandled.current = true; setRenaming(false); restoreFocus(); }}
           />
         </div>
       ) : (
