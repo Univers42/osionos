@@ -81,6 +81,10 @@ test("right-clicking a recent page opens the Osionos context menu", async ({ pag
   await expect(menu.getByRole("menuitem", { name: "Rename", exact: true })).toBeVisible();
   await expect(menu.getByRole("menuitem", { name: "Duplicate", exact: true })).toBeVisible();
   await expect(menu.getByRole("menuitem", { name: "Copy path", exact: true })).toBeVisible();
+
+  const sidebar = page.locator(`${FILES} nav[aria-label="Pages"]`);
+  await sidebar.evaluate((nav) => { nav.scrollTop = nav.scrollHeight; });
+  await expect(menu).toBeVisible();
 });
 
 test("sidebar files stay in document flow inside the Recents scroll surface", async ({ page }) => {
