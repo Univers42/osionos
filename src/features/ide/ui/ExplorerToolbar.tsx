@@ -34,8 +34,10 @@ export const ExplorerToolbar: React.FC<{
     { label: "Collapse all", onClick: onCollapseAll, icon: <ChevronsDownUp size={14} /> },
     { label: "Refresh", onClick: onRefresh, icon: <RefreshCw size={14} /> },
   ];
+  // shrink-0: in the sidebar the tree below is flex-none, so a tree taller than the panel
+  // squeezed this bar from 30 to 24 px and every row jumped up 6 px (CI 43794742172).
   return (
-    <div role="toolbar" aria-label="Workspace files actions" className="flex h-[30px] items-center gap-0.5 px-2">
+    <div role="toolbar" aria-label="Workspace files actions" className="flex h-[30px] shrink-0 items-center gap-0.5 px-2">
       <PanelSectionLabel className="mr-auto truncate">{label}</PanelSectionLabel>
       {actions.map((action) => action && (
         <IconButton key={action.label} size="xs" label={action.label} onClick={action.onClick}>{action.icon}</IconButton>
