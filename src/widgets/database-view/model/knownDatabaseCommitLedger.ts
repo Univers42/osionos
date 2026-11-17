@@ -10,10 +10,12 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// Every stored id this tab's copy may hold next (groot ADR 0055 J-C1). An IndexedDB commit started
-// at unload is lost on navigation (I10, 20/20), and one started a moment earlier may still land,
-// so the unload journal names all of them: the id read at readiness, every resolved commit, and
-// every pending one. The durable copy's record gate reads its last commit from here too.
+// Every stored id this tab's copy may hold next (groot ADR 0055 J-C1, as amended by JM2). An
+// IndexedDB commit started at unload is lost on navigation (I10, 20/20), and one started a moment
+// earlier may still land, so the unload journal names the id read at readiness, the last resolved
+// commit and every pending one. An older resolved commit was overwritten by a later one of this
+// tab, which writes one after another, so it is not kept. The durable copy's record gate reads its
+// last commit from here too.
 
 export type RecordMap = Readonly<Record<string, string>>;
 
@@ -26,7 +28,6 @@ export interface CommitSnapshot {
 export interface CommitLedger {
   /** The id the readiness transaction read or wrote; null when the store held no copy. */
   readonly loadedId: string | null;
-  readonly resolvedIds: readonly string[];
   /** This tab's last completed commit, with the record stored next to it now. */
   readonly lastResolved: CommitSnapshot | null;
   readonly pending: readonly CommitSnapshot[];
@@ -44,7 +45,6 @@ export interface CommitLedgerTracker {
 
 interface Entries {
   loadedId: string | null;
-  resolvedIds: string[];
   lastResolved: CommitSnapshot | null;
   pending: Map<string, CommitSnapshot>;
 }
@@ -52,15 +52,13 @@ interface Entries {
 function settle(entries: Entries, id: string, isKept: boolean): void {
   const snapshot = entries.pending.get(id);
   entries.pending.delete(id);
-  if (!isKept || !snapshot) return;
-  entries.resolvedIds.push(id);
-  entries.lastResolved = snapshot;
+  if (isKept && snapshot) entries.lastResolved = snapshot;
 }
 
 export function createCommitLedger(): CommitLedgerTracker {
-  const entries: Entries = { loadedId: null, resolvedIds: [], lastResolved: null, pending: new Map() };
+  const entries: Entries = { loadedId: null, lastResolved: null, pending: new Map() };
   return {
-    view: () => ({ ...entries, resolvedIds: [...entries.resolvedIds], pending: [...entries.pending.values()] }),
+    view: () => ({ ...entries, pending: [...entries.pending.values()] }),
     get lastResolved() { return entries.lastResolved; },
     get pendingCount() { return entries.pending.size; },
     loaded: (id) => { entries.loadedId = id; },

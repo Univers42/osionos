@@ -134,14 +134,15 @@ const asBase = (snapshot: CommitSnapshot): JournalBase =>
 
 // Once a commit of this tab resolved, the store can no longer hold the readiness copy or an older
 // own commit again, so only the last resolved one and the pending ones are compared: keeping every
-// older state would pin each one in memory. Their ids stay in `bases` (J-C1).
+// older state would pin each one in memory. The readiness id stays in `bases` (J-C1, JM2).
 function landableBases(ledger: CommitLedger, loaded: JournalBase | null): JournalBase[] {
   const settled = ledger.lastResolved ? asBase(ledger.lastResolved) : loaded;
   return [...(settled ? [settled] : []), ...ledger.pending.map(asBase)];
 }
 
 function baseIds(ledger: CommitLedger): string[] {
-  return [...(ledger.loadedId === null ? [] : [ledger.loadedId]), ...ledger.resolvedIds, ...ledger.pending.map((entry) => entry.id)];
+  const settled = [ledger.loadedId, ledger.lastResolved?.id].filter((id): id is string => typeof id === "string");
+  return [...settled, ...ledger.pending.map((entry) => entry.id)];
 }
 
 function writeOnce(source: UnloadJournalSource, storage: PageCacheStorage): Outcome {
