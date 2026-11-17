@@ -15,12 +15,15 @@
 // of pageStore.actions' warm chunk: it is reached only through a dynamic import.
 
 import type { Block } from "@/entities/block";
-import { useKnownDatabaseStateStore } from "./knownDatabaseState";
+import { useKnownDatabaseStateStore, whenKnownDatabaseReady } from "./knownDatabaseState";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import { rememberDatabaseWorkspace } from "./objectDatabaseWorkspaces";
 import { cloneTemplateDatabases } from "./templateDatabaseClone";
 
-export function instantiateTemplateDatabases(content: Block[], workspaceId: string): Block[] {
+/** Waits for the stored copy: cloned into the seed, the template's databases would be dropped
+ *  when the stored copy replaces it. */
+export async function instantiateTemplateDatabases(content: Block[], workspaceId: string): Promise<Block[]> {
+  await whenKnownDatabaseReady();
   const state = useKnownDatabaseStateStore.getState().state;
   const result = cloneTemplateDatabases(content, state, (prefix) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`);
   if (result.created.length > 0) {

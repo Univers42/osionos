@@ -792,7 +792,7 @@ export function createCreatePageFromTemplate(_set: SetFn, get: GetFn) {
     let clonedContent = content;
     try {
       const glue = await import("@/widgets/database-view/model/templateDatabaseInstantiate");
-      clonedContent = glue.instantiateTemplateDatabases(content, workspaceId);
+      clonedContent = await glue.instantiateTemplateDatabases(content, workspaceId);
     } catch (err) {
       return notifyCreateFailure("Couldn't create the page from this template.", err);
     }

@@ -15,9 +15,9 @@
 // dependency-injected (database state, no DOM) so tests can drive the whole
 // matrix in node and inspect the real bytes.
 
-import type { NotionState } from "@notion-db/contract-types";
 import { buildExportFiles } from "./buildExportFiles";
 import { collectExportPages } from "./collectPages";
+import { loadExportDatabaseState } from "./exportDatabaseState";
 import { sanitizeFileName } from "./exportPaths";
 import { captureExportTheme } from "./exportTheme";
 import type { ExportOptions } from "./exportTypes";
@@ -57,13 +57,7 @@ export async function runPageExport(input: RunExportInput): Promise<{ fileName: 
     includeSubpages: input.options.includeSubpages,
   });
 
-  let dbState: NotionState | null = null;
-  try {
-    const { loadKnownDatabaseState } = await import("@/widgets/database-view/model/knownDatabaseState");
-    dbState = loadKnownDatabaseState();
-  } catch {
-    // No database plane available (offline harness) — blocks degrade to text.
-  }
+  const dbState = await loadExportDatabaseState();
 
   // Styled HTML mirrors the user's live theme; every other path skips the DOM.
   const theme = input.options.format === "html" && input.options.styling !== "raw"
