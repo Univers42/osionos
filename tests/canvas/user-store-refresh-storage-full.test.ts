@@ -15,7 +15,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BRIDGE_KEY, fillPageCache, persisted, reset, resultKey, signIn, storage, stubBridge, userStore, useToastStore } from "./user-store-fixtures.ts";
+import { BRIDGE_KEY, fillPageCache, gate, leaseKey, persisted, reset, resultKey, signIn, storage, stubBridge, untilCalled, userStore, useToastStore } from "./user-store-fixtures.ts";
 
 const { useUserStore } = userStore;
 const RT = "osb_rt.u1-first.sig";
@@ -110,4 +110,20 @@ test("A4 a refreshed record that does not fit shows the notice once, however man
   await useUserStore.getState().refreshAccount("u1");
   signIn("u2", "osb_rt.u2-first.sig");
   assert.equal(stickyNotices().length, 1);
+});
+
+test("AL1 a lease refused by a full origin is written once the page caches make room", async () => {
+  reset();
+  signIn("u1", RT);
+  const cache = fillPageCache(4_000);
+  storage.fullWhilePageCached.add(leaseKey("u1"));
+  const answer = gate();
+  const calls = stubBridge({ refreshTo: RT2, held: answer.opened });
+  const flight = useUserStore.getState().refreshAccount("u1");
+  await untilCalled(calls);
+  assert.ok(storage.getItem(leaseKey("u1")), "the lease is held while the route answers");
+  assert.equal(storage.getItem(cache), null);
+  answer.open();
+  assert.equal(await flight, "refreshed");
+  assert.equal(storage.getItem(leaseKey("u1")), null, "and released after");
 });

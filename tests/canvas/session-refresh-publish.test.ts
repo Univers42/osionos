@@ -63,12 +63,13 @@ test("A3 P5 inverted: an adopt that throws still publishes, and the next run ado
   assert.deepEqual(sent, ["rt-old"]);
 });
 
-test("A3 the result goes through the publish writer the store hands in", async () => {
+test("A3 AL1 the lease and the result go through the writer the store hands in", async () => {
   const storage = new QuotaStorage();
+  storage.refused.add(leaseKey("u1"));
   storage.refused.add(resultKey("u1"));
-  const published: string[] = [];
-  const publish = (key: string, text: string) => { published.push(key); return storage.data.set(key, text) !== undefined; };
-  await runRefresh({ ...deps(storage, () => true), publish });
-  assert.deepEqual(published, [resultKey("u1")]);
+  const written: string[] = [];
+  const writeShared = (key: string, text: string) => { written.push(key); return storage.data.set(key, text) !== undefined; };
+  await runRefresh({ ...deps(storage, () => true), writeShared });
+  assert.deepEqual(written, [leaseKey("u1"), resultKey("u1")]);
   assert.equal(JSON.parse(storage.getItem(resultKey("u1")) ?? "{}").refreshToken, "rt-new");
 });
