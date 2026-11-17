@@ -34,6 +34,7 @@ import {
 } from "./objectDatabaseBridgeSync";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import { createKnownStateWriter, KNOWN_DATABASE_STATE_STORAGE_KEY } from "./knownDatabaseStorage";
+import { createFlushSchedule } from "./knownDatabaseFlushSchedule";
 import {
   deletedPageIdsBetween,
   loadPersistedKnownDatabaseState,
@@ -41,8 +42,6 @@ import {
 } from "./knownDatabasePersistedState";
 
 export { KNOWN_DATABASE_STATE_STORAGE_KEY };
-const KNOWN_DATABASE_STATE_FLUSH_DELAY_MS = 1000;
-const KNOWN_DATABASE_STATE_IDLE_TIMEOUT_MS = 2000;
 
 type KnownDatabaseStoreState = {
   state: NotionState;
@@ -70,16 +69,6 @@ const knownDatabaseAdapterCache = new Map<string, PersistableObjectDatabaseAdapt
  *  deletion from a fresh browser's not-yet-filled placeholder). */
 let deletedPageIds = new Set<string>();
 let pendingKnownDatabaseState: NotionState | null = null;
-let pendingKnownDatabaseStateMicrotask = false;
-let pendingKnownDatabaseStateDebounceHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
-let pendingKnownDatabaseStateIdleHandle: number | null = null;
-let pendingKnownDatabaseStateTimeoutHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
-
-type KnownDatabaseRequestIdleCallback = (
-  callback: IdleRequestCallback,
-  options?: IdleRequestOptions,
-) => number;
-type KnownDatabaseCancelIdleCallback = (handle: number) => void;
 
 export const useKnownDatabaseStateStore = create<KnownDatabaseStoreState>((set) => ({
   state: loadKnownDatabaseState(),
@@ -182,7 +171,7 @@ export function persistKnownDatabaseState(state: NotionState): NotionState {
 }
 
 export function flushKnownDatabaseStatePersist(pushNow = false) {
-  cancelKnownDatabaseStateFlush();
+  flushSchedule.cancel();
 
   if (!pendingKnownDatabaseState) return;
 
@@ -215,78 +204,11 @@ if (globalThis.window !== undefined) {
 // Makes room in the page caches when the origin is full (knownDatabaseStorage).
 const writeKnownState = createKnownStateWriter(() => flushKnownDatabaseStatePersist(true));
 
+const flushSchedule = createFlushSchedule(() => flushKnownDatabaseStatePersist());
+
 function scheduleKnownDatabaseStatePersist(state: NotionState) {
   pendingKnownDatabaseState = state;
-
-  if (pendingKnownDatabaseStateMicrotask) return;
-
-  pendingKnownDatabaseStateMicrotask = true;
-  queueMicrotask(() => {
-    pendingKnownDatabaseStateMicrotask = false;
-    scheduleDebouncedKnownDatabaseStateFlush();
-  });
-}
-
-function scheduleDebouncedKnownDatabaseStateFlush() {
-  if (pendingKnownDatabaseStateDebounceHandle !== null) {
-    globalThis.clearTimeout(pendingKnownDatabaseStateDebounceHandle);
-  }
-
-  pendingKnownDatabaseStateDebounceHandle = globalThis.setTimeout(() => {
-    pendingKnownDatabaseStateDebounceHandle = null;
-    scheduleIdleKnownDatabaseStateFlush();
-  }, KNOWN_DATABASE_STATE_FLUSH_DELAY_MS);
-}
-
-function scheduleIdleKnownDatabaseStateFlush() {
-  if (pendingKnownDatabaseStateIdleHandle !== null || pendingKnownDatabaseStateTimeoutHandle !== null) return;
-
-  const requestIdle = (globalThis as typeof globalThis & {
-    requestIdleCallback?: KnownDatabaseRequestIdleCallback;
-  }).requestIdleCallback;
-
-  if (requestIdle) {
-    // A busy (or headless) page may grant no idle period at all; without a
-    // timeout the save waited for the next edit or unload (seen: >8 s).
-    // Caveat: an edit is still unsaved for up to debounce + timeout (3 s); a
-    // tab crash in that window loses it (a normal close flushes on unload).
-    pendingKnownDatabaseStateIdleHandle = requestIdle(() => {
-      pendingKnownDatabaseStateIdleHandle = null;
-      flushKnownDatabaseStatePersist();
-    }, { timeout: KNOWN_DATABASE_STATE_IDLE_TIMEOUT_MS });
-    return;
-  }
-
-  pendingKnownDatabaseStateTimeoutHandle = globalThis.setTimeout(() => {
-    pendingKnownDatabaseStateTimeoutHandle = null;
-    flushKnownDatabaseStatePersist();
-  }, 0);
-}
-
-function cancelKnownDatabaseStateFlush() {
-  if (pendingKnownDatabaseStateDebounceHandle !== null) {
-    globalThis.clearTimeout(pendingKnownDatabaseStateDebounceHandle);
-    pendingKnownDatabaseStateDebounceHandle = null;
-  }
-
-  if (pendingKnownDatabaseStateTimeoutHandle !== null) {
-    globalThis.clearTimeout(pendingKnownDatabaseStateTimeoutHandle);
-    pendingKnownDatabaseStateTimeoutHandle = null;
-  }
-
-  if (pendingKnownDatabaseStateIdleHandle === null) return;
-
-  const cancelIdle = (globalThis as typeof globalThis & {
-    cancelIdleCallback?: KnownDatabaseCancelIdleCallback;
-  }).cancelIdleCallback;
-
-  if (cancelIdle) {
-    cancelIdle(pendingKnownDatabaseStateIdleHandle);
-  } else {
-    globalThis.clearTimeout(pendingKnownDatabaseStateIdleHandle);
-  }
-
-  pendingKnownDatabaseStateIdleHandle = null;
+  flushSchedule.schedule();
 }
 
 class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
