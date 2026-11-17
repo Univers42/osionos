@@ -39,14 +39,14 @@ interface HomeVariantState {
   setVariant: (variant: HomeVariant) => void;
 }
 
+const writeHomeView = noticingWriter("Home view");
+
 /**
  * The active Home surface (Dashboard / Second Brain / Database / Gallery).
  * Lifted to a shared store so the top-bar Home control can switch it from any
  * page while HomeTabView renders the matching surface — instead of the picker
  * floating above the Home content.
  */
-const writeHomeView = noticingWriter("Home view");
-
 export const useHomeVariantStore = create<HomeVariantState>((set) => ({
   variant: initialVariant(),
   setVariant: (variant) => {

@@ -89,12 +89,12 @@ function browserStorage(): SelectionStorage | null {
   }
 }
 
-/** The stored choice, or null when there is none (or it is unreadable). */
 /** A refused write is not a failure: the choice still holds for this session, and is shown. */
 function writeAiChoice(storage: SelectionStorage, key: string, text: string): void {
   noticingWriter("AI model choice", (name, value) => trySetItem(name, value, storage))(key, text);
 }
 
+/** The stored choice, or null when there is none (or it is unreadable). */
 export function readAiSelection(storage: SelectionStorage | null = browserStorage()): AiSelection | null {
   if (!storage) return null;
   try {

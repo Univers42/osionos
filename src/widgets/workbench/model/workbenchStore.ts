@@ -60,10 +60,10 @@ function safeGet(key: string): string | null {
   }
 }
 
-// Seeds dockOpen exactly once: only while our own blob is absent. Once the
-// store persists, the legacy key is never consulted again.
 const writePanelLayout = noticingWriter("Panel layout");
 
+// Seeds dockOpen exactly once: only while our own blob is absent. Once the
+// store persists, the legacy key is never consulted again.
 const seededStorage: StateStorage = {
   getItem: (name) => {
     const own = safeGet(name);

@@ -227,11 +227,11 @@ export function loadLayout(scope: string): { root: LayoutNode; activePaneId: str
   }
 }
 
+const writeWorkspaceLayout = noticingWriter('Workspace layout');
+
 /** Persist a tree under the scope that OWNS it. A missing scope means the tree
  *  belongs to nobody signed-in — never persisted — so a mid-switch commit can't
  *  write one identity's tabs into another identity's slot (the v1 bleed bug). */
-const writeWorkspaceLayout = noticingWriter('Workspace layout');
-
 export function saveLayout(state: { root: LayoutNode; activePaneId: string }, scope: string): void {
   if (!scope) return;
   writeWorkspaceLayout(layoutKeyForScope(scope), JSON.stringify({ root: state.root, activePaneId: state.activePaneId }));
