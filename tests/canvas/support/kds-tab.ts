@@ -37,7 +37,7 @@ import { isStepUpRead } from "./stub-bridge.ts";
 
 type Page = NotionState["pages"][string];
 type Database = NotionState["databases"][string];
-type Legacy = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+type Legacy = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
 
 export const EMPTY: NotionState = { databases: {}, pages: {}, views: {} } as unknown as NotionState;
 export const NO_SEEDS: ReadonlySet<string> = new Set();
@@ -92,6 +92,8 @@ export function memoryLegacy(initial: Record<string, string> = {}): Legacy & { v
   const values = new Map(Object.entries(initial));
   return {
     values,
+    get length() { return values.size; },
+    key: (index) => [...values.keys()][index] ?? null,
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => { values.set(key, value); },
     removeItem: (key) => { values.delete(key); },
