@@ -71,8 +71,17 @@ function hashesOf(state: NotionState): Map<string, string> {
   return hashes;
 }
 
+// A base holding neither a slice nor a record entry for a database (a hydrate added it after the
+// copy was read) needs it only when the live copy is dirty: a clean one is the server's copy, and
+// carrying every such database would put a large account's journal over the cap (devil R8, A2).
+function differsFromBase(dbKey: string, hash: string, input: JournalInput, base: JournalBase): boolean {
+  const baseHash = hashesOf(base.state).get(dbKey);
+  if (baseHash === undefined && base.record[dbKey] === undefined) return input.record[dbKey] !== hash;
+  return baseHash !== hash || base.record[dbKey] !== input.record[dbKey];
+}
+
 function differsFromAnyBase(dbKey: string, hash: string, input: JournalInput): boolean {
-  return input.landable.some((base) => hashesOf(base.state).get(dbKey) !== hash || base.record[dbKey] !== input.record[dbKey]);
+  return input.landable.some((base) => differsFromBase(dbKey, hash, input, base));
 }
 
 /** The journal for this unload, or null when no database differs from any base (or none exists). */

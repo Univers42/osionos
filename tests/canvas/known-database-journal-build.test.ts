@@ -51,6 +51,15 @@ test("journal: a database the record never held is carried without a record entr
   assert.deepEqual(built?.record, {});
 });
 
+// A2 (devil R8): a hydrate adds databases no base holds; a clean one is the server's copy.
+test("journal: a clean database no base holds stays out, a dirty one is carried", () => {
+  const live = withDb(L, "db-z", ["z"]);
+  assert.equal(build(live, [base("earlier:1")], { ...REC, "db-z": hashOf(live, "db-z") }), null);
+  const stale = build(live, [base("earlier:1")], { ...REC, "db-z": "older" });
+  assert.deepEqual(Object.keys(stale?.slices ?? {}), ["db-z"]);
+  assert.deepEqual(stale?.record, { "db-z": "older" });
+});
+
 test("journal: no base at all → no journal", () => {
   assert.equal(build(withDb(L, "db-x", ["a", "b-1"]), []), null);
 });
