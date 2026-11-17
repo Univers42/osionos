@@ -147,6 +147,9 @@ export interface RefreshDeps {
    *  out here while the route answered, so the result is not published (ADR 0056 S3). */
   adopt: (tokens: RefreshedTokens) => boolean | void;
   signOut: (code: string) => void;
+  /** Writes the result for the other tabs; the store hands in a writer that makes room on a full
+   *  origin (ADR 0056 A3). Without one, `storage.setItem`, dropped when it throws. */
+  publish?: (key: string, text: string) => boolean | void;
   storage?: RefreshStorage | null;
   now?: () => number;
   wait?: (ms: number) => Promise<void>;
@@ -215,11 +218,27 @@ function releaseLease(deps: RefreshDeps, owner: string) {
   if (readJson<Lease>(deps.storage, leaseKey(deps.userId))?.owner === owner) remove(deps.storage, leaseKey(deps.userId));
 }
 
+function publishResult(deps: RefreshDeps, published: Published) {
+  if (deps.publish) deps.publish(resultKey(deps.userId), JSON.stringify(published));
+  else writeJson(deps.storage, resultKey(deps.userId), published);
+}
+
+/** The route has already rotated, so the result is published even when adopting throws: without it
+ *  the next run sends the rotated-out token and the server reads that as reuse (ADR 0056 A3, P5). */
+function adoptAndPublish(deps: RefreshDeps, tokens: RefreshedTokens, prev: string) {
+  let kept: boolean | void = true;
+  try {
+    kept = deps.adopt(tokens);
+  } finally {
+    if (kept !== false) publishResult(deps, { prev, ...tokens });
+  }
+}
+
 async function rotateHolding(deps: RefreshDeps, refreshToken: string): Promise<RefreshOutcome> {
   const result = await deps.rotate(refreshToken);
   if (result.ok) {
     const tokens = { accessToken: result.accessToken, refreshToken: result.refreshToken, expiresAt: result.expiresAt };
-    if (deps.adopt(tokens) !== false) writeJson(deps.storage, resultKey(deps.userId), { prev: refreshToken, ...tokens } satisfies Published);
+    adoptAndPublish(deps, tokens, refreshToken);
     return 'refreshed';
   }
   if (!isFinalRefreshFailure(result.code)) return 'kept';

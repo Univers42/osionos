@@ -39,6 +39,9 @@ register(`data:text/javascript,${encodeURIComponent(LOADER)}`, import.meta.url);
 
 const memory = new Map<string, string>();
 Reflect.set(globalThis, "window", globalThis);
+// The fake window needs the listener API: the user store now reaches pageStore.helpers, whose
+// module body registers its pagehide flush once a window exists.
+Reflect.set(globalThis, "addEventListener", () => {});
 Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
   value: {

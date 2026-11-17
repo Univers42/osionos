@@ -44,6 +44,7 @@ import {
   type LogoutNotice,
 } from '@/features/auth/model/bridgeLogout';
 import { selectActivatedSessions } from '@/features/auth/model/sessionSelect';
+import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 import {
   clearRefreshCoordination,
   createSingleFlight,
@@ -102,7 +103,7 @@ function readPersistedContext(): PersistedUserContext {
 
 function savePersistedContext(context: PersistedUserContext) {
   if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(ACTIVE_CONTEXT_STORAGE_KEY, JSON.stringify(context));
+  setItemEvictingPageCaches(ACTIVE_CONTEXT_STORAGE_KEY, JSON.stringify(context));
 }
 
 function readPersistedWorkspaces(): Record<string, Workspace[]> {
@@ -120,7 +121,7 @@ function savePersistedWorkspaces(sessions: Record<string, UserSession>) {
   const workspacesByUser = Object.fromEntries(
     Object.entries(sessions).map(([userId, session]) => [userId, session.privateWorkspaces]),
   );
-  localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(workspacesByUser));
+  setItemEvictingPageCaches(WORKSPACES_STORAGE_KEY, JSON.stringify(workspacesByUser));
   // Keep the bridge-session records' workspace lists in sync with the live sessions:
   // the boot path restores from those records, so a create/join/rename/delete that
   // updated `sessions` must also land there, otherwise a reload resurrects a stale list.
@@ -163,7 +164,7 @@ function withoutPassword<P extends { password: string }>(persona: P): P {
 function savePersistedPersonas(personas: typeof INITIAL_PERSONAS) {
   if (typeof localStorage === 'undefined') return;
   const persisted = personas.filter((persona) => persona.persistInSessions).map(withoutPassword);
-  localStorage.setItem(ACTIVE_ACCOUNTS_STORAGE_KEY, JSON.stringify(persisted));
+  setItemEvictingPageCaches(ACTIVE_ACCOUNTS_STORAGE_KEY, JSON.stringify(persisted));
 }
 
 // Bridge sessions are persisted as a MAP keyed by userId so MULTIPLE accounts
@@ -199,7 +200,17 @@ function readPersistedBridgeSessions(): Record<string, PersistedBridgeSession> {
 function savePersistedBridgeSessions(map: Record<string, PersistedBridgeSession>) {
   if (typeof localStorage === 'undefined') return;
   const scrubbed = Object.fromEntries(Object.entries(map).map(([userId, record]) => [userId, { ...record, persona: withoutPassword(record.persona) }]));
-  localStorage.setItem(BRIDGE_SESSION_STORAGE_KEY, JSON.stringify(scrubbed));
+  if (!setItemEvictingPageCaches(BRIDGE_SESSION_STORAGE_KEY, JSON.stringify(scrubbed))) noticeSessionNotKept();
+}
+
+const SESSION_NOT_KEPT_DESCRIPTION = "Your sign-in can't be kept across a reload. Keep this tab open, or free browser storage and sign in again.";
+
+// A sign-in held only in memory ends at the next reload, so it is said before, and it stays on
+// screen (ADR 0056 A4). One at a time: every refresh tick retries the write.
+function noticeSessionNotKept() {
+  const toasts = useToastStore.getState();
+  if (toasts.toasts.some((toast) => toast.description === SESSION_NOT_KEPT_DESCRIPTION)) return;
+  toasts.push({ kind: 'error', title: 'Browser storage is full', description: SESSION_NOT_KEPT_DESCRIPTION, durationMs: null });
 }
 
 function savePersistedBridgeSession(record: PersistedBridgeSession) {
@@ -471,8 +482,9 @@ function applyRefreshed(userId: string, tokens: RefreshedTokens) {
   const base = live ?? readPersistedBridgeSessions()[userId]?.session;
   if (!base) return;
   const session: UserSession = { ...base, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
-  persistRefreshed(session, tokens);
+  // Memory first: a record that cannot be written must not cost this tab the rotated pair (ADR 0056 A2).
   if (live) useUserStore.setState((state) => ({ sessions: { ...state.sessions, [userId]: session } }));
+  persistRefreshed(session, tokens);
 }
 
 /** A step-up (2FA verify or disable) answered a new access token, and a refresh token of a NEW
@@ -516,6 +528,7 @@ const refreshOne = (userId: string): Promise<RefreshOutcome> => {
       return userId in readPersistedBridgeSessions();
     },
     signOut: (code) => { if (unchanged()) dropRefreshed(userId, code); },
+    publish: (key, text) => setItemEvictingPageCaches(key, text),
   });
 };
 

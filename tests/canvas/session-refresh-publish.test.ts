@@ -47,3 +47,28 @@ test("S3 an adopt that keeps the record still publishes the result", async () =>
   await runRefresh(deps(storage, () => true));
   assert.equal(JSON.parse(storage.getItem(resultKey("u1")) ?? "{}").refreshToken, "rt-new");
 });
+
+test("A3 P5 inverted: an adopt that throws still publishes, and the next run adopts with no second rotate", async () => {
+  const storage = new QuotaStorage();
+  const sent: string[] = [];
+  let throws = true;
+  const adopt = () => {
+    if (!throws) return true;
+    throws = false;
+    throw new DOMException("Setting the value exceeded the quota.", "QuotaExceededError");
+  };
+  await assert.rejects(runRefresh(deps(storage, adopt, sent)));
+  assert.equal(JSON.parse(storage.getItem(resultKey("u1")) ?? "{}").prev, "rt-old");
+  assert.equal(await runRefresh(deps(storage, adopt, sent)), "adopted");
+  assert.deepEqual(sent, ["rt-old"]);
+});
+
+test("A3 the result goes through the publish writer the store hands in", async () => {
+  const storage = new QuotaStorage();
+  storage.refused.add(resultKey("u1"));
+  const published: string[] = [];
+  const publish = (key: string, text: string) => { published.push(key); return storage.data.set(key, text) !== undefined; };
+  await runRefresh({ ...deps(storage, () => true), publish });
+  assert.deepEqual(published, [resultKey("u1")]);
+  assert.equal(JSON.parse(storage.getItem(resultKey("u1")) ?? "{}").refreshToken, "rt-new");
+});
