@@ -197,10 +197,14 @@ function readPersistedBridgeSessions(): Record<string, PersistedBridgeSession> {
   }
 }
 
+function writePersistedBridgeSessions(map: Record<string, PersistedBridgeSession>): boolean {
+  const scrubbed = Object.fromEntries(Object.entries(map).map(([userId, record]) => [userId, { ...record, persona: withoutPassword(record.persona) }]));
+  return setItemEvictingPageCaches(BRIDGE_SESSION_STORAGE_KEY, JSON.stringify(scrubbed));
+}
+
 function savePersistedBridgeSessions(map: Record<string, PersistedBridgeSession>) {
   if (typeof localStorage === 'undefined') return;
-  const scrubbed = Object.fromEntries(Object.entries(map).map(([userId, record]) => [userId, { ...record, persona: withoutPassword(record.persona) }]));
-  if (!setItemEvictingPageCaches(BRIDGE_SESSION_STORAGE_KEY, JSON.stringify(scrubbed))) noticeSessionNotKept();
+  if (!writePersistedBridgeSessions(map)) noticeSessionNotKept();
 }
 
 const SESSION_NOT_KEPT_DESCRIPTION = "Your sign-in can't be kept across a reload. Keep this tab open, or free browser storage and sign in again.";
@@ -226,10 +230,13 @@ function clearPersistedBridgeSession(userId?: string) {
     return;
   }
   const map = readPersistedBridgeSessions();
-  if (map[userId]) {
-    delete map[userId];
-    savePersistedBridgeSessions(map);
-  }
+  if (!map[userId]) return;
+  delete map[userId];
+  if (writePersistedBridgeSessions(map)) return;
+  // The old map still holds this account's refresh token, so it goes whole (ADR 0056 LV1). Its
+  // room then usually takes the smaller map; only if not are the other accounts memory-only.
+  localStorage.removeItem(BRIDGE_SESSION_STORAGE_KEY);
+  if (Object.keys(map).length > 0 && !writePersistedBridgeSessions(map)) noticeSessionNotKept();
 }
 
 function uniquePersonas(personas: typeof INITIAL_PERSONAS) {
