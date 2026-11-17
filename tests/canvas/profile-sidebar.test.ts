@@ -140,3 +140,9 @@ test("the README prompt is the owner's, and only while the README card has nothi
   assert.equal(showsReadmePrompt(withBlocks, true), false);
   assert.equal(showsReadmePrompt(truncated, true), false);
 });
+
+test("a link fact carries the kind its host picks, so the sidebar draws that icon", () => {
+  const profile = { ...(FULL as object), website: "https://ada.example.com", links: ["https://github.com/ada", "https://www.linkedin.com/in/ada"] } as never;
+  const links = build(profile).facts.filter((fact: { id: string }) => fact.id.startsWith("link:"));
+  assert.deepEqual(links.map((fact: { kind: string }) => fact.kind), ["site", "github", "linkedin"]);
+});

@@ -35,7 +35,7 @@ import { BindingProvider, toBoundRecord, toReadmeRecord } from "./model/binding"
 import { useProfile } from "./useProfile";
 
 export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
-  const { profile } = useProfile(userId);
+  const { profile, reload } = useProfile(userId);
   const activeUserId = useUserStore((state) => state.activeUserId);
   const storeProfession = useProfessionStore((state) => state.profession);
   // The subject's profession is the server's when it carries one; for the member
@@ -57,7 +57,7 @@ export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
   // opt-in, and it is not gated on osio.profile.template.
   if (professionBlocks) {
     return (
-      <ProfileFrame userId={userId} profile={profile}>
+      <ProfileFrame userId={userId} profile={profile} onSaved={reload}>
         <button
           type="button"
           data-testid="profession-repick"

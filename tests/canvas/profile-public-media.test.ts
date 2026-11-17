@@ -51,6 +51,13 @@ test("mergePublicFields: absolute URLs, other paths and nulls are kept", () => {
   assert.equal(mergePublicFields(BASE, { bannerUrl: "/elsewhere/b.png" }).bannerUrl, "/elsewhere/b.png");
 });
 
+test("mergePublicFields: the card's display name replaces the legacy name, an empty one does not", () => {
+  const base = { userId: "user-a", username: "ada", name: "Old Name" } as never;
+  assert.equal(mergePublicFields(base, { displayName: "Ada Lovelace" }).name, "Ada Lovelace");
+  assert.equal(mergePublicFields(base, { displayName: "  " }).name, "Old Name");
+  assert.equal(mergePublicFields(base, {}).name, "Old Name");
+});
+
 test("isSafeImageSource: https, a same-origin path and the bridge's media are drawn", () => {
   assert.ok(isSafeImageSource("https://cdn.example.com/a.png"));
   assert.ok(isSafeImageSource("/api/media/avatars/a.webp"));

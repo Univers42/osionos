@@ -19,6 +19,7 @@
 import React, { useEffect, useState } from "react";
 import { Building2, Clock, Link2, MapPin } from "lucide-react";
 
+import { LINK_KIND_ICON } from "@/features/settings/profile/linkKindIcons";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ProfileActions } from "./profileChrome";
 import { buildSidebar, type PromptField, type SidebarFact, type SidebarModel } from "./model/sidebarModel";
@@ -40,7 +41,7 @@ function useMinuteClock(): Date {
 }
 
 const FactRow: React.FC<{ fact: SidebarFact }> = ({ fact }) => {
-  const Icon = FACT_ICON[fact.id] ?? Link2;
+  const Icon = FACT_ICON[fact.id] ?? (fact.kind ? LINK_KIND_ICON[fact.kind] : Link2);
   return (
     <li className="flex min-w-0 items-center gap-2">
       <Icon size={16} aria-hidden />
@@ -84,9 +85,10 @@ interface ProfileSidebarProps {
   profile: MemberProfile;
   isOwner: boolean;
   onAdd: (field: PromptField) => void;
+  onEdit: () => void;
 }
 
-export const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ userId, profile, isOwner, onAdd }) => {
+export const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ userId, profile, isOwner, onAdd, onEdit }) => {
   const now = useMinuteClock();
   const model = buildSidebar(profile, { isOwner, now });
   return (
@@ -104,7 +106,7 @@ export const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ userId, profile,
       {model.bio && <p className="mt-2 whitespace-pre-line break-words text-sm text-[var(--osio-fg-default)]">{model.bio}</p>}
       {model.status && <StatusLine status={model.status} />}
       <p className="mt-2 text-sm text-[var(--osio-fg-muted)]">{model.presence}</p>
-      <ProfileActions userId={userId} name={model.name} />
+      <ProfileActions userId={userId} name={model.name} onEdit={onEdit} />
       <Prompts model={model} onAdd={onAdd} />
       {model.facts.length > 0 && (
         <ul className="mt-6 space-y-1 text-sm text-[var(--osio-fg-muted)]">

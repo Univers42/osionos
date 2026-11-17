@@ -20,6 +20,7 @@
  * unknown zone yields no time rather than a wrong one.
  */
 
+import { linkKind, type LinkKind } from "@/features/settings/profile/linkKinds";
 import type { MemberProfile } from "../useProfile";
 import { activeStatus, type ShownStatus } from "./profileStatus";
 
@@ -29,6 +30,8 @@ export interface SidebarFact {
   id: string;
   label: string;
   href?: string;
+  /** Set on link facts: the site the host names, which picks the icon. */
+  kind?: LinkKind;
 }
 
 export interface SidebarPrompt {
@@ -74,7 +77,7 @@ function linkFacts(profile: MemberProfile): SidebarFact[] {
   const hrefs = [profile.website, ...(profile.links ?? [])].filter((raw): raw is string => !!raw);
   return hrefs.flatMap((href, index) => {
     const host = linkHost(href);
-    return host ? [{ id: `link:${index}`, label: host, href }] : [];
+    return host ? [{ id: `link:${index}`, label: host, href, kind: linkKind(href) }] : [];
   });
 }
 

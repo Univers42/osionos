@@ -26,11 +26,11 @@ import { OwnerActions } from "./OwnerActions";
  * when viewing someone else. Used by both the built-in ProfileView (fallback)
  * and the admin-template ProfilePageView so the DM/connect logic lives once.
  */
-export function ProfileActions({ userId, name }: { userId: string; name: string }): React.ReactElement | null {
+export function ProfileActions({ userId, name, onEdit }: { userId: string; name: string; onEdit?: () => void }): React.ReactElement | null {
   const activeUserId = useUserStore((s) => s.activeUserId);
   const moreRef = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  if (userId === activeUserId) return <OwnerActions />;
+  if (userId === activeUserId) return <OwnerActions onEdit={onEdit} />;
 
   const startDm = () => {
     openDm(userId)

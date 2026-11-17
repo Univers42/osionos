@@ -32,7 +32,7 @@ interface ProfileViewProps {
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
-  const { profile, error } = useProfile(userId);
+  const { profile, error, reload } = useProfile(userId);
   const readmeRecord = useMemo(() => toReadmeRecord(profile), [profile]);
   const isOwner = useUserStore((s) => s.activeUserId) === userId;
 
@@ -52,7 +52,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
   }
 
   return (
-    <ProfileFrame userId={userId} profile={profile}>
+    <ProfileFrame userId={userId} profile={profile} onSaved={reload}>
       <ReadmeBlocks readme={profile.readme} record={readmeRecord} />
       {showsReadmePrompt(profile, isOwner) && <ReadmePrompt />}
       <ProfileSharedPosts userId={userId} />

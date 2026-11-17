@@ -12,28 +12,66 @@
 
 /**
  * Shell + sidebar for one member's page, shared by the default view and the profession
- * branch so the identity column is written once. The empty-section prompts route to
- * Settings until the page edits in place.
+ * branch. The owner's Edit profile (and each empty-section prompt) swaps the sidebar for the
+ * shared edit form in place; leaving it puts focus back on the Edit button.
  */
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { useUserStore } from "@/features/auth";
-import { openSettings } from "@/features/settings/model/settingsNav";
+import { PublicProfileEditor } from "@/features/settings/profile/PublicProfileEditor";
+import { UsernameModal } from "@/features/settings/profile/ProfileSecurityModals";
 import { ProfileShell } from "./ProfileShell";
 import { ProfileSidebar } from "./ProfileSidebar";
+import { activeStatus } from "./model/profileStatus";
 import type { MemberProfile } from "./useProfile";
 
 interface ProfileFrameProps {
   userId: string;
   profile: MemberProfile | null;
+  /** Re-reads the page's profile after a save, a photo change or a username change. */
+  onSaved?: () => void;
   children: React.ReactNode;
 }
 
-export const ProfileFrame: React.FC<ProfileFrameProps> = ({ userId, profile, children }) => {
+interface Editing {
+  field?: string;
+}
+
+function useEditFocusReturn(editing: Editing | null): void {
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (wasEditing.current && !editing) document.querySelector<HTMLElement>("[data-profile-edit]")?.focus();
+    wasEditing.current = editing !== null;
+  }, [editing]);
+}
+
+export const ProfileFrame: React.FC<ProfileFrameProps> = ({ userId, profile, onSaved, children }) => {
   const isOwner = useUserStore((s) => s.activeUserId) === userId;
-  const sidebar = profile && (
-    <ProfileSidebar userId={userId} profile={profile} isOwner={isOwner} onAdd={() => openSettings("profile", "public-profile")} />
-  );
-  return <ProfileShell bannerUrl={profile?.bannerUrl} sidebar={sidebar}>{children}</ProfileShell>;
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const [changingUsername, setChangingUsername] = useState(false);
+  useEditFocusReturn(editing);
+
+  const leave = () => { setEditing(null); onSaved?.(); };
+  const stored = profile && activeStatus(profile.status, new Date()) ? profile.status ?? null : null;
+
+  const sidebar = profile && (editing && isOwner ? (
+    <>
+      <PublicProfileEditor
+        saveLabel="Save"
+        discardLabel="Cancel"
+        discardAlways
+        status={stored}
+        focusField={editing.field ?? "displayName"}
+        onChangeUsername={() => setChangingUsername(true)}
+        onDone={leave}
+      />
+      {changingUsername && profile.username && (
+        <UsernameModal current={profile.username} onClose={() => { setChangingUsername(false); onSaved?.(); }} />
+      )}
+    </>
+  ) : (
+    <ProfileSidebar userId={userId} profile={profile} isOwner={isOwner} onEdit={() => setEditing({})} onAdd={(field) => setEditing({ field })} />
+  ));
+  return <ProfileShell bannerUrl={profile?.bannerUrl} sidebar={sidebar} wideSidebar={Boolean(editing && isOwner)}>{children}</ProfileShell>;
 };

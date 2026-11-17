@@ -70,6 +70,8 @@ export function mergePublicFields(base: MemberProfile, pub: Record<string, unkno
   const merged: Record<string, unknown> = { ...base };
   for (const key of PUBLIC_FIELD_KEYS) if (key in pub) merged[key] = pub[key];
   if ('status' in pub) merged.status = parseStatus(pub.status);
+  // The name the owner just saved lives on the card; the legacy route's copy would show the old one.
+  if (typeof pub.displayName === 'string' && pub.displayName.trim()) merged.name = pub.displayName;
   for (const key of ['avatarUrl', 'bannerUrl'] as const) {
     if (typeof merged[key] === 'string') merged[key] = bridgeMediaUrl(merged[key] as string);
   }
