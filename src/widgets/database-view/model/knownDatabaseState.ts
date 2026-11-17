@@ -33,8 +33,15 @@ import {
   type ObjectDatabaseSyncHooks,
 } from "./objectDatabaseBridgeSync";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
-import { createKnownStateWriter, KNOWN_DATABASE_STATE_STORAGE_KEY } from "./knownDatabaseStorage";
+import {
+  createKeptStateReporter,
+  createKnownStateWriter,
+  KNOWN_DATABASE_STATE_STORAGE_KEY,
+  warnReadOnlyDatabases,
+} from "./knownDatabaseStorage";
 import { createFlushSchedule } from "./knownDatabaseFlushSchedule";
+import { createKnownDatabasePersistence, type KnownDatabasePersistence } from "./knownDatabasePersistence";
+import { flushWhenHidden, openKnownDatabaseDurableCopy } from "./knownDatabaseDurableStore";
 import {
   deletedPageIdsBetween,
   loadPersistedKnownDatabaseState,
@@ -69,17 +76,24 @@ const knownDatabaseAdapterCache = new Map<string, PersistableObjectDatabaseAdapt
  *  deletion from a fresh browser's not-yet-filled placeholder). */
 let deletedPageIds = new Set<string>();
 let pendingKnownDatabaseState: NotionState | null = null;
+/** The durable copy's side of the store; null without a window (tests, prerender). */
+let persistence: KnownDatabasePersistence | null = null;
+/** I9, I7: a write before the stored copy is read, or in a pull-only tab, does nothing. */
+const isWritable = (): boolean => persistence?.canWrite() ?? true;
 
 export const useKnownDatabaseStateStore = create<KnownDatabaseStoreState>((set) => ({
-  state: loadKnownDatabaseState(),
-  replaceState: (state) => set({ state: persistKnownDatabaseState(state) }),
+  state: seedSnapshot(), // the stored copy replaces it at readiness (restoreStoredState)
+  replaceState: (state) => {
+    if (isWritable()) set({ state: persistKnownDatabaseState(state) });
+  },
   resetState: () => {
+    if (!isWritable()) return;
     deletedPageIds = new Set();
     set({ state: persistKnownDatabaseState(seedSnapshot()) });
   },
   updatePageProperty: (pageId, propertyId, value) => set((current) => {
     const page = current.state.pages[pageId];
-    if (!page) return current;
+    if (!page || !isWritable()) return current;
     return {
       state: persistKnownDatabaseState({
         ...current.state,
@@ -136,23 +150,30 @@ function withStatusDefaults(state: NotionState): NotionState {
   return changed ? { ...state, databases } : state;
 }
 
-export function loadKnownDatabaseState(): NotionState {
-  const seeded = seedSnapshot();
-  if (pendingKnownDatabaseState) return cloneState(pendingKnownDatabaseState);
-  if (globalThis.window === undefined) return seeded;
+/** Resolves once the store holds this browser's stored copy instead of the seed. */
+export function whenKnownDatabaseReady(): Promise<void> {
+  return persistence?.ready ?? Promise.resolve();
+}
 
+/** A copy of the store's state; it holds the stored data only after whenKnownDatabaseReady(). */
+export function loadKnownDatabaseState(): NotionState {
+  return cloneState(useKnownDatabaseStateStore.getState().state);
+}
+
+/** I9: the stored copy replaces the whole store, tombstones included; the seed when none. */
+function restoreStoredState(text: string | null): void {
+  const restored = text ? readStoredState(text) : null;
+  deletedPageIds = restored?.deletedPageIds ?? new Set();
+  useKnownDatabaseStateStore.setState({ state: restored?.state ?? seedSnapshot() });
+  notifyObjectDatabaseAdaptersReloaded();
+}
+
+function readStoredState(text: string): { state: NotionState; deletedPageIds: Set<string> } | null {
   try {
-    const raw = globalThis.localStorage.getItem(KNOWN_DATABASE_STATE_STORAGE_KEY);
-    if (!raw) {
-      deletedPageIds = new Set();
-      return seeded;
-    }
-    const loaded = loadPersistedKnownDatabaseState(raw, seeded);
-    deletedPageIds = loaded.deletedPageIds;
-    return withStatusDefaults(rebaseHomeDemoDates(loaded.state));
+    const loaded = loadPersistedKnownDatabaseState(text, seedSnapshot());
+    return { state: withStatusDefaults(rebaseHomeDemoDates(loaded.state)), deletedPageIds: loaded.deletedPageIds };
   } catch {
-    deletedPageIds = new Set();
-    return seeded;
+    return null;
   }
 }
 
@@ -162,6 +183,7 @@ export function getDeletedPageIds(): ReadonlySet<string> {
 }
 
 export function persistKnownDatabaseState(state: NotionState): NotionState {
+  if (!isWritable()) return state;
   // No clone here: `state` is built immutably by every caller (zustand set
   // replaces objects, never mutates), so recording the ref is safe until the
   // debounced flush snapshots it. Cloning here ran structuredClone over the
@@ -178,6 +200,10 @@ export function flushKnownDatabaseStatePersist(pushNow = false) {
   const pendingState = pendingKnownDatabaseState;
   pendingKnownDatabaseState = null;
 
+  if (persistence?.mode() === "idb") {
+    persistence.flush(pendingState, pushNow);
+    return;
+  }
   if (globalThis.window !== undefined) {
     // No snapshot: the store replaces objects and never mutates them (see
     // persistKnownDatabaseState), so the pending ref is already a stable
@@ -201,8 +227,10 @@ if (globalThis.window !== undefined) {
   globalThis.addEventListener("pagehide", () => flushKnownDatabaseStatePersist(true));
 }
 
-// Makes room in the page caches when the origin is full (knownDatabaseStorage).
-const writeKnownState = createKnownStateWriter(() => flushKnownDatabaseStatePersist(true));
+// Makes room in the page caches when the origin is full (knownDatabaseStorage). The durable
+// copy's failed commit raises the same warning and unload guard (K9).
+const reportKeptState = createKeptStateReporter(() => flushKnownDatabaseStatePersist(true));
+const writeKnownState = createKnownStateWriter(() => flushKnownDatabaseStatePersist(true), undefined, reportKeptState);
 
 const flushSchedule = createFlushSchedule(() => flushKnownDatabaseStatePersist());
 
@@ -605,11 +633,16 @@ function pruneDeletedPageIds(stillNeeded: ReadonlySet<string>): void {
 }
 
 const objectDatabaseSyncHooks: ObjectDatabaseSyncHooks = {
+  whenReady: whenKnownDatabaseReady,
   getSeedIds: seedDatabaseIds,
   getLiveState: () => useKnownDatabaseStateStore.getState().state,
   getDeletedPageIds: () => deletedPageIds,
   pruneDeletedPageIds,
-  applyMerged: (state) => useKnownDatabaseStateStore.getState().replaceState(state),
+  // A pull-only tab still shows the server's copy; it only never writes it back (I7).
+  applyMerged: (state) => {
+    if (persistence?.mode() === "fallback-flagged") useKnownDatabaseStateStore.setState({ state });
+    else useKnownDatabaseStateStore.getState().replaceState(state);
+  },
   notifyReloaded: notifyObjectDatabaseAdaptersReloaded,
   reconcileRegistry: reconcileObjectDatabaseRegistry,
 };
@@ -622,6 +655,23 @@ export function startObjectDatabaseSync(): void {
 }
 
 export { resetObjectDatabaseSync } from "./objectDatabaseBridgeSync";
+
+// K2: one durable copy per tab, opened at module evaluation.
+if (globalThis.window !== undefined) {
+  const liveState = (): NotionState => useKnownDatabaseStateStore.getState().state;
+  persistence = createKnownDatabasePersistence({
+    durable: openKnownDatabaseDurableCopy(),
+    load: restoreStoredState,
+    getLiveState: liveState,
+    serialize: (state) => serializeKnownDatabaseState(state, deletedPageIds),
+    pushLive: () => pushDirtyObjectDatabases(liveState(), seedDatabaseIds(), deletedPageIds),
+    reportCommit: reportKeptState,
+    warnReadOnly: warnReadOnlyDatabases,
+  });
+  flushWhenHidden(() => {
+    if (persistence?.mode() === "idb") flushKnownDatabaseStatePersist();
+  });
+}
 
 function createId(prefix: string): string {
   if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`;
