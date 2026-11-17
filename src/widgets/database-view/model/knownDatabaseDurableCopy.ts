@@ -19,6 +19,7 @@
 
 import type { KeyValueStore } from "@/shared/lib/key-value-store/indexedKeyValueStore";
 import { setItemEvictingPageCaches, type PageCacheStorage } from "@/store/pageStore.helpers";
+import { createCommitLedger, type CommitLedger, type CommitLedgerTracker } from "./knownDatabaseCommitLedger";
 
 // Same literals as knownDatabaseStorage.ts and objectDatabasePushBaseline.ts, which import the
 // toast layer; this module stays free of it so it loads in the canvas tests.
@@ -52,6 +53,8 @@ export interface DurableCopy {
   commit(stateRef: object, text: string, record: Readonly<Record<string, string>>): Promise<boolean>;
   /** I1 strict gate. Writes the record alone, or nothing. Resolves whether it wrote. */
   commitRecord(liveRef: object, record: Readonly<Record<string, string>>): Promise<boolean>;
+  /** The ids this copy may hold next, as far as this tab knows (ADR 0055 J-C1). */
+  ledger(): CommitLedger;
   close(): void;
 }
 
@@ -124,17 +127,19 @@ function migratedEntries(text: string, map: Record<string, string>, id: string):
 // A stored "migrated" copy next to a legacy key that was never retired means an earlier migration
 // was abandoned by the budget before it could retire its source: the legacy copy kept receiving
 // edits, so it is the newer one and is migrated again.
-async function decideInitialCopy(store: KeyValueStore, options: DurableCopyOptions, isAbandoned: () => boolean): Promise<LoadedCopy> {
+async function decideInitialCopy(store: KeyValueStore, options: DurableCopyOptions, session: Session): Promise<LoadedCopy> {
   const { legacy } = options;
+  const isAbandoned = () => session.abandoned;
   const source = snapshotLegacy(legacy);
   let loaded = loadedFrom(null, undefined);
   await store.update(["state", "pushed"], current => {
     const found = current.get("state");
     const redo = isState(found) && isMigratedId(found.id) && !source.isRetired && source.text !== null;
-    if (isState(found) && !redo) { loaded = loadedFrom(found, current.get("pushed")); return null; }
+    if (isState(found) && !redo) { loaded = loadedFrom(found, current.get("pushed")); session.ledger.loaded(found.id); return null; }
     // An abandoned session is a fallback one and must not write (I7).
     if (source.text === null || isAbandoned()) return null;
     loaded = { mode: "idb", text: source.text, record: source.map };
+    session.ledger.loaded(migratedId(options.tabId));
     return migratedEntries(source.text, source.map, migratedId(options.tabId));
   }, { durability: "strict" });
   // An abandoned session keeps writing the legacy keys; retiring them would orphan its edits.
@@ -147,10 +152,8 @@ interface Session {
   mode: DurableCopyMode | "pending";
   abandoned: boolean;
   seq: number;
-  pending: number;
   failed: boolean;
-  committedRef: object | null;
-  committedId: string | null;
+  ledger: CommitLedgerTracker;
   chain: Promise<unknown>;
 }
 
@@ -178,7 +181,7 @@ function startReady(session: Session, options: DurableCopyOptions): Promise<Load
       .then(opened => {
         if (session.abandoned) { opened.close(); return null; }
         session.store = opened;
-        return decideInitialCopy(opened, options, () => session.abandoned);
+        return decideInitialCopy(opened, options, session);
       })
       .then(settle, () => settle(null));
   });
@@ -196,43 +199,47 @@ function commitState(session: Session, tabId: string, stateRef: object, text: st
   if (session.mode !== "idb" || !target) return Promise.resolve(false);
   const id = `${tabId}:${++session.seq}`;
   const map = { ...record };
-  session.pending += 1;
+  session.ledger.started({ id, stateRef, record: map });
   return enqueue(session, () => target.update([], () => ({
     state: { text, id } satisfies StoredState,
     pushed: { map, stateId: id } satisfies StoredPushed,
   }), { durability: "strict" })).then(
-    () => { session.committedRef = stateRef; session.committedId = id; session.failed = false; return true; },
-    () => { session.failed = true; return false; },
-  ).finally(() => { session.pending -= 1; });
+    () => { session.ledger.settled(id, true); session.failed = false; return true; },
+    () => { session.ledger.settled(id, false); session.failed = true; return false; },
+  );
 }
 
 function canCommitRecord(session: Session, liveRef: object): boolean {
-  return session.mode === "idb" && session.store !== null && session.committedId !== null
-    && liveRef === session.committedRef && session.pending === 0 && !session.failed;
+  return session.mode === "idb" && session.store !== null && liveRef === session.ledger.lastResolved?.stateRef
+    && session.ledger.pendingCount === 0 && !session.failed;
 }
 
 function commitPushRecord(session: Session, liveRef: object, record: Readonly<Record<string, string>>): Promise<boolean> {
   const target = session.store;
-  const id = session.committedId;
-  if (!target || id === null || !canCommitRecord(session, liveRef)) return Promise.resolve(false);
+  const id = session.ledger.lastResolved?.id;
+  if (!target || id === undefined || !canCommitRecord(session, liveRef)) return Promise.resolve(false);
   const map = { ...record };
   let wrote = false;
   return enqueue(session, () => target.update(["state"], current => {
     if ((current.get("state") as StoredState | undefined)?.id !== id) return null;
     wrote = true;
     return { pushed: { map, stateId: id } satisfies StoredPushed };
-  }, { durability: "strict" })).then(() => wrote, () => false);
+  }, { durability: "strict" })).then(() => {
+    if (wrote) session.ledger.recordStored(id, map);
+    return wrote;
+  }, () => false);
 }
 
 export function openDurableCopy(options: DurableCopyOptions): DurableCopy {
   const session: Session = {
-    store: null, mode: "pending", abandoned: false, seq: 0, pending: 0, failed: false,
-    committedRef: null, committedId: null, chain: Promise.resolve(),
+    store: null, mode: "pending", abandoned: false, seq: 0, failed: false,
+    ledger: createCommitLedger(), chain: Promise.resolve(),
   };
   return {
     ready: startReady(session, options),
     commit: (stateRef, text, record) => commitState(session, options.tabId, stateRef, text, record),
     commitRecord: (liveRef, record) => commitPushRecord(session, liveRef, record),
+    ledger: () => session.ledger.view(),
     close: () => session.store?.close(),
   };
 }
