@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
+import type { DurableCopy } from "../../src/widgets/database-view/model/knownDatabaseDurableCopy.ts";
 
 await import("./support/memory-local-storage.ts");
 await import("./support/stub-bridge.ts");
@@ -16,11 +17,11 @@ const { EMPTY, withDb, sliceOf, hashOf, valuesOf, settle, storeWith, memoryLegac
 const X = withDb(EMPTY, "db-x", ["a", "b"]);
 const OWN_KEY = "osionos.kds.journal.v1.tab-a";
 
-async function freshTab(t: TestContext) {
+async function freshTab(t: TestContext, options: Parameters<typeof openTab>[1] = {}) {
   const bridge = useBridge(t, { "db-x": sliceOf(X, "db-x") });
   const store = storeWith(X, { "db-x": hashOf(X, "db-x") });
   const legacy = memoryLegacy();
-  const tab = openTab(store, { legacy });
+  const tab = openTab(store, { ...options, legacy });
   await tab.persistence.ready;
   await tab.hydrate();
   await settle();
@@ -98,6 +99,21 @@ test("lifecycle: an unload whose journal the origin refuses stores nothing and s
   tab.pagehide(); await settle();
   assert.equal(legacy.values.has(OWN_KEY), false);
   assert.deepEqual(bridge.posts.filter((post) => valuesOf(post.state, "db-x").includes("b-2")), []);
+});
+
+// JM1: only the writer reads the ledger, so the push itself still works; under "a throwing writer
+// allows the push" it sends b-1 with no journal behind it (N2).
+test("lifecycle: a journal writer that throws at pagehide stores nothing and sends no push", async (t) => {
+  let isBroken = false;
+  const ledgerThrows = (copy: DurableCopy): DurableCopy => ({
+    ...copy,
+    ledger: () => { if (isBroken) throw new Error("ledger unreadable"); return copy.ledger(); },
+  });
+  const { bridge, legacy, tab } = await freshTab(t, { wrapDurable: ledgerThrows });
+  tab.edit("db-x", ["a", "b-1"]);
+  isBroken = true; tab.pagehide(); await settle();
+  assert.equal(legacy.values.has(OWN_KEY), false);
+  assert.deepEqual(bridge.posts, []);
 });
 
 test("lifecycle: a session on the legacy copy writes no journal", async (t) => {

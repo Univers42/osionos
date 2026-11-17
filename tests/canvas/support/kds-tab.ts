@@ -187,8 +187,9 @@ export interface Tab {
   pagehide(): void;
 }
 
-/** `legacy` is this origin's localStorage: the legacy copy and the unload journals. */
-interface TabOptions { tabId?: string; legacy?: Legacy; isUnavailable?: boolean }
+/** `legacy` is this origin's localStorage: the legacy copy and the unload journals. `wrapDurable`
+ *  lets a test break one method of the copy the persistence sees. */
+interface TabOptions { tabId?: string; legacy?: Legacy; isUnavailable?: boolean; wrapDurable?: (copy: DurableCopy) => DurableCopy }
 
 function tabPersistence(durable: DurableCopy, tab: Tab, unloadJournal: { storage: Legacy; tabId: string }): KnownDatabasePersistence {
   return createKnownDatabasePersistence({
@@ -239,7 +240,7 @@ export function openTab(store: KeyValueStore, options: TabOptions = {}): Tab {
     journals: openReadinessJournals(legacy),
   });
   const tab = { live: { state: EMPTY, deleted: new Set<string>() }, commitReports: [], readOnlyWarnings: 0 } as unknown as Tab;
-  tab.persistence = tabPersistence(durable, tab, { storage: legacy, tabId });
+  tab.persistence = tabPersistence(options.wrapDurable?.(durable) ?? durable, tab, { storage: legacy, tabId });
   tab.edit = (key, values) => {
     if (!tab.persistence.canWrite()) return false;
     tab.live.state = withDb(tab.live.state, key, values);
