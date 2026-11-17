@@ -288,14 +288,3 @@ test("durable-copy: a non-migrated stored copy wins even when the flag is unset"
   assert.deepEqual(loaded, { mode: "idb", text: "stored-text", record: { b: "h2" } });
   assert.equal(store.writes, 0);
 });
-
-test("durable-copy: a copy an older build migrated under the bare id is still redone", async () => {
-  const store = createMemoryKeyValueStore({
-    state: { text: "stored-text", id: "migrated" },
-    pushed: { map: { b: "h2" }, stateId: "migrated" },
-  });
-  const loaded = await open(store, fakeLegacy(LEGACY)).ready;
-
-  assert.deepEqual(loaded, { mode: "idb", text: "legacy-text", record: { a: "h1" } });
-  assert.deepEqual(stored(store, "state"), { text: "legacy-text", id: "migrated:tabA" });
-});

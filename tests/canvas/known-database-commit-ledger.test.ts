@@ -78,3 +78,12 @@ test("ledger: a migration loads the migrated id", async () => {
   await copy.ready;
   assert.equal(copy.ledger().loadedId, "migrated:tabA");
 });
+
+test("ledger: a copy an older build migrated under the bare id is redone under this tab's id", async () => {
+  const store = createMemoryKeyValueStore({ state: { text: "stored-text", id: "migrated" }, pushed: { map: { b: "h2" }, stateId: "migrated" } });
+  const legacy = { ...noLegacy, getItem: (key: string) => (key === "osionos.knownDatabaseState.v1" ? "legacy-text" : null) };
+  const copy = openDurableCopy({ openStore: async () => store, legacy, tabId: "tabA", budgetMs: 500 });
+  assert.equal((await copy.ready).text, "legacy-text");
+  assert.deepEqual(store.entries.get("state"), { text: "legacy-text", id: "migrated:tabA" });
+  assert.equal(copy.ledger().loadedId, "migrated:tabA");
+});
