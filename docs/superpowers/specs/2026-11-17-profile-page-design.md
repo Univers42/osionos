@@ -87,7 +87,7 @@ A profile that reads like a GitHub profile and is edited as fast as one:
 | Pronouns | select (she/her, he/him, they/them, prefer not to say) + "Custom" reveals a 40-char input |
 | Status | emoji picker restricted to emoji, text with stored presets, busy toggle, expiry select |
 | Location | country select (the list the database place editor uses) + optional city; stored in the existing column |
-| Links | rows with add / remove; the kind (GitHub, LinkedIn, mail, site, …) is derived from the host and picks the icon |
+| Links | rows with add / remove; the kind (GitHub, GitLab, LinkedIn, X, YouTube, site) is derived from the host and picks the icon. A `mail` kind is not built: the link validator is https-only, and a public e-mail link changes what the bridge accepts, so it is ruled with U5 |
 | Timezone | existing select |
 | Avatar, banner | existing uploaders, opened by clicking the image in edit mode |
 | Username | shown; "Change" opens the existing re-auth modal |
@@ -97,6 +97,27 @@ A profile that reads like a GitHub profile and is edited as fast as one:
   edit and the reverse.
 - Done when: an e2e edits every field on the page and reloads to the saved values; a 412
   shows the conflict banner with the server's row; `check-built-with-blocks.sh` is green.
+
+### Built in U1 + U2, differences from rev 1
+
+- **Country list.** An inline ISO 3166 alpha-2 code list named through `Intl.DisplayNames`
+  (`features/settings/profile/countries.ts`), not the database place editor's list, which is
+  partial and private to a vendored package. Stored as "City, Country" or "Country" in the
+  existing `location` column (120 characters).
+- **Avatar and banner.** The existing uploader rows sit at the top of the edit form; the image
+  on the page is not itself a click target.
+- **Edit mode width.** The sidebar is 296 px when reading and widens to 26 rem when editing,
+  because the form does not fit 296 px.
+- **Followers and following.** Not shown until U5 (their routes are not verified against a
+  blocked viewer yet).
+- **Links.** No `mail` kind (see the Links row above).
+- **Emoji.** The status picker is the app's `EmojiPicker` with a filter: a pick that is not an
+  emoji is refused with a message. The library has no prop to hide its Icons tab.
+- **Status in Settings.** Settings > Presence and status hosts the same `StatusFields` and
+  `useStatusEdit` (`StatusPanel`) behind its own Save; the old duplicate editor is gone.
+- **Name on the page.** The card's `displayName` wins over the legacy route's `name`, so a
+  saved name shows at once.
+- **Prompts.** The owner sees both "Customize" and a "Write your README" row.
 
 ### U3 — markdown engine: the GitHub HTML subset, parsed, never injected
 
