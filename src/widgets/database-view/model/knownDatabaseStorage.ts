@@ -26,20 +26,23 @@ import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 
 export const KNOWN_DATABASE_STATE_STORAGE_KEY = "osionos.knownDatabaseState.v1";
 
-/** A writer for the serialized state: false when it could not be kept. `flushNow` writes any
- *  debounced state at unload, before the guard decides whether the browser must ask. */
-export function createKnownStateWriter(flushNow: () => void, storage?: PageCacheStorage) {
+export type KeptStateReport = (isKept: boolean) => void;
+
+/** Reports whether the last write of the state was kept: the first refusal warns once, and a
+ *  refused state makes the browser ask before the tab is left. `flushNow` writes any debounced
+ *  state at unload, before the guard decides whether the browser must ask. */
+export function createKeptStateReporter(flushNow: () => void): KeptStateReport {
   let kept = true;
   let warned = false;
   const guard = createUnloadGuard(globalThis, () => {
     flushNow();
     return kept;
   });
-  return (text: string): boolean => {
-    kept = setItemEvictingPageCaches(KNOWN_DATABASE_STATE_STORAGE_KEY, text, storage);
-    if (kept) {
+  return (isKept) => {
+    kept = isKept;
+    if (isKept) {
       guard.disarm();
-      return true;
+      return;
     }
     if (!warned) {
       warned = true;
@@ -50,6 +53,28 @@ export function createKnownStateWriter(flushNow: () => void, storage?: PageCache
       });
     }
     guard.arm();
-    return false;
   };
+}
+
+/** A writer for the serialized state: false when it could not be kept. */
+export function createKnownStateWriter(
+  flushNow: () => void,
+  storage?: PageCacheStorage,
+  report: KeptStateReport = createKeptStateReporter(flushNow),
+) {
+  return (text: string): boolean => {
+    const kept = setItemEvictingPageCaches(KNOWN_DATABASE_STATE_STORAGE_KEY, text, storage);
+    report(kept);
+    return kept;
+  };
+}
+
+/** A tab whose browser storage did not answer while this browser's copy lives in IndexedDB
+ *  only pulls: anything it wrote or pushed would revert the newer stored copy (devil I7). */
+export function warnReadOnlyDatabases(): void {
+  useToastStore.getState().push({
+    kind: "warning",
+    title: "Databases are read-only in this tab",
+    description: "Browser storage did not answer, so database edits here could overwrite newer ones. Reload the tab to edit.",
+  });
 }
