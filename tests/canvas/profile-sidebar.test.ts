@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { buildSidebar } = await import("../../src/widgets/profile-page/model/sidebarModel.ts");
+const { buildSidebar, showsReadmePrompt } = await import("../../src/widgets/profile-page/model/sidebarModel.ts");
 const { activeStatus, parseStatus } = await import("../../src/widgets/profile-page/model/profileStatus.ts");
 
 const NOW = new Date("2026-11-17T12:00:00Z");
@@ -128,4 +128,15 @@ test("activeStatus: empty, expired and busy-only statuses", () => {
   assert.deepEqual(activeStatus({ ...base, text: "Out", expiresAt: "2026-11-17T12:00:01Z" }, NOW), { emoji: null, text: "Out", busy: false });
   assert.deepEqual(activeStatus({ ...base, busy: true }, NOW), { emoji: null, text: null, busy: true });
   assert.equal(activeStatus({ ...base, text: "x", expiresAt: "garbage" }, NOW)?.text, "x");
+});
+
+test("the README prompt is the owner's, and only while the README card has nothing to draw", () => {
+  const withBlocks = { ...(FULL as object), readme: { pageId: "p", blocks: [{ id: "b" }] } } as never;
+  const emptyBlocks = { ...(FULL as object), readme: { pageId: "p", blocks: [] } } as never;
+  const truncated = { ...(FULL as object), readme: { pageId: "p", truncated: true } } as never;
+  assert.equal(showsReadmePrompt(FULL, true), true);
+  assert.equal(showsReadmePrompt(FULL, false), false);
+  assert.equal(showsReadmePrompt(emptyBlocks, true), true);
+  assert.equal(showsReadmePrompt(withBlocks, true), false);
+  assert.equal(showsReadmePrompt(truncated, true), false);
 });

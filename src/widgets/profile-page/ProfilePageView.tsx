@@ -27,6 +27,7 @@ import { useProfessionStore } from "@/features/professions/model/useProfessionSt
 import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { PageBlocksRenderer } from "@/widgets/page-renderer/ui/PageBlocksRenderer";
 import { useTemplateForSurface } from "@/widgets/page-renderer/model/useTemplateForSurface";
+import { ProfileFrame } from "./ProfileFrame";
 import { ProfileView } from "./ProfileView";
 import { ProfileActions } from "./profileChrome";
 import { ReadmeBlocks } from "./ReadmeBlocks";
@@ -56,23 +57,20 @@ export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
   // opt-in, and it is not gated on osio.profile.template.
   if (professionBlocks) {
     return (
-      <div className="h-full overflow-auto bg-[var(--osio-bg-page)] text-[var(--osio-fg-default)]">
-        <div className="mx-auto max-w-3xl px-6 py-10">
-          <ProfileActions userId={userId} name={profile?.name ?? ""} />
-          <button
-            type="button"
-            data-testid="profession-repick"
-            onClick={() => useProfessionStore.getState().setOpen(true)}
-            className="mb-4 rounded-md border border-[var(--osio-border-default)] px-3 py-1 text-sm text-[var(--osio-fg-muted)]"
-          >
-            Change profession
-          </button>
-          <BindingProvider record={record}>
-            <PageBlocksRenderer blocks={professionBlocks} />
-          </BindingProvider>
-          <ReadmeBlocks readme={profile?.readme} record={readmeRecord} />
-        </div>
-      </div>
+      <ProfileFrame userId={userId} profile={profile}>
+        <button
+          type="button"
+          data-testid="profession-repick"
+          onClick={() => useProfessionStore.getState().setOpen(true)}
+          className="mb-4 rounded-md border border-[var(--osio-border-default)] px-3 py-1 text-sm text-[var(--osio-fg-muted)]"
+        >
+          Change profession
+        </button>
+        <BindingProvider record={record}>
+          <PageBlocksRenderer blocks={professionBlocks} />
+        </BindingProvider>
+        <ReadmeBlocks readme={profile?.readme} record={readmeRecord} />
+      </ProfileFrame>
     );
   }
 

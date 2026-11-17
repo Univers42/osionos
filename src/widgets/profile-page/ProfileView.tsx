@@ -11,21 +11,21 @@
 /* ************************************************************************** */
 
 /**
- * Built-in member profile — the fallback shell used when the admin-authored
- * profile template is absent or disabled. Avatar, name, org role, presence dot,
- * and the shared Message/Connect actions. Rendered as a child of ProfilePageView,
- * which owns the presence heartbeat.
+ * Built-in member profile — the fallback used when the admin-authored profile template is
+ * absent or disabled. The sidebar lives in ProfileFrame; this is the main column: README and
+ * shared posts. Rendered as a child of ProfilePageView, which owns the presence heartbeat.
  */
 
 import React, { useMemo } from 'react';
 
-import { ProfileActions } from './profileChrome';
-import { ProfileFacts } from './profileFields';
+import { ProfileFrame } from './ProfileFrame';
+import { ReadmePrompt } from './ReadmePrompt';
 import { ProfileSharedPosts } from './ProfileSharedPosts';
 import { ReadmeBlocks } from './ReadmeBlocks';
 import { toReadmeRecord } from './model/binding';
+import { showsReadmePrompt } from './model/sidebarModel';
 import { useProfile } from './useProfile';
-import { isSafeImageSource } from '@/shared/lib/media/bridgeMediaUrl';
+import { useUserStore } from '@/features/auth';
 
 interface ProfileViewProps {
   userId: string;
@@ -34,6 +34,7 @@ interface ProfileViewProps {
 export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
   const { profile, error } = useProfile(userId);
   const readmeRecord = useMemo(() => toReadmeRecord(profile), [profile]);
+  const isOwner = useUserStore((s) => s.activeUserId) === userId;
 
   if (error) {
     return (
@@ -50,47 +51,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
     );
   }
 
-  // Only an https URL or a same-origin path is drawn; the field is the allowlisted bannerUrl, nothing else.
-  const bannerSrc = isSafeImageSource(profile.bannerUrl) ? profile.bannerUrl : undefined;
-
   return (
-    <div className="h-full overflow-auto bg-[var(--osio-bg-page)] text-[var(--osio-fg-default)]">
-      {bannerSrc && (
-        <div className="mx-auto aspect-[3/1] max-h-64 w-full max-w-4xl overflow-hidden bg-[var(--osio-bg-subtle)]">
-          <img src={bannerSrc} alt="" data-testid="profile-banner" className="h-full w-full object-cover" />
-        </div>
-      )}
-      <div className="mx-auto max-w-2xl px-8 py-12">
-        <div className="flex items-center gap-6">
-          <div className="relative">
-            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-[var(--osio-accent)] text-3xl font-bold text-[var(--osio-accent-fg)]">
-              {profile.avatar
-                ? <img src={profile.avatar} alt={profile.name} className="h-full w-full object-cover" />
-                : profile.name.slice(0, 1).toUpperCase()}
-            </div>
-            <span
-              title={profile.online ? 'Online' : 'Offline'}
-              className={`absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-[var(--osio-bg-page)] ${profile.online ? 'bg-[var(--osio-success)]' : 'bg-[var(--osio-fg-subtle)]'}`}
-            />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold">{profile.name}</h1>
-            {profile.pronouns && <p className="text-sm text-[var(--osio-fg-muted)]">{profile.pronouns}</p>}
-            <p className="mt-1 text-sm text-[var(--osio-fg-muted)]">
-              {profile.role ? `${profile.role} · ` : ''}
-              {profile.online ? 'Online now' : 'Offline'}
-            </p>
-          </div>
-        </div>
-
-        <ProfileFacts profile={profile} />
-
-        <ProfileActions userId={userId} name={profile.name} />
-
-        <ReadmeBlocks readme={profile.readme} record={readmeRecord} />
-
-        <ProfileSharedPosts userId={userId} />
-      </div>
-    </div>
+    <ProfileFrame userId={userId} profile={profile}>
+      <ReadmeBlocks readme={profile.readme} record={readmeRecord} />
+      {showsReadmePrompt(profile, isOwner) && <ReadmePrompt />}
+      <ProfileSharedPosts userId={userId} />
+    </ProfileFrame>
   );
 };

@@ -123,3 +123,10 @@ export function buildSidebar(profile: MemberProfile, viewer: { isOwner: boolean;
     prompts,
   };
 }
+
+/** The owner's "Write your README" row: shown while there is nothing for the README card to draw. */
+export function showsReadmePrompt(profile: MemberProfile, isOwner: boolean): boolean {
+  const readme = profile.readme;
+  const drawn = !!readme && (readme.truncated === true || (Array.isArray(readme.blocks) && readme.blocks.length > 0));
+  return isOwner && !drawn;
+}
