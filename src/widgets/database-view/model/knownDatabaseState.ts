@@ -40,7 +40,7 @@ import {
   warnReadOnlyDatabases,
 } from "./knownDatabaseStorage";
 import { createFlushSchedule } from "./knownDatabaseFlushSchedule";
-import { applyAdapterOptions, type KnownDatabaseAdapterOptions } from "./knownDatabaseViewLimit";
+import { applyAdapterOptions, type KnownDatabaseAdapterOptions, withoutProjectedLimits } from "./knownDatabaseViewLimit";
 import { createKnownDatabasePersistence, type KnownDatabasePersistence } from "./knownDatabasePersistence";
 import { knownDatabaseUnloadJournal, openKnownDatabaseDurableCopy } from "./knownDatabaseDurableStore";
 import { watchKnownDatabaseUnload } from "./knownDatabaseUnload";
@@ -374,20 +374,24 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
     this.emit({ type: "schema-changed", databaseId });
   }
 
+  // The host persists what it loaded, against its empty initial store: without taking
+  // the embed's Limit back out, every paged view of the account was written with it
+  // (devil F1, groot ADR 0055: 19 of 45 seed views, and the first-session journal).
   persistState(state: NotionState, previousState?: NotionState): void {
+    const current = useKnownDatabaseStateStore.getState().state;
+    const views = withoutProjectedLimits(state.views, current.views, this.options, previousState?.views);
     if (!previousState) {
-      useKnownDatabaseStateStore.getState().replaceState(state);
+      useKnownDatabaseStateStore.getState().replaceState({ ...state, views });
       return;
     }
     // The host diffs its store against the pre-edit baseline: a page in the
     // baseline that is gone from `state` is a user deletion. Remember it so a
     // reload (or the server union) cannot bring it back.
     for (const pageId of deletedPageIdsBetween(previousState, state)) deletedPageIds.add(pageId);
-    const current = useKnownDatabaseStateStore.getState().state;
     useKnownDatabaseStateStore.getState().replaceState({
       databases: mergeChangedRecords(current.databases, state.databases, previousState.databases),
       pages: mergeChangedRecords(current.pages, state.pages, previousState.pages),
-      views: mergeChangedRecords(current.views, state.views, previousState.views),
+      views: mergeChangedRecords(current.views, views, previousState.views),
     });
   }
 

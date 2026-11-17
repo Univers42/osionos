@@ -61,3 +61,54 @@ export function applyAdapterOptions(state: NotionState, options: KnownDatabaseAd
     views: Object.fromEntries(Object.entries(state.views).map(([viewId, view]) => [viewId, projectView(view, limits)])),
   };
 }
+
+type Settings = NonNullable<View["settings"]>;
+
+const fieldsOf = (value: object | undefined) => (value ?? {}) as Record<string, unknown>;
+
+// The projection spreads the stored view, so an untouched one differs from it only by
+// new objects holding the same values: identity of every field (and of every field of
+// `nested`, one level down) decides it.
+function sameFields(left: object | undefined, right: object | undefined, nested?: string): boolean {
+  const a = fieldsOf(left);
+  const b = fieldsOf(right);
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const same = key === nested ? sameFields(a[key] as object | undefined, b[key] as object | undefined) : a[key] === b[key];
+    if (!same) return false;
+  }
+  return true;
+}
+
+function unprojectView(view: View, stored: View | undefined, limits: ViewLimits): View {
+  if (!PAGED_VIEW_TYPES.has(view.type)) return view;
+  const storedLimit = stored?.settings?.loadLimit;
+  const projected = projectedLimit(storedLimit, limits);
+  if (projected === undefined || view.settings?.loadLimit !== projected) return view;
+  const settings: Settings = { ...view.settings };
+  if (storedLimit === undefined) delete settings.loadLimit;
+  else settings.loadLimit = storedLimit;
+  const restored = { ...view, settings };
+  return stored && sameFields(restored, stored, "settings") ? stored : restored;
+}
+
+/** The views an embed writes back, with its own projection taken out: a Limit the
+ *  embed showed but the user did not pick is restored to the stored one, and a view
+ *  whose only difference was that Limit is the stored object itself. Only the views
+ *  that changed since `previous` are looked at; the rest pass through untouched.
+ *  Caveat: a Limit the user picks that equals what the embed shows (8 on a view with
+ *  none, or the cap on a view stored above it) reads as the projection and is not
+ *  written. A view setting, never a row; picking it on a full page writes it. */
+export function withoutProjectedLimits(
+  views: NotionState["views"],
+  stored: NotionState["views"],
+  options: KnownDatabaseAdapterOptions,
+  previous?: NotionState["views"],
+): NotionState["views"] {
+  const limits = resolveLimits(options);
+  if (limits.fill === undefined && limits.cap === undefined) return views;
+  const written: NotionState["views"] = {};
+  for (const [viewId, view] of Object.entries(views)) {
+    written[viewId] = previous?.[viewId] === view ? view : unprojectView(view, stored[viewId], limits);
+  }
+  return written;
+}
