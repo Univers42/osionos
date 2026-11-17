@@ -15,11 +15,12 @@
 // its state reads a stale database as clean, and the next pull or push reverts another device's
 // edit on the server. So the record is stored only inside a commit of the state it was captured
 // with, or by a catch-up the durable copy refuses unless the live state is the copy last
-// committed by this tab. Every push sends the live state, never a copy captured before an await.
+// committed by this tab. Every push sends the live state, never a copy captured before an await:
+// the push lives here, so the tests that drive this module drive that guard (devil M4).
 
 import type { NotionState } from "@notion-db/object-database";
 import type { DurableCopy, DurableCopyMode, LoadedCopy } from "./knownDatabaseDurableCopy";
-import { objectDatabasePushRecord, seedObjectDatabasePushRecord } from "./objectDatabaseBridgeSync";
+import { objectDatabasePushRecord, pushDirtyObjectDatabases, seedObjectDatabasePushRecord } from "./objectDatabaseBridgeSync";
 import type { PushRecordSink } from "./objectDatabasePushRecord";
 
 export interface KnownDatabasePersistenceDeps {
@@ -28,8 +29,8 @@ export interface KnownDatabasePersistenceDeps {
   load(text: string | null): void;
   getLiveState(): NotionState;
   serialize(state: NotionState): string;
-  /** Pushes the store's state as it is when called (I2). */
-  pushLive(): void;
+  getSeedIds(): ReadonlySet<string>;
+  getDeletedPageIds(): ReadonlySet<string>;
   reportCommit(isKept: boolean): void;
   warnReadOnly(): void;
 }
@@ -53,6 +54,12 @@ interface Session {
   /** The record version the durable copy holds, as far as this tab wrote it. */
   storedVersion: number;
 }
+
+// I2: read when the push runs. A state captured before the commit await still holds the databases
+// a hydrate replaced during that await, and would push them back over the server's copies.
+const pushLive = (deps: KnownDatabasePersistenceDeps): void => {
+  pushDirtyObjectDatabases(deps.getLiveState(), deps.getSeedIds(), deps.getDeletedPageIds());
+};
 
 const markStored = (session: Session, version: number): void => {
   session.storedVersion = Math.max(session.storedVersion, version);
@@ -88,11 +95,11 @@ function flush(session: Session, state: NotionState, pushNow: boolean): void {
   const record = objectDatabasePushRecord();
   const version = record.version;
   const committed = deps.durable.commit(state, deps.serialize(state), record.snapshot());
-  if (pushNow) deps.pushLive();
+  if (pushNow) pushLive(deps);
   void committed.then((isKept) => {
     if (isKept) markStored(session, version);
     deps.reportCommit(isKept);
-    if (!pushNow) deps.pushLive(); // a failed commit never stops the push (K9)
+    if (!pushNow) pushLive(deps); // a failed commit never stops the push (K9)
     catchUp(session);
   });
 }

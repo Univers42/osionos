@@ -657,13 +657,13 @@ export { resetObjectDatabaseSync } from "./objectDatabaseBridgeSync";
 
 // K2: one durable copy per tab, opened at module evaluation.
 if (globalThis.window !== undefined) {
-  const liveState = (): NotionState => useKnownDatabaseStateStore.getState().state;
   persistence = createKnownDatabasePersistence({
     durable: openKnownDatabaseDurableCopy(),
     load: restoreStoredState,
-    getLiveState: liveState,
+    getLiveState: () => useKnownDatabaseStateStore.getState().state,
     serialize: (state) => serializeKnownDatabaseState(state, deletedPageIds),
-    pushLive: () => pushDirtyObjectDatabases(liveState(), seedDatabaseIds(), deletedPageIds),
+    getSeedIds: seedDatabaseIds,
+    getDeletedPageIds,
     reportCommit: reportKeptState,
     warnReadOnly: warnReadOnlyDatabases,
   });

@@ -13,7 +13,8 @@
 // One browser tab for the known-database revert sequences (devil D1, B1a-B5): the real durable
 // copy over the memory store, the real persistence and the real bridge sync, against a fake
 // bridge that keeps the server's databases. The live state is held here instead of in the zustand
-// store, so a test decides when each flush runs and when a tab closes.
+// store, so a test decides when each flush runs and when a tab closes. The push is the
+// persistence's own, never one defined here: B5 must fail if that push stops reading the live state.
 // Import memory-local-storage.ts and stub-bridge.ts, and define `window`, before this module.
 
 import assert from "node:assert/strict";
@@ -24,11 +25,7 @@ import {
   createKnownDatabasePersistence,
   type KnownDatabasePersistence,
 } from "../../../src/widgets/database-view/model/knownDatabasePersistence.ts";
-import {
-  ensureObjectDatabaseHydration,
-  pushDirtyObjectDatabases,
-  resetObjectDatabaseSync,
-} from "../../../src/widgets/database-view/model/objectDatabaseBridgeSync.ts";
+import { ensureObjectDatabaseHydration, resetObjectDatabaseSync } from "../../../src/widgets/database-view/model/objectDatabaseBridgeSync.ts";
 import {
   loadPersistedKnownDatabaseState,
   serializeKnownDatabaseState,
@@ -183,7 +180,8 @@ function tabPersistence(durable: DurableCopy, tab: Tab): KnownDatabasePersistenc
     },
     getLiveState: () => tab.live.state,
     serialize: (state) => serializeKnownDatabaseState(state, tab.live.deleted),
-    pushLive: () => pushDirtyObjectDatabases(tab.live.state, NO_SEEDS, tab.live.deleted),
+    getSeedIds: () => NO_SEEDS,
+    getDeletedPageIds: () => tab.live.deleted,
     reportCommit: (isKept) => { tab.commitReports.push(isKept); },
     warnReadOnly: () => { tab.readOnlyWarnings += 1; },
   });
