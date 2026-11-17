@@ -56,6 +56,9 @@ async function expectFilled(page, name) {
   }
   const long = side.getByRole("link", { name: new RegExp(`^long.example.com/${LONG_PATH}$`) });
   await expect(long).toHaveAttribute("title", LONG_LINK);
+  // A truncated label must not squeeze its icon: a flex child shrinks unless told not to.
+  const longIcon = long.locator("..").locator("svg");
+  expect(await longIcon.evaluate((icon) => icon.getBoundingClientRect().width)).toBe(16);
   expect(await side.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await expectNoErrorToast(page);

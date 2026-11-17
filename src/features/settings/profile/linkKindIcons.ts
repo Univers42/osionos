@@ -20,6 +20,6 @@ import { Github, Gitlab, Globe, Linkedin, Twitter, Youtube } from 'lucide-react'
 
 import type { LinkKind } from './linkKinds';
 
-export const LINK_KIND_ICON: Record<LinkKind, React.ComponentType<{ size?: number; 'aria-hidden'?: boolean }>> = {
+export const LINK_KIND_ICON: Record<LinkKind, React.ComponentType<{ size?: number; 'aria-hidden'?: boolean; className?: string }>> = {
   github: Github, gitlab: Gitlab, linkedin: Linkedin, x: Twitter, youtube: Youtube, site: Globe,
 };

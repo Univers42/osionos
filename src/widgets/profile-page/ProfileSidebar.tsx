@@ -25,7 +25,7 @@ import { ProfileActions } from "./profileChrome";
 import { buildSidebar, type PromptField, type SidebarFact, type SidebarModel } from "./model/sidebarModel";
 import type { MemberProfile } from "./useProfile";
 
-const FACT_ICON: Record<string, React.ComponentType<{ size?: number; "aria-hidden"?: boolean }>> = {
+const FACT_ICON: Record<string, React.ComponentType<{ size?: number; "aria-hidden"?: boolean; className?: string }>> = {
   company: Building2,
   location: MapPin,
   time: Clock,
@@ -44,7 +44,7 @@ const FactRow: React.FC<{ fact: SidebarFact }> = ({ fact }) => {
   const Icon = FACT_ICON[fact.id] ?? (fact.kind ? LINK_KIND_ICON[fact.kind] : Link2);
   return (
     <li className="flex min-w-0 items-center gap-2">
-      <Icon size={16} aria-hidden />
+      <Icon size={16} aria-hidden className="shrink-0" />
       {fact.href ? (
         <a href={fact.href} title={fact.href} target="_blank" rel="noopener noreferrer me" className="min-w-0 truncate text-[var(--osio-accent)] hover:underline">
           {fact.label}
