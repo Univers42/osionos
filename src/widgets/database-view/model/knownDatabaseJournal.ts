@@ -161,16 +161,16 @@ interface LastWrite { readonly live: NotionState; readonly version: number; read
 export function createUnloadJournalWriter(source: UnloadJournalSource): UnloadJournalWriter {
   const { storage } = source;
   let last: LastWrite | null = null;
-  // A journal another tab's readiness removed is written again even when nothing changed.
-  const isWritten = (live: NotionState, version: number, target: PageCacheStorage): boolean => last !== null && last.live === live
-    && last.version === version && (last.outcome !== "stored" || target.getItem(journalKey(source.tabId)) !== null);
+  // A journal another tab's readiness removed is not written again: that readiness applied it, and
+  // a rewrite could only name ids the store no longer holds (D4).
+  const isWritten = (live: NotionState, version: number): boolean => last?.live === live && last.version === version;
   return {
     write: () => {
       if (!storage) return true;
       try {
         const live = source.live();
         const version = source.record().version;
-        if (!isWritten(live, version, storage)) last = { live, version, outcome: writeOnce(source, storage) };
+        if (!isWritten(live, version)) last = { live, version, outcome: writeOnce(source, storage) };
         return last?.outcome !== "refused";
       } catch {
         return false; // no journal is known to be stored: the push would be N2's revert
