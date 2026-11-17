@@ -235,6 +235,10 @@ function clearPersistedBridgeSession(userId?: string) {
   if (writePersistedBridgeSessions(map)) return;
   // The old map still holds this account's refresh token, so it goes whole (ADR 0056 LV1). Its
   // room then usually takes the smaller map; only if not are the other accounts memory-only.
+  // Caveat: the remove/write pair is not atomic across tabs. Chromium and WebKit tabs read the key
+  // as absent between the two calls (ADR 0056 M2), so another account's refresh landing there goes
+  // unpublished and a second tab resends the replaced token: the family is revoked, failing closed
+  // (DQ2a). Reached only when a smaller write is refused, which no measured engine does on quota (M1).
   localStorage.removeItem(BRIDGE_SESSION_STORAGE_KEY);
   if (Object.keys(map).length > 0 && !writePersistedBridgeSessions(map)) noticeSessionNotKept();
 }
