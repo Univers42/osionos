@@ -20,7 +20,7 @@ import { mkdirSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
-import { BOB_PUBLIC, OTHER, giveTheAppABridgeOrigin, heading, mockApi, openProfile, seedSession } from "../support/profilePageMocks.mjs";
+import { BOB_PUBLIC, OTHER, expectNoErrorToast, giveTheAppABridgeOrigin, heading, mockApi, openProfile, seedSession } from "../support/profilePageMocks.mjs";
 
 const SHOTS = "target/shots/profile";
 const BANNER = "/e2e-profile-banner.png";
@@ -44,6 +44,7 @@ async function expectProfileFits(page, name, theme) {
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
   const fits = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
   expect(fits).toBe(true);
+  await expectNoErrorToast(page);
 }
 
 async function shoot(page, who, width, theme) {

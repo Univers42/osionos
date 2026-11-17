@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   profileEdit.spec.mjs                               :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/11/17 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/11/17 00:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 // U2: the profile page edits in place. Every field of the form is changed, saved through the
 // mocked account backend and read back after a reload; a 412 shows the server's row; a failed
 // status save keeps the profile edit and the reverse; keyboard, focus and axe in edit mode.
@@ -10,21 +22,23 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
-import { accountBackend, giveTheAppABridgeOrigin, heading, mockAccountBackend, mockApi, openProfileFromPalette, seedSession } from "../support/profilePageMocks.mjs";
+import { accountBackend, expectNoErrorToast, giveTheAppABridgeOrigin, heading, mockAccountBackend, mockApi, openProfileFromPalette, seedSession } from "../support/profilePageMocks.mjs";
 
 const SHOTS = "target/shots/profile";
 const WCAG_AA = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const SELF = "me-user";
+// A long handle is what pushes the "Change username" button to wrap at 375 px.
+const LONG_USERNAME = "me-user-with-a-rather-long-handle";
 
-async function openOwnPage(page, baseURL, seed = {}, theme = "light") {
+async function openOwnPage(page, baseURL, seed = {}, theme = "light", username = SELF) {
   await page.addInitScript((mode) => localStorage.setItem("osionos:theme-mode", mode), theme);
   await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);
   await openFreshPage(page, baseURL);
   const mine = await seedSession(page);
-  const backend = accountBackend(mine, SELF, seed);
+  const backend = accountBackend(mine, username, seed);
   await page.route(/\/api\/(social|app-connections|connections)/, (route) => route.fulfill({ json: { blocks: [], connections: [], edges: [] } }));
-  await mockApi(page, { id: mine, username: SELF, name: "Me Myself", publicBody: backend.card() });
-  await mockAccountBackend(page, backend, SELF);
+  await mockApi(page, { id: mine, username, name: "Me Myself", publicBody: backend.card() });
+  await mockAccountBackend(page, backend, username);
   await openProfileFromPalette(page, "Me");
   await expect(heading(page, "Me Myself")).toBeVisible();
   return backend;
@@ -172,10 +186,24 @@ for (const width of [375, 1440]) {
   for (const theme of ["light", "dark"]) {
     test(`edit mode fits at ${width}px, ${theme}, and is shot`, async ({ page, baseURL }) => {
       await page.setViewportSize({ width, height: 900 });
-      await openOwnPage(page, baseURL, { headline: "Analyst", bio: "Notes", links: ["https://github.com/ada"] }, theme);
+      await openOwnPage(page, baseURL, { headline: "Analyst", bio: "Notes", links: ["https://github.com/ada"] }, theme, LONG_USERNAME);
       await edit(page).click();
       await expect(field(page, "Display name")).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+      await expectNoErrorToast(page);
+      const row = page.getByTestId("username-row");
+      const button = row.getByRole("button", { name: "Change username" });
+      // The button has a fixed height, so a wrapped label overflows it unseen: count the text's line boxes.
+      const lines = await button.evaluate((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top))).size;
+      });
+      expect(lines).toBe(1);
+      const [rowBox, buttonBox] = [await row.boundingBox(), await button.boundingBox()];
+      expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+      // The photo row draws the same Avatar atom as read mode: initials, not the 👤 placeholder.
+      await expect(page.locator("form").getByText("MM", { exact: true })).toBeVisible();
       mkdirSync(SHOTS, { recursive: true });
       await page.screenshot({ path: `${SHOTS}/edit-${width}-${theme}.png` });
     });

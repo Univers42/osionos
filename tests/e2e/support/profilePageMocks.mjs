@@ -13,6 +13,8 @@
 // Shared setup for the profile-page specs: a bridge origin for the offline build, a seeded
 // session token, the mocked profile reads, and opening a profile from the command palette.
 
+import { expect } from "@playwright/test";
+
 import { openFreshPage } from "../../browser/core/app.mjs";
 
 export const OTHER = { id: "user-456", username: "bob" };
@@ -32,12 +34,42 @@ export const BOB_PUBLIC = {
 
 // The offline build has no bridge origin, so api.get throws before fetching.
 export async function giveTheAppABridgeOrigin(page, origin) {
+  await mockPageCreate(page);
+  await recordErrorToasts(page);
   await page.route("**/src/shared/api/client.ts", async (route) => {
     const response = await route.fetch();
     const source = await response.text();
     const patched = source.replace(/("VITE_API_URL":\s*)""/, `$1"${origin}"`);
     await route.fulfill({ response, body: patched });
   });
+}
+
+// openFreshPage clicks "New page" on purpose, and the page API is not served by the dev server,
+// so the app answered 404 and raised an error toast over every shot. The profile view itself
+// never creates a page on open (only the README prompt does, on a click).
+export async function mockPageCreate(page) {
+  await page.route("**/api/pages", (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    const body = route.request().postDataJSON() ?? {};
+    const now = new Date().toISOString();
+    return route.fulfill({ json: { id: `e2e-page-${Date.now()}`, content: [], createdAt: now, updatedAt: now, ...body } });
+  });
+}
+
+// Error toasts speak assertively (ToastViewport) and fade on their own, so a check at the end
+// would miss one raised earlier: the observer records every one that ever appeared.
+async function recordErrorToasts(page) {
+  await page.addInitScript(() => {
+    globalThis.__errorToasts = [];
+    const note = () => document.querySelectorAll('[role="status"][aria-live="assertive"]')
+      .forEach((el) => { const text = el.textContent ?? ""; if (!globalThis.__errorToasts.includes(text)) globalThis.__errorToasts.push(text); });
+    new MutationObserver(note).observe(document, { childList: true, subtree: true });
+  });
+}
+
+export async function expectNoErrorToast(page) {
+  await expect(page.locator('[role="status"][aria-live="assertive"]')).toHaveCount(0);
+  expect(await page.evaluate(() => globalThis.__errorToasts)).toEqual([]);
 }
 
 export async function seedSession(page) {
