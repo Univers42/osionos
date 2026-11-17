@@ -16,6 +16,8 @@ import { createJSONStorage, type StateStorage } from "zustand/middleware";
 // A localStorage write a full origin refuses never throws into its caller, and the user is told
 // once per store per session (ADR 0056 A5). Preferences pass the plain `trySetItem`; user content
 // passes a writer that makes room first. The memory state is the caller's and stays as it is.
+// Caveat: one notice per store per session. A store refused, then kept, then refused again is
+// not shown a second time, and a dismissed notice does not come back until the page reloads.
 
 /** Writes `text` under `key`; false when it was not kept. */
 export type StorageWriter = (key: string, text: string) => boolean;
