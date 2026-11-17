@@ -16,7 +16,7 @@
 // an 83-database, 8,646-row account (tests/bench/object-database-sync.bench.ts).
 
 import type { NotionState } from "@notion-db/object-database";
-import { emptySlice, hashSlice, serverSliceFor, sliceAllDatabases, unionSliceFor, withReplacedSlices } from "./objectDatabaseSlice";
+import { emptySlice, hashSlice, isBlankPage, isPlaceholderSchema, serverSliceFor, sliceAllDatabases, unionSliceFor, withReplacedSlices } from "./objectDatabaseSlice";
 
 export interface ReconcileInput {
   /** The local state, tombstoned pages already removed. */
@@ -35,7 +35,8 @@ export interface ReconcileResult {
 
 /** The server copy overwrites local ONLY when local is provably our last push.
  *  A dirty or untracked local database is unioned with the server instead and
- *  loses its baseline, so the union is pushed back. */
+ *  loses its baseline, so the union is pushed back.
+ *  A blank placeholder schema always takes the clean server path. */
 export function reconcileServerDatabases({ live, server, pushed, deletedPageIds }: ReconcileInput): ReconcileResult {
   const local = sliceAllDatabases(live);
   const nextPushed: Record<string, string> = { ...pushed };
@@ -43,7 +44,8 @@ export function reconcileServerDatabases({ live, server, pushed, deletedPageIds 
   for (const [dbKey, serverState] of server) {
     const localSlice = local.get(dbKey) ?? emptySlice();
     const localHash = hashSlice(localSlice);
-    if (live.databases[dbKey] && pushed[dbKey] !== localHash) {
+    const blankPlaceholder = isPlaceholderSchema(dbKey, localSlice, serverState) && Object.values(localSlice.pages).every(isBlankPage);
+    if (live.databases[dbKey] && !blankPlaceholder && pushed[dbKey] !== localHash) {
       delete nextPushed[dbKey];
       const union = unionSliceFor(localSlice, dbKey, serverState, deletedPageIds);
       if (hashSlice(union) !== localHash) replaced.set(dbKey, union);

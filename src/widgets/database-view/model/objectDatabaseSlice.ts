@@ -100,8 +100,42 @@ export function serverSliceFor(
   return slice;
 }
 
-const isBlankPage = (page: NotionState["pages"][string]): boolean =>
+/** True when `local` holds only the schema a block invents before the server copy arrives (at most one
+ *  column) while `server` holds a real one (more than one column). */
+// Caveat: a local database whose columns were deliberately deleted down to one, while unsynced, also matches: the server's columns come back.
+export function isPlaceholderSchema(dbKey: string, local: NotionState, server: NotionState): boolean {
+  const localColumns = Object.keys(local.databases[dbKey]?.properties ?? {}).length;
+  const serverColumns = Object.keys(server.databases?.[dbKey]?.properties ?? {}).length;
+  return localColumns <= 1 && serverColumns > 1;
+}
+
+export const isBlankPage = (page: NotionState["pages"][string]): boolean =>
   !page.content?.length && Object.values(page.properties ?? {}).every((value) => value === "" || value == null);
+
+/** Moves the title value to the server's title column; every other value stays, so a row typed into a
+ *  schema cut down to one column keeps what the server's columns can still show. */
+function retitled(properties: NotionState["pages"][string]["properties"], localTitle: string, serverTitle: string) {
+  const { [localTitle]: title, ...rest } = properties ?? {};
+  return { ...rest, [serverTitle]: title ?? rest[serverTitle] ?? "" };
+}
+
+/** Server definition and views; local rows the server lacks are kept under the server's title column. A row
+ *  id both sides hold is the server's: a placeholder row carries one string, the server's a real record. */
+function placeholderSliceFor(local: NotionState, dbKey: string, server: NotionState): NotionState {
+  const slice = emptySlice();
+  const definition = server.databases[dbKey];
+  if (definition) slice.databases[dbKey] = definition;
+  slice.pages = { ...server.pages };
+  slice.views = { ...server.views };
+  const localTitle = local.databases[dbKey]?.titlePropertyId;
+  const serverTitle = definition?.titlePropertyId;
+  for (const [id, page] of Object.entries(local.pages)) {
+    if (slice.pages[id]) continue;
+    if (id === `${dbKey}-row-1` && isBlankPage(page)) continue;
+    slice.pages[id] = localTitle && serverTitle ? { ...page, properties: retitled(page.properties, localTitle, serverTitle) } : page;
+  }
+  return slice;
+}
 
 /** Union of one database's local slice with the server's copy so NEITHER side
  *  loses a record. Used when local is dirty/untracked and can't be trusted to
@@ -110,7 +144,8 @@ const isBlankPage = (page: NotionState["pages"][string]): boolean =>
  *  latter used to overwrite real data). The side with MORE records is the base
  *  and wins id collisions (its schema/views win too); the other side only fills
  *  in records the base lacks. No page or view owned by `dbKey` is dropped —
- *  except a tombstoned page, which is a deletion, not a record to rescue. */
+ *  except a tombstoned page, which is a deletion, not a record to rescue.
+ *  A placeholder schema keeps only the server's definition and views. */
 export function unionSliceFor(
   local: NotionState,
   dbKey: string,
@@ -119,6 +154,7 @@ export function unionSliceFor(
 ): NotionState {
   const localSlice = withoutPages(local, deletedPageIds);
   const serverSlice = withoutPages(sliceDatabase(server, dbKey), deletedPageIds);
+  if (isPlaceholderSchema(dbKey, localSlice, serverSlice)) return placeholderSliceFor(localSlice, dbKey, serverSlice);
   const serverIsBase = Object.keys(serverSlice.pages).length > Object.keys(localSlice.pages).length;
   const base = serverIsBase ? serverSlice : localSlice;
   const fill = serverIsBase ? localSlice : serverSlice;
