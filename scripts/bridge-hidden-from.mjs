@@ -7,10 +7,14 @@
  * It fails closed: a lookup that errors is not "visible". The caller gets a 503 and no
  * data, because answering from a half-read rule would hand out what a block hides.
  *
- * Caveat: the opt-out is read from osionos_profiles. A user who has an identity row but no
- * profile row (the backfill skips users without a GoTrue row) can never be seen as opted
- * out here, so that user is shown; a missing row is also how an unknown id answers, which
- * is why it cannot be treated as hidden.
+ * Caveat: a person is opted out when EITHER osionos_bridge_identities or osionos_profiles says
+ * so, because the legacy toggle (PATCH /api/profile/me) writes only the identity row and the
+ * account writers (PATCH /api/account/profile, bridge-account-users.mjs:136 admin patch) write
+ * only the profile row; the database trigger that mirrors them is not assumed to be applied.
+ * What stays wrong is over-hiding: if the mirror is absent, opting back in through one writer
+ * leaves a stale `true` in the other table, and the person stays hidden. Both writers can cause
+ * it. Opting in again through the writer that set `true` in the first place clears it. Hiding
+ * too much is the safe direction; an unknown id (no row in either table) is not hidden.
  */
 
 import { UUID_REGEX, blockedViewerBy, readInChunks, rest } from './bridge-social-core.mjs';
@@ -18,12 +22,19 @@ import { inFilter } from './bridge-paging.mjs';
 
 const lower = (id) => String(id ?? '').toLowerCase();
 
-async function optedOutAmong(config, fetchImpl, ids) {
+const OPT_OUT_TABLES = ['osionos_profiles', 'osionos_bridge_identities'];
+
+async function optedOutIn(table, config, fetchImpl, ids) {
 	const rows = await readInChunks(ids, async (chunk) => {
-		const part = await rest(config, fetchImpl, `osionos_profiles?${inFilter('user_id', chunk)}&directory_opt_out=eq.true&select=user_id`);
+		const part = await rest(config, fetchImpl, `${table}?${inFilter('user_id', chunk)}&directory_opt_out=eq.true&select=user_id`);
 		return Array.isArray(part) ? part : [];
 	});
-	return new Set(rows.map((row) => lower(row.user_id)));
+	return rows.map((row) => lower(row.user_id));
+}
+
+async function optedOutAmong(config, fetchImpl, ids) {
+	const found = await Promise.all(OPT_OUT_TABLES.map((table) => optedOutIn(table, config, fetchImpl, ids)));
+	return new Set(found.flat());
 }
 
 function unavailable(cause) {

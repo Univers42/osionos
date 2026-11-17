@@ -28,15 +28,31 @@ describe('hiddenAmong', () => {
 		assert.deepEqual([...hidden].sort(), [uid(2), uid(3), uid(4)]);
 	});
 
-	it('reads 120 subjects in chunks of at most 50 and one block list', async () => {
+	it('reads 120 subjects in chunks of at most 50 from each opt-out table and one block list', async () => {
 		const s = store();
 		await hiddenAmong(CONFIG, s.fetchImpl, VIEWER, Array.from({ length: 120 }, (_, n) => uid(100 + n)));
 		assert.equal(s.callsTo('osionos_user_blocks').length, 1);
 		assert.equal(s.callsTo('osionos_profiles').length, 3);
+		assert.equal(s.callsTo('osionos_bridge_identities').length, 3);
 	});
 
+	// Either column hides: the legacy toggle writes the identity row and only a trigger mirrors it.
+	const optOutCases = [
+		['an identity row opted out and no profile row', [], [{ user_id: uid(2), directory_opt_out: true }]],
+		['an identity row opted out and a profile row that says false', [{ user_id: uid(2), directory_opt_out: false }], [{ user_id: uid(2), directory_opt_out: true }]],
+		['a profile row opted out and an identity row that says false', [{ user_id: uid(2), directory_opt_out: true }], [{ user_id: uid(2), directory_opt_out: false }]],
+	];
+	for (const [label, profiles, identities] of optOutCases) {
+		it(`hides a subject with ${label}`, async () => {
+			const s = store({ tables: { osionos_profiles: profiles, osionos_bridge_identities: identities } });
+			assert.equal(await hiddenFrom(CONFIG, s.fetchImpl, uid(2), VIEWER), true);
+		});
+	}
+
 	it('answers 503 account_plane_unavailable, keeping the cause, when a read fails', async () => {
-		const s = store({ failWhen: (name) => name === 'osionos_profiles' });
-		await assert.rejects(hiddenFrom(CONFIG, s.fetchImpl, uid(2), VIEWER), (error) => error.status === 503 && error.code === 'account_plane_unavailable' && error.cause instanceof Error);
+		for (const table of ['osionos_profiles', 'osionos_bridge_identities', 'osionos_user_blocks']) {
+			const s = store({ failWhen: (name) => name === table });
+			await assert.rejects(hiddenFrom(CONFIG, s.fetchImpl, uid(2), VIEWER), (error) => error.status === 503 && error.code === 'account_plane_unavailable' && error.cause instanceof Error, table);
+		}
 	});
 });

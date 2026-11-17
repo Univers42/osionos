@@ -34,7 +34,7 @@ function profileRow(userId, name, optedOut = false) {
 	return { user_id: userId, username: name.toLowerCase(), display_name: name, directory_opt_out: optedOut, avatar_url: null, headline: `${name} headline` };
 }
 
-function world({ viewer, optedOut = false, failWhen }) {
+function world({ viewer, optedOut = false, identityOnlyOptOut = false, failWhen }) {
 	const everyone = [SUBJECT, STRANGER, ...AROUND];
 	const blocks = [...viewer.blocks, { blocker_id: viewer.id, blocked_id: uid(4) }, { blocker_id: uid(5), blocked_id: viewer.id }];
 	const follows = [
@@ -49,7 +49,7 @@ function world({ viewer, optedOut = false, failWhen }) {
 		failWhen,
 		tables: {
 			osionos_profiles: profiles,
-			osionos_bridge_identities: [{ user_id: SUBJECT, display_name: 'User10', username: 'user10', directory_opt_out: optedOut, profile: { bio: 'bio', fields: { phone: '555' } }, created_at: at(0), last_seen_at: at(1) }],
+			osionos_bridge_identities: [{ user_id: SUBJECT, display_name: 'User10', username: 'user10', directory_opt_out: optedOut || identityOnlyOptOut, profile: { bio: 'bio', fields: { phone: '555' } }, created_at: at(0), last_seen_at: at(1) }],
 			osionos_workspace_members: [{ workspace_id: TEAM, user_id: SUBJECT, role: 'owner' }],
 		},
 	});
@@ -151,6 +151,14 @@ describe('U5 privacy matrix', () => {
 		}
 	}
 
+	it('hides a subject whose opt-out lives in the identity row only, on every route', async () => {
+		const w = world({ viewer: VIEWERS.stranger, identityOnlyOptOut: true });
+		assert.deepEqual(keys((await w.profile(SUBJECT)).body), MINIMAL_LEGACY);
+		assert.deepEqual(keys((await w.card('user10')).body), REDUCED_CARD);
+		assert.deepEqual((await w.counts(SUBJECT)).body, ZERO_COUNTS);
+		assert.deepEqual((await w.followers(SUBJECT)).body, { ok: true, items: [], nextCursor: null });
+	});
+
 	it('an unknown id is a 404 on the two profile routes and an empty answer on the follow routes', async () => {
 		const w = world({ viewer: VIEWERS.stranger });
 		assert.equal((await w.profile(UNKNOWN)).status, 404);
@@ -166,7 +174,8 @@ describe('U5 privacy matrix', () => {
 
 	const failures = {
 		'the block list': (name) => name === 'osionos_user_blocks',
-		'the opt-out read': (name, params) => name === 'osionos_profiles' && params.has('directory_opt_out') && params.get('directory_opt_out') === 'eq.true',
+		'the profile opt-out read': (name, params) => name === 'osionos_profiles' && params.get('directory_opt_out') === 'eq.true',
+		'the identity opt-out read': (name, params) => name === 'osionos_bridge_identities' && params.get('directory_opt_out') === 'eq.true',
 	};
 	for (const [what, failWhen] of Object.entries(failures)) {
 		it(`answers 503 on every route when ${what} fails, and never the full answer`, async () => {

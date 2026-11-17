@@ -86,7 +86,7 @@ describe('the counts', () => {
 		const { store, call } = world({ follows });
 		const answer = await call('GET', `/api/social/follow-counts/${uid(2)}`);
 		assert.deepEqual(answer.body, { ok: true, followerCount: 3, followingCount: 1, viewerFollows: true });
-		// One RPC for the three numbers; the rule that may hide them adds its own two reads (U5-1).
+		// One RPC for the three numbers; the rule that may hide them adds its own three reads (U5-1).
 		assert.equal(store.callsTo('rpc/osionos_follow_counts').length, 1);
 		assert.deepEqual(store.callsTo('rpc/osionos_follow_counts')[0].body, { p_user: uid(2), p_viewer: ME });
 	});
@@ -149,7 +149,7 @@ describe('the lists', () => {
 		await small.call('GET', `/api/social/followers/${uid(7)}?limit=2`);
 		await large.call('GET', `/api/social/followers/${uid(7)}?limit=5`);
 		assert.equal(small.store.calls.length, large.store.calls.length);
-		assert.ok(small.store.calls.length <= 5, `${small.store.calls.length} requests`);
+		assert.ok(small.store.calls.length <= 6, `${small.store.calls.length} requests`);
 	});
 
 	const invalid = [
