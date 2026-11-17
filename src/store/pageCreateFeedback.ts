@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
+import { KnownDatabaseReadOnlyError } from "@/widgets/database-view/model/knownDatabaseReadOnlyError";
 
 /**
  * Surface a page-create failure instead of swallowing it. A silent `return null`
@@ -34,4 +35,11 @@ export function notifyCreateFailure(description: string, err?: unknown): null {
     description,
   });
   return null;
+}
+
+/** A template whose content could not be instantiated. A read-only tab says why and what to do;
+ *  the generic line would leave the user retrying a template that cannot work until a reload. */
+export function notifyTemplateFailure(err: unknown): null {
+  const description = err instanceof KnownDatabaseReadOnlyError ? err.message : "Couldn't create the page from this template.";
+  return notifyCreateFailure(description, err);
 }

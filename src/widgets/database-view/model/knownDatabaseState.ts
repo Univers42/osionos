@@ -79,21 +79,21 @@ let pendingKnownDatabaseState: NotionState | null = null;
 /** The durable copy's side of the store; null without a window (tests, prerender). */
 let persistence: KnownDatabasePersistence | null = null;
 /** I9, I7: a write before the stored copy is read, or in a pull-only tab, does nothing. */
-const isWritable = (): boolean => persistence?.canWrite() ?? true;
+export const isKnownDatabaseWritable = (): boolean => persistence?.canWrite() ?? true;
 
 export const useKnownDatabaseStateStore = create<KnownDatabaseStoreState>((set) => ({
   state: seedSnapshot(), // the stored copy replaces it at readiness (restoreStoredState)
   replaceState: (state) => {
-    if (isWritable()) set({ state: persistKnownDatabaseState(state) });
+    if (isKnownDatabaseWritable()) set({ state: persistKnownDatabaseState(state) });
   },
   resetState: () => {
-    if (!isWritable()) return;
+    if (!isKnownDatabaseWritable()) return;
     deletedPageIds = new Set();
     set({ state: persistKnownDatabaseState(seedSnapshot()) });
   },
   updatePageProperty: (pageId, propertyId, value) => set((current) => {
     const page = current.state.pages[pageId];
-    if (!page || !isWritable()) return current;
+    if (!page || !isKnownDatabaseWritable()) return current;
     return {
       state: persistKnownDatabaseState({
         ...current.state,
@@ -183,7 +183,7 @@ export function getDeletedPageIds(): ReadonlySet<string> {
 }
 
 export function persistKnownDatabaseState(state: NotionState): NotionState {
-  if (!isWritable()) return state;
+  if (!isKnownDatabaseWritable()) return state;
   // No clone here: `state` is built immutably by every caller (zustand set
   // replaces objects, never mutates), so recording the ref is safe until the
   // debounced flush snapshots it. Cloning here ran structuredClone over the

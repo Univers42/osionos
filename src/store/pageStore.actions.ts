@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import { api, ApiError, getActivePageJwt } from "@/shared/api/client";
-import { notifyCreateFailure } from "./pageCreateFeedback";
+import { notifyCreateFailure, notifyTemplateFailure } from "./pageCreateFeedback";
 import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { planDuplicate } from "./duplicatePlan";
@@ -794,7 +794,7 @@ export function createCreatePageFromTemplate(_set: SetFn, get: GetFn) {
       const glue = await import("@/widgets/database-view/model/templateDatabaseInstantiate");
       clonedContent = await glue.instantiateTemplateDatabases(content, workspaceId);
     } catch (err) {
-      return notifyCreateFailure("Couldn't create the page from this template.", err);
+      return notifyTemplateFailure(err);
     }
     const page = await get().addPage(
       workspaceId,
