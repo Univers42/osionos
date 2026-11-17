@@ -14,7 +14,11 @@
 // lost on navigation (I10, 20/20) while the push it races still lands, so the next load would push
 // its older copy over the newer server row (N2). A synchronous localStorage write survives; it
 // carries every database that differs from any copy the store may hold next, under this tab's own
-// key, so two tabs never overwrite each other's journal (T7).
+// key, so two tabs never overwrite each other's journal (T7). It carries the live tombstones too
+// (J-C10), the set the lost commit would have stored: without them the reload unions the server's
+// copy of a row deleted in the window back in, and pushes it. A page some base still holds makes its
+// database differ from that base, so its database is journaled; a page no base holds has no
+// database to attribute, so the set is carried whole.
 
 import type { NotionState } from "@notion-db/object-database";
 import { setItemEvictingPageCaches, type PageCacheStorage } from "@/store/pageStore.helpers";
@@ -39,6 +43,8 @@ export interface UnloadJournal {
   readonly writtenAt: number;
   readonly slices: Readonly<Record<string, NotionState>>;
   readonly record: Readonly<Record<string, string>>;
+  /** Tombstones the readiness unions into the stored ones; never a removal (ADR 0051). */
+  readonly deletedPages: readonly string[];
 }
 
 export interface JournalInput {
@@ -49,6 +55,7 @@ export interface JournalInput {
   readonly landable: readonly JournalBase[];
   readonly live: NotionState;
   readonly record: RecordMap;
+  readonly deleted: ReadonlySet<string>;
 }
 
 const baseHashes = new WeakMap<NotionState, Map<string, string>>();
@@ -80,7 +87,7 @@ export function buildUnloadJournal(input: JournalInput): UnloadJournal | null {
     if (entry !== undefined) record[dbKey] = entry;
   }
   if (Object.keys(slices).length === 0) return null;
-  return { bases: [...input.baseIds], tabId: input.tabId, writtenAt: Date.now(), slices, record };
+  return { bases: [...input.baseIds], tabId: input.tabId, writtenAt: Date.now(), slices, record, deletedPages: [...input.deleted] };
 }
 
 /** Caveat: an estimate of the origin quota a value costs: browsers that store UTF-16 charge every
@@ -117,6 +124,7 @@ export interface UnloadJournalSource {
   /** The copy read at readiness, as live state; null when the store held none. */
   loadedBase(): JournalBase | null;
   live(): NotionState;
+  deleted(): ReadonlySet<string>;
   record(): { readonly version: number; snapshot(): RecordMap };
 }
 
@@ -147,8 +155,10 @@ function baseIds(ledger: CommitLedger): string[] {
 
 function writeOnce(source: UnloadJournalSource, storage: PageCacheStorage): Outcome {
   const ledger = source.ledger();
-  const record = source.record().snapshot();
-  const journal = buildUnloadJournal({ tabId: source.tabId, baseIds: baseIds(ledger), landable: landableBases(ledger, source.loadedBase()), live: source.live(), record });
+  const journal = buildUnloadJournal({
+    tabId: source.tabId, baseIds: baseIds(ledger), landable: landableBases(ledger, source.loadedBase()),
+    live: source.live(), record: source.record().snapshot(), deleted: source.deleted(),
+  });
   if (!journal) {
     forgetUnloadJournal(storage, source.tabId);
     return "unneeded";

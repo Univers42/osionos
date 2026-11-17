@@ -12,6 +12,7 @@ await import("./support/kds-browser.ts");
 const kds = await import("./support/kds-tab.ts");
 const { openDurableCopy } = await import("../../src/widgets/database-view/model/knownDatabaseDurableCopy.ts");
 const { openReadinessJournals } = await import("../../src/widgets/database-view/model/knownDatabaseJournalApply.ts");
+const { createMemoryKeyValueStore } = await import("./support/memory-key-value-store.ts");
 const { EMPTY, withDb, sliceOf, hashOf, valuesOf, storeWith, storedPair, memoryLegacy } = kds;
 
 const L = withDb(withDb(EMPTY, "db-x", ["a", "b"]), "db-y", ["y-1"]);
@@ -19,8 +20,8 @@ const REC = { "db-x": hashOf(L, "db-x"), "db-y": hashOf(L, "db-y") };
 const X1 = withDb(L, "db-x", ["a", "b-1"]);
 const KEY = (tabId: string) => `osionos.kds.journal.v1.${tabId}`;
 
-function journal(tabId: string, bases: string[], state: typeof L, record: Record<string, string>, writtenAt = 1) {
-  return JSON.stringify({ bases, tabId, writtenAt, slices: { "db-x": sliceOf(state, "db-x") }, record });
+function journal(tabId: string, bases: string[], state: typeof L, record: Record<string, string>, writtenAt = 1, deletedPages: string[] = []) {
+  return JSON.stringify({ bases, tabId, writtenAt, slices: { "db-x": sliceOf(state, "db-x") }, record, deletedPages });
 }
 
 async function ready(storage: ReturnType<typeof memoryLegacy>, store = storeWith(L, REC)) {
@@ -114,4 +115,25 @@ test("apply: no journals configured → the copy reads as before", async () => {
   await copy.ready;
   assert.equal(store.writes, 0);
   assert.equal(copy.ledger().loadedId, "earlier:1");
+});
+
+test("apply: the tombstones of every applied journal are unioned into the stored ones (J-C10)", async () => {
+  const stored = JSON.stringify({ ...L, deletedPages: ["kept"] });
+  const store = createMemoryKeyValueStore({ state: { text: stored, id: "earlier:1" }, pushed: { map: REC, stateId: "earlier:1" } });
+  const storage = memoryLegacy({
+    [KEY("tab-a")]: journal("tab-a", ["earlier:1"], X1, REC, 1, ["db-x-r9", "kept"]),
+    [KEY("tab-b")]: journal("tab-b", ["earlier:1"], X1, REC, 2, ["db-x-r8"]),
+    [KEY("tab-c")]: journal("tab-c", ["other:1"], X1, REC, 3, ["not-applied"]),
+  });
+  await ready(storage, store);
+  const text = (store.entries.get("state") as { text: string }).text;
+  assert.deepEqual([...(JSON.parse(text) as { deletedPages: string[] }).deletedPages].sort(), ["db-x-r8", "db-x-r9", "kept"]);
+});
+
+test("apply: a journal without its tombstone list is removed unapplied", async () => {
+  const bare = JSON.stringify({ bases: ["earlier:1"], tabId: "tab-a", writtenAt: 1, slices: { "db-x": sliceOf(X1, "db-x") }, record: REC });
+  const storage = memoryLegacy({ [KEY("tab-a")]: bare });
+  const { store } = await ready(storage);
+  assert.equal(storedPair(store).id, "earlier:1");
+  assert.equal(storage.values.size, 0);
 });

@@ -111,7 +111,7 @@ test("ledger: after 1000 resolved commits the journal names the loaded id, the l
   const storage = mapStorage();
   const live = { databases: { "db-x": { id: "db-x" } }, pages: {}, views: {} } as unknown as typeof committed;
   const writer = createUnloadJournalWriter({
-    storage, tabId: "tabA", ledger: () => copy.ledger(), loadedBase: () => null, live: () => live,
+    storage, tabId: "tabA", ledger: () => copy.ledger(), loadedBase: () => null, live: () => live, deleted: () => new Set(),
     record: () => ({ version: 0, snapshot: () => ({}) }),
   });
   assert.equal(writer.write(), true);

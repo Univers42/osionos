@@ -14,11 +14,12 @@
 // store holds describes edits made on top of that copy; one naming another id would lay an older
 // window over a newer copy, so it is removed unapplied. A stored record entry that already equals
 // the hash of the journal's slice is an ack that landed after the journal was written (T8): taking
-// the journal's older entry would read the database dirty and push it over a newer server row.
+// the journal's older entry would read the database dirty and push it over a newer server row. The
+// journals' tombstones are unioned into the stored ones (J-C10): a database is never removed.
 
 import type { NotionState } from "@notion-db/object-database";
 import type { PageCacheStorage } from "@/store/pageStore.helpers";
-import type { PersistedKnownDatabaseState } from "./knownDatabasePersistedState";
+import { readDeletedPageIds, type PersistedKnownDatabaseState } from "./knownDatabasePersistedState";
 import { KDS_JOURNAL_KEY_PREFIX, type UnloadJournal } from "./knownDatabaseJournal";
 import { hashSlice, withReplacedSlices } from "./objectDatabaseSlice";
 
@@ -54,6 +55,8 @@ interface Winner {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isStringList = (value: unknown): boolean => Array.isArray(value) && value.every((item) => typeof item === "string");
+
 function isSlice(value: unknown): value is NotionState {
   return isRecord(value) && isRecord(value.databases) && isRecord(value.pages) && isRecord(value.views);
 }
@@ -62,7 +65,7 @@ function isSlice(value: unknown): value is NotionState {
 function parseJournal(raw: string): UnloadJournal | null {
   try {
     const value: unknown = JSON.parse(raw);
-    if (!isRecord(value) || !Array.isArray(value.bases) || !value.bases.every((id) => typeof id === "string")) return null;
+    if (!isRecord(value) || !isStringList(value.bases) || !isStringList(value.deletedPages)) return null;
     if (typeof value.writtenAt !== "number" || !isRecord(value.slices) || !isRecord(value.record)) return null;
     if (!Object.values(value.slices).every(isSlice) || !Object.values(value.record).every((hash) => typeof hash === "string")) return null;
     return value as unknown as UnloadJournal;
@@ -102,18 +105,21 @@ function mergedRecord(stored: Readonly<Record<string, string>>, winners: Readonl
   return record;
 }
 
-function mergedText(text: string, winners: ReadonlyMap<string, Winner>): string {
+function mergedText(text: string, winners: ReadonlyMap<string, Winner>, matching: readonly UnloadJournal[]): string {
   const stored = JSON.parse(text) as PersistedKnownDatabaseState;
   const state = { databases: stored.databases ?? {}, pages: stored.pages ?? {}, views: stored.views ?? {} } as NotionState;
   const slices = new Map([...winners].map(([dbKey, winner]) => [dbKey, winner.slice]));
-  return JSON.stringify({ ...stored, ...withReplacedSlices(state, slices) });
+  const deleted = readDeletedPageIds(stored);
+  for (const journal of matching) for (const pageId of journal.deletedPages) deleted.add(pageId);
+  const tombstones = deleted.size === 0 ? {} : { deletedPages: [...deleted] };
+  return JSON.stringify({ ...stored, ...withReplacedSlices(state, slices), ...tombstones });
 }
 
 function mergeInto(stored: StoredCopy, found: readonly FoundJournal[]): MergedCopy | null {
   const matching = found.flatMap(({ journal }) => (journal?.bases.includes(stored.id) ? [journal] : []));
   if (matching.length === 0) return null;
   const winners = winnersFor(matching);
-  return { text: mergedText(stored.text, winners), record: mergedRecord(stored.record, winners) };
+  return { text: mergedText(stored.text, winners, matching), record: mergedRecord(stored.record, winners) };
 }
 
 // Compare-and-delete: a tab that rewrote its key since the read owns the newer text.

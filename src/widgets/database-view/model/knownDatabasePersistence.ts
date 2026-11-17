@@ -128,6 +128,7 @@ function journalFor(session: Session): UnloadJournalWriter | null {
     ledger: () => session.deps.durable.ledger(),
     loadedBase: () => session.loadedBase,
     live: () => session.deps.getLiveState(),
+    deleted: () => session.deps.getDeletedPageIds(),
     record: objectDatabasePushRecord,
   });
 }
