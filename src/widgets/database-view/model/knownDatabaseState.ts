@@ -40,6 +40,7 @@ import {
   warnReadOnlyDatabases,
 } from "./knownDatabaseStorage";
 import { createFlushSchedule } from "./knownDatabaseFlushSchedule";
+import { applyAdapterOptions, type KnownDatabaseAdapterOptions } from "./knownDatabaseViewLimit";
 import { createKnownDatabasePersistence, type KnownDatabasePersistence } from "./knownDatabasePersistence";
 import { knownDatabaseUnloadJournal, openKnownDatabaseDurableCopy } from "./knownDatabaseDurableStore";
 import { watchKnownDatabaseUnload } from "./knownDatabaseUnload";
@@ -57,15 +58,6 @@ type KnownDatabaseStoreState = {
   resetState: () => void;
   updatePageProperty: (pageId: string, propertyId: string, value: unknown) => void;
 };
-
-interface KnownDatabaseAdapterOptions {
-  /** Compact fallback for an inline embed — fills a view's `loadLimit` ONLY when
-   *  the user hasn't set a per-view Limit. Never clamps an explicit choice
-   *  (the collision that made the Limit setting appear not to persist). */
-  defaultLoadLimit?: number;
-  /** Explicit per-embed hard cap (block `recordLimit`) — clamps every view. */
-  recordCap?: number;
-}
 
 export interface PersistableObjectDatabaseAdapter extends ObjectDatabaseAdapter {
   persistState?: (state: NotionState, previousState?: NotionState) => void;
@@ -419,27 +411,6 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
       for (const callback of this.subscribers) callback(event);
     });
   }
-}
-
-function applyAdapterOptions(state: NotionState, options: KnownDatabaseAdapterOptions): NotionState {
-  const fill = options.defaultLoadLimit && options.defaultLoadLimit > 0 ? Math.max(1, Math.round(options.defaultLoadLimit)) : undefined;
-  const cap = options.recordCap && options.recordCap > 0 ? Math.max(1, Math.round(options.recordCap)) : undefined;
-  if (fill === undefined && cap === undefined) return state;
-  return {
-    ...state,
-    views: Object.fromEntries(Object.entries(state.views).map(([viewId, view]) => {
-      if (view.type !== "table" && view.type !== "list" && view.type !== "timeline") return [viewId, view];
-      const current = Number(view.settings?.loadLimit);
-      // Respect an explicit per-view Limit (incl. 0 = "All"); only fall back to
-      // the compact inline default when the user hasn't chosen one. This is the
-      // fix for the Limit that "didn't persist": the default no longer clamps it.
-      let next = Number.isFinite(current) ? current : fill;
-      // An explicit per-embed record cap still clamps (0 = "All" is never capped).
-      if (cap !== undefined && next !== undefined && next !== 0) next = Math.min(next, cap);
-      if (next === undefined) return [viewId, view];
-      return [viewId, { ...view, settings: { ...view.settings, loadLimit: next } }];
-    })),
-  };
 }
 
 function mergeChangedRecords<TRecord>(
