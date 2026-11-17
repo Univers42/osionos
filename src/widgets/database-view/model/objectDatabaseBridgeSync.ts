@@ -28,6 +28,7 @@ import { startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objec
 import { resetObjectDatabaseWorkspaces } from "./objectDatabaseWorkspaces";
 import { databaseTitle, fetchServerDatabases, pushDatabaseSlice, serverStateOf } from "./objectDatabaseBridgeRequests";
 import { createPushBaseline } from "./objectDatabasePushBaseline";
+import { createPushRecord, type PushRecord, type PushRecordMap, type PushRecordSink } from "./objectDatabasePushRecord";
 import { createSessionWait, type SessionWait } from "./sessionWait";
 import { clearRefusedDatabaseSave, noticeRefusedDatabaseSave } from "./refusedDatabaseSave";
 
@@ -35,6 +36,8 @@ const HYDRATION_JWT_RETRY_MS = 1500;
 const HYDRATION_JWT_MAX_ATTEMPTS = 12;
 
 export type ObjectDatabaseSyncHooks = {
+  /** Resolves once the store holds its stored copy; hydrate reconciles nothing before. */
+  whenReady?: () => Promise<void>;
   getSeedIds: () => ReadonlySet<string>;
   getLiveState: () => NotionState;
   /** Pages the user deleted. Never pulled back from the server (the push that
@@ -61,17 +64,29 @@ export function objectDatabaseServerSyncReady(): boolean {
   return globalThis.window !== undefined && Boolean(API_BASE) && isObjectDatabaseServerSyncEnabled();
 }
 
+// The legacy home of the record (localStorage), read once at tab load. A store with a durable
+// copy replaces both the record and its sink when its copy is read (devil I5).
 const pushBaseline = createPushBaseline(() => globalThis.localStorage);
+const legacySink: PushRecordSink = {
+  isPullOnly: false,
+  recordChanged: (map) => pushBaseline.save({ ...map }),
+  reset: () => pushBaseline.reset(),
+};
+let record: PushRecord = createPushRecord(pushBaseline.load());
+let sink: PushRecordSink = legacySink;
+
+/** Seeds the record from the copy the store read, and names where it goes from now on. */
+export function seedObjectDatabasePushRecord(initial: Readonly<PushRecordMap>, next: PushRecordSink = legacySink): void {
+  record = createPushRecord(initial);
+  sink = next;
+}
+
+export function objectDatabasePushRecord(): PushRecord {
+  return record;
+}
 
 export { objectDatabasePushBody, objectDatabasePushBodyFor } from "./objectDatabaseBridgeRequests";
 
-/** Flush hook: upload every user database whose slice changed since its last
- *  successful push. Gated on `hydrationCompleted`
- *  — a browser MUST pull the server's copy before it may push, otherwise a fresh
- *  session (whose store is briefly empty, or holds an auto-created placeholder)
- *  could overwrite real server data before it ever saw it. Once hydration has run
- *  the store is reconciled, so pushing is safe.
- *  Fire-and-forget — a failed item simply stays dirty and retries next flush. */
 /** The starter a page invents for a database this tab has not seen. It says nothing the server
  *  needs: pushed, it blanks a real database or resurrects a deleted one (scripts/bridge-object-db-guard.mjs).
  *  Caveat: a database created here reaches the server at its first edit, not at its creation. */
@@ -86,55 +101,66 @@ export function isPristinePlaceholder(dbKey: string, slice: NotionState): boolea
 
 let refreshAfterRefusal: (() => void) | null = null;
 
+type DirtyItem = { dbKey: string; title: string; slice: NotionState; hash: string };
+
+function dirtyItems(state: NotionState, seedIds: ReadonlySet<string>): DirtyItem[] {
+  const pushed = record.snapshot();
+  const slices = sliceAllDatabases(state);
+  return userDatabaseIds(state, seedIds)
+    .map((dbKey) => ({ dbKey, title: databaseTitle(state, dbKey), slice: slices.get(dbKey) ?? emptySlice() }))
+    .map((item) => ({ ...item, hash: hashSlice(item.slice) }))
+    .filter((item) => pushed[item.dbKey] !== item.hash && !isPristinePlaceholder(item.dbKey, item.slice));
+}
+
+async function pushItem(jwt: string, item: DirtyItem): Promise<void> {
+  try {
+    await pushDatabaseSlice(jwt, item.dbKey, item.title, item.slice);
+    record.set(item.dbKey, item.hash);
+    clearRefusedDatabaseSave(item.dbKey);
+  } catch (error) {
+    // The server holds this database and this tab has a blank: stop pushing and load it.
+    if ((error as { status?: number }).status === 409) {
+      record.set(item.dbKey, item.hash);
+      refreshAfterRefusal?.();
+    } else {
+      record.delete(item.dbKey); // keep dirty → retried next flush
+      noticeRefusedDatabaseSave(item.dbKey, item.title, item.hash, (error as { status?: number }).status);
+    }
+  }
+}
+
+/** Flush hook: upload every user database whose slice changed since its last
+ *  successful push. Gated on `hydrationCompleted`
+ *  — a browser MUST pull the server's copy before it may push, otherwise a fresh
+ *  session (whose store is briefly empty, or holds an auto-created placeholder)
+ *  could overwrite real server data before it ever saw it. Once hydration has run
+ *  the store is reconciled, so pushing is safe.
+ *  Fire-and-forget — a failed item simply stays dirty and retries next flush.
+ *  A pull-only session (a fallback in a browser whose copy moved to IndexedDB) never pushes. */
 export function pushDirtyObjectDatabases(
   state: NotionState,
   seedIds: ReadonlySet<string>,
   deletedPageIds?: ReadonlySet<string>,
 ): void {
-  if (!objectDatabaseServerSyncReady() || pushInFlight || !hydrationCompleted) return;
+  if (sink.isPullOnly || !objectDatabaseServerSyncReady() || pushInFlight || !hydrationCompleted) return;
   const jwt = getActivePageJwt();
   if (!jwt) return;
   // A tombstoned page must not be written back to the server (that would undo
   // the delete for every other client).
-  if (deletedPageIds?.size) state = withoutDeletedPages(state, deletedPageIds);
-
-  const pushed = pushBaseline.load();
-  const userIds = new Set(userDatabaseIds(state, seedIds));
-  const slices = sliceAllDatabases(state);
-  const dirty = [...userIds]
-    .map((dbKey) => ({ dbKey, title: databaseTitle(state, dbKey), slice: slices.get(dbKey) ?? emptySlice() }))
-    .map((item) => ({ ...item, hash: hashSlice(item.slice) }))
-    .filter((item) => pushed[item.dbKey] !== item.hash && !isPristinePlaceholder(item.dbKey, item.slice));
+  const dirty = dirtyItems(deletedPageIds?.size ? withoutDeletedPages(state, deletedPageIds) : state, seedIds);
   // A database missing from `state` is never deleted remotely. Absence is not intent: a
   // state that did not persist (storage full), an empty or partial server list, or a flush
   // captured before hydrate all look like "every database was deleted". No delete action
   // exists in the UI ("Delete database" only closes the menu), so a remote delete needs an
   // explicit intent once one ships (groot ADR 0051).
   if (dirty.length === 0) return;
-
   pushInFlight = true;
   void (async () => {
-    const next = pushBaseline.load();
     try {
-      for (const item of dirty) {
-        try {
-          await pushDatabaseSlice(jwt, item.dbKey, item.title, item.slice);
-          next[item.dbKey] = item.hash;
-          clearRefusedDatabaseSave(item.dbKey);
-        } catch (error) {
-          // The server holds this database and this tab has a blank: stop pushing and load it.
-          if ((error as { status?: number }).status === 409) {
-            next[item.dbKey] = item.hash;
-            refreshAfterRefusal?.();
-          } else {
-            delete next[item.dbKey]; // keep dirty → retried next flush
-            noticeRefusedDatabaseSave(item.dbKey, item.title, item.hash, (error as { status?: number }).status);
-          }
-        }
-      }
-      pushBaseline.save(next);
+      for (const item of dirty) await pushItem(jwt, item);
     } finally {
       pushInFlight = false;
+      sink.recordChanged(record.snapshot());
     }
   })();
 }
@@ -148,39 +174,47 @@ export function pushDirtyObjectDatabases(
  *  local user database only in the browser is auto-repaired (pushed up). Server
  *  truth is applied via `applyMerged` (write-through), then a push drains dirty. */
 async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
+  await hooks.whenReady?.(); // reconciling the seed would read every stored database as new
   const jwt = getActivePageJwt();
   if (!jwt) throw new Error("object-db hydrate: no session");
   const serverMap = await fetchServerDatabases(jwt);
-
   const seedIds = hooks.getSeedIds();
   const deletedPageIds = hooks.getDeletedPageIds?.() ?? new Set<string>();
-  const liveState = hooks.getLiveState();
-  const live = withoutDeletedPages(liveState, deletedPageIds);
-  const server = new Map([...serverMap].map(([dbKey, row]) => [dbKey, serverStateOf(row)] as const));
-  const { merged, changed: reconciled, nextPushed } = reconcileServerDatabases({ live, server, pushed: pushBaseline.load(), deletedPageIds });
-  const changed = reconciled || live !== liveState;
-
-  for (const dbKey of userDatabaseIds(merged, seedIds)) {
-    if (!serverMap.has(dbKey)) delete nextPushed[dbKey]; // never on server → auto-repair on push
-  }
-
-  // A tombstone is only needed until the server agrees the row is gone: the
-  // merge above already ran with the full set, so from here on a tombstone no
-  // server slice holds is dead weight — it would pile up in localStorage for
-  // every deletion the user ever made. An empty server map keeps them all (an
-  // empty list can mean "not loaded" — never prune blind).
-  hooks.pruneDeletedPageIds?.(
-    tombstonesStillNeeded(deletedPageIds, [...server.values()]),
-  );
-
-  pushBaseline.save(nextPushed);
+  const { merged, changed } = reconcileWithServer(hooks, serverMap, seedIds, deletedPageIds);
   hydrationCompleted = true;
   if (changed) {
     hooks.applyMerged(merged);
     hooks.notifyReloaded?.(); // mounted views reload from the merged store immediately
   }
+  // Never before applyMerged (devil R3, B1a): the record stays in memory and is stored with
+  // the merged state's commit, or next to the copy already committed when nothing changed.
+  sink.recordChanged(record.snapshot());
   hooks.reconcileRegistry?.(userDatabaseIds(merged, seedIds)); // list every synced db in the sidebar
-  pushDirtyObjectDatabases(merged, seedIds, deletedPageIds); // upload dirty + repaired now, not only on next edit
+  // Upload dirty + repaired now, not only on next edit. The live state, as every push (devil I3).
+  pushDirtyObjectDatabases(hooks.getLiveState(), seedIds, deletedPageIds);
+}
+
+/** Reconciles the live state with the server's databases and sets the in-memory record. */
+function reconcileWithServer(
+  hooks: ObjectDatabaseSyncHooks,
+  serverMap: Awaited<ReturnType<typeof fetchServerDatabases>>,
+  seedIds: ReadonlySet<string>,
+  deletedPageIds: ReadonlySet<string>,
+): { merged: NotionState; changed: boolean } {
+  const liveState = hooks.getLiveState();
+  const live = withoutDeletedPages(liveState, deletedPageIds);
+  const server = new Map([...serverMap].map(([dbKey, row]) => [dbKey, serverStateOf(row)] as const));
+  const { merged, changed, nextPushed } = reconcileServerDatabases({ live, server, pushed: record.snapshot(), deletedPageIds });
+  for (const dbKey of userDatabaseIds(merged, seedIds)) {
+    if (!serverMap.has(dbKey)) delete nextPushed[dbKey]; // never on server → auto-repair on push
+  }
+  // A tombstone is only needed until the server agrees the row is gone: the
+  // merge above already ran with the full set, so from here on a tombstone no
+  // server slice holds is dead weight. An empty server map keeps them all (an
+  // empty list can mean "not loaded" — never prune blind).
+  hooks.pruneDeletedPageIds?.(tombstonesStillNeeded(deletedPageIds, [...server.values()]));
+  record.replace(nextPushed);
+  return { merged, changed: changed || live !== liveState };
 }
 
 /** Kick hydration once the session token exists. Waits briefly for it, then
@@ -218,5 +252,6 @@ export function resetObjectDatabaseSync(): void {
   hydrationDone = false;
   hydrationCompleted = false;
   resetObjectDatabaseWorkspaces();
-  pushBaseline.reset();
+  record.replace({}); // in memory; only the legacy sink also clears its stored copy (devil I4)
+  sink.reset();
 }
