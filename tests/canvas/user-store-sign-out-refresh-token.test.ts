@@ -15,7 +15,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { gate, leaseKey, persisted, reset, resultKey, signIn, storage, stubBridge, userStore, useToastStore } from "./user-store-fixtures.ts";
+import { BRIDGE_KEY, gate, leaseKey, persisted, reset, resultKey, signIn, storage, stubBridge, userStore, useToastStore } from "./user-store-fixtures.ts";
 
 const { useUserStore, dropLocalSession } = userStore;
 const RT_U1 = "osb_rt.u1-first.sig";
@@ -76,4 +76,40 @@ test("S3 a rotation that resolves after the sign-out publishes no result for the
   assert.equal(persisted().u1, undefined);
   assert.equal(useUserStore.getState().sessions.u1, undefined);
   assert.deepEqual(keysHolding(RT_U1, RT_U1_ROTATED), []);
+});
+
+const storageFull = () => useToastStore.getState().toasts.filter((toast) => toast.title === "Browser storage is full");
+
+test("LV1 a sign-out whose record rewrite is refused leaves no key holding the account's refresh token", () => {
+  reset();
+  signIn("u1", RT_U1);
+  signIn("u2", RT_U2);
+  storage.refused.add(BRIDGE_KEY);
+  dropLocalSession("u1");
+  assert.deepEqual(keysHolding(RT_U1), []);
+  assert.equal(useUserStore.getState().sessions.u1, undefined);
+  // u2 is still signed in here but no longer saved, so the notice that says so is true.
+  assert.equal(persisted().u2, undefined);
+  assert.ok(useUserStore.getState().sessions.u2);
+  assert.equal(storageFull().length, 1);
+});
+
+test("LV1 the last account signing out with its rewrite refused gets no storage-full notice", () => {
+  reset();
+  signIn("u1", RT_U1);
+  storage.refused.add(BRIDGE_KEY);
+  dropLocalSession("u1");
+  assert.deepEqual(keysHolding(RT_U1), []);
+  assert.deepEqual(storageFull(), []);
+});
+
+test("LV1 the other accounts stay saved when the map fits once the old one is removed", () => {
+  reset();
+  signIn("u1", RT_U1);
+  signIn("u2", RT_U2);
+  storage.refusals.set(BRIDGE_KEY, 2); // the rewrite and the room-maker's retry after evicting
+  dropLocalSession("u1");
+  assert.deepEqual(keysHolding(RT_U1), []);
+  assert.equal(persisted().u2.session.refreshToken, RT_U2);
+  assert.deepEqual(storageFull(), []);
 });
