@@ -377,7 +377,9 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   // The host persists what it loaded, against its empty initial store: without taking
   // the embed's Limit back out, every paged view of the account was written with it
   // (devil F1, groot ADR 0055: 19 of 45 seed views, and the first-session journal).
-  persistState(state: NotionState, previousState?: NotionState): void {
+  // An arrow field: the host calls it unbound (object_database.tsx:532-551), and a
+  // method reading `this.options` threw there and dropped every embed write.
+  persistState = (state: NotionState, previousState?: NotionState): void => {
     const current = useKnownDatabaseStateStore.getState().state;
     const views = withoutProjectedLimits(state.views, current.views, this.options, previousState?.views);
     if (!previousState) {
@@ -393,7 +395,7 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
       pages: mergeChangedRecords(current.pages, state.pages, previousState.pages),
       views: mergeChangedRecords(current.views, views, previousState.views),
     });
-  }
+  };
 
   subscribe(callback: (event: ChangeEvent) => void): () => void {
     this.subscribers.add(callback);

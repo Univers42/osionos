@@ -55,11 +55,19 @@ function withStoredLimit(viewId: string, loadLimit: number): void {
   resetTo({ ...state, views: { ...state.views, [viewId]: { ...view, settings: { ...view.settings, loadLimit } } } });
 }
 
+// The host takes persistState off the adapter and calls it unbound
+// (object_database.tsx:532-551), so every write here goes through the same shape.
+function persistAsHost(adapter: Adapter, next: NotionState, base?: NotionState): void {
+  const { persistState } = adapter;
+  assert.ok(persistState);
+  persistState(next, base);
+}
+
 // The host's post-load persist: next = what loadState returned, base = the empty initial store.
 async function mount(options: Options): Promise<{ adapter: Adapter; loaded: NotionState }> {
   const adapter = createKnownDatabaseAdapter(options);
   const loaded = await adapter.loadState();
-  adapter.persistState?.(loaded, { ...loaded, ...EMPTY_HOST });
+  persistAsHost(adapter, loaded, { ...loaded, ...EMPTY_HOST });
   return { adapter, loaded };
 }
 
@@ -69,7 +77,7 @@ function editViews(mounted: { adapter: Adapter; loaded: NotionState }, changes: 
   const { adapter, loaded } = mounted;
   const views = { ...loaded.views };
   for (const [viewId, change] of Object.entries(changes)) views[viewId] = change(loaded.views[viewId]);
-  adapter.persistState?.({ ...loaded, views }, loaded);
+  persistAsHost(adapter, { ...loaded, views }, loaded);
 }
 
 const fullPageView = async (viewId: string) => (await createKnownDatabaseAdapter().loadState()).views[viewId];
@@ -143,7 +151,7 @@ test("F-C4 a new inline database persists its database, view and starter row", a
   resetTo();
   const adapter = createKnownDatabaseAdapter(INLINE);
   const state = withRequestedDatabase(await adapter.loadState(), "db-f1-new", undefined, "F1 new");
-  adapter.persistState?.(state, { ...state, ...EMPTY_HOST });
+  persistAsHost(adapter, state, { ...state, ...EMPTY_HOST });
   const stored = store().state;
   assert.equal(stored.databases["db-f1-new"]?.name, "F1 new");
   assert.equal(stored.views["db-f1-new-table"]?.databaseId, "db-f1-new");
@@ -173,6 +181,15 @@ test("F-C5 an inline mount journals nothing: not the seed, not a clean hydrated 
   assert.equal(journal(), null);
 });
 
+test("a row added in an embed reaches the account (the host's unbound flush)", async () => {
+  resetTo();
+  const mounted = await mount(INLINE);
+  const [pageId] = Object.keys(mounted.loaded.pages);
+  const row = { ...mounted.loaded.pages[pageId], id: "f1-new-row", properties: { "prop-title": "F1 row" } };
+  persistAsHost(mounted.adapter, { ...mounted.loaded, pages: { ...mounted.loaded.pages, [row.id]: row } }, mounted.loaded);
+  assert.equal(store().state.pages["f1-new-row"]?.properties["prop-title"], "F1 row");
+});
+
 test("an embed's row edit leaves a view it did not touch as another mount stored it", async () => {
   resetTo();
   const mounted = await mount(INLINE);
@@ -182,7 +199,7 @@ test("an embed's row edit leaves a view it did not touch as another mount stored
   const [pageId] = Object.keys(mounted.loaded.pages);
   const page = mounted.loaded.pages[pageId];
   const pages = { ...mounted.loaded.pages, [pageId]: { ...page, properties: { ...page.properties, edited: "yes" } } };
-  mounted.adapter.persistState?.({ ...mounted.loaded, pages }, mounted.loaded);
+  persistAsHost(mounted.adapter, { ...mounted.loaded, pages }, mounted.loaded);
   assert.deepEqual(storedViews()["v-tasks-table"].sorts, sorts);
   assert.equal(store().state.pages[pageId].properties.edited, "yes");
 });
@@ -190,6 +207,6 @@ test("an embed's row edit leaves a view it did not touch as another mount stored
 test("a whole-state persist from an embed writes no Limit either", async () => {
   resetTo();
   const adapter = createKnownDatabaseAdapter(INLINE);
-  adapter.persistState?.(await adapter.loadState());
+  persistAsHost(adapter, await adapter.loadState());
   assert.deepEqual(limited(storedViews()), []);
 });
