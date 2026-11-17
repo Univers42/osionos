@@ -19,14 +19,9 @@ import React, { useState } from 'react';
 
 import { api, getActivePageJwt } from '@/shared/api/client';
 import { isSafeImageSource } from '@/shared/lib/media/bridgeMediaUrl';
-import { Button, useToastStore } from '@/shared/ui';
+import { Avatar, Button, useToastStore } from '@/shared/ui';
 import { ConfirmModal } from '../ui/ConfirmModals';
-import { Avatar } from '../ui/settingsKit';
 import { ImageAvatarUpload } from './ImageAvatarUpload';
-
-function avatarIconValue(url: string | null | undefined): string | undefined {
-  return isSafeImageSource(url) ? `img:${url}` : undefined;
-}
 
 export const ProfilePhotoRow: React.FC<{ avatarUrl: string | null; name: string; onChanged: () => void }> = ({ avatarUrl, name, onChanged }) => {
   const toast = useToastStore((state) => state.push);
@@ -45,7 +40,7 @@ export const ProfilePhotoRow: React.FC<{ avatarUrl: string | null; name: string;
 
   return (
     <div className="flex flex-wrap items-center gap-4 pb-2">
-      <Avatar value={avatarIconValue(avatarUrl)} label={name} size={60} />
+      <Avatar name={name} src={isSafeImageSource(avatarUrl) ? avatarUrl : undefined} size="lg" />
       <ImageAvatarUpload onUploaded={onChanged} />
       {avatarUrl && <Button tone="danger" onClick={() => setAsking(true)}>Remove photo</Button>}
       {asking && (
