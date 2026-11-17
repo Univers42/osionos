@@ -18,28 +18,21 @@
 // session or an unreachable bridge degrades to local-only and retries on the
 // next flush — it never throws into the persist path and never loses data.
 
-import { LIVE_VIEWS_KEY_PREFIX } from "@/shared/notion-database-sys/src/store/live/liveViewSync";
 import type { NotionState } from "@notion-db/object-database";
-import { api, getActivePageJwt, API_BASE } from "@/shared/api/client";
+import { getActivePageJwt, API_BASE } from "@/shared/api/client";
 import { isObjectDatabaseServerSyncEnabled } from "@/shared/config/featureFlags";
 import { emptySlice, hashSlice, sliceAllDatabases, userDatabaseIds } from "./objectDatabaseSlice";
 import { reconcileServerDatabases } from "./objectDatabaseReconcile";
 import { withoutDeletedPages, tombstonesStillNeeded } from "./knownDatabasePersistedState";
-import { OBJECT_DB_WRITER_ID, startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objectDatabaseRealtime";
-import {
-  databaseWorkspace,
-  rememberDatabaseWorkspace,
-  resetObjectDatabaseWorkspaces,
-} from "./objectDatabaseWorkspaces";
+import { startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objectDatabaseRealtime";
+import { resetObjectDatabaseWorkspaces } from "./objectDatabaseWorkspaces";
+import { databaseTitle, fetchServerDatabases, pushDatabaseSlice, serverStateOf } from "./objectDatabaseBridgeRequests";
 import { createPushBaseline } from "./objectDatabasePushBaseline";
 import { createSessionWait, type SessionWait } from "./sessionWait";
 import { clearRefusedDatabaseSave, noticeRefusedDatabaseSave } from "./refusedDatabaseSave";
 
 const HYDRATION_JWT_RETRY_MS = 1500;
 const HYDRATION_JWT_MAX_ATTEMPTS = 12;
-
-type ServerObjectDatabase = { dbKey: string; title?: string; state?: NotionState; workspaceId?: string | null };
-type ServerListResponse = { databases?: ServerObjectDatabase[] };
 
 export type ObjectDatabaseSyncHooks = {
   getSeedIds: () => ReadonlySet<string>;
@@ -70,57 +63,7 @@ export function objectDatabaseServerSyncReady(): boolean {
 
 const pushBaseline = createPushBaseline(() => globalThis.localStorage);
 
-function databaseTitle(state: NotionState, dbKey: string): string {
-  const database = state.databases[dbKey] as { name?: string; title?: string } | undefined;
-  return String(database?.name ?? database?.title ?? "Untitled").slice(0, 200) || "Untitled";
-}
-
-/** The server's copy of one database (the bridge answers `{}` for a row it
- *  never got a state for). */
-function serverStateOf(row: ServerObjectDatabase): NotionState {
-  return row.state ?? ({ databases: {}, pages: {}, views: {} } as NotionState);
-}
-
-// ── bridge I/O (owner scoping is enforced server-side from the session token) ─
-async function fetchServerDatabases(jwt: string): Promise<Map<string, ServerObjectDatabase>> {
-  const response = await api.get<ServerListResponse>("/api/object-databases", jwt);
-  const map = new Map<string, ServerObjectDatabase>();
-  for (const row of response.databases ?? []) {
-    if (!row?.dbKey || row.dbKey.startsWith(LIVE_VIEWS_KEY_PREFIX)) continue;
-    map.set(row.dbKey, row);
-    // The bridge returns the workspace; remember it before any push can happen.
-    rememberDatabaseWorkspace(row.dbKey, row.workspaceId);
-  }
-  return map;
-}
-
-/** `origin` is this tab's id: the bridge echoes it so the tab skips its own nudge. */
-type ObjectDatabasePushBody = { dbKey: string; title: string; state: NotionState; origin: string; workspaceId?: string };
-
-/** The exact body of a push. Exported so the test can prove the workspace
- *  comes from the database's map, not from the active workspace. */
-export function objectDatabasePushBody(
-  dbKey: string,
-  title: string,
-  slice: NotionState,
-  workspaceId?: string,
-): ObjectDatabasePushBody {
-  return { dbKey, title, state: slice, origin: OBJECT_DB_WRITER_ID, ...(workspaceId ? { workspaceId } : {}) };
-}
-
-async function pushDatabaseSlice(jwt: string, dbKey: string, title: string, slice: NotionState): Promise<void> {
-  // C138 is per workspace: send the database's own workspace, never an active one.
-  await api.post("/api/object-databases", objectDatabasePushBodyFor(dbKey, title, slice), jwt);
-}
-
-/** The body of a dirty-database push, workspace included from the map. */
-export function objectDatabasePushBodyFor(
-  dbKey: string,
-  title: string,
-  slice: NotionState,
-): ObjectDatabasePushBody {
-  return objectDatabasePushBody(dbKey, title, slice, databaseWorkspace(dbKey));
-}
+export { objectDatabasePushBody, objectDatabasePushBodyFor } from "./objectDatabaseBridgeRequests";
 
 /** Flush hook: upload every user database whose slice changed since its last
  *  successful push. Gated on `hydrationCompleted`
