@@ -83,7 +83,7 @@ test.describe("the profile page shows the saved public profile", () => {
     await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);
     await openFreshPage(page, baseURL);
     const mine = await seedSession(page);
-    await mockApi(page, { id: mine, username: "me-user", name: "Me Myself", publicBody: { ...BOB_PUBLIC, userId: mine, username: "me-user" }, profileExtra: { online: true } });
+    await mockApi(page, { id: mine, username: "me-user", name: "Me Myself", publicBody: { ...BOB_PUBLIC, userId: mine, username: "me-user", displayName: "Me Myself" }, profileExtra: { online: true } });
     const box = page.getByRole("combobox", { name: "Search pages or run a command" });
     await box.click();
     await box.fill("user:Me");
@@ -91,9 +91,9 @@ test.describe("the profile page shows the saved public profile", () => {
     await expect(heading(page, "Me Myself")).toBeVisible();
     await expect(page.locator('[title="Online"]').first()).not.toHaveClass(/bg-green-500/);
     await page.getByRole("button", { name: "Edit profile", exact: true }).click();
-    // The page never leaves: no Settings dialog. This build has no profile server, so the form says so.
+    // The page never leaves: no Settings dialog. The mock answers the account route with 403, so the form says it could not load and offers Close.
     await expect(page.getByRole("region", { name: "Settings", exact: true })).toHaveCount(0);
-    await expect(page.getByText("Your public profile can't be edited here")).toBeVisible();
+    await expect(page.getByText("Couldn't load these settings")).toBeVisible();
     await page.getByRole("button", { name: "Close", exact: true }).click();
     await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toBeFocused();
   });
