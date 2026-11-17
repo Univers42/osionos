@@ -19,20 +19,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import "./window-events.ts";
 import { useDragSession } from "../../src/store/dragSession.ts";
-
-// This runner's globalThis is not an EventTarget — give it one so the store's
-// window-level safety net is exercisable (the store reads the listener fns at
-// CALL time, never at import time). Test files run in their own process, so
-// the polyfill leaks nowhere.
-const eventTarget = new EventTarget();
-if (typeof globalThis.addEventListener !== "function") {
-  Object.assign(globalThis, {
-    addEventListener: eventTarget.addEventListener.bind(eventTarget),
-    removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
-    dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
-  });
-}
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
 
