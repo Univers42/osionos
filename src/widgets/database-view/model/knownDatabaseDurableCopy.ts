@@ -26,6 +26,7 @@ import type { ReadinessJournals } from "./knownDatabaseJournalApply";
 // toast layer; this module stays free of it so it loads in the canvas tests.
 const LEGACY_STATE_KEY = "osionos.knownDatabaseState.v1";
 const LEGACY_PUSHED_KEY = "osionos.objectDb.pushed.v1";
+const LEGACY_RETIRED_TEXT = '{"kdsRetired":"idb"}';
 // ADR 0055 J-C1: a migrated copy's id names the tab that migrated it, so the redo rule never
 // writes an id an unload journal of an earlier session names. "migrated" is an older build's id.
 const MIGRATED_PREFIX = "migrated";
@@ -80,14 +81,38 @@ function readLegacyRecord(legacy: LegacyStorage): Record<string, string> {
   }
 }
 
+// Caveat: a retired origin (flag stored, or state key tombstoned) is read pull-only. The tombstone
+// works because a full origin refuses only growing writes and it shrinks the state key (measured on
+// Chromium 147, Firefox 148 and WebKit 26.4; Mac Chrome inferred). An origin with no legacy text,
+// or text under 20 characters, gets no marker (R-C7b) and falls back to its legacy pair.
+function isLegacyRetired(legacy: LegacyStorage): boolean {
+  return readLegacyItem(legacy, KDS_IDB_FLAG_KEY) === "1"
+    || readLegacyItem(legacy, LEGACY_STATE_KEY) === LEGACY_RETIRED_TEXT;
+}
+
+// Tombstone, read back, then the push record: a crash between the steps leaves a marker or the
+// intact pair (devil C7). A tombstone is never a state: the snapshot reads no text, no record.
+function markStateRetired(legacy: NonNullable<LegacyStorage>): void {
+  const stored = readLegacyItem(legacy, LEGACY_STATE_KEY);
+  if (stored === null) return;
+  if (stored !== LEGACY_RETIRED_TEXT) {
+    if (!setItemEvictingPageCaches(LEGACY_STATE_KEY, LEGACY_RETIRED_TEXT, legacy)) return;
+    if (readLegacyItem(legacy, LEGACY_STATE_KEY) !== LEGACY_RETIRED_TEXT) return;
+  }
+  try { legacy.removeItem(LEGACY_PUSHED_KEY); } catch { /* a tombstoned origin never reads it */ }
+}
+
 // Flag first, read back: a crash between the two steps must leave a flagged origin, never an
 // unflagged one whose legacy keys are gone. The origin is full by the premise of this copy, so the
 // flag makes room in the page caches (the server rebuilds them); unflagged legacy keys are a pair
 // that a later load without IndexedDB pushes over newer server data (devil N1). A flag that still
-// does not fit keeps the legacy keys, and the next load retries.
+// does not fit tombstones the state key instead, and the next load retries the flag.
 function retireLegacy(legacy: LegacyStorage): void {
-  if (!legacy || !setItemEvictingPageCaches(KDS_IDB_FLAG_KEY, "1", legacy)) return;
-  if (readLegacyItem(legacy, KDS_IDB_FLAG_KEY) !== "1") return;
+  if (!legacy) return;
+  if (!setItemEvictingPageCaches(KDS_IDB_FLAG_KEY, "1", legacy) || readLegacyItem(legacy, KDS_IDB_FLAG_KEY) !== "1") {
+    markStateRetired(legacy);
+    return;
+  }
   try {
     legacy.removeItem(LEGACY_STATE_KEY);
     legacy.removeItem(LEGACY_PUSHED_KEY);
@@ -97,7 +122,7 @@ function retireLegacy(legacy: LegacyStorage): void {
 }
 
 function fallbackCopy(legacy: LegacyStorage): LoadedCopy {
-  if (readLegacyItem(legacy, KDS_IDB_FLAG_KEY) === "1") {
+  if (isLegacyRetired(legacy)) {
     return { mode: "fallback-flagged", text: null, record: {} };
   }
   return { mode: "fallback-legacy", text: readLegacyItem(legacy, LEGACY_STATE_KEY), record: readLegacyRecord(legacy) };
@@ -115,10 +140,12 @@ function loadedFrom(state: StoredState | null, pushed: unknown): LoadedCopy {
 interface LegacySnapshot { text: string | null; map: Record<string, string>; isRetired: boolean }
 
 function snapshotLegacy(legacy: LegacyStorage): LegacySnapshot {
+  const text = readLegacyItem(legacy, LEGACY_STATE_KEY);
+  const isTombstone = text === LEGACY_RETIRED_TEXT;
   return {
-    text: readLegacyItem(legacy, LEGACY_STATE_KEY),
-    map: readLegacyRecord(legacy),
-    isRetired: readLegacyItem(legacy, KDS_IDB_FLAG_KEY) === "1",
+    text: isTombstone ? null : text,
+    map: isTombstone ? {} : readLegacyRecord(legacy),
+    isRetired: isLegacyRetired(legacy),
   };
 }
 
