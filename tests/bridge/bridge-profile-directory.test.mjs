@@ -32,7 +32,8 @@ function world({ optedOut = false, blocks = [], avatarUrl = null } = {}) {
 			created_at: '2026-10-01T00:00:00.000Z', last_seen_at: new Date().toISOString(),
 		}],
 		osionos_workspace_members: [{ workspace_id: IDS.team, user_id: IDS.userA, role: 'owner', permissions: ['read'] }],
-		osionos_profiles: [{ user_id: IDS.userA, display_name: 'Alice', avatar_url: avatarUrl }],
+		// The trigger keeps the two opt-out columns in step; the rule reads the profile row.
+		osionos_profiles: [{ user_id: IDS.userA, display_name: 'Alice', avatar_url: avatarUrl, directory_opt_out: optedOut }],
 	}, {
 		// The mock has no `or=` filter; the block lookup is answered directly.
 		failWhen: (call) => (call.table === 'osionos_user_blocks' ? { status: 200, body: blocks } : null),
@@ -78,6 +79,7 @@ describe('GET /api/profile/:userId', () => {
 			const { body } = await profileOf(base, asA);
 			assert.equal(body.bio, 'private bio');
 			assert.deepEqual(body.customFields, { phone: '555' });
+			assert.deepEqual([body.role, body.workspaceId], ['owner', IDS.team]);
 		});
 	});
 
@@ -85,7 +87,8 @@ describe('GET /api/profile/:userId', () => {
 		await withBridge(config, world(), async (base) => {
 			const { body } = await profileOf(base, asB);
 			assert.equal(body.headline, 'CTO');
-			assert.equal(body.workspaceId, IDS.team);
+			// U5-4: the role and the workspace are the subject's own; a visitor gets neither.
+			assert.ok(!('workspaceId' in body) && !('role' in body));
 		});
 	});
 

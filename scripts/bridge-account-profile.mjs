@@ -34,7 +34,8 @@
  */
 
 import { rateLimit } from './bridge-guard.mjs';
-import { bearerToken, blockedViewerBy, readJsonBody, safeText, sendJson } from './bridge-social-core.mjs';
+import { bearerToken, readJsonBody, safeText, sendJson } from './bridge-social-core.mjs';
+import { hiddenFrom } from './bridge-hidden-from.mjs';
 import { neutraliseBindings } from './bridge-readme-bindings.mjs';
 import { STATUS_COLUMNS, statusOf } from './bridge-status.mjs';
 
@@ -219,7 +220,7 @@ async function patchOwnProfile({ pg, kv }, session, request, response, config) {
 
 /**
  * The service-role fetch the shared helpers expect, backed by the account plane's service
- * client. `blockedViewerBy` builds its own URL and headers, so this replays that request
+ * client. The shared helpers build their own URL and headers, so this replays that request
  * through `pg.asService()`: the bridge's injected transport answers it, and the block
  * semantics stay in the one place that owns them.
  */
@@ -235,17 +236,6 @@ export function serviceFetch(pg) {
 			return new Response(String(error?.upstreamText ?? ''), { status: Number(error?.upstreamStatus ?? 502) });
 		}
 	};
-}
-
-async function hiddenFromViewer(config, pg, viewerId, subjectId) {
-	try {
-		const hidden = await blockedViewerBy(config, serviceFetch(pg), viewerId);
-		return hidden.has(subjectId);
-	} catch {
-		// The block list is the one thing that hides a person from a viewer, so a failure
-		// fails the request: the full card would hand out what a block hides.
-		throw accountError(503, 'account_plane_unavailable', 'The account plane is unavailable.');
-	}
 }
 
 /** The username may hold `_`, and `_` is a wildcard in LIKE, so the name is escaped: an
@@ -287,8 +277,8 @@ async function lookupUser({ config, pg, kv, session }, rawName, response) {
 		return await noSuchUser(kv, session);
 	}
 	const subject = safeText(row.user_id, 80).toLowerCase();
-	const reduced = subject !== session.userId
-		&& (row.directory_opt_out === true || await hiddenFromViewer(config, pg, session.userId, subject));
+	// U5-1: the one predicate; a lookup that fails is a 503, never the full card.
+	const reduced = await hiddenFrom(config, serviceFetch(pg), subject, session.userId);
 	if (reduced) return sendJson(response, 200, camelRow(row, REDUCED_CARD_COLUMNS), config);
 	const card = { ...camelRow(row, CARD_COLUMNS), status: statusOf(row) };
 	const readme = await projectReadme(pg, row);

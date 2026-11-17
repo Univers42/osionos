@@ -37,6 +37,7 @@ import {
 	rest,
 	sendJson,
 } from './bridge-social-core.mjs';
+import { hiddenAmong, hiddenFrom } from './bridge-hidden-from.mjs';
 import { decodeCursor, inFilter, keyset, pageOf } from './bridge-paging.mjs';
 import { onlineAmong } from './bridge-presence.mjs';
 
@@ -77,18 +78,22 @@ async function unfollow(deps, session, followeeId, response, config) {
 	return sendJson(response, 200, { ok: true, following: false }, config);
 }
 
+const countsBody = (row) => ({
+	ok: true,
+	followerCount: Number(row.follower_count ?? 0),
+	followingCount: Number(row.following_count ?? 0),
+	viewerFollows: row.viewer_follows === true,
+});
+
+// A hidden subject answers through the same body builder as an id nobody holds (no row at all),
+// so the two cannot differ by a byte.
 async function counts(deps, session, userId, response, config) {
+	if (await hiddenFrom(config, deps.fetchImpl, userId, session.userId)) return sendJson(response, 200, countsBody({}), config);
 	const answer = await rest(config, deps.fetchImpl, 'rpc/osionos_follow_counts', {
 		method: 'POST',
 		body: { p_user: userId.toLowerCase(), p_viewer: session.userId },
 	});
-	const row = (Array.isArray(answer) ? answer[0] : answer) ?? {};
-	return sendJson(response, 200, {
-		ok: true,
-		followerCount: Number(row.follower_count ?? 0),
-		followingCount: Number(row.following_count ?? 0),
-		viewerFollows: row.viewer_follows === true,
-	}, config);
+	return sendJson(response, 200, countsBody((Array.isArray(answer) ? answer[0] : answer) ?? {}), config);
 }
 
 async function viewerFollowsAmong(deps, session, ids, config) {
@@ -97,9 +102,8 @@ async function viewerFollowsAmong(deps, session, ids, config) {
 	return new Set((Array.isArray(rows) ? rows : []).map((row) => row.followee_id));
 }
 
-async function list(deps, session, kind, ownerId, url, response, config) {
+async function readEdges(deps, kind, ownerId, url, config) {
 	const [listed, owner] = LIST_COLUMNS[kind];
-	const owned = ownerId.toLowerCase();
 	const rawCursor = url.searchParams.get('cursor');
 	const order = [['created_at', 'desc'], [listed, 'desc']];
 	const { query, take } = keyset({
@@ -108,17 +112,17 @@ async function list(deps, session, kind, ownerId, url, response, config) {
 		limit: url.searchParams.get('limit'),
 		maxLimit: LIST_MAX,
 	});
-	const hidden = await blockedViewerBy(config, deps.fetchImpl, session.userId);
-	if (hidden.has(owned)) return sendJson(response, 200, { ok: true, items: [], nextCursor: null }, config);
-	const rows = await rest(config, deps.fetchImpl, `osionos_follows?${owner}=eq.${owned}&select=${listed},created_at&${query}`);
-	const page = pageOf(Array.isArray(rows) ? rows : [], order, take);
-	const ids = page.items.map((row) => row[listed]).filter((id) => !hidden.has(String(id).toLowerCase()));
+	const rows = await rest(config, deps.fetchImpl, `osionos_follows?${owner}=eq.${ownerId}&select=${listed},created_at&${query}`);
+	return pageOf(Array.isArray(rows) ? rows : [], order, take);
+}
+
+async function describePeople(deps, session, ids, config) {
 	const [people, followed] = await Promise.all([
 		identitySummaries(config, deps.fetchImpl, ids),
 		viewerFollowsAmong(deps, session, ids, config),
 	]);
 	const online = await onlineAmong(deps.kv, ids, { now: deps.now(), viewerId: session.userId });
-	const items = ids.map((id) => ({
+	return ids.map((id) => ({
 		id,
 		name: people.get(id)?.name ?? 'Member',
 		avatar: people.get(id)?.avatar ?? null,
@@ -126,7 +130,21 @@ async function list(deps, session, kind, ownerId, url, response, config) {
 		online: online.has(id),
 		following: followed.has(id),
 	}));
-	return sendJson(response, 200, { ok: true, items, nextCursor: page.nextCursor }, config);
+}
+
+// A hidden owner answers like an owner with no edges. The page is read before the owner is
+// judged so the rule costs one lookup for the owner and everyone listed, not two.
+// Caveat: followerCount/followingCount (the counts route) include the edges of people
+// dropped here, so a count can exceed the rows a viewer can ever page through; it never
+// falls below them.
+async function list(deps, session, kind, ownerId, url, response, config) {
+	const owned = ownerId.toLowerCase();
+	const page = await readEdges(deps, kind, owned, url, config);
+	const listedIds = page.items.map((row) => row[LIST_COLUMNS[kind][0]]);
+	const hidden = await hiddenAmong(config, deps.fetchImpl, session.userId, [owned, ...listedIds]);
+	if (hidden.has(owned)) return sendJson(response, 200, { ok: true, items: [], nextCursor: null }, config);
+	const ids = listedIds.filter((id) => !hidden.has(String(id).toLowerCase()));
+	return sendJson(response, 200, { ok: true, items: await describePeople(deps, session, ids, config), nextCursor: page.nextCursor }, config);
 }
 
 /** Answers true when the path is a follow route and false when it is not. */

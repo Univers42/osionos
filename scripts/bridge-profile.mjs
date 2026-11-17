@@ -56,6 +56,7 @@ import {
 	safeText,
 	sendJson,
 } from './bridge-social-core.mjs';
+import { hiddenFrom } from './bridge-hidden-from.mjs';
 import { inFilter } from './bridge-paging.mjs';
 import { publicAvatar } from './bridge-avatar.mjs';
 import { canReadPageRowAsMember } from './bridge-page-read.mjs';
@@ -102,22 +103,33 @@ async function avatarOf(config, fetchImpl, userId, profile) {
 	return publicAvatar(stored ?? legacy, config);
 }
 
+// Which keys of profile.fields another viewer may read. Empty on purpose: nobody has ruled
+// any field public yet (devil U5-4), and the owner always sees all of them.
+const PUBLIC_CUSTOM_FIELDS = new Set();
+
+const asRecord = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
+
+function publicFields(fields) {
+	return Object.fromEntries(Object.entries(fields).filter(([key]) => PUBLIC_CUSTOM_FIELDS.has(key)));
+}
+
+// The role and the workspace are the subject's own business: a visitor learns presence only.
+async function ownerOnly(deps, config, userId, fields) {
+	return { ...(await workspaceRole(config, deps.fetchImpl, userId, deps.env)), customFields: fields };
+}
+
 async function getProfile(deps, session, userId, response, config) {
 	const row = await identityRow(config, deps.fetchImpl, userId);
 	if (!row) throw httpError('Profile not found.', 404);
-	const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
-	// G6 F5: the directory opt-out and blocks hold when a profile is addressed by id too;
-	// the user themselves always gets the full card.
-	if (userId !== session.userId && (row.directory_opt_out === true || (await blockedViewerBy(config, deps.fetchImpl, session.userId)).has(userId))) {
-		return sendJson(response, 200, {
-			ok: true,
-			userId,
-			name: row.display_name ?? 'Member',
-			avatar: await avatarOf(config, deps.fetchImpl, userId, profile),
-		}, config);
+	const profile = asRecord(row.profile);
+	const avatar = await avatarOf(config, deps.fetchImpl, userId, profile);
+	// G6 F5: the directory opt-out and blocks hold when a profile is addressed by id too (U5-1:
+	// one predicate, 503 when it cannot be read); the user themselves always gets the full card.
+	if (await hiddenFrom(config, deps.fetchImpl, userId, session.userId)) {
+		return sendJson(response, 200, { ok: true, userId, name: row.display_name ?? 'Member', avatar }, config);
 	}
-	const { role, workspaceId } = await workspaceRole(config, deps.fetchImpl, userId, deps.env);
-	const fields = profile.fields && typeof profile.fields === 'object' && !Array.isArray(profile.fields) ? profile.fields : {};
+	const fields = asRecord(profile.fields);
+	const isSelf = userId === session.userId;
 	const now = deps.now();
 	const online = await onlineAmong(deps.kv, [userId], { now, viewerId: session.userId });
 	const present = online.get(userId);
@@ -125,9 +137,8 @@ async function getProfile(deps, session, userId, response, config) {
 		ok: true,
 		userId,
 		name: row.display_name ?? 'Member',
-		avatar: await avatarOf(config, deps.fetchImpl, userId, profile),
-		role,
-		workspaceId,
+		avatar,
+		...(isSelf ? await ownerOnly(deps, config, userId, fields) : { customFields: publicFields(fields) }),
 		// Caveat: the column is refreshed at most once every ten minutes, so this value is
 		// coarse; `online` below is the exact one.
 		lastSeenAt: row.last_seen_at ?? null,
@@ -142,7 +153,6 @@ async function getProfile(deps, session, userId, response, config) {
 		location: typeof profile.location === 'string' ? profile.location : null,
 		joinedAt: row.created_at ?? null,
 		directoryOptOut: row.directory_opt_out === true,
-		customFields: fields,
 	}, config);
 }
 

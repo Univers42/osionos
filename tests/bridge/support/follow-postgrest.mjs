@@ -34,6 +34,8 @@ function matches(row, params) {
 	for (const [key, expr] of params) {
 		if (['select', 'order', 'limit', 'on_conflict', 'or'].includes(key)) continue;
 		if (expr.startsWith('eq.')) { if (!same(row[key], expr.slice(3))) return false; continue; }
+		// `ilike` with no wildcard is a case-insensitive equality; the account card's username lookup sends it escaped.
+		if (expr.startsWith('ilike.')) { if (!same(row[key], expr.slice(6).replace(/\\([\\%_])/g, '$1'))) return false; continue; }
 		if (expr.startsWith('in.(')) { if (!unquoteList(expr).some((item) => same(row[key], item))) return false; continue; }
 		throw new Error(`follow store: unsupported filter ${key}=${expr}`);
 	}
@@ -80,6 +82,8 @@ export function createFollowStore(world = {}) {
 		blocks: [...(world.blocks ?? [])],
 		tables: world.tables ?? {},
 		raceBlocked: world.raceBlocked ?? new Set(),
+		// (table, params) => true makes that read answer 500: the lookup that fails.
+		failWhen: world.failWhen ?? (() => false),
 		calls: [],
 	};
 	const blockedPair = (a, b) => store.blocks.some((row) => (same(row.blocker_id, a) && same(row.blocked_id, b)) || (same(row.blocker_id, b) && same(row.blocked_id, a)));
@@ -109,6 +113,7 @@ export function createFollowStore(world = {}) {
 		const body = init.body ? JSON.parse(init.body) : undefined;
 		const prefer = String(init.headers?.Prefer ?? '');
 		store.calls.push({ method, name, params: parsed.searchParams, body });
+		if (store.failWhen(name, parsed.searchParams)) return new Response('upstream down', { status: 500 });
 		if (name === 'rpc/osionos_follow_counts') return reply(counts(body));
 		if (name === 'osionos_follows') {
 			if (method === 'POST') return insertFollow(body, prefer);
