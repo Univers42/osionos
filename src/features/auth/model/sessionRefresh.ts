@@ -143,8 +143,9 @@ export interface RefreshDeps {
   /** The tokens as they are NOW (the persisted record wins over a stale in-memory copy). */
   readTokens: () => { accessToken: string; refreshToken?: string } | null;
   rotate: (refreshToken: string) => Promise<RefreshResult>;
-  /** Applies tokens to this tab's session and persisted record. */
-  adopt: (tokens: RefreshedTokens) => void;
+  /** Applies tokens to this tab's session and persisted record. `false`: the account was signed
+   *  out here while the route answered, so the result is not published (ADR 0056 S3). */
+  adopt: (tokens: RefreshedTokens) => boolean | void;
   signOut: (code: string) => void;
   storage?: RefreshStorage | null;
   now?: () => number;
@@ -182,6 +183,12 @@ function remove(storage: RefreshStorage | null | undefined, key: string) {
   }
 }
 
+/** A sign-out takes the account's coordination keys with it: the result holds a live refresh token. */
+export function clearRefreshCoordination(storage: RefreshStorage | null | undefined, userId: string): void {
+  remove(storage, resultKey(userId));
+  remove(storage, leaseKey(userId));
+}
+
 /** A result another tab published for the token this tab holds: adopt it instead of rotating. */
 function adoptPublished(deps: RefreshDeps, ownRefreshToken: string): boolean {
   const published = readJson<Published>(deps.storage, resultKey(deps.userId));
@@ -212,8 +219,7 @@ async function rotateHolding(deps: RefreshDeps, refreshToken: string): Promise<R
   const result = await deps.rotate(refreshToken);
   if (result.ok) {
     const tokens = { accessToken: result.accessToken, refreshToken: result.refreshToken, expiresAt: result.expiresAt };
-    deps.adopt(tokens);
-    writeJson(deps.storage, resultKey(deps.userId), { prev: refreshToken, ...tokens } satisfies Published);
+    if (deps.adopt(tokens) !== false) writeJson(deps.storage, resultKey(deps.userId), { prev: refreshToken, ...tokens } satisfies Published);
     return 'refreshed';
   }
   if (!isFinalRefreshFailure(result.code)) return 'kept';

@@ -45,6 +45,7 @@ import {
 } from '@/features/auth/model/bridgeLogout';
 import { selectActivatedSessions } from '@/features/auth/model/sessionSelect';
 import {
+  clearRefreshCoordination,
   createSingleFlight,
   isoExpiry,
   needsRefresh,
@@ -416,6 +417,7 @@ async function resolveInitialState() {
 /** Drop one persona locally: persisted session, persisted persona, and the active-account fallback. */
 function signedOutState(state: UserStore, userId: string): Partial<UserStore> {
   clearPersistedBridgeSession(userId);
+  clearRefreshCoordination(refreshStorage(), userId);
   const sessions = { ...state.sessions };
   delete sessions[userId];
   const personas = state.personas.filter((persona) => persona.id !== userId || persona.persistInSessions);
@@ -509,7 +511,10 @@ const refreshOne = (userId: string): Promise<RefreshOutcome> => {
       rotatedFrom = refreshToken;
       return refreshBridgeSession({ apiBase: API_BASE, refreshToken });
     },
-    adopt: (tokens) => { if (unchanged()) applyRefreshed(userId, tokens); },
+    adopt: (tokens) => {
+      if (unchanged()) applyRefreshed(userId, tokens);
+      return userId in readPersistedBridgeSessions();
+    },
     signOut: (code) => { if (unchanged()) dropRefreshed(userId, code); },
   });
 };
