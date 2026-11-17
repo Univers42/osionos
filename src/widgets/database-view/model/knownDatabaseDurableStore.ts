@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// The browser side of the known-database durable copy: the IndexedDB database it lives in, the
-// localStorage copy it migrates from, and the page events that must flush it.
+// The browser side of the known-database durable copy: the IndexedDB database it lives in, and
+// the localStorage it migrates from and keeps its unload journals in.
 
 import { openIndexedKeyValueStore } from "@/shared/lib/key-value-store/indexedKeyValueStore";
 import { openDurableCopy, type DurableCopy } from "./knownDatabaseDurableCopy";
@@ -38,11 +38,7 @@ export function openKnownDatabaseDurableCopy(): DurableCopy {
   });
 }
 
-/** A hidden tab can be discarded without a pagehide (mobile, frozen background tabs), so its
- *  pending state is committed when it is hidden (devil I10). */
-export function flushWhenHidden(flush: () => void): void {
-  const doc = globalThis.document;
-  doc?.addEventListener?.("visibilitychange", () => {
-    if (doc.visibilityState === "hidden") flush();
-  });
+/** Where this tab's unload journal lives: this origin's localStorage, under its writer id. */
+export function knownDatabaseUnloadJournal(): { storage: Storage | undefined; tabId: string } {
+  return { storage: legacyStorage(), tabId: OBJECT_DB_WRITER_ID };
 }

@@ -19,7 +19,9 @@
 // the push lives here, so the tests that drive this module drive that guard (devil M4).
 
 import type { NotionState } from "@notion-db/object-database";
+import type { PageCacheStorage } from "@/store/pageStore.helpers";
 import type { DurableCopy, DurableCopyMode, LoadedCopy } from "./knownDatabaseDurableCopy";
+import { createUnloadJournalWriter, type JournalBase, type UnloadJournalWriter } from "./knownDatabaseJournal";
 import { objectDatabasePushRecord, pushDirtyObjectDatabases, seedObjectDatabasePushRecord } from "./objectDatabaseBridgeSync";
 import type { PushRecordSink } from "./objectDatabasePushRecord";
 
@@ -33,6 +35,8 @@ export interface KnownDatabasePersistenceDeps {
   getDeletedPageIds(): ReadonlySet<string>;
   reportCommit(isKept: boolean): void;
   warnReadOnly(): void;
+  /** This origin's localStorage and this tab's id, for the unload journal (ADR 0055); none → no journal. */
+  unloadJournal?: { storage: PageCacheStorage | undefined; tabId: string };
 }
 
 export interface KnownDatabasePersistence {
@@ -44,6 +48,9 @@ export interface KnownDatabasePersistence {
   /** Mode idb only: commits `state`, then pushes the live state. pushNow (pagehide) pushes
    *  at once, because nothing after an unload is awaited. Other modes keep their own writer. */
   flush(state: NotionState, pushNow: boolean): void;
+  /** Mode idb only: writes this tab's unload journal. False when the unload must not push. */
+  writeUnloadJournal(): boolean;
+  forgetUnloadJournal(): void;
 }
 
 const PULL_ONLY: PushRecordSink = { isPullOnly: true, recordChanged: () => undefined, reset: () => undefined };
@@ -53,6 +60,9 @@ interface Session {
   mode: DurableCopyMode | "pending";
   /** The record version the durable copy holds, as far as this tab wrote it. */
   storedVersion: number;
+  /** The copy read at readiness, as the live state it became; null without a stored copy. */
+  loadedBase: JournalBase | null;
+  journal: UnloadJournalWriter | null;
 }
 
 // I2: read when the push runs. A state captured before the commit await still holds the databases
@@ -85,6 +95,8 @@ function applyLoaded(session: Session, loaded: LoadedCopy): void {
   session.deps.load(loaded.text);
   seedObjectDatabasePushRecord(loaded.record, sinkFor(session, loaded.mode));
   session.storedVersion = objectDatabasePushRecord().version;
+  const loadedId = session.deps.durable.ledger().loadedId;
+  if (loaded.mode === "idb" && loadedId !== null) session.loadedBase = { id: loadedId, state: session.deps.getLiveState(), record: { ...loaded.record } };
   session.mode = loaded.mode;
   if (loaded.mode === "fallback-flagged") session.deps.warnReadOnly();
 }
@@ -95,7 +107,8 @@ function flush(session: Session, state: NotionState, pushNow: boolean): void {
   const record = objectDatabasePushRecord();
   const version = record.version;
   const committed = deps.durable.commit(state, deps.serialize(state), record.snapshot());
-  if (pushNow) pushLive(deps);
+  // J-C5: an unload whose journal could not be stored sends no push; the push without it is N2.
+  if (pushNow && writeJournal(session)) pushLive(deps);
   void committed.then((isKept) => {
     if (isKept) markStored(session, version);
     deps.reportCommit(isKept);
@@ -104,12 +117,30 @@ function flush(session: Session, state: NotionState, pushNow: boolean): void {
   });
 }
 
+// J-C4: the legacy and pull-only sessions write no journal; their unload keeps its push.
+const writeJournal = (session: Session): boolean => session.mode !== "idb" || (session.journal?.write() ?? true);
+
+function journalFor(session: Session): UnloadJournalWriter | null {
+  const target = session.deps.unloadJournal;
+  if (!target) return null;
+  return createUnloadJournalWriter({
+    ...target,
+    ledger: () => session.deps.durable.ledger(),
+    loadedBase: () => session.loadedBase,
+    live: () => session.deps.getLiveState(),
+    record: objectDatabasePushRecord,
+  });
+}
+
 export function createKnownDatabasePersistence(deps: KnownDatabasePersistenceDeps): KnownDatabasePersistence {
-  const session: Session = { deps, mode: "pending", storedVersion: 0 };
+  const session: Session = { deps, mode: "pending", storedVersion: 0, loadedBase: null, journal: null };
+  session.journal = journalFor(session);
   return {
     ready: deps.durable.ready.then((loaded) => applyLoaded(session, loaded)),
     mode: () => session.mode,
     canWrite: () => session.mode === "idb" || session.mode === "fallback-legacy",
     flush: (state, pushNow) => flush(session, state, pushNow),
+    writeUnloadJournal: () => writeJournal(session),
+    forgetUnloadJournal: () => session.journal?.forget(),
   };
 }

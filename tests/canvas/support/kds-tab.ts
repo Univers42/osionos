@@ -26,6 +26,8 @@ import {
   type KnownDatabasePersistence,
 } from "../../../src/widgets/database-view/model/knownDatabasePersistence.ts";
 import { ensureObjectDatabaseHydration, resetObjectDatabaseSync } from "../../../src/widgets/database-view/model/objectDatabaseBridgeSync.ts";
+import { openReadinessJournals } from "../../../src/widgets/database-view/model/knownDatabaseJournalApply.ts";
+import { watchKnownDatabaseUnload } from "../../../src/widgets/database-view/model/knownDatabaseUnload.ts";
 import {
   loadPersistedKnownDatabaseState,
   serializeKnownDatabaseState,
@@ -88,16 +90,26 @@ export function storedPair(store: MemoryKeyValueStore): { state: NotionState; re
   return { state: loadPersistedKnownDatabaseState(state.text, EMPTY).state, record: pushed.map, id: state.id };
 }
 
-export function memoryLegacy(initial: Record<string, string> = {}): Legacy & { values: Map<string, string> } {
+/** This origin's localStorage: `refuseWrites` throws a full origin's error, `dropWrites` models a
+ *  write the browser accepts but does not keep (ADR 0055: Firefox tab close loses the pagehide one). */
+export type MemoryLegacy = Legacy & { values: Map<string, string>; refuseWrites: boolean; dropWrites: boolean };
+
+export function memoryLegacy(initial: Record<string, string> = {}): MemoryLegacy {
   const values = new Map(Object.entries(initial));
-  return {
+  const legacy: MemoryLegacy = {
     values,
+    refuseWrites: false,
+    dropWrites: false,
     get length() { return values.size; },
     key: (index) => [...values.keys()][index] ?? null,
     getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => { values.set(key, value); },
+    setItem: (key, value) => {
+      if (legacy.refuseWrites) throw new DOMException("full", "QuotaExceededError");
+      if (!legacy.dropWrites) values.set(key, value);
+    },
     removeItem: (key) => { values.delete(key); },
   };
+  return legacy;
 }
 
 export interface FakeBridge {
@@ -169,13 +181,19 @@ export interface Tab {
   flush(pushNow?: boolean): void;
   /** Starts the hydration and resolves once it reconciled; its own push is under way then. */
   hydrate(): Promise<void>;
+  /** The page lifecycle through the real unload watcher (ADR 0055 J-C4). */
+  hide(): void;
+  show(): void;
+  pagehide(): void;
 }
 
+/** `legacy` is this origin's localStorage: the legacy copy and the unload journals. */
 interface TabOptions { tabId?: string; legacy?: Legacy; isUnavailable?: boolean }
 
-function tabPersistence(durable: DurableCopy, tab: Tab): KnownDatabasePersistence {
+function tabPersistence(durable: DurableCopy, tab: Tab, unloadJournal: { storage: Legacy; tabId: string }): KnownDatabasePersistence {
   return createKnownDatabasePersistence({
     durable,
+    unloadJournal,
     load: (text) => {
       const loaded = text ? loadPersistedKnownDatabaseState(text, EMPTY) : { state: EMPTY, deletedPageIds: new Set<string>() };
       tab.live = { state: loaded.state, deleted: loaded.deletedPageIds };
@@ -200,15 +218,28 @@ function hydrateTab(tab: Tab): Promise<void> {
   }));
 }
 
+function watchLifecycle(tab: Tab): void {
+  const page = new EventTarget();
+  const doc = Object.assign(new EventTarget(), { visibilityState: "visible" as DocumentVisibilityState });
+  watchKnownDatabaseUnload({ flushPending: (pushNow) => tab.flush(pushNow), persistence: () => tab.persistence }, page, doc);
+  const turn = (state: DocumentVisibilityState) => { doc.visibilityState = state; doc.dispatchEvent(new Event("visibilitychange")); };
+  tab.hide = () => turn("hidden");
+  tab.show = () => turn("visible");
+  tab.pagehide = () => { page.dispatchEvent(new Event("pagehide")); };
+}
+
 export function openTab(store: KeyValueStore, options: TabOptions = {}): Tab {
+  const legacy = options.legacy ?? memoryLegacy();
+  const tabId = options.tabId ?? "tab-a";
   const durable = openDurableCopy({
     openStore: () => (options.isUnavailable ? Promise.reject(new Error("IndexedDB does not answer")) : Promise.resolve(store)),
-    legacy: options.legacy ?? memoryLegacy(),
-    tabId: options.tabId ?? "tab-a",
+    legacy,
+    tabId,
     budgetMs: 500,
+    journals: openReadinessJournals(legacy),
   });
   const tab = { live: { state: EMPTY, deleted: new Set<string>() }, commitReports: [], readOnlyWarnings: 0 } as unknown as Tab;
-  tab.persistence = tabPersistence(durable, tab);
+  tab.persistence = tabPersistence(durable, tab, { storage: legacy, tabId });
   tab.edit = (key, values) => {
     if (!tab.persistence.canWrite()) return false;
     tab.live.state = withDb(tab.live.state, key, values);
@@ -216,13 +247,14 @@ export function openTab(store: KeyValueStore, options: TabOptions = {}): Tab {
   };
   tab.flush = (pushNow = false) => tab.persistence.flush(tab.live.state, pushNow);
   tab.hydrate = () => hydrateTab(tab);
+  watchLifecycle(tab);
   return tab;
 }
 
 /** A reload: this origin's stored pair read by a fresh tab, which then hydrates and pushes. */
-export async function reload(store: MemoryKeyValueStore): Promise<Tab> {
+export async function reload(store: MemoryKeyValueStore, legacy?: Legacy): Promise<Tab> {
   resetObjectDatabaseSync();
-  const tab = openTab(createMemoryKeyValueStore(Object.fromEntries(store.entries)), { tabId: "tab-reloaded" });
+  const tab = openTab(createMemoryKeyValueStore(Object.fromEntries(store.entries)), { tabId: "tab-reloaded", legacy });
   await tab.persistence.ready;
   await tab.hydrate();
   await settle();

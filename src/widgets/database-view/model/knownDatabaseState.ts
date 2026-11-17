@@ -41,7 +41,8 @@ import {
 } from "./knownDatabaseStorage";
 import { createFlushSchedule } from "./knownDatabaseFlushSchedule";
 import { createKnownDatabasePersistence, type KnownDatabasePersistence } from "./knownDatabasePersistence";
-import { flushWhenHidden, openKnownDatabaseDurableCopy } from "./knownDatabaseDurableStore";
+import { knownDatabaseUnloadJournal, openKnownDatabaseDurableCopy } from "./knownDatabaseDurableStore";
+import { watchKnownDatabaseUnload } from "./knownDatabaseUnload";
 import {
   deletedPageIdsBetween,
   loadPersistedKnownDatabaseState,
@@ -218,12 +219,6 @@ function writeToLocalStorage(pendingState: NotionState, pushNow: boolean): void 
   const push = () => pushDirtyObjectDatabases(pendingState, seedDatabaseIds(), deletedPageIds);
   if (pushNow) push();
   else globalThis.setTimeout(push, 0);
-}
-
-// pagehide, not beforeunload: it fires after every beforeunload handler, so a
-// write the database host flushes from its own beforeunload still lands here.
-if (globalThis.window !== undefined) {
-  globalThis.addEventListener("pagehide", () => flushKnownDatabaseStatePersist(true));
 }
 
 // Makes room in the page caches when the origin is full (knownDatabaseStorage). The durable
@@ -666,10 +661,11 @@ if (globalThis.window !== undefined) {
     getDeletedPageIds,
     reportCommit: reportKeptState,
     warnReadOnly: warnReadOnlyDatabases,
+    unloadJournal: knownDatabaseUnloadJournal(),
   });
-  flushWhenHidden(() => {
-    if (persistence?.mode() === "idb") flushKnownDatabaseStatePersist();
-  });
+  // pagehide, not beforeunload: it fires after every beforeunload handler, so a
+  // write the database host flushes from its own beforeunload still lands here.
+  watchKnownDatabaseUnload({ flushPending: flushKnownDatabaseStatePersist, persistence: () => persistence }, globalThis, globalThis.document);
 }
 
 function createId(prefix: string): string {

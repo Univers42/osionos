@@ -18,7 +18,7 @@
 
 import type { NotionState } from "@notion-db/object-database";
 import { setItemEvictingPageCaches, type PageCacheStorage } from "@/store/pageStore.helpers";
-import type { RecordMap } from "./knownDatabaseCommitLedger";
+import type { CommitLedger, CommitSnapshot, RecordMap } from "./knownDatabaseCommitLedger";
 import { hashSlice, sliceAllDatabases } from "./objectDatabaseSlice";
 
 export const KDS_JOURNAL_KEY_PREFIX = "osionos.kds.journal.v1.";
@@ -108,4 +108,76 @@ export function storeUnloadJournal(storage: PageCacheStorage, journal: UnloadJou
   const isStored = storedLength(text) <= KDS_JOURNAL_CHAR_CAP && setItemEvictingPageCaches(journalKey(journal.tabId), text, storage);
   if (!isStored) forgetUnloadJournal(storage, journal.tabId);
   return isStored;
+}
+
+export interface UnloadJournalSource {
+  readonly storage: PageCacheStorage | undefined;
+  readonly tabId: string;
+  ledger(): CommitLedger;
+  /** The copy read at readiness, as live state; null when the store held none. */
+  loadedBase(): JournalBase | null;
+  live(): NotionState;
+  record(): { readonly version: number; snapshot(): RecordMap };
+}
+
+export interface UnloadJournalWriter {
+  /** Writes this tab's journal now. False when this unload must not push (J-C5). */
+  write(): boolean;
+  forget(): void;
+}
+
+type Outcome = "stored" | "unneeded" | "refused";
+
+// The persistence commits the live NotionState itself as the commit's state ref.
+const asBase = (snapshot: CommitSnapshot): JournalBase =>
+  ({ id: snapshot.id, state: snapshot.stateRef as NotionState, record: snapshot.record });
+
+// Once a commit of this tab resolved, the store can no longer hold the readiness copy or an older
+// own commit again, so only the last resolved one and the pending ones are compared: keeping every
+// older state would pin each one in memory. Their ids stay in `bases` (J-C1).
+function landableBases(ledger: CommitLedger, loaded: JournalBase | null): JournalBase[] {
+  const settled = ledger.lastResolved ? asBase(ledger.lastResolved) : loaded;
+  return [...(settled ? [settled] : []), ...ledger.pending.map(asBase)];
+}
+
+function baseIds(ledger: CommitLedger): string[] {
+  return [...(ledger.loadedId === null ? [] : [ledger.loadedId]), ...ledger.resolvedIds, ...ledger.pending.map((entry) => entry.id)];
+}
+
+function writeOnce(source: UnloadJournalSource, storage: PageCacheStorage): Outcome {
+  const ledger = source.ledger();
+  const record = source.record().snapshot();
+  const journal = buildUnloadJournal({ tabId: source.tabId, baseIds: baseIds(ledger), landable: landableBases(ledger, source.loadedBase()), live: source.live(), record });
+  if (!journal) {
+    forgetUnloadJournal(storage, source.tabId);
+    return "unneeded";
+  }
+  return storeUnloadJournal(storage, journal) ? "stored" : "refused";
+}
+
+interface LastWrite { readonly live: NotionState; readonly version: number; readonly outcome: Outcome }
+
+export function createUnloadJournalWriter(source: UnloadJournalSource): UnloadJournalWriter {
+  const { storage } = source;
+  let last: LastWrite | null = null;
+  // A journal another tab's readiness removed is written again even when nothing changed.
+  const isWritten = (live: NotionState, version: number, target: PageCacheStorage): boolean => last !== null && last.live === live
+    && last.version === version && (last.outcome !== "stored" || target.getItem(journalKey(source.tabId)) !== null);
+  return {
+    write: () => {
+      if (!storage) return true;
+      try {
+        const live = source.live();
+        const version = source.record().version;
+        if (!isWritten(live, version, storage)) last = { live, version, outcome: writeOnce(source, storage) };
+        return last?.outcome !== "refused";
+      } catch {
+        return false; // no journal is known to be stored: the push would be N2's revert
+      }
+    },
+    forget: () => {
+      last = null;
+      if (storage) forgetUnloadJournal(storage, source.tabId);
+    },
+  };
 }
