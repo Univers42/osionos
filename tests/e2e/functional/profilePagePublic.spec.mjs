@@ -20,7 +20,7 @@ import { openFreshPage } from "../../browser/core/app.mjs";
 import { BOB_PUBLIC, OTHER, giveTheAppABridgeOrigin, heading, mockApi, openProfile, seedSession } from "../support/profilePageMocks.mjs";
 
 test.describe("the profile page shows the saved public profile", () => {
-  test("another person's page shows pronouns, company, link hosts, ORCID, Patreon and local time", async ({ page, baseURL }) => {
+  test("another person's page shows pronouns, company, link labels, ORCID, Patreon and local time", async ({ page, baseURL }) => {
     await mockApi(page, { ...OTHER, name: "Bob Jones", publicBody: BOB_PUBLIC });
     await openProfile(page, baseURL, "Bob");
     await expect(heading(page, "Bob Jones")).toBeVisible();
@@ -28,7 +28,7 @@ test.describe("the profile page shows the saved public profile", () => {
     await expect(page.getByText("Design Co")).toBeVisible();
     await expect(page.getByText("New York, NY")).toBeVisible();
     await expect(page.getByTestId("local-time")).toHaveText(/\d{1,2}:\d{2}/);
-    for (const host of ["bob.example.com", "dribbble.com"]) {
+    for (const host of ["bob.example.com/about", "dribbble.com/bob"]) {
       const link = page.getByRole("link", { name: host, exact: true });
       await expect(link).toHaveAttribute("rel", "noopener noreferrer me");
       await expect(link).toHaveAttribute("target", "_blank");
@@ -68,7 +68,7 @@ test.describe("the profile page shows the saved public profile", () => {
     await expect(heading(page, "Bob Jones")).toBeVisible();
     await expect(page.getByText("he/him")).toHaveCount(0);
     await expect(page.getByTestId("local-time")).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "dribbble.com" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "dribbble.com/bob" })).toHaveCount(0);
   });
 
   test("absent fields render nothing", async ({ page, baseURL }) => {
