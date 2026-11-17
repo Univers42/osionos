@@ -14,6 +14,7 @@ const kds = await import("./support/kds-tab.ts");
 const { createMemoryKeyValueStore } = await import("./support/memory-key-value-store.ts");
 const { resetObjectDatabaseSync } = await import("../../src/widgets/database-view/model/objectDatabaseBridgeSync.ts");
 const { serializeKnownDatabaseState } = await import("../../src/widgets/database-view/model/knownDatabasePersistedState.ts");
+const { openDurableCopy } = await import("../../src/widgets/database-view/model/knownDatabaseDurableCopy.ts");
 const { EMPTY, withDb, sliceOf, hashOf, valuesOf, settle, storeWith, storedPair, memoryLegacy, openTab, reload, useBridge } = kds;
 
 type State = typeof EMPTY;
@@ -94,8 +95,8 @@ test("T5: no commit this session, offline at pagehide → the edit reaches the s
 const LEGACY_STATE_KEY = "osionos.knownDatabaseState.v1";
 
 // S1 migrates without retiring the legacy keys (the flag is refused), and leaves offline with e1.
-// S2 has no IndexedDB and writes e2 to the legacy key. S3 redoes the migration: S1's journal must
-// not land on the redone copy.
+// S2 has no IndexedDB and writes e2 to the legacy key. A tab whose readiness reads no journals (an
+// older build) redoes the migration; S1's journal must not land on the redone copy at the next load.
 test("T6: a journal of an earlier migration never lands on a redone one", async (t) => {
   const L0 = withDb(EMPTY, "db-x", ["x-1", "x-2"]);
   const legacy = memoryLegacy({ [LEGACY_STATE_KEY]: serializeKnownDatabaseState(L0, new Set()), "osionos.objectDb.pushed.v1": JSON.stringify({ "db-x": hashOf(L0, "db-x") }) });
@@ -113,6 +114,8 @@ test("T6: a journal of an earlier migration never lands on a redone one", async 
   s2.edit("db-x", ["x-1", "e2"]);
   legacy.values.set(LEGACY_STATE_KEY, serializeKnownDatabaseState(s2.live.state, new Set())); // the legacy writer's flush
   bridge.failPosts = false; store.failWrites = false;
+  await openDurableCopy({ openStore: async () => store, legacy, tabId: "tab-c", budgetMs: 500 }).ready;
+  assert.ok(legacy.values.has("osionos.kds.journal.v1.tab-a"));
   const s3 = await reload(store, legacy);
   assert.deepEqual(valuesOf(s3.live.state, "db-x"), ["e2", "x-1"]);
   assert.ok(serverValues(bridge, "db-x").includes("e2"), "T6: S2's newer edit reverted by the S1 journal");
