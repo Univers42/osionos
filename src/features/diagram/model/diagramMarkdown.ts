@@ -28,22 +28,12 @@
  * (the draw block's "*[drawing]*" does the same).
  */
 
+import { fenceFor } from "@/shared/lib/markdown/codeFence";
 import { parseDiagramSpec } from "./diagramSpec";
 import { mermaidSpecToMermaid } from "./toMermaid";
 
 /** What a diagram leaves in the markdown where the picture cannot go. */
 const DIAGRAM_PLACEHOLDER = "*[diagram]*";
-
-/**
- * The fence that closes around a source: one backtick more than the longest
- * run of backticks inside it, so a source that carries a fence cannot break
- * out of its own.
- */
-function fenceFor(source: string): string {
-  const runs = source.match(/`+/g) ?? [];
-  const longest = runs.reduce((max, run) => Math.max(max, run.length), 0);
-  return "`".repeat(Math.max(3, longest + 1));
-}
 
 /**
  * JSON that never throws and never leaves its HTML comment: a spec that cannot
