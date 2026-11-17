@@ -86,3 +86,61 @@ export async function openProfile(page, baseURL, name) {
 }
 
 export const heading = (page, name) => page.getByRole("heading", { name, exact: true });
+
+const json = (route, status, body, headers = {}) => route.fulfill({ status, headers, json: body });
+
+// A stateful account backend: the profile row (version, If-Match, 412), the status endpoint and
+// the public card that reads both, so a reload shows what was saved. `failStatus`,
+// `failProfile` and `conflictNext` switch the failures on; `calls` records every write.
+export function accountBackend(id, username, seed = {}) {
+  const backend = {
+    row: {
+      userId: id, displayName: "Me Myself", username, pronouns: null, headline: null, bio: null, location: null,
+      company: null, website: null, links: [], timezone: null, orcid: null, patreon: null, avatarUrl: null,
+      bannerUrl: null, directoryOptOut: false, profession: null, readmePageId: null, version: 1,
+      createdAt: null, updatedAt: null, ...seed,
+    },
+    status: null,
+    failStatus: false,
+    failProfile: false,
+    conflictNext: null,
+    calls: { profile: [], status: [] },
+  };
+  backend.card = () => ({
+    userId: id, username, displayName: backend.row.displayName, pronouns: backend.row.pronouns, headline: backend.row.headline,
+    bio: backend.row.bio, company: backend.row.company, location: backend.row.location, website: backend.row.website,
+    links: backend.row.links, timezone: backend.row.timezone, orcid: null, patreon: null, avatarUrl: null, bannerUrl: null,
+    status: backend.status,
+  });
+  return backend;
+}
+
+async function answerProfile(route, backend) {
+  const request = route.request();
+  if (request.method() === "GET") return json(route, 200, backend.row, { etag: `"${backend.row.version}"` });
+  const patch = request.postDataJSON();
+  backend.calls.profile.push({ patch, ifMatch: request.headers()["if-match"] });
+  if (backend.failProfile) return json(route, 500, { message: "boom" });
+  if (backend.conflictNext) {
+    const server = { ...backend.row, ...backend.conflictNext, version: backend.row.version + 1 };
+    backend.conflictNext = null;
+    backend.row = server;
+    return json(route, 412, { profile: server, version: server.version });
+  }
+  backend.row = { ...backend.row, ...patch, version: backend.row.version + 1 };
+  return json(route, 200, backend.row, { etag: `"${backend.row.version}"` });
+}
+
+async function answerStatus(route, backend) {
+  const body = route.request().postDataJSON();
+  backend.calls.status.push(body);
+  if (backend.failStatus) return json(route, 500, { message: "boom" });
+  backend.status = body.emoji || body.text || body.busy ? body : null;
+  return json(route, 200, backend.status);
+}
+
+export async function mockAccountBackend(page, backend, username) {
+  await page.route("**/api/account/profile", (route) => answerProfile(route, backend));
+  await page.route("**/api/account/profile/status", (route) => answerStatus(route, backend));
+  await page.route(`**/api/users/${username}`, (route) => json(route, 200, backend.card()));
+}

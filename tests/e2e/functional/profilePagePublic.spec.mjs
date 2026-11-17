@@ -79,7 +79,7 @@ test.describe("the profile page shows the saved public profile", () => {
     await expect(page.getByText("orcid", { exact: false })).toHaveCount(0);
   });
 
-  test("your own page shows Edit profile, which opens the public profile section; the presence dot uses --osio-success", async ({ page, baseURL }) => {
+  test("your own page shows Edit profile, which edits in place; the presence dot uses --osio-success", async ({ page, baseURL }) => {
     await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);
     await openFreshPage(page, baseURL);
     const mine = await seedSession(page);
@@ -91,9 +91,10 @@ test.describe("the profile page shows the saved public profile", () => {
     await expect(heading(page, "Me Myself")).toBeVisible();
     await expect(page.locator('[title="Online"]').first()).not.toHaveClass(/bg-green-500/);
     await page.getByRole("button", { name: "Edit profile", exact: true }).click();
-    const region = page.getByRole("region", { name: "Settings", exact: true });
-    await expect(region).toBeVisible();
-    // The public-profile anchor itself is P1-6-a's; here the Profile section must be the one shown.
-    await expect(region.getByRole("heading", { level: 1, name: "Profile", exact: true })).toBeVisible();
+    // The page never leaves: no Settings dialog. This build has no profile server, so the form says so.
+    await expect(page.getByRole("region", { name: "Settings", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Your public profile can't be edited here")).toBeVisible();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toBeFocused();
   });
 });
