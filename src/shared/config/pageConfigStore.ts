@@ -11,12 +11,14 @@
 /* ************************************************************************** */
 
 import { create } from 'zustand';
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 
 import type { Block } from '@/entities/block';
 
 import { api } from '@/shared/api/client';
 import { useUserStore } from '@/features/auth/model/useUserStore';
+import { noticingJsonStorage, trySetItem } from '@/shared/lib/storage-full/noticingWrite';
+import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 import { shrinkConfigForApi } from './pageConfigBudget';
 
 export type PageFont = 'default' | 'serif' | 'mono';
@@ -251,31 +253,21 @@ function capVersionsInPersistedValue(value: string, perPageLimit: number): strin
 }
 
 /**
- * localStorage that never throws on quota: page-version snapshots are the heavy,
- * disposable part, so on failure we progressively drop them (10 → 3 → 1 → 0) and
- * retry. The page config itself (settings) is always preserved.
+ * Page settings are user content (ADR 0056 A6): on quota the disposable version
+ * snapshots go first (10 → 3 → 1), then the last attempt (no snapshots) makes room
+ * from the page caches. A write refused even then shows the storage-full notice.
+ * Candidates are built lazily: each cap is a full parse+stringify of a multi-MB
+ * blob, so the happy path (the ~1.8 s version autosave) costs one setItem.
+ * Caveat: the version snapshots shed on quota are gone for good, and the page caches
+ * evicted for room are refetched from the server on the next open; when the other keys
+ * fill the origin, eviction frees too little and the notice is the only outcome.
  */
-const quotaSafeStorage: StateStorage = {
-  getItem: (name) => globalThis.localStorage?.getItem(name) ?? null,
-  removeItem: (name) => globalThis.localStorage?.removeItem(name),
-  setItem: (name, value) => {
-    const store = globalThis.localStorage;
-    if (!store) return;
-    // Lazy fallbacks: capVersionsInPersistedValue is a full JSON.parse+stringify of
-    // the whole config blob (multi-MB with version/translation snapshots). Building
-    // all three candidates EAGERLY made every successful write — the ~1.8s version
-    // autosave while typing — pay 3 extra full serializations for nothing. Now the
-    // happy path costs one setItem; capped candidates exist only after a quota throw.
-    for (const limit of [null, 3, 1, 0] as const) {
-      try {
-        store.setItem(name, limit === null ? value : capVersionsInPersistedValue(value, limit));
-        return;
-      } catch {
-        // over quota — fall through to a leaner candidate
-      }
-    }
-  },
-};
+function writeSheddingVersions(name: string, value: string): boolean {
+  for (const limit of [null, 3, 1] as const) {
+    if (trySetItem(name, limit === null ? value : capVersionsInPersistedValue(value, limit))) return true;
+  }
+  return setItemEvictingPageCaches(name, capVersionsInPersistedValue(value, 0));
+}
 
 export const usePageConfigStore = create<PageConfigStore>()(
   persist(
@@ -375,7 +367,7 @@ export const usePageConfigStore = create<PageConfigStore>()(
     }),
     {
       name: 'osionos:page-configurations',
-      storage: createJSONStorage(() => quotaSafeStorage),
+      storage: noticingJsonStorage<PageConfigStore>('Page settings', writeSheddingVersions),
     },
   ),
 );
