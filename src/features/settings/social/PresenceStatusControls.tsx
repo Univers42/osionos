@@ -25,17 +25,10 @@ import {
   PRESENCE_CHOICES, checkPresenceText, isPresenceChoice, presenceLabel, validateStatus,
   type PresenceChoice, type StatusDraft,
 } from "../people/peopleSocialModel";
+import { EXPIRY_CHOICES } from "../profile/statusChoices";
 
 const FIELD =
   "h-9 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]";
-
-const EXPIRY_CHOICES = [
-  { label: "Never", minutes: 0 },
-  { label: "In 30 minutes", minutes: 30 },
-  { label: "In 1 hour", minutes: 60 },
-  { label: "In 4 hours", minutes: 240 },
-  { label: "In 24 hours", minutes: 1440 },
-];
 
 const EMPTY: StatusDraft = { emoji: "", text: "", expiresAt: "", busy: false };
 
