@@ -136,11 +136,14 @@ test("B4: two tabs commit with two ids; one tab's record is never stored next to
   await settle(); // A's push finishes; its catch-up finds B's id and stores nothing
   assert.equal(kds.storedPair(store).id, "tab-b:1");
   kds.assertStoredPairConsistent(store, bridge);
-  const reloaded = await kds.reload(store);
+  assertReloadKeepsOnlyA(await kds.reload(store), bridge);
+});
+
+function assertReloadKeepsOnlyA(reloaded: Awaited<ReturnType<typeof kds.reload>>, bridge: Bridge): void {
   assert.deepEqual(valuesOf(reloaded.live.state, "db-x"), ["x-1", "x-A"]);
   assert.deepEqual(kds.postedValues(bridge, "db-x"), [["x-1", "x-A"]], "only A's own edit is pushed");
   assert.deepEqual(valuesOf(bridge.server.get("db-x"), "db-x"), ["x-1", "x-A"]);
-});
+}
 
 test("B3: a session that fell back with the flag set pushes nothing; the next IndexedDB load reverts nothing", async (t) => {
   const s0 = withDb(EMPTY, "db-y", ["y-1", "y-2"]);

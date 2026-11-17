@@ -26,63 +26,64 @@ export interface FlushSchedule {
   cancel(): void;
 }
 
+interface Handles {
+  readonly flush: () => void;
+  microtaskQueued: boolean;
+  debounce: ReturnType<typeof globalThis.setTimeout> | null;
+  idle: number | null;
+  timeout: ReturnType<typeof globalThis.setTimeout> | null;
+}
+
+function scheduleIdle(handles: Handles): void {
+  if (handles.idle !== null || handles.timeout !== null) return;
+  const requestIdle = (globalThis as IdleGlobals).requestIdleCallback;
+  if (requestIdle) {
+    // A busy (or headless) page may grant no idle period at all; without a
+    // timeout the save waited for the next edit or unload (seen: >8 s).
+    // Caveat: an edit is still unsaved for up to debounce + timeout (3 s); a
+    // tab crash in that window loses it (a normal close flushes on unload).
+    handles.idle = requestIdle(() => {
+      handles.idle = null;
+      handles.flush();
+    }, { timeout: IDLE_TIMEOUT_MS });
+    return;
+  }
+  handles.timeout = globalThis.setTimeout(() => {
+    handles.timeout = null;
+    handles.flush();
+  }, 0);
+}
+
+function scheduleDebounced(handles: Handles): void {
+  if (handles.debounce !== null) globalThis.clearTimeout(handles.debounce);
+  handles.debounce = globalThis.setTimeout(() => {
+    handles.debounce = null;
+    scheduleIdle(handles);
+  }, FLUSH_DELAY_MS);
+}
+
+function schedule(handles: Handles): void {
+  if (handles.microtaskQueued) return;
+  handles.microtaskQueued = true;
+  queueMicrotask(() => {
+    handles.microtaskQueued = false;
+    scheduleDebounced(handles);
+  });
+}
+
+function cancel(handles: Handles): void {
+  if (handles.debounce !== null) globalThis.clearTimeout(handles.debounce);
+  if (handles.timeout !== null) globalThis.clearTimeout(handles.timeout);
+  handles.debounce = null;
+  handles.timeout = null;
+  if (handles.idle === null) return;
+  const cancelIdle = (globalThis as IdleGlobals).cancelIdleCallback;
+  if (cancelIdle) cancelIdle(handles.idle);
+  else globalThis.clearTimeout(handles.idle);
+  handles.idle = null;
+}
+
 export function createFlushSchedule(flush: () => void): FlushSchedule {
-  let microtaskQueued = false;
-  let debounceHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
-  let idleHandle: number | null = null;
-  let timeoutHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
-
-  const scheduleIdle = (): void => {
-    if (idleHandle !== null || timeoutHandle !== null) return;
-    const requestIdle = (globalThis as IdleGlobals).requestIdleCallback;
-    if (requestIdle) {
-      // A busy (or headless) page may grant no idle period at all; without a
-      // timeout the save waited for the next edit or unload (seen: >8 s).
-      // Caveat: an edit is still unsaved for up to debounce + timeout (3 s); a
-      // tab crash in that window loses it (a normal close flushes on unload).
-      idleHandle = requestIdle(() => {
-        idleHandle = null;
-        flush();
-      }, { timeout: IDLE_TIMEOUT_MS });
-      return;
-    }
-    timeoutHandle = globalThis.setTimeout(() => {
-      timeoutHandle = null;
-      flush();
-    }, 0);
-  };
-
-  const scheduleDebounced = (): void => {
-    if (debounceHandle !== null) globalThis.clearTimeout(debounceHandle);
-    debounceHandle = globalThis.setTimeout(() => {
-      debounceHandle = null;
-      scheduleIdle();
-    }, FLUSH_DELAY_MS);
-  };
-
-  const cancelIdle = (): void => {
-    if (idleHandle === null) return;
-    const cancel = (globalThis as IdleGlobals).cancelIdleCallback;
-    if (cancel) cancel(idleHandle);
-    else globalThis.clearTimeout(idleHandle);
-    idleHandle = null;
-  };
-
-  return {
-    schedule: () => {
-      if (microtaskQueued) return;
-      microtaskQueued = true;
-      queueMicrotask(() => {
-        microtaskQueued = false;
-        scheduleDebounced();
-      });
-    },
-    cancel: () => {
-      if (debounceHandle !== null) globalThis.clearTimeout(debounceHandle);
-      if (timeoutHandle !== null) globalThis.clearTimeout(timeoutHandle);
-      debounceHandle = null;
-      timeoutHandle = null;
-      cancelIdle();
-    },
-  };
+  const handles: Handles = { flush, microtaskQueued: false, debounce: null, idle: null, timeout: null };
+  return { schedule: () => schedule(handles), cancel: () => cancel(handles) };
 }

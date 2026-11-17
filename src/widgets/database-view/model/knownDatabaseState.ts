@@ -200,25 +200,24 @@ export function flushKnownDatabaseStatePersist(pushNow = false) {
   const pendingState = pendingKnownDatabaseState;
   pendingKnownDatabaseState = null;
 
-  if (persistence?.mode() === "idb") {
-    persistence.flush(pendingState, pushNow);
-    return;
-  }
-  if (globalThis.window !== undefined) {
-    // No snapshot: the store replaces objects and never mutates them (see
-    // persistKnownDatabaseState), so the pending ref is already a stable
-    // snapshot. structuredClone of the whole state was half of this flush —
-    // 54 ms with a 5k-row table, landing ~1 s after an edit, i.e. while the
-    // user is still typing.
-    timed("persistKnownDatabaseState", () => writeKnownState(serializeKnownDatabaseState(pendingState, deletedPageIds)));
-    // Write-through: mirror every user-created database to the server (bridge →
-    // Postgres, owner-isolated). No-ops offline / without a session — see module.
-    // Its own task: hashing every user slice must not stack on the local write
-    // (a page being unloaded gets no later task, so it pushes now).
-    const push = () => pushDirtyObjectDatabases(pendingState, seedDatabaseIds(), deletedPageIds);
-    if (pushNow) push();
-    else globalThis.setTimeout(push, 0);
-  }
+  if (persistence?.mode() === "idb") persistence.flush(pendingState, pushNow);
+  else if (globalThis.window !== undefined) writeToLocalStorage(pendingState, pushNow);
+}
+
+function writeToLocalStorage(pendingState: NotionState, pushNow: boolean): void {
+  // No snapshot: the store replaces objects and never mutates them (see
+  // persistKnownDatabaseState), so the pending ref is already a stable
+  // snapshot. structuredClone of the whole state was half of this flush —
+  // 54 ms with a 5k-row table, landing ~1 s after an edit, i.e. while the
+  // user is still typing.
+  timed("persistKnownDatabaseState", () => writeKnownState(serializeKnownDatabaseState(pendingState, deletedPageIds)));
+  // Write-through: mirror every user-created database to the server (bridge →
+  // Postgres, owner-isolated). No-ops offline / without a session — see module.
+  // Its own task: hashing every user slice must not stack on the local write
+  // (a page being unloaded gets no later task, so it pushes now).
+  const push = () => pushDirtyObjectDatabases(pendingState, seedDatabaseIds(), deletedPageIds);
+  if (pushNow) push();
+  else globalThis.setTimeout(push, 0);
 }
 
 // pagehide, not beforeunload: it fires after every beforeunload handler, so a

@@ -47,52 +47,62 @@ export interface KnownDatabasePersistence {
 
 const PULL_ONLY: PushRecordSink = { isPullOnly: true, recordChanged: () => undefined, reset: () => undefined };
 
+interface Session {
+  readonly deps: KnownDatabasePersistenceDeps;
+  mode: DurableCopyMode | "pending";
+  /** The record version the durable copy holds, as far as this tab wrote it. */
+  storedVersion: number;
+}
+
+const markStored = (session: Session, version: number): void => {
+  session.storedVersion = Math.max(session.storedVersion, version);
+};
+
+// I1: the stored record only catches up next to this tab's last commit; the copy refuses
+// otherwise, and the record then travels with the next commit.
+function catchUp(session: Session): void {
+  const record = objectDatabasePushRecord();
+  const version = record.version;
+  if (version === session.storedVersion) return;
+  void session.deps.durable.commitRecord(session.deps.getLiveState(), record.snapshot()).then((isStored) => {
+    if (isStored) markStored(session, version);
+  });
+}
+
+function sinkFor(session: Session, mode: DurableCopyMode): PushRecordSink | undefined {
+  if (mode === "idb") return { isPullOnly: false, recordChanged: () => catchUp(session), reset: () => undefined };
+  return mode === "fallback-flagged" ? PULL_ONLY : undefined; // undefined: the localStorage record
+}
+
+function applyLoaded(session: Session, loaded: LoadedCopy): void {
+  session.deps.load(loaded.text);
+  seedObjectDatabasePushRecord(loaded.record, sinkFor(session, loaded.mode));
+  session.storedVersion = objectDatabasePushRecord().version;
+  session.mode = loaded.mode;
+  if (loaded.mode === "fallback-flagged") session.deps.warnReadOnly();
+}
+
+function flush(session: Session, state: NotionState, pushNow: boolean): void {
+  if (session.mode !== "idb") return;
+  const { deps } = session;
+  const record = objectDatabasePushRecord();
+  const version = record.version;
+  const committed = deps.durable.commit(state, deps.serialize(state), record.snapshot());
+  if (pushNow) deps.pushLive();
+  void committed.then((isKept) => {
+    if (isKept) markStored(session, version);
+    deps.reportCommit(isKept);
+    if (!pushNow) deps.pushLive(); // a failed commit never stops the push (K9)
+    catchUp(session);
+  });
+}
+
 export function createKnownDatabasePersistence(deps: KnownDatabasePersistenceDeps): KnownDatabasePersistence {
-  let mode: DurableCopyMode | "pending" = "pending";
-  let storedVersion = 0;
-
-  // I1: the stored record only catches up next to this tab's last commit; the copy refuses
-  // otherwise, and the record then travels with the next commit.
-  const catchUp = (): void => {
-    const record = objectDatabasePushRecord();
-    const version = record.version;
-    if (version === storedVersion) return;
-    void deps.durable.commitRecord(deps.getLiveState(), record.snapshot()).then((isStored) => {
-      if (isStored) storedVersion = Math.max(storedVersion, version);
-    });
-  };
-
-  const sinkFor = (loadedMode: DurableCopyMode): PushRecordSink | undefined => {
-    if (loadedMode === "idb") return { isPullOnly: false, recordChanged: catchUp, reset: () => undefined };
-    return loadedMode === "fallback-flagged" ? PULL_ONLY : undefined;
-  };
-
-  const applyLoaded = (loaded: LoadedCopy): void => {
-    deps.load(loaded.text);
-    seedObjectDatabasePushRecord(loaded.record, sinkFor(loaded.mode));
-    storedVersion = objectDatabasePushRecord().version;
-    mode = loaded.mode;
-    if (mode === "fallback-flagged") deps.warnReadOnly();
-  };
-
-  const flush = (state: NotionState, pushNow: boolean): void => {
-    if (mode !== "idb") return;
-    const record = objectDatabasePushRecord();
-    const version = record.version;
-    const committed = deps.durable.commit(state, deps.serialize(state), record.snapshot());
-    if (pushNow) deps.pushLive();
-    void committed.then((isKept) => {
-      if (isKept) storedVersion = Math.max(storedVersion, version);
-      deps.reportCommit(isKept);
-      if (!pushNow) deps.pushLive(); // a failed commit never stops the push (K9)
-      catchUp();
-    });
-  };
-
+  const session: Session = { deps, mode: "pending", storedVersion: 0 };
   return {
-    ready: deps.durable.ready.then(applyLoaded),
-    mode: () => mode,
-    canWrite: () => mode === "idb" || mode === "fallback-legacy",
-    flush,
+    ready: deps.durable.ready.then((loaded) => applyLoaded(session, loaded)),
+    mode: () => session.mode,
+    canWrite: () => session.mode === "idb" || session.mode === "fallback-legacy",
+    flush: (state, pushNow) => flush(session, state, pushNow),
   };
 }
