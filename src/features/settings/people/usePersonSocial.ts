@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchFollowCounts, fetchPersonCard, followUser, socialAvailable, unfollowUser, type PersonCard } from "@/shared/social/followApi";
-import { toggleFollow, type FollowView } from "./peopleSocialModel";
+import { toggleFollow, type FollowView } from "../model/peopleSocialModel";
 
 export interface PersonSocial {
   available: boolean;

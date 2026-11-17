@@ -21,7 +21,7 @@ import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import { useEffect } from 'react';
 
 import { api, getActivePageJwt } from '@/shared/api/client';
-import type { PresenceChoice } from '@/features/settings/people/peopleSocialModel';
+import type { PresenceChoice } from '@/features/settings/model/peopleSocialModel';
 
 export interface PresenceSetting {
   state: PresenceChoice;

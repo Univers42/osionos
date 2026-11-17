@@ -29,7 +29,7 @@ import {
   validateStatus,
   type FollowView,
   type StatusDraft,
-} from "../../src/features/settings/people/peopleSocialModel.ts";
+} from "../../src/features/settings/model/peopleSocialModel.ts";
 
 const NOW = Date.parse("2026-10-23T12:00:00.000Z");
 const NOT_FOLLOWING: FollowView = { following: false, followerCount: 4, followingCount: 2 };

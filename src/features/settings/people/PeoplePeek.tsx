@@ -37,7 +37,7 @@ import {
   changeMemberRole, connectPerson, inviteContact, messagePerson, removeContact, removeMember, revokeGuest, transferOwnership,
 } from "./peopleActions";
 import { AcceptLinkModal, InviteError, InviteRoleSelect, type InviteRole } from "./AcceptLinkModal";
-import { presenceLabel, type PresenceState } from "./peopleSocialModel";
+import { presenceLabel, type PresenceState } from "../model/peopleSocialModel";
 import { useCanInviteMembers } from "./useCanInviteMembers";
 import { usePersonSocial } from "./usePersonSocial";
 

@@ -16,7 +16,7 @@
  *  offline build never makes a request and never logs an error. */
 
 import { API_BASE, api, getActivePageJwt } from '@/shared/api/client';
-import type { PresenceState } from '@/features/settings/people/peopleSocialModel';
+import type { PresenceState } from '@/features/settings/model/peopleSocialModel';
 
 export interface FollowCounts {
   followerCount: number;

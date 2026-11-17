@@ -24,7 +24,7 @@ import { Section, SettingRow } from "../ui/settingsKit";
 import {
   PRESENCE_CHOICES, checkPresenceText, isPresenceChoice, presenceLabel, validateStatus,
   type PresenceChoice, type StatusDraft,
-} from "../people/peopleSocialModel";
+} from "../model/peopleSocialModel";
 import { EXPIRY_CHOICES } from "../profile/statusChoices";
 
 const FIELD =
