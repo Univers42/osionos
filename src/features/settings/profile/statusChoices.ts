@@ -19,7 +19,8 @@
  * list (some dingbats) is accepted. Either way the bridge accepts any text up to 8 characters.
  */
 
-import { STATUS_EMOJI_LIMIT } from "../people/peopleSocialModel";
+import type { PersonStatus } from "@/shared/social/followApi";
+import { STATUS_EMOJI_LIMIT, type StatusDraft } from "../model/peopleSocialModel";
 
 const EMOJI_PART = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\u200D|\uFE0F|\u20E3|[\u{E0020}-\u{E007F}]|[0-9#*])+$/u;
 const EMOJI_CORE = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
@@ -47,4 +48,32 @@ export const EXPIRY_CHOICES = [
 /** The ISO instant `minutes` from `nowMs`, or "" for a status that does not expire. */
 export function expiryIso(minutes: number, nowMs: number): string {
   return minutes > 0 ? new Date(nowMs + minutes * 60_000).toISOString() : "";
+}
+
+/** The expiry choice that leaves a stored expiry as it is (the editor never shows a clock). */
+export const KEEP_EXPIRY = -1;
+
+export interface StatusForm {
+  emoji: string;
+  text: string;
+  busy: boolean;
+  /** Minutes from the save, 0 for never, or KEEP_EXPIRY. */
+  minutes: number;
+}
+
+export function statusFormFrom(stored: PersonStatus | null): StatusForm {
+  return { emoji: stored?.emoji ?? "", text: stored?.text ?? "", busy: stored?.busy ?? false, minutes: stored?.expiresAt ? KEEP_EXPIRY : 0 };
+}
+
+export function statusDraft(form: StatusForm, stored: PersonStatus | null, nowMs: number): StatusDraft {
+  const expiresAt = form.minutes === KEEP_EXPIRY ? (stored?.expiresAt ?? "") : expiryIso(form.minutes, nowMs);
+  return { emoji: form.emoji, text: form.text, busy: form.busy, expiresAt };
+}
+
+export function applyPreset(form: StatusForm, preset: { emoji: string; text: string }): StatusForm {
+  return { ...form, emoji: preset.emoji, text: preset.text };
+}
+
+export function sameStatus(a: StatusForm, b: StatusForm): boolean {
+  return a.emoji === b.emoji && a.text === b.text && a.busy === b.busy && a.minutes === b.minutes;
 }

@@ -19,10 +19,10 @@
 import React, { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 
-import { Button, IconButton, Input } from '@/shared/ui';
+import { Button, IconButton, Input, Select, Textarea } from '@/shared/ui';
+import { LINK_KIND_LABEL, linkKind, type LinkKind } from './linkKinds';
+import { LINK_KIND_ICON } from './linkKindIcons';
 import { MAX_LINKS, listTimezones } from './profileFields';
-
-const CONTROL_CLASS = 'w-full rounded-[var(--osio-field-radius)] border border-[var(--osio-field-border)] bg-[var(--osio-field-bg)] px-2.5 py-2 text-sm text-[var(--osio-fg-default)] focus-visible:border-[var(--osio-field-border-focus)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]';
 
 interface FieldFrameProps {
   id: string;
@@ -60,10 +60,10 @@ export const TextField: React.FC<TextFieldProps> = ({ name, value, onChange, mul
   <FieldFrame
     id={`profile-${name}`}
     {...frame}
-    aside={max && multiline ? <span className="text-xs text-[var(--osio-fg-muted)]">{value.length} / {max}</span> : undefined}
+    aside={max ? <span className="text-xs text-[var(--osio-fg-muted)]">{value.length} / {max}</span> : undefined}
   >
     {(aria) => multiline
-      ? <textarea {...aria} rows={5} className={`${CONTROL_CLASS} resize-y`} value={value} onChange={(event) => onChange(event.target.value)} />
+      ? <Textarea {...aria} rows={5} value={value} onChange={(event) => onChange(event.target.value)} />
       : <Input {...aria} autoComplete={autoComplete} value={value} onChange={(event) => onChange(event.target.value)} />}
   </FieldFrame>
 );
@@ -95,12 +95,22 @@ export const TimezoneField: React.FC<{ value: string; error?: string | null; onC
       aside={value && ZONES.includes(value) ? <span className="text-xs text-[var(--osio-fg-muted)]">It is {timeIn(value, now)} there</span> : undefined}
     >
       {(aria) => (
-        <select {...aria} className={CONTROL_CLASS} value={value} onChange={(event) => onChange(event.target.value)}>
+        <Select {...aria} value={value} onChange={(event) => onChange(event.target.value)}>
           <option value="">Not shown</option>
           {ZONES.map((zone) => <option key={zone} value={zone}>{zone}</option>)}
-        </select>
+        </Select>
       )}
     </FieldFrame>
+  );
+};
+
+/** The icon and the name of the site a link points to; the name keeps the kind from resting on the icon alone. */
+export const LinkKindIcon: React.FC<{ kind: LinkKind }> = ({ kind }) => {
+  const Icon = LINK_KIND_ICON[kind];
+  return (
+    <span className="flex w-16 shrink-0 items-center gap-1 text-xs text-[var(--osio-fg-muted)]" data-testid="link-kind">
+      <Icon size={14} aria-hidden /> {LINK_KIND_LABEL[kind]}
+    </span>
   );
 };
 
@@ -110,6 +120,7 @@ export const LinksField: React.FC<{ value: string[]; error?: string | null; onCh
       <div className="space-y-2">
         {value.map((link, index) => (
           <div key={index} className="flex items-center gap-2">
+            <LinkKindIcon kind={linkKind(link)} />
             <Input
               {...aria}
               id={index === 0 ? aria.id : `${aria.id}-${index}`}
@@ -121,7 +132,7 @@ export const LinksField: React.FC<{ value: string[]; error?: string | null; onCh
           </div>
         ))}
         {/* With no link yet, the label names the button: a `for` with no target is a console issue. */}
-        <Button id={value.length === 0 ? aria.id : undefined} disabled={value.length >= MAX_LINKS} onClick={() => onChange([...value, ''])}>Add link</Button>
+        <Button id={value.length === 0 ? aria.id : undefined} aria-label="Add link" disabled={value.length >= MAX_LINKS} onClick={() => onChange([...value, ''])}>Add link</Button>
       </div>
     )}
   </FieldFrame>

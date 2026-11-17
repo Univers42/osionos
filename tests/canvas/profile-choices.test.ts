@@ -77,3 +77,27 @@ test("link kinds follow the host, subdomains included, and fall back to site", (
   assert.equal(kinds.LINK_KIND_LABEL.github, "GitHub");
   assert.equal(kinds.LINK_KIND_LABEL.site, "Website");
 });
+
+const NOW = Date.parse("2026-11-17T12:00:00Z");
+
+test("status form: a stored status keeps its expiry unless another is chosen", () => {
+  assert.deepEqual(status.statusFormFrom(null), { emoji: "", text: "", busy: false, minutes: 0 });
+  const stored = { emoji: "🎯", text: "Focusing", busy: true, expiresAt: "2026-11-17T13:00:00.000Z" };
+  const form = status.statusFormFrom(stored);
+  assert.deepEqual(form, { emoji: "🎯", text: "Focusing", busy: true, minutes: status.KEEP_EXPIRY });
+  assert.equal(status.statusDraft(form, stored, NOW).expiresAt, "2026-11-17T13:00:00.000Z");
+  assert.equal(status.statusDraft({ ...form, minutes: 60 }, stored, NOW).expiresAt, "2026-11-17T13:00:00.000Z");
+  assert.equal(status.statusDraft({ ...form, minutes: 0 }, stored, NOW).expiresAt, "");
+  assert.equal(status.statusDraft({ ...form, minutes: 30 }, stored, NOW).expiresAt, "2026-11-17T12:30:00.000Z");
+});
+
+test("status form: a preset fills emoji and text and leaves busy and expiry alone", () => {
+  const form = { emoji: "", text: "", busy: true, minutes: 60 };
+  assert.deepEqual(status.applyPreset(form, status.STATUS_PRESETS[0]), { emoji: "📅", text: "In a meeting", busy: true, minutes: 60 });
+});
+
+test("status form: sameStatus ignores nothing the person can change", () => {
+  const base = { emoji: "🎯", text: "x", busy: false, minutes: 0 };
+  assert.equal(status.sameStatus(base, { ...base }), true);
+  for (const patch of [{ emoji: "" }, { text: "y" }, { busy: true }, { minutes: 30 }]) assert.equal(status.sameStatus(base, { ...base, ...patch }), false);
+});

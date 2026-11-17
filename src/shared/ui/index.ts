@@ -22,6 +22,7 @@
 export * from "@osionos/ui";
 export * from "./atoms/EquationView";
 export * from "./atoms/PanelSectionLabel";
+export * from "./atoms/Select";
 export * from "./atoms/Textarea";
 export * from "./molecules/NoteComposeModal";
 export * from "./molecules/MenuSubmenu";
