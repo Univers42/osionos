@@ -41,7 +41,7 @@ function unavailable(cause) {
 	return Object.assign(new Error('The account plane is unavailable.', { cause }), { status: 503, code: 'account_plane_unavailable' });
 }
 
-/** The subset of `subjectIds` hidden from `viewerId`, as lower-case ids; two reads, whatever the size. */
+/** The subset of `subjectIds` hidden from `viewerId`, as lower-case ids; the block list plus one read per opt-out table and 50 subjects. */
 export async function hiddenAmong(config, fetchImpl, viewerId, subjectIds) {
 	const viewer = lower(viewerId);
 	const others = [...new Set(subjectIds.map(lower))].filter((id) => id !== viewer && UUID_REGEX.test(id));
