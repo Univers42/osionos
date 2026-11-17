@@ -12,6 +12,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
+import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 
 import { nowIso, stableDefault } from './settingsStoreUtils';
 import { recordSettingsAction } from './useSettingsAuditStore';
@@ -62,6 +64,9 @@ export const useAiSettingsStore = create<AiSettingsStore>()(
     }),
     {
       name: STORE_NAME,
+      // Caveat: a refused write evicts every workspace page cache (refetched on open) and may still
+      // be refused; the state then lives in memory this session and the refusal is shown once.
+      storage: noticingJsonStorage('AI settings', setItemEvictingPageCaches),
       version: 1,
       migrate: (persistedState: unknown) => {
         const state = (persistedState ?? {}) as { data?: Record<string, { accountContext?: boolean }> };

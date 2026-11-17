@@ -176,7 +176,7 @@ test("C913: views kept in this browser by L1 are ignored, and no role writes the
     assert.deepEqual(state.views, shipped, `${role}: the shipped views, whatever this browser holds`);
     assert.equal(state.databases[LIBRARY_DB_ID].locked, true, `${role}: locked until the bridge says otherwise`);
     adapter.persistState?.(edited(state, "Edited"), state);
-    assert.equal(writes.length, 0, `${role}: nothing is written to this browser`);
+    assert.deepEqual(writes.filter((written) => written.startsWith("osionos:library:")), [], `${role}: no view is written to this browser`);
     assert.equal(files.get(key), stored);
   }
 });

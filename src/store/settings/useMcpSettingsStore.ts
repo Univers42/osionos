@@ -12,6 +12,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
+import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 
 import { addConnection, canConnectApp, removeConnection } from './mcpPolicy';
 import { nowIso, stableDefault } from './settingsStoreUtils';
@@ -133,6 +135,9 @@ export const useMcpSettingsStore = create<McpSettingsStore>()(
     }),
     {
       name: STORE_NAME,
+      // Caveat: a refused write evicts every workspace page cache (refetched on open) and may still
+      // be refused; the state then lives in memory this session and the refusal is shown once.
+      storage: noticingJsonStorage('MCP settings', setItemEvictingPageCaches),
       version: 1,
       // Rows persisted before the connections/restrict fields existed are
       // completed here ONCE at rehydration, so getData returns stable, fully

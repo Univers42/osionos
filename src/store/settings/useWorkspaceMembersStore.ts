@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { defaultWorkspaceMember } from './defaults';
 import { errorCode, errorMessage, nowIso, pushSettingsError, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPost, upsertById } from './settingsStoreUtils';
@@ -124,6 +125,7 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Workspace members'),
       partialize: (state) => ({ data: state.data }),
       merge: (persisted, current) => ({ ...current, data: sanitizePersistedMembers((persisted as { data?: unknown } | undefined)?.data) }),
     },

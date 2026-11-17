@@ -18,6 +18,8 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
+import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 
 export const DEFAULT_OBJECT_DATABASE_ID = 'db-tasks';
 export const DEFAULT_OBJECT_DATABASE_VIEW_ID = 'v-tasks-table';
@@ -83,7 +85,9 @@ export const useDatabaseStore = create<DatabaseStore>()(
           return additions.length ? { created: [...additions, ...state.created] } : state;
         }),
     }),
-    { name: 'osionos.databases.created.v1', partialize: (s) => ({ created: s.created }) },
+    // Caveat: a refused write evicts every workspace page cache (refetched on open) and may still
+    // be refused; the state then lives in memory this session and the refusal is shown once.
+    { name: 'osionos.databases.created.v1', storage: noticingJsonStorage('Databases', setItemEvictingPageCaches), partialize: (s) => ({ created: s.created }) },
   ),
 );
 

@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { listReports, submitReport } from '@/shared/social/reportApi';
 import { errorMessage, pushSettingsError } from '@/store/settings/settingsStoreUtils';
@@ -55,6 +56,7 @@ export const useReportsStore = create<ReportsStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Reports'),
       partialize: (state) => ({ data: state.data }),
     },
   ),

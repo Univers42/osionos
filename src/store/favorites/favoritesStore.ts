@@ -16,6 +16,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { noticingJsonStorage } from "@/shared/lib/storage-full/noticingWrite";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { isServerPageId } from "./favoritesScope";
@@ -64,6 +65,6 @@ export const useFavoritesStore = create<FavoritesStore>()(
         }
       },
     }),
-    { name: STORE_NAME, partialize: (state) => ({ pageIds: state.pageIds }) },
+    { name: STORE_NAME, storage: noticingJsonStorage("Favorites"), partialize: (state) => ({ pageIds: state.pageIds }) },
   ),
 );

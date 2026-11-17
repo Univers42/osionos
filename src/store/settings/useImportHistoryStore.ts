@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { createLocalId, errorMessage, nowIso, pushSettingsError, trySettingsGet, trySettingsUpload, upsertById } from './settingsStoreUtils';
 import type { ImportHistoryEntry } from './types';
@@ -111,6 +112,7 @@ export const useImportHistoryStore = create<ImportHistoryStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Import history'),
       partialize: (state) => ({ data: state.data }),
     },
   ),

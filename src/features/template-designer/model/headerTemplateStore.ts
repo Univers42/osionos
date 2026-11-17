@@ -13,10 +13,15 @@
 import { create } from "zustand";
 
 import { api, getActivePageJwt } from "@/shared/api/client";
+import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
 import type { HeaderTemplate } from "@/entities/page/model/headerTemplate";
-import { isUuidId } from "@/store/pageStore.helpers";
+import { isUuidId, setItemEvictingPageCaches } from "@/store/pageStore.helpers";
 
 const LS_KEY = "osio-header-templates.v1";
+// The only copy of a template on a database the bridge does not key (see serverKeyed).
+// Caveat: a refused write evicts every workspace page cache (refetched on open) and may still
+// be refused; the state then lives in memory this session and the refusal is shown once.
+const writeHeaderTemplates = noticingWriter("Header templates", setItemEvictingPageCaches);
 
 function loadLocal(): Record<string, HeaderTemplate> {
   try {
@@ -27,11 +32,7 @@ function loadLocal(): Record<string, HeaderTemplate> {
 }
 
 function saveLocal(map: Record<string, HeaderTemplate>): void {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(map));
-  } catch {
-    /* storage unavailable — keep the in-memory copy */
-  }
+  writeHeaderTemplates(LS_KEY, JSON.stringify(map));
 }
 
 interface HeaderTemplateStore {

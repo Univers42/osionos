@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { storedWorkspaceConfig, useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 import { defaultWorkspaceSettings } from './defaults';
@@ -164,6 +165,7 @@ export const useWorkspaceSettingsStore = create<WorkspaceSettingsStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Workspace settings'),
       partialize: (state) => ({ data: state.data }),
     },
   ),

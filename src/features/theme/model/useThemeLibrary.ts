@@ -18,6 +18,8 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { noticingJsonStorage } from "@/shared/lib/storage-full/noticingWrite";
+import { setItemEvictingPageCaches } from "@/store/pageStore.helpers";
 
 import { THEME_LIMITS, themeSlug } from "../../../../scripts/bridge-theme-rules.mjs";
 
@@ -98,7 +100,9 @@ export const useThemeLibrary = create<ThemeLibraryState>()(
         return doc;
       },
     }),
-    { name: "osionos:theme-library" },
+    // Caveat: a refused write evicts every workspace page cache (refetched on open) and may still
+    // be refused; the state then lives in memory this session and the refusal is shown once.
+    { name: "osionos:theme-library", storage: noticingJsonStorage("Themes", setItemEvictingPageCaches) },
   ),
 );
 

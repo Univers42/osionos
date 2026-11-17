@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { defaultConnections } from './defaults';
 import { createLocalId, errorMessage, nowIso, pushSettingsError, removeById, scheduleSettingsWrite, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPost, upsertById } from './settingsStoreUtils';
@@ -130,6 +131,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Connections'),
       partialize: (state) => ({ data: state.data }),
     },
   ),

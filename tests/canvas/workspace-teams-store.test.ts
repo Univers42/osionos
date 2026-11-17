@@ -18,6 +18,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { registerHooks } from "node:module";
 
+// The room-maker's module listens on the window at import time (pageStore.helpers.ts).
+import "./window-events.ts";
+
 const CLIENT = new URL("../../src/shared/api/client.ts", import.meta.url).href;
 const UI_STUB = `export const useToastStore = { getState: () => ({ push(toast) { (globalThis.__toasts ??= []).push(toast); } }) };`;
 
@@ -40,7 +43,7 @@ registerHooks({
 
 const OLD_ROW = JSON.stringify({ state: { data: { w1: [] } }, version: 0 });
 const memory = new Map<string, string>([["osionos:settings:teamspaces", OLD_ROW]]);
-// zustand's persist reads `window.localStorage`; without a window it silently skips persistence.
+// The store's noticing storage writes to `localStorage`; without one it skips persistence.
 const storage = {
   getItem: (key: string) => memory.get(key) ?? null,
   setItem: (key: string, value: string) => void memory.set(key, value),

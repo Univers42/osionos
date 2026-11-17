@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { API_BASE } from '@/shared/api/client';
 import { createLocalId, errorCode, errorMessage, nowIso, pushSettingsError, settingsJwt, trySettingsDelete, trySettingsGet, trySettingsPost, upsertById } from './settingsStoreUtils';
@@ -250,6 +251,7 @@ export const useWorkspaceInvitesStore = create<WorkspaceInvitesStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Workspace invites'),
       partialize: (state) => ({ data: state.data }),
     },
   ),

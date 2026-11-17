@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { blockUser, listBlocks, unblockUser } from '@/shared/social/blockApi';
 import { errorMessage, pushSettingsError } from '@/store/settings/settingsStoreUtils';
@@ -74,6 +75,7 @@ export const useBlocksStore = create<BlocksStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Blocked people'),
       partialize: (state) => ({ data: state.data }),
     },
   ),

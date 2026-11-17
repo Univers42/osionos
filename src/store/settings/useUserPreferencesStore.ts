@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { defaultPreferences } from './defaults';
 import { errorMessage, nowIso, pushSettingsError, scheduleSettingsWrite, trySettingsGet, trySettingsPatch, trySettingsPost } from './settingsStoreUtils';
@@ -75,6 +76,7 @@ export const useUserPreferencesStore = create<UserPreferencesStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Preferences'),
       partialize: (state) => ({ data: state.data }),
     },
   ),

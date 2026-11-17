@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { noticingJsonStorage } from "@/shared/lib/storage-full/noticingWrite";
+import { setItemEvictingPageCaches } from "@/store/pageStore.helpers";
 
 import { comboSteps } from "./combo";
 import { DEFAULT_AUTOMATIONS } from "./defaultAutomations";
@@ -119,6 +121,8 @@ export const useAutomationStore = create<AutomationStoreState>()(
       },
       conflicts: () => computeConflicts(get().automations()),
     }),
-    { name: "osionos:settings:automations", partialize: (state) => ({ overrides: state.overrides, custom: state.custom }) },
+    // Caveat: a refused write evicts every workspace page cache (refetched on open) and may still
+    // be refused; the state then lives in memory this session and the refusal is shown once.
+    { name: "osionos:settings:automations", storage: noticingJsonStorage("Shortcuts", setItemEvictingPageCaches), partialize: (state) => ({ overrides: state.overrides, custom: state.custom }) },
   ),
 );

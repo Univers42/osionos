@@ -18,6 +18,9 @@
 import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
 
+// The room-maker's module listens on the window at import time (pageStore.helpers.ts).
+import "./window-events.ts";
+
 const stored = new Map<string, string>();
 const localStorageStub = {
   getItem: (key: string) => stored.get(key) ?? null,

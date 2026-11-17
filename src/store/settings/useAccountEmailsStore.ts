@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { addEmail, EMAILS_TEMPORARILY_DOWN, listEmails, makePrimaryEmail, removeEmail, resendEmailCode, verifyEmail, type CodeRequested } from '@/shared/api/accountEmailsApi';
 import type { AccountSecurityOutcome } from '@/shared/api/accountSecurityApi';
@@ -101,6 +102,7 @@ export const useAccountEmailsStore = create<AccountEmailsStore>()(
     },
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Account emails'),
       version: 1,
       partialize: (state) => ({ data: state.data.filter(isPrimary) }),
       migrate: (stored) => ({ data: ((stored as { data?: EmailRecord[] } | null)?.data ?? []).filter(isPrimary) }),

@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { currentAccountEpoch } from './accountEpoch';
 import { unknownAccountSettings } from './defaults';
@@ -73,6 +74,7 @@ export const useAccountSettingsStore = create<AccountSettingsStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Account settings'),
       partialize: (state) => ({ data: state.data }),
     },
   ),

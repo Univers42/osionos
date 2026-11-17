@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { API_BASE } from '@/shared/api/client';
 import {
@@ -130,6 +131,7 @@ export const useContactsStore = create<ContactsStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Contacts'),
       partialize: (state) => ({ data: state.data, requests: state.requests }),
       // Drop malformed/null edges persisted by older builds (a failed sendRequest once
       // stored `undefined`, which JSON-serializes to `null`) so a stale cache can never

@@ -12,6 +12,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
+import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 
 import { createLocalId, errorMessage, nowIso, pushSettingsError, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPost } from './settingsStoreUtils';
 import { recordSettingsAction } from './useSettingsAuditStore';
@@ -222,6 +224,8 @@ export const useTeamspacesStore = create<TeamspacesStore>()(
       },
     }),
     // Loading/error flags are per-session; persisting `true` would show a spinner forever after a crash.
-    { name: STORE_NAME, partialize: ({ data, teams, teamMembers }) => ({ data, teams, teamMembers }) },
+    // Caveat: a refused write evicts every workspace page cache (refetched on open) and may still
+    // be refused; the state then lives in memory this session and the refusal is shown once.
+    { name: STORE_NAME, storage: noticingJsonStorage('Teamspaces', setItemEvictingPageCaches), partialize: ({ data, teams, teamMembers }) => ({ data, teams, teamMembers }) },
   ),
 );

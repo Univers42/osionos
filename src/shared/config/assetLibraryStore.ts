@@ -12,6 +12,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
+import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 
 export type AccountAssetKind = 'cover' | 'image' | 'video' | 'audio' | 'file' | 'emoji';
 export type AccountAssetOrigin = 'preloaded' | 'url' | 'unsplash' | 'upload';
@@ -82,6 +84,8 @@ export const useAssetLibraryStore = create<AssetLibraryStore>()(
         return assets.filter((asset) => kinds.includes(asset.kind));
       },
     }),
-    { name: 'osionos:account-asset-library' },
+    // Caveat: a refused write evicts every workspace page cache (refetched on open) and may still
+    // be refused; the state then lives in memory this session and the refusal is shown once.
+    { name: 'osionos:account-asset-library', storage: noticingJsonStorage('Asset library', setItemEvictingPageCaches) },
   ),
 );

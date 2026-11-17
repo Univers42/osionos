@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { defaultNotifications } from './defaults';
 import { errorMessage, nowIso, pushSettingsError, scheduleSettingsWrite, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPut } from './settingsStoreUtils';
@@ -107,6 +108,7 @@ export const useNotificationSettingsStore = create<NotificationSettingsStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Notification settings'),
       partialize: (state) => ({ data: state.data }),
     },
   ),

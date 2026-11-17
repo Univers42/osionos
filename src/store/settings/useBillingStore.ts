@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 
 import { defaultBillingState } from './defaults';
 import { errorMessage, nowIso, pushSettingsError, scheduleSettingsWrite, stableDefault, trySettingsGet, trySettingsPatch } from './settingsStoreUtils';
@@ -99,6 +100,7 @@ export const useBillingStore = create<BillingStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Billing'),
       partialize: (state) => ({ data: state.data, invoices: state.invoices }),
     },
   ),

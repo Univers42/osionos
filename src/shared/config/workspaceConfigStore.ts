@@ -12,6 +12,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
+import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 
 import { chatBridgeAvailable, createChannel as createBridgeChannel } from '@/shared/chat/channelApi';
 
@@ -231,6 +233,8 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
         set((state) => ({ configs: { ...state.configs, [key]: nextConfig } }));
       },
     }),
-    { name: 'osionos:workspace-configurations' },
+    // Caveat: a refused write evicts every workspace page cache (refetched on open) and may still
+    // be refused; the state then lives in memory this session and the refusal is shown once.
+    { name: 'osionos:workspace-configurations', storage: noticingJsonStorage('Workspace configuration', setItemEvictingPageCaches) },
   ),
 );
