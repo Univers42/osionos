@@ -15,7 +15,7 @@
 // bridge that keeps the server's databases. The live state is held here instead of in the zustand
 // store, so a test decides when each flush runs and when a tab closes. The push is the
 // persistence's own, never one defined here: B5 must fail if that push stops reading the live state.
-// Import memory-local-storage.ts and stub-bridge.ts, and define `window`, before this module.
+// Import memory-local-storage.ts, stub-bridge.ts and kds-browser.ts before this module.
 
 import assert from "node:assert/strict";
 import type { NotionState } from "@notion-db/object-database";

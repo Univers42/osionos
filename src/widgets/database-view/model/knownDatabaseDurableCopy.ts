@@ -18,9 +18,10 @@
 // A session that fell back (no IndexedDB in time) never writes the store (I7).
 
 import type { KeyValueStore } from "@/shared/lib/key-value-store/indexedKeyValueStore";
+import { setItemEvictingPageCaches, type PageCacheStorage } from "@/store/pageStore.helpers";
 
 // Same literals as knownDatabaseStorage.ts and objectDatabasePushBaseline.ts, which import the
-// store and the toast layers; this module stays free of them so it loads in the canvas tests.
+// toast layer; this module stays free of it so it loads in the canvas tests.
 const LEGACY_STATE_KEY = "osionos.knownDatabaseState.v1";
 const LEGACY_PUSHED_KEY = "osionos.objectDb.pushed.v1";
 const MIGRATED_ID = "migrated";
@@ -36,7 +37,8 @@ export interface LoadedCopy {
 }
 export interface DurableCopyOptions {
   openStore: () => Promise<KeyValueStore>;
-  legacy: Pick<Storage, "getItem" | "setItem" | "removeItem"> | undefined;
+  /** Enumerable, so that a full origin can evict its page caches to store the flag. */
+  legacy: PageCacheStorage | undefined;
   tabId: string;
   budgetMs?: number;
 }
@@ -66,15 +68,19 @@ function readLegacyRecord(legacy: LegacyStorage): Record<string, string> {
   }
 }
 
-// Flag first: a crash between the two steps must leave a flagged origin, never an unflagged one
-// whose legacy keys are gone. A throwing flag write keeps the legacy keys.
+// Flag first, read back: a crash between the two steps must leave a flagged origin, never an
+// unflagged one whose legacy keys are gone. The origin is full by the premise of this copy, so the
+// flag makes room in the page caches (the server rebuilds them); unflagged legacy keys are a pair
+// that a later load without IndexedDB pushes over newer server data (devil N1). A flag that still
+// does not fit keeps the legacy keys, and the next load retries.
 function retireLegacy(legacy: LegacyStorage): void {
+  if (!legacy || !setItemEvictingPageCaches(KDS_IDB_FLAG_KEY, "1", legacy)) return;
+  if (readLegacyItem(legacy, KDS_IDB_FLAG_KEY) !== "1") return;
   try {
-    legacy?.setItem(KDS_IDB_FLAG_KEY, "1");
-    legacy?.removeItem(LEGACY_STATE_KEY);
-    legacy?.removeItem(LEGACY_PUSHED_KEY);
+    legacy.removeItem(LEGACY_STATE_KEY);
+    legacy.removeItem(LEGACY_PUSHED_KEY);
   } catch {
-    // Storage that throws leaves the mode unchanged; the next load retires the keys.
+    // Keys left behind a stored flag are never read: a flagged origin falls back pull-only.
   }
 }
 

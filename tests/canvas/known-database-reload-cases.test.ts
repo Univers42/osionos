@@ -19,8 +19,7 @@ import test from "node:test";
 
 await import("./support/memory-local-storage.ts");
 await import("./support/stub-bridge.ts");
-Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { search: "", hash: "" }, localStorage: globalThis.localStorage } });
-(globalThis as Record<string, unknown>).__playgroundUserStore = { getState: () => ({ activePageJwt: () => "test-jwt" }) };
+await import("./support/kds-browser.ts");
 
 const kds = await import("./support/kds-tab.ts");
 const { EMPTY, X_OLD, X_NEW, withDb, sliceOf, hashOf, valuesOf, settle } = kds;
