@@ -238,6 +238,7 @@ export function openTab(store: KeyValueStore, options: TabOptions = {}): Tab {
     tabId,
     budgetMs: 500,
     journals: openReadinessJournals(legacy),
+    seedText: () => serializeKnownDatabaseState(EMPTY, new Set()), // the seed this tab's load falls back to
   });
   const tab = { live: { state: EMPTY, deleted: new Set<string>() }, commitReports: [], readOnlyWarnings: 0 } as unknown as Tab;
   tab.persistence = tabPersistence(options.wrapDurable?.(durable) ?? durable, tab, { storage: legacy, tabId });

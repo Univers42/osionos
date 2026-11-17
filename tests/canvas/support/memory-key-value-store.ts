@@ -3,6 +3,8 @@ import type { KeyValueStore } from "../../../src/shared/lib/key-value-store/inde
 export interface MemoryKeyValueStore extends KeyValueStore {
   readonly entries: Map<string, unknown>;
   delayMs: number;
+  /** Delay between the writes and the resolve: a transaction still committing after its callback. */
+  commitDelayMs: number;
   failWrites: boolean;
   readonly writes: number;
 }
@@ -25,6 +27,7 @@ async function performUpdate(
   // Values are stored as given, without the structured cloning IndexedDB performs.
   for (const [key, value] of changes) store.entries.set(key, value);
   if (changes.length > 0) countWrite();
+  if (store.commitDelayMs > 0) await new Promise<void>(resolve => setTimeout(resolve, store.commitDelayMs));
   return current;
 }
 
@@ -36,6 +39,7 @@ export function createMemoryKeyValueStore(initial: Record<string, unknown> = {})
   const store: MemoryKeyValueStore = {
     entries,
     delayMs: 0,
+    commitDelayMs: 0,
     failWrites: false,
     get writes() { return writes; },
     update(keys, change) {

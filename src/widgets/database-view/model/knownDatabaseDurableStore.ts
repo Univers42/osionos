@@ -28,13 +28,15 @@ function legacyStorage(): Storage | undefined {
   }
 }
 
-/** The copy this tab commits under its writer id, so a commit is never mistaken for another tab's. */
-export function openKnownDatabaseDurableCopy(): DurableCopy {
+/** The copy this tab commits under its writer id, so a commit is never mistaken for another tab's.
+ *  `seedText` is the store's seed as stored text, written when the copy starts empty (A2). */
+export function openKnownDatabaseDurableCopy(seedText: () => string): DurableCopy {
   return openDurableCopy({
     openStore: () => openIndexedKeyValueStore(KNOWN_DATABASE_IDB_NAME),
     legacy: legacyStorage(),
     tabId: OBJECT_DB_WRITER_ID,
     journals: openReadinessJournals(legacyStorage()),
+    seedText,
   });
 }
 

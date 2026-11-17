@@ -49,6 +49,8 @@ export interface DurableCopyOptions {
   budgetMs?: number;
   /** The unload journals of earlier documents, applied by the readiness transaction (ADR 0055). */
   journals?: ReadinessJournals;
+  /** The seed as stored text; an empty store with no legacy copy stores it at readiness (A2). */
+  seedText?: () => string;
 }
 export interface DurableCopy {
   readonly ready: Promise<LoadedCopy>;
@@ -157,11 +159,14 @@ async function decideInitialCopy(store: KeyValueStore, options: DurableCopyOptio
       loaded = read.loaded;
       return read.entries;
     }
-    // An abandoned session is a fallback one and must not write (I7).
-    if (source.text === null || isAbandoned()) return null;
-    loaded = { mode: "idb", text: source.text, record: source.map };
+    // An abandoned session is a fallback one and must not write (I7). A first session stores the
+    // seed as a migrated copy: its unload journal then has a base, and a seed put the budget
+    // abandoned is redone from the legacy copy the fallback session wrote (devil R8, A2).
+    const text = isAbandoned() ? null : source.text ?? options.seedText?.() ?? null;
+    if (text === null) return null;
+    loaded = { mode: "idb", text, record: source.map };
     session.ledger.loaded(migratedId(options.tabId));
-    return copyEntries(source.text, source.map, migratedId(options.tabId));
+    return copyEntries(text, source.map, migratedId(options.tabId));
   }, { durability: "strict" });
   if (!isAbandoned()) options.journals?.discard();
   // An abandoned session keeps writing the legacy keys; retiring them would orphan its edits.

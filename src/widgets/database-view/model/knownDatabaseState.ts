@@ -162,7 +162,7 @@ export function loadKnownDatabaseState(): NotionState {
 }
 
 /** I9: the stored copy replaces the whole store, tombstones included; the seed when none. */
-function restoreStoredState(text: string | null): void {
+export function restoreStoredState(text: string | null): void {
   const restored = text ? readStoredState(text) : null;
   deletedPageIds = restored?.deletedPageIds ?? new Set();
   useKnownDatabaseStateStore.setState({ state: restored?.state ?? seedSnapshot() });
@@ -549,7 +549,7 @@ function stringifyUnknown(value: unknown): string {
   }
 }
 
-function seedSnapshot(): NotionState {
+export function seedSnapshot(): NotionState {
   // The Delivery Wiki slice (Milestones ↔ Files), the Home demo slice
   // (Events + Learn), and the Grades slice (grade-calculator template) extend
   // the JSON seed at the same precedence level — stored user state overlays all.
@@ -653,7 +653,7 @@ export { resetObjectDatabaseSync } from "./objectDatabaseBridgeSync";
 // K2: one durable copy per tab, opened at module evaluation.
 if (globalThis.window !== undefined) {
   persistence = createKnownDatabasePersistence({
-    durable: openKnownDatabaseDurableCopy(),
+    durable: openKnownDatabaseDurableCopy(() => serializeKnownDatabaseState(seedSnapshot(), new Set())),
     load: restoreStoredState,
     getLiveState: () => useKnownDatabaseStateStore.getState().state,
     serialize: (state) => serializeKnownDatabaseState(state, deletedPageIds),

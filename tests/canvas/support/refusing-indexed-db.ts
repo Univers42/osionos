@@ -24,6 +24,11 @@ export function installRefusingBrowser(delayMs: number): void {
     },
   };
   Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: indexedDB });
+  installBrowserWindow();
+}
+
+/** The `window` and listener globals the known-database store module reads at evaluation. */
+export function installBrowserWindow(): void {
   Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { search: "", hash: "" }, localStorage: globalThis.localStorage } });
   for (const name of ["addEventListener", "removeEventListener"] as const) {
     if (typeof globalThis[name] !== "function") Object.defineProperty(globalThis, name, { configurable: true, value: () => undefined });
