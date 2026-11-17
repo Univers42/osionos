@@ -20,6 +20,7 @@
 import type { KeyValueStore } from "@/shared/lib/key-value-store/indexedKeyValueStore";
 import { setItemEvictingPageCaches, type PageCacheStorage } from "@/store/pageStore.helpers";
 import { createCommitLedger, type CommitLedger, type CommitLedgerTracker } from "./knownDatabaseCommitLedger";
+import type { ReadinessJournals } from "./knownDatabaseJournalApply";
 
 // Same literals as knownDatabaseStorage.ts and objectDatabasePushBaseline.ts, which import the
 // toast layer; this module stays free of it so it loads in the canvas tests.
@@ -46,6 +47,8 @@ export interface DurableCopyOptions {
   legacy: PageCacheStorage | undefined;
   tabId: string;
   budgetMs?: number;
+  /** The unload journals of earlier documents, applied by the readiness transaction (ADR 0055). */
+  journals?: ReadinessJournals;
 }
 export interface DurableCopy {
   readonly ready: Promise<LoadedCopy>;
@@ -117,11 +120,25 @@ function snapshotLegacy(legacy: LegacyStorage): LegacySnapshot {
   };
 }
 
-function migratedEntries(text: string, map: Record<string, string>, id: string): Record<string, unknown> {
+function copyEntries(text: string, map: Record<string, string>, id: string): Record<string, unknown> {
   return {
     state: { text, id } satisfies StoredState,
     pushed: { map, stateId: id } satisfies StoredPushed,
   };
+}
+
+// ADR 0055 J-C3: earlier unloads' journals land in the transaction that reads the copy, before
+// memory is replaced, under an ordinary id of this tab. An abandoned session must not write (I7).
+function readFound(found: StoredState, pushed: unknown, options: DurableCopyOptions, session: Session): { loaded: LoadedCopy; entries: Record<string, unknown> | null } {
+  const loaded = loadedFrom(found, pushed);
+  const merged = session.abandoned ? null : options.journals?.merge({ id: found.id, text: found.text, record: loaded.record });
+  if (!merged) {
+    session.ledger.loaded(found.id);
+    return { loaded, entries: null };
+  }
+  const id = `${options.tabId}:${++session.seq}`;
+  session.ledger.loaded(id);
+  return { loaded: { mode: "idb", text: merged.text, record: merged.record }, entries: copyEntries(merged.text, merged.record, id) };
 }
 
 // A stored "migrated" copy next to a legacy key that was never retired means an earlier migration
@@ -135,13 +152,18 @@ async function decideInitialCopy(store: KeyValueStore, options: DurableCopyOptio
   await store.update(["state", "pushed"], current => {
     const found = current.get("state");
     const redo = isState(found) && isMigratedId(found.id) && !source.isRetired && source.text !== null;
-    if (isState(found) && !redo) { loaded = loadedFrom(found, current.get("pushed")); session.ledger.loaded(found.id); return null; }
+    if (isState(found) && !redo) {
+      const read = readFound(found, current.get("pushed"), options, session);
+      loaded = read.loaded;
+      return read.entries;
+    }
     // An abandoned session is a fallback one and must not write (I7).
     if (source.text === null || isAbandoned()) return null;
     loaded = { mode: "idb", text: source.text, record: source.map };
     session.ledger.loaded(migratedId(options.tabId));
-    return migratedEntries(source.text, source.map, migratedId(options.tabId));
+    return copyEntries(source.text, source.map, migratedId(options.tabId));
   }, { durability: "strict" });
+  if (!isAbandoned()) options.journals?.discard();
   // An abandoned session keeps writing the legacy keys; retiring them would orphan its edits.
   if (loaded.text !== null && !isAbandoned()) retireLegacy(legacy);
   return loaded;

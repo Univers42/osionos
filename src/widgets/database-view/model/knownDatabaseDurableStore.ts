@@ -15,6 +15,7 @@
 
 import { openIndexedKeyValueStore } from "@/shared/lib/key-value-store/indexedKeyValueStore";
 import { openDurableCopy, type DurableCopy } from "./knownDatabaseDurableCopy";
+import { openReadinessJournals } from "./knownDatabaseJournalApply";
 import { OBJECT_DB_WRITER_ID } from "./objectDatabaseRealtime";
 
 const KNOWN_DATABASE_IDB_NAME = "osionos-kds";
@@ -33,6 +34,7 @@ export function openKnownDatabaseDurableCopy(): DurableCopy {
     openStore: () => openIndexedKeyValueStore(KNOWN_DATABASE_IDB_NAME),
     legacy: legacyStorage(),
     tabId: OBJECT_DB_WRITER_ID,
+    journals: openReadinessJournals(legacyStorage()),
   });
 }
 
