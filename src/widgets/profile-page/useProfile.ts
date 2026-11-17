@@ -31,8 +31,9 @@ export interface MemberProfile {
   userId: string;
   name: string;
   avatar: string | null;
-  role: string | null;
-  workspaceId: string | null;
+  // Sent to the subject only (U5-4): another viewer's profile carries neither key.
+  role?: string | null;
+  workspaceId?: string | null;
   lastSeenAt: string | null;
   online: boolean;
   // Widened fields (admin-authored profile binding). Optional so existing

@@ -24,7 +24,7 @@ export function toBoundRecord(profile: MemberProfile | null): BoundRecord | null
     name: profile.name,
     username: profile.username ?? null,
     avatar: profile.avatar,
-    role: profile.role,
+    role: profile.role ?? null,
     headline: profile.headline ?? null,
     bio: profile.bio ?? null,
     location: profile.location ?? null,
