@@ -62,3 +62,22 @@ test("isSafeImageSource: a protocol-relative, plain-http or script URL is refuse
     assert.equal(isSafeImageSource(url), false, String(url));
   }
 });
+
+const { withoutLegacyCard } = await import("../../src/widgets/profile-page/useProfile.ts");
+
+test("withoutLegacyCard: the legacy route's bio, headline and location are not read", () => {
+  const legacy = { userId: "u", username: "ada", bio: "old", headline: "old", location: "old", company: "kept" } as never;
+  const stripped = withoutLegacyCard(legacy);
+  assert.deepEqual([stripped.bio, stripped.headline, stripped.location], [null, null, null]);
+  assert.equal(stripped.company, "kept");
+  const merged = mergePublicFields(stripped, { bio: "card bio" });
+  assert.equal(merged.bio, "card bio");
+  assert.equal(merged.headline, null);
+});
+
+test("mergePublicFields: the card's status is typed; a card without one leaves none", () => {
+  const withStatus = mergePublicFields(BASE, { status: { emoji: "🎯", text: "Focusing", expiresAt: null, busy: true } });
+  assert.deepEqual(withStatus.status, { emoji: "🎯", text: "Focusing", expiresAt: null, busy: true });
+  assert.equal(mergePublicFields(BASE, { status: null }).status, null);
+  assert.equal(mergePublicFields(BASE, {}).status, undefined);
+});

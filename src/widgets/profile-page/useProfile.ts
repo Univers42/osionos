@@ -18,11 +18,13 @@
  * 60 s refresh repeats both. A failed second read keeps the first result.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { api, getActivePageJwt } from '@/shared/api/client';
 import { bridgeMediaUrl } from '@/shared/lib/media/bridgeMediaUrl';
 
+import type { PersonStatus } from '@/shared/social/followApi';
+import { parseStatus } from './model/profileStatus';
 import type { ReadmeProjection } from './ReadmeBlocks';
 
 export interface MemberProfile {
@@ -54,22 +56,31 @@ export interface MemberProfile {
   bannerUrl?: string | null;
   profession?: string | null;
   readme?: ReadmeProjection | null;
+  status?: PersonStatus | null;
 }
 
 // The only keys copied from the public projection: a private field the server
 // ever adds there must not reach the page by accident.
 export const PUBLIC_FIELD_KEYS = [
   'pronouns', 'headline', 'bio', 'location', 'company', 'website', 'links',
-  'timezone', 'orcid', 'patreon', 'avatarUrl', 'bannerUrl', 'profession', 'readme',
+  'timezone', 'orcid', 'patreon', 'avatarUrl', 'bannerUrl', 'profession', 'readme', 'status',
 ] as const;
 
 export function mergePublicFields(base: MemberProfile, pub: Record<string, unknown>): MemberProfile {
   const merged: Record<string, unknown> = { ...base };
   for (const key of PUBLIC_FIELD_KEYS) if (key in pub) merged[key] = pub[key];
+  if ('status' in pub) merged.status = parseStatus(pub.status);
   for (const key of ['avatarUrl', 'bannerUrl'] as const) {
     if (typeof merged[key] === 'string') merged[key] = bridgeMediaUrl(merged[key] as string);
   }
   return merged as unknown as MemberProfile;
+}
+
+// The account card is the one source of these three: the legacy route's older copy can
+// disagree with it, and for a viewer the card reduces (directory opt-out) it is the only one
+// that withholds them.
+export function withoutLegacyCard(base: MemberProfile): MemberProfile {
+  return { ...base, headline: null, bio: null, location: null };
 }
 
 const REFRESH_MS = 60_000;
@@ -77,6 +88,7 @@ const REFRESH_MS = 60_000;
 export function useProfile(userId: string) {
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [error, setError] = useState('');
+  const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -85,11 +97,11 @@ export function useProfile(userId: string) {
       if (!jwt || !userId) return;
       api.get<MemberProfile>(`/api/profile/${encodeURIComponent(userId)}`, jwt)
         .then(async (reply) => {
-          let merged = reply;
+          let merged = withoutLegacyCard(reply);
           if (reply.username) {
             try {
               const pub = await api.get<Record<string, unknown>>(`/api/users/${encodeURIComponent(reply.username)}`, jwt);
-              merged = mergePublicFields(reply, pub);
+              merged = mergePublicFields(merged, pub);
             } catch { /* keep the first read, no error state */ }
           }
           if (alive) { setProfile(merged); setError(''); }
@@ -102,7 +114,8 @@ export function useProfile(userId: string) {
       alive = false;
       clearInterval(timer);
     };
-  }, [userId]);
+  }, [userId, reloads]);
 
-  return { profile, error };
+  const reload = useCallback(() => setReloads((count) => count + 1), []);
+  return { profile, error, reload };
 }
