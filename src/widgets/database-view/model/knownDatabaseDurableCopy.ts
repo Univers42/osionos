@@ -94,22 +94,40 @@ function loadedFrom(state: StoredState | null, pushed: unknown): LoadedCopy {
   return { mode: "idb", text: state?.text ?? null, record: state ? { ...map } : {} };
 }
 
+interface LegacySnapshot { text: string | null; map: Record<string, string>; isRetired: boolean }
+
+function snapshotLegacy(legacy: LegacyStorage): LegacySnapshot {
+  return {
+    text: readLegacyItem(legacy, LEGACY_STATE_KEY),
+    map: readLegacyRecord(legacy),
+    isRetired: readLegacyItem(legacy, KDS_IDB_FLAG_KEY) === "1",
+  };
+}
+
+function migratedEntries(text: string, map: Record<string, string>): Record<string, unknown> {
+  return {
+    state: { text, id: MIGRATED_ID } satisfies StoredState,
+    pushed: { map, stateId: MIGRATED_ID } satisfies StoredPushed,
+  };
+}
+
+// A stored "migrated" copy next to a legacy key that was never retired means an earlier migration
+// was abandoned by the budget before it could retire its source: the legacy copy kept receiving
+// edits, so it is the newer one and is migrated again.
 async function decideInitialCopy(store: KeyValueStore, legacy: LegacyStorage, isAbandoned: () => boolean): Promise<LoadedCopy> {
-  const legacyText = readLegacyItem(legacy, LEGACY_STATE_KEY);
-  const legacyMap = readLegacyRecord(legacy);
+  const source = snapshotLegacy(legacy);
   let loaded = loadedFrom(null, undefined);
   await store.update(["state", "pushed"], current => {
     const found = current.get("state");
-    if (isState(found)) { loaded = loadedFrom(found, current.get("pushed")); return null; }
+    const redo = isState(found) && found.id === MIGRATED_ID && !source.isRetired && source.text !== null;
+    if (isState(found) && !redo) { loaded = loadedFrom(found, current.get("pushed")); return null; }
     // An abandoned session is a fallback one and must not write (I7).
-    if (legacyText === null || isAbandoned()) return null;
-    loaded = { mode: "idb", text: legacyText, record: legacyMap };
-    return {
-      state: { text: legacyText, id: MIGRATED_ID },
-      pushed: { map: legacyMap, stateId: MIGRATED_ID },
-    };
+    if (source.text === null || isAbandoned()) return null;
+    loaded = { mode: "idb", text: source.text, record: source.map };
+    return migratedEntries(source.text, source.map);
   }, { durability: "strict" });
-  if (loaded.text !== null) retireLegacy(legacy);
+  // An abandoned session keeps writing the legacy keys; retiring them would orphan its edits.
+  if (loaded.text !== null && !isAbandoned()) retireLegacy(legacy);
   return loaded;
 }
 

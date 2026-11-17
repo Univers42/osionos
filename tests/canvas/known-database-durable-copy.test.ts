@@ -226,3 +226,64 @@ test("durable-copy: a failed commit leaves the previous pair intact", async () =
   assert.equal(await copy.commit({}, "lost", { a: "2" }), false);
   assert.deepEqual([stored(store, "state"), stored(store, "pushed")], pair);
 });
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function slowCompletion(store: MemoryKeyValueStore, extraMs: number): KeyValueStore {
+  return {
+    close: () => store.close(),
+    update: (keys, change, options) => store.update(keys, change, options).then(async result => {
+      await sleep(extraMs);
+      return result;
+    }),
+  };
+}
+
+test("durable-copy: a migration the budget abandoned leaves the legacy keys and the flag alone", async () => {
+  const store = createMemoryKeyValueStore();
+  const legacy = fakeLegacy(LEGACY);
+  const copy = openDurableCopy({ openStore: async () => slowCompletion(store, 80), legacy, tabId: "tabA", budgetMs: 20 });
+
+  assert.equal((await copy.ready).mode, "fallback-legacy");
+  await sleep(150);
+  assert.equal(legacy.values.has(KDS_IDB_FLAG_KEY), false);
+  assert.equal(legacy.values.get(STATE_KEY), "legacy-text");
+  assert.equal(legacy.values.has(PUSHED_KEY), true);
+});
+
+test("durable-copy: the next open redoes that migration from the newer legacy copy", async () => {
+  const first = createMemoryKeyValueStore();
+  await openDurableCopy({ openStore: async () => slowCompletion(first, 80), legacy: fakeLegacy(LEGACY), tabId: "tabA", budgetMs: 20 }).ready;
+  await sleep(150);
+  const second = createMemoryKeyValueStore(Object.fromEntries(first.entries));
+  const newer = fakeLegacy({ [STATE_KEY]: "newer-text", [PUSHED_KEY]: JSON.stringify({ a: "h9" }) });
+  const loaded = await open(second, newer).ready;
+
+  assert.deepEqual(loaded, { mode: "idb", text: "newer-text", record: { a: "h9" } });
+  assert.deepEqual(stored(second, "state"), { text: "newer-text", id: "migrated" });
+  assert.deepEqual(stored(second, "pushed"), { map: { a: "h9" }, stateId: "migrated" });
+  assert.equal(newer.values.get(KDS_IDB_FLAG_KEY), "1");
+  assert.equal(newer.values.has(STATE_KEY) || newer.values.has(PUSHED_KEY), false);
+});
+
+test("durable-copy: a migrated copy whose source was retired keeps the stored copy", async () => {
+  const store = createMemoryKeyValueStore({
+    state: { text: "stored-text", id: "migrated" },
+    pushed: { map: { b: "h2" }, stateId: "migrated" },
+  });
+  const loaded = await open(store, fakeLegacy({ [KDS_IDB_FLAG_KEY]: "1" })).ready;
+
+  assert.deepEqual(loaded, { mode: "idb", text: "stored-text", record: { b: "h2" } });
+  assert.equal(store.writes, 0);
+});
+
+test("durable-copy: a non-migrated stored copy wins even when the flag is unset", async () => {
+  const store = createMemoryKeyValueStore({
+    state: { text: "stored-text", id: "tabX:3" },
+    pushed: { map: { b: "h2" }, stateId: "tabX:3" },
+  });
+  const loaded = await open(store, fakeLegacy(LEGACY)).ready;
+
+  assert.deepEqual(loaded, { mode: "idb", text: "stored-text", record: { b: "h2" } });
+  assert.equal(store.writes, 0);
+});
