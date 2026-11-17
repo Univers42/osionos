@@ -1,8 +1,9 @@
-# Profile page — design, rev 1
+# Profile page — design, rev 2
 
-Status: rev 1, 2026-11-17. U1 and U2 are in build (no new endpoint, no schema, no new
-exposure). U3–U8 wait for a devil ruling; U7 also needs an architect contract and the
-owner's agreement on the plan. Base: osionos develop `63c376994`.
+Status: rev 2, 2026-11-17. U1 and U2 are built on `feat/profile-page` (no new endpoint, no
+schema, no new exposure). U3–U8 were ruled on 2026-11-17 (groot ADR 0058); the section
+"Ruling" below binds and wins over the unit text where they differ. Base: osionos develop
+`628f5de19`. "What exists" was measured on `63c376994`.
 
 ## What is asked
 
@@ -135,20 +136,20 @@ A profile that reads like a GitHub profile and is edited as fast as one:
 - Done when: the fixture README renders with the expected structure (DOM assertions and
   a screenshot); the engine's fuzz suite and an XSS vector corpus produce no script, no
   handler and no `javascript:` URL; existing engine suites stay green.
-- Open for the ruling — remote images. (A) load them directly with
-  `referrerpolicy="no-referrer"` and lazy loading: the viewer's address reaches the image
-  host. (B) a bridge image proxy: hides the viewer, adds an SSRF surface and bandwidth.
-  Recommended: A now with an explicit `img-src` policy, B as its own unit.
+- Remote images, ruled: (A) loaded directly with `referrerPolicy="no-referrer"`, lazy,
+  no `srcset`, behind a viewer disclosure with **Load** / **Don't load**: the viewer's
+  address reaches the image host once they accept. (B) a bridge image proxy stays its own
+  later unit.
 
 ### U4 — a README written as markdown
 
 - The README stays a page of blocks, so bound fields, database blocks and markdown mix.
 - Markdown source lives in a block that renders through the engine with the U3 subset,
   with a source / preview editor. Pasting a README offers "keep as markdown".
-- Open for the ruling — the block shape. (A) the existing `code` block, language
-  `markdown`, plus an additive "rendered" flag: an older client shows the source as code.
-  (B) a new block type: cleaner, but an older client shows an unknown block.
-  Recommended: A.
+- The block shape, ruled: the existing `code` block, rendered only when
+  `language === "markdown"` and the existing key `codeView === "preview"`. No new key (a
+  new key is dropped by the block overlay) and no new block type. An older client shows
+  the source as code.
 - README card: header with **Edit** for the owner, opening the page in the editor pane.
 
 ### U5 — followers, following, organizations
@@ -183,6 +184,24 @@ A profile that reads like a GitHub profile and is edited as fast as one:
 
 - A signed-out read of the fields the owner marked public, rate-limited, with no
   directory listing. Not started without an explicit request.
+
+## Ruling (groot ADR 0058, 2026-11-17)
+
+| Unit | Verdict | What binds |
+|---|---|---|
+| U3 | proceed with conditions U3-1..11 | One parser, typed nodes, `React.createElement`; the engine's `allowHtml` injection branch is deleted. Attributes are allowlisted per tag and a failing one is dropped, never clamped; no `style`, `id`, `class`. `src` goes through a new `sanitizeImageSrc` (https or the app media prefix). No variable or binding expansion inside an attribute or URL. Element cap 5,000; linear time, benchmarked. `img-src 'self' https: data: blob:` in every CSP header, Report-Only first. |
+| U4 | proceed with conditions U4-1..7 | The code-fence fix (`fenceFor`) is live for one deploy, service-worker rollover included, before preview or paste ships. Paste offers **Keep as markdown** / **Convert to blocks** and refuses more than 200 KB. |
+| U5 | proceed with conditions U5-1..7 | One fail-closed `hiddenFrom(subject, viewer)`. Counts for a hidden person equal those of an unknown id. Lists omit opted-out people, so a count can exceed the rows shown. `role` and `workspaceId` go to the subject only. Organizations need a schema migration and the owner's go. |
+| U6 | page and shared-post pins: proceed with conditions H-1..6. Database pins: blocked. Achievements: blocked until U7. | Pins are ids, checked per viewer, fail closed. |
+| U7 | code blocked | An architect contract answers M-1..M-11, then a new ruling, then the plan goes to the owner. |
+| U8 | blocked | Not requested. |
+
+Not ruled yet: a README `button` block runs in the viewer's session. It gets a security
+review before U4 ships.
+
+Build order: fence fix, then U3 engine and U5 bridge fixes in parallel with the U7
+contract; then the CSP header, the image disclosure and the U4 editor; then U5 and U6 on
+the page.
 
 ## Not in this design
 
