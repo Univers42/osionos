@@ -17,6 +17,7 @@
  * minimized as an array and rehydrate it back into a Set.
  */
 
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -85,6 +86,7 @@ export const useDockStore = create<DockStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Contact dock'),
       partialize: (state) => ({
         collapsed: state.collapsed,
         openTabs: state.openTabs,

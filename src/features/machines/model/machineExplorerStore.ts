@@ -1,7 +1,9 @@
 // The Explorer's two sources and what the person left open. Layout only: what is on a machine stays
 // in that machine's frame.
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+
+import { noticingJsonStorage } from "@/shared/lib/storage-full/noticingWrite";
 
 export const CLOUD_SECTION = "cloud";
 export const MACHINE_SECTION = "machine";
@@ -35,6 +37,6 @@ export const useMachineExplorer = create<MachineExplorerState>()(persist((set) =
   markUsed: () => set({ used: true }),
 }), {
   name: "osionos:machine-explorer",
-  storage: createJSONStorage(() => localStorage),
+  storage: noticingJsonStorage("Explorer layout"),
   partialize: ({ collapsed, weight, used }) => ({ collapsed, weight, used }),
 }));

@@ -4,6 +4,7 @@
  * browser that cannot store it shows the notice again, which is the safe side.
  */
 
+import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
 import { useStore } from "zustand";
 
 import { cancelRun, createConversation, resumeRun, startThreadRun } from "@/features/ai/api/aiClient";
@@ -11,6 +12,7 @@ import { postAiAnswer } from "@/shared/chat/messageApi";
 
 import { createAiDraftStore, type AiDraft } from "./aiAnswerDraft";
 
+const writeAnswerNotice = noticingWriter("AI answer notice");
 const noticeKey = (userId: string) => `osionos.ai.channelNotice.${userId}`;
 
 export const aiDraftStore = createAiDraftStore({
@@ -27,11 +29,8 @@ export const aiDraftStore = createAiDraftStore({
     }
   },
   markNoticeSeen: (userId) => {
-    try {
-      globalThis.localStorage?.setItem(noticeKey(userId), "1");
-    } catch {
-      // Not stored: the notice shows again next time.
-    }
+    // Not stored: the notice shows again next time.
+    writeAnswerNotice(noticeKey(userId), "1");
   },
   newId: () => globalThis.crypto.randomUUID(),
 });

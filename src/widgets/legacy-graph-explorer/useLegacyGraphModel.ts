@@ -18,6 +18,7 @@
  * status (loading/offline/error/totals/retry/expand) the chrome needs.
  */
 
+import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import { type Dispatch, type SetStateAction, useCallback, useMemo, useState } from "react";
 import type { NotionState } from "@notion-db/object-database";
 import { useKnownDatabaseStateStore } from "@/widgets/database-view/model/knownDatabaseState";
@@ -69,13 +70,15 @@ export interface GraphData {
   expand: (id: NodeId) => void;
 }
 
+const writeGraphView = noticingWriter('Graph view');
+
 export function useLegacyGraphModel(): GraphData {
   const updatePageProperty = useKnownDatabaseStateStore((store) => store.updatePageProperty);
   const viewerId = useUserStore((store) => store.activeUserId) || null;
   const activeWorkspaceId = useUserStore((store) => store.activeWorkspace()?._id ?? null);
   const [scope, setScopeState] = useState<GraphScope>(loadGraphScope);
   const setScope = useCallback((next: GraphScope) => {
-    try { localStorage.setItem(GRAPH_SCOPE_KEY, next); } catch { /* private mode */ }
+    writeGraphView(GRAPH_SCOPE_KEY, next);
     setScopeState(next);
   }, []);
   // Use the canonical bridge note-graph whenever there's a logged-in workspace —

@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
+import { setItemEvictingPageCaches } from "@/store/pageStore.helpers";
 import { create } from "zustand";
 
 import type { ChatMessage, Conversation, Project, SharedContextItem } from "./chatTypes";
@@ -140,10 +142,12 @@ export interface ChatStoreState extends ChatData {
   contextFor: (scope: SharedContextItem["scope"], scopeId: string) => SharedContextItem[];
 }
 
+const writeChat = noticingWriter("Chat", setItemEvictingPageCaches);
+
 export const useChatStore = create<ChatStoreState>((set, get) => {
   const persist = () => {
     const { projects, conversations, messages, contextItems } = get();
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, conversations, messages, contextItems })); } catch { /* quota */ }
+    writeChat(STORAGE_KEY, JSON.stringify({ projects, conversations, messages, contextItems }));
   };
   const addMessage = (conversationId: string, m: Pick<ChatMessage, "role" | "content" | "connectorId" | "model" | "connectionId" | "agentId">) => {
     set((s) => ({

@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -168,6 +169,7 @@ export const useUIStore = create<UIStore>()(
     },
     {
       name: 'ui-storage', // key in localStorage
+      storage: noticingJsonStorage('Sidebar layout'),
       version: 2,
       // Map the old {isSidebarOpen, sidebarWidth, ...} blob onto the new shape
       // so existing users keep their width and aren't reset to defaults.

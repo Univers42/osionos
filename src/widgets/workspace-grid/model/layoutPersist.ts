@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import { calendarAppUrl, mailAppUrl, whiteboardAppUrl } from "@/shared/config/appUrls";
 import { boardUrl } from "@/features/whiteboard/model/whiteboardClient";
 import { pruneUnrestorableTabs } from "./layoutSanitize";
@@ -229,11 +230,9 @@ export function loadLayout(scope: string): { root: LayoutNode; activePaneId: str
 /** Persist a tree under the scope that OWNS it. A missing scope means the tree
  *  belongs to nobody signed-in — never persisted — so a mid-switch commit can't
  *  write one identity's tabs into another identity's slot (the v1 bleed bug). */
+const writeWorkspaceLayout = noticingWriter('Workspace layout');
+
 export function saveLayout(state: { root: LayoutNode; activePaneId: string }, scope: string): void {
-  if (globalThis.window === undefined || !scope) return;
-  try {
-    globalThis.localStorage.setItem(layoutKeyForScope(scope), JSON.stringify({ root: state.root, activePaneId: state.activePaneId }));
-  } catch {
-    /* ignore storage quota / privacy-mode errors */
-  }
+  if (!scope) return;
+  writeWorkspaceLayout(layoutKeyForScope(scope), JSON.stringify({ root: state.root, activePaneId: state.activePaneId }));
 }

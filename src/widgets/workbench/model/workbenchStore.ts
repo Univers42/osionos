@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 
@@ -61,6 +62,8 @@ function safeGet(key: string): string | null {
 
 // Seeds dockOpen exactly once: only while our own blob is absent. Once the
 // store persists, the legacy key is never consulted again.
+const writePanelLayout = noticingWriter("Panel layout");
+
 const seededStorage: StateStorage = {
   getItem: (name) => {
     const own = safeGet(name);
@@ -68,13 +71,7 @@ const seededStorage: StateStorage = {
     const seed = migrateFromIdeMode(safeGet(LEGACY_IDE_MODE_KEY));
     return seed ? JSON.stringify({ state: { dockOpen: seed.dockOpen }, version: 0 }) : null;
   },
-  setItem: (name, value) => {
-    try {
-      globalThis.localStorage?.setItem(name, value);
-    } catch {
-      /* storage full or blocked: the dock state is session-only then */
-    }
-  },
+  setItem: (name, value) => void writePanelLayout(name, value),
   removeItem: (name) => {
     try {
       globalThis.localStorage?.removeItem(name);

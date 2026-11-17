@@ -17,6 +17,7 @@
  * widgets (profile view, DM list, search bar) share ONE interval.
  */
 
+import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import { useEffect } from 'react';
 
 import { api, getActivePageJwt } from '@/shared/api/client';
@@ -59,10 +60,12 @@ function beat(now = Date.now()): void {
   void api.post('/api/profile/heartbeat', chosen ?? {}, jwt).catch(() => undefined);
 }
 
+const writePresence = noticingWriter('Presence');
+
 /** Remembers the choice and tells the bridge now rather than at the next 45 s beat. */
 export function setPresenceSetting(next: PresenceSetting): void {
   setting = next;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* not remembered across reloads */ }
+  writePresence(STORAGE_KEY, JSON.stringify(next));
   beat();
 }
 

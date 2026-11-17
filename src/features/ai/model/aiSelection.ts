@@ -23,6 +23,7 @@
  * back to the platform one, an unknown model to its connection's default.
  */
 
+import { noticingWriter, trySetItem } from "@/shared/lib/storage-full/noticingWrite";
 import { DEVICE_CONNECTION_ID } from "./deviceEngine";
 
 /** Where the choice is remembered. */
@@ -89,6 +90,11 @@ function browserStorage(): SelectionStorage | null {
 }
 
 /** The stored choice, or null when there is none (or it is unreadable). */
+/** A refused write is not a failure: the choice still holds for this session, and is shown. */
+function writeAiChoice(storage: SelectionStorage, key: string, text: string): void {
+  noticingWriter("AI model choice", (name, value) => trySetItem(name, value, storage))(key, text);
+}
+
 export function readAiSelection(storage: SelectionStorage | null = browserStorage()): AiSelection | null {
   if (!storage) return null;
   try {
@@ -111,11 +117,7 @@ export function writeAiSelection(
   storage: SelectionStorage | null = browserStorage(),
 ): void {
   if (!storage) return;
-  try {
-    storage.setItem(AI_SELECTION_STORAGE_KEY, JSON.stringify(selection));
-  } catch {
-    // A refused write is not a failure: the choice still holds for this session.
-  }
+  writeAiChoice(storage, AI_SELECTION_STORAGE_KEY, JSON.stringify(selection));
 }
 
 /** The default model of a list — the one the service marks as such. */
@@ -234,9 +236,5 @@ export function writeAiFallbacks(
   primary?: AiFallbackChoice | null,
 ): void {
   if (!storage) return;
-  try {
-    storage.setItem(AI_FALLBACKS_STORAGE_KEY, JSON.stringify(cleanAiFallbacks(list, primary)));
-  } catch {
-    // A refused write is not a failure: the chain still holds for this session.
-  }
+  writeAiChoice(storage, AI_FALLBACKS_STORAGE_KEY, JSON.stringify(cleanAiFallbacks(list, primary)));
 }

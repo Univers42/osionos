@@ -17,6 +17,8 @@
  * orchestrator reads `attachments` and passes them straight to actions.send().
  */
 
+import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
+import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { Attachment } from '@/shared/chat/messageApi';
@@ -42,6 +44,8 @@ export function caretAnchor(textarea: HTMLTextAreaElement): SlashAnchor {
   return { x: rect.left + 8, y: rect.top, top: rect.top };
 }
 
+const writeDraft = noticingWriter('Message drafts', setItemEvictingPageCaches);
+
 export function useComposerDraft(storageKey?: string) {
   const [text, setText] = useState(() => readDraft(storageKey));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -52,10 +56,11 @@ export function useComposerDraft(storageKey?: string) {
   // Attachments stay ephemeral (their blob: previews die across a reload anyway).
   useEffect(() => {
     if (!storageKey) return;
-    try {
-      if (text.trim()) localStorage.setItem(storageKey, text);
-      else localStorage.removeItem(storageKey);
-    } catch { /* private mode / quota — best-effort */ }
+    if (text.trim()) {
+      writeDraft(storageKey, text);
+      return;
+    }
+    try { localStorage.removeItem(storageKey); } catch { /* nothing to remove when storage is blocked */ }
   }, [text, storageKey]);
 
   const addAttachment = useCallback((attachment: Attachment) => {

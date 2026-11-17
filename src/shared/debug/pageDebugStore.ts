@@ -18,6 +18,7 @@
  * reloads; global (not per page) — debugging is a session activity.
  */
 
+import { noticingJsonStorage, noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -53,9 +54,11 @@ interface PageDebugStore {
   disableAll: () => void;
 }
 
+const writeDebugTools = noticingWriter("Debug tools");
+
 function mirrorPerfFlag(on: boolean) {
   try {
-    if (on) globalThis.localStorage?.setItem(PERF_LOCAL_STORAGE_KEY, "1");
+    if (on) writeDebugTools(PERF_LOCAL_STORAGE_KEY, "1");
     else globalThis.localStorage?.removeItem(PERF_LOCAL_STORAGE_KEY);
   } catch { /* private mode */ }
 }
@@ -74,7 +77,7 @@ export const usePageDebugStore = create<PageDebugStore>()(
         set({ enabled: {} });
       },
     }),
-    { name: "osionos.debug.tools.v1" },
+    { name: "osionos.debug.tools.v1", storage: noticingJsonStorage("Debug tools") },
   ),
 );
 

@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import { create } from 'zustand';
 import { resetOnUserChange } from '@/store/settings/accountStoresIsolation';
 import { useToastStore } from '@osionos/ui/primitives/useToastStore';
@@ -101,9 +102,12 @@ function readPersistedContext(): PersistedUserContext {
   }
 }
 
+// Landing finding 3: like the session, these make room, and a refusal is shown (ADR 0056 A5).
+const writeAccountState = noticingWriter('Accounts and workspaces', setItemEvictingPageCaches);
+
 function savePersistedContext(context: PersistedUserContext) {
   if (typeof localStorage === 'undefined') return;
-  setItemEvictingPageCaches(ACTIVE_CONTEXT_STORAGE_KEY, JSON.stringify(context));
+  writeAccountState(ACTIVE_CONTEXT_STORAGE_KEY, JSON.stringify(context));
 }
 
 function readPersistedWorkspaces(): Record<string, Workspace[]> {
@@ -121,7 +125,7 @@ function savePersistedWorkspaces(sessions: Record<string, UserSession>) {
   const workspacesByUser = Object.fromEntries(
     Object.entries(sessions).map(([userId, session]) => [userId, session.privateWorkspaces]),
   );
-  setItemEvictingPageCaches(WORKSPACES_STORAGE_KEY, JSON.stringify(workspacesByUser));
+  writeAccountState(WORKSPACES_STORAGE_KEY, JSON.stringify(workspacesByUser));
   // Keep the bridge-session records' workspace lists in sync with the live sessions:
   // the boot path restores from those records, so a create/join/rename/delete that
   // updated `sessions` must also land there, otherwise a reload resurrects a stale list.
@@ -164,7 +168,7 @@ function withoutPassword<P extends { password: string }>(persona: P): P {
 function savePersistedPersonas(personas: typeof INITIAL_PERSONAS) {
   if (typeof localStorage === 'undefined') return;
   const persisted = personas.filter((persona) => persona.persistInSessions).map(withoutPassword);
-  setItemEvictingPageCaches(ACTIVE_ACCOUNTS_STORAGE_KEY, JSON.stringify(persisted));
+  writeAccountState(ACTIVE_ACCOUNTS_STORAGE_KEY, JSON.stringify(persisted));
 }
 
 // Bridge sessions are persisted as a MAP keyed by userId so MULTIPLE accounts

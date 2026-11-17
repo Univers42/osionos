@@ -1,3 +1,4 @@
+import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
 import { api, getActivePageJwt } from "@/shared/api/client";
 
 import type { BridgeGraph } from "../model/toIngestDoc";
@@ -21,12 +22,10 @@ export function loadGraphScope(): GraphScope {
   }
 }
 
+const writeGraphView = noticingWriter("Graph view");
+
 export function saveGraphScope(scope: GraphScope): void {
-  try {
-    localStorage.setItem(GRAPH_SCOPE_KEY, scope);
-  } catch {
-    // Storage blocked: the choice lasts for this view only.
-  }
+  writeGraphView(GRAPH_SCOPE_KEY, scope);
 }
 
 /** The bridge route for a scope. The bridge filters by the session's owner and workspaces. */

@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import type { Block, BlockType } from "@/entities/block";
 import type { SeedPage } from "../data/seedPages";
 import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
@@ -131,12 +132,10 @@ export function loadRecents(): ActivePage[] {
   }
 }
 
+const writeRecentPages = noticingWriter('Recent pages');
+
 export function saveRecents(recents: ActivePage[]) {
-  try {
-    localStorage.setItem(RECENTS_KEY, JSON.stringify(recents));
-  } catch {
-    // localStorage might be unavailable (e.g. private browsing quota)
-  }
+  writeRecentPages(RECENTS_KEY, JSON.stringify(recents));
 }
 
 /** Prepend `page` to recents, deduped, capped PER WORKSPACE — opening pages in
@@ -168,10 +167,15 @@ export function loadActivePage(): ActivePage | null {
   }
 }
 
+const writeLastOpenPage = noticingWriter('Last open page');
+
 export function saveActivePage(page: ActivePage | null) {
+  if (page) {
+    writeLastOpenPage(ACTIVE_PAGE_KEY, JSON.stringify(page));
+    return;
+  }
   try {
-    if (page) localStorage.setItem(ACTIVE_PAGE_KEY, JSON.stringify(page));
-    else localStorage.removeItem(ACTIVE_PAGE_KEY);
+    localStorage.removeItem(ACTIVE_PAGE_KEY);
   } catch {
     // localStorage might be unavailable (e.g. private browsing quota)
   }
@@ -305,7 +309,9 @@ export function evictPageCaches(storage: Pick<Storage, "length" | "key" | "getIt
 export type PageCacheStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
 
 /** `setItem`, and on a full origin once more after evicting the page caches, for a value the
- *  server cannot rebuild. False when it still does not fit or storage is unavailable. O(bytes). */
+ *  server cannot rebuild. False when it still does not fit or storage is unavailable. O(bytes).
+ *  Caveat: it evicts every workspace page cache, not only the room the write needs, so each page
+ *  is refetched on its next open; when other keys fill the origin the retry fails all the same. */
 export function setItemEvictingPageCaches(key: string, text: string, storage?: PageCacheStorage): boolean {
   try {
     const target = storage ?? localStorage;

@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
 import { create } from "zustand";
 
 export type HomeVariant = "dashboard" | "graph" | "database" | "workspace";
@@ -44,13 +45,13 @@ interface HomeVariantState {
  * page while HomeTabView renders the matching surface — instead of the picker
  * floating above the Home content.
  */
+const writeHomeView = noticingWriter("Home view");
+
 export const useHomeVariantStore = create<HomeVariantState>((set) => ({
   variant: initialVariant(),
   setVariant: (variant) => {
     if (!isVariant(variant)) return;
-    if (globalThis.window !== undefined) {
-      globalThis.localStorage.setItem(STORAGE_KEY, variant);
-    }
     set({ variant });
+    writeHomeView(STORAGE_KEY, variant);
   },
 }));

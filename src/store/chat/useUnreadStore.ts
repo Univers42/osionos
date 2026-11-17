@@ -12,6 +12,7 @@
 
 /** Per-channel unread counters + last-seen marks (persisted). */
 
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -43,6 +44,7 @@ export const useUnreadStore = create<UnreadStore>()(
     }),
     {
       name: STORE_NAME,
+      storage: noticingJsonStorage('Unread counts'),
       partialize: (state) => ({ counts: state.counts, lastSeen: state.lastSeen }),
     },
   ),

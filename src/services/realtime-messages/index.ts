@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingJsonStorage } from "@/shared/lib/storage-full/noticingWrite";
+import { setItemEvictingPageCaches } from "@/store/pageStore.helpers";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -118,6 +120,7 @@ export const useRealtimeMessagesStore = create<RealtimeMessagesStore>()(
     }),
     {
       name: "osionos:realtime-messages",
+      storage: noticingJsonStorage("Messages", setItemEvictingPageCaches),
       // Drop the seen-id index after a rehydrate so it rebuilds lazily from the restored
       // arrays (which may carry an older, longer history than the current cap).
       onRehydrateStorage: () => () => { seenIdsByThread.clear(); },

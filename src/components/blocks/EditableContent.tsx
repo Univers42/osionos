@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import React, {
   type CSSProperties,
   useCallback,
@@ -333,19 +334,10 @@ function loadRecentInlineColors() {
   }
 }
 
-function saveRecentInlineColors(colors: readonly string[]) {
-  if (globalThis.window === undefined) {
-    return;
-  }
+const writeRecentColors = noticingWriter('Recent colors');
 
-  try {
-    globalThis.localStorage.setItem(
-      INLINE_COLOR_RECENTS_STORAGE_KEY,
-      JSON.stringify(colors),
-    );
-  } catch {
-    // localStorage can be unavailable or quota-limited.
-  }
+function saveRecentInlineColors(colors: readonly string[]) {
+  writeRecentColors(INLINE_COLOR_RECENTS_STORAGE_KEY, JSON.stringify(colors));
 }
 
 function recordRecentInlineColor(

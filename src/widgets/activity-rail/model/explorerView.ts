@@ -17,6 +17,7 @@
  * area shows the cover-card gallery — no second redundant sidebar. Persisted.
  */
 
+import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
 import { create } from "zustand";
 
 export type ExplorerView = "tree" | "gallery";
@@ -33,10 +34,12 @@ interface ExplorerViewState {
   setView: (view: ExplorerView) => void;
 }
 
+const writeExplorerView = noticingWriter("Explorer view");
+
 export const useExplorerView = create<ExplorerViewState>((set) => ({
   view: initialView(),
   setView: (view) => {
-    if (globalThis.window !== undefined) globalThis.localStorage.setItem(STORAGE_KEY, view);
     set({ view });
+    writeExplorerView(STORAGE_KEY, view);
   },
 }));

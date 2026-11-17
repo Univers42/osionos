@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import { FIXED_ACCENT_PALETTES, GENERATED_ACCENTS } from "./accents.generated";
 import { GENERATED_PALETTES } from "./palettes.generated";
 
@@ -83,9 +84,10 @@ export function readStoredThemeMode(): ThemeMode {
   return "system";
 }
 
+const writeTheme = noticingWriter('Theme');
+
 export function persistThemeMode(mode: ThemeMode) {
-  if (globalThis.window === undefined) return;
-  globalThis.localStorage.setItem(THEME_STORAGE_KEY, mode);
+  writeTheme(THEME_STORAGE_KEY, mode);
 }
 
 /* ── Palette (color scheme) — orthogonal to light/dark ──────────────────────
@@ -125,8 +127,7 @@ export function readStoredPalette(): string {
 }
 
 export function persistPalette(id: string) {
-  if (globalThis.window === undefined) return;
-  globalThis.localStorage.setItem(PALETTE_STORAGE_KEY, id);
+  writeTheme(PALETTE_STORAGE_KEY, id);
 }
 
 /* ── Appearance — accent, density, corners, text size, accessibility ────────
@@ -267,8 +268,7 @@ export function readStoredAppearance(): Appearance {
 }
 
 export function persistAppearance(appearance: Appearance) {
-  if (globalThis.window === undefined) return;
-  globalThis.localStorage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify(appearance));
+  writeTheme(APPEARANCE_STORAGE_KEY, JSON.stringify(appearance));
 }
 
 /** The axes that live on <html> as an attribute. urlPaste is not one of them:

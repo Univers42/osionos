@@ -34,6 +34,7 @@
  * the service's guess at its flagship, not a measured ranking.
  */
 
+import { noticingWriter, trySetItem } from "@/shared/lib/storage-full/noticingWrite";
 import { PLATFORM_CONNECTION_ID, type AiSelection } from "./aiSelection";
 
 /** The most models the Recommended section shows. */
@@ -207,11 +208,8 @@ export function readStarred(storage: StarStorage | null = browserStorage()): str
 
 /** A storage that refuses is ignored: the pins still hold for this session. */
 export function writeStarred(starred: readonly string[], storage: StarStorage | null = browserStorage()): void {
-  try {
-    storage?.setItem(AI_STARRED_STORAGE_KEY, JSON.stringify(parseStarred([...starred])));
-  } catch {
-    // Not a failure: see above.
-  }
+  if (!storage) return;
+  noticingWriter("Pinned AI models", (key, text) => trySetItem(key, text, storage))(AI_STARRED_STORAGE_KEY, JSON.stringify(parseStarred([...starred])));
 }
 
 interface MenuInput {

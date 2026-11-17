@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
+import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, CheckCircle2, FilePlus2, Loader2, RotateCcw, Send, SlidersHorizontal, TerminalSquare, XCircle } from "lucide-react";
 
@@ -125,10 +127,9 @@ function readJsonStorage<TValue>(key: string, fallback: TValue): TValue {
   }
 }
 
-function writeJsonStorage(key: string, value: unknown) {
-  if (globalThis.window === undefined) return;
-  localStorage.setItem(key, JSON.stringify(value));
-}
+// The thread is what the person wrote, so it makes room; the run settings are a preference.
+const writeAgentThreads = noticingWriter('Agent conversations', setItemEvictingPageCaches);
+const writeAgentSettings = noticingWriter('Agent settings');
 
 function readThreads(): Record<string, AgentMessage[]> {
   return readJsonStorage<Record<string, AgentMessage[]>>(AGENT_THREADS_STORAGE_KEY, {});
@@ -137,7 +138,7 @@ function readThreads(): Record<string, AgentMessage[]> {
 function writeThread(pageId: string, messages: AgentMessage[]) {
   const threads = readThreads();
   threads[pageId] = messages;
-  writeJsonStorage(AGENT_THREADS_STORAGE_KEY, threads);
+  writeAgentThreads(AGENT_THREADS_STORAGE_KEY, JSON.stringify(threads));
 }
 
 function readSettings(pageId: string): AgentRunSettings {
@@ -149,7 +150,7 @@ function readSettings(pageId: string): AgentRunSettings {
 function writeSettings(pageId: string, settings: AgentRunSettings) {
   const allSettings = readJsonStorage<Record<string, AgentRunSettings>>(AGENT_SETTINGS_STORAGE_KEY, {});
   allSettings[pageId] = settings;
-  writeJsonStorage(AGENT_SETTINGS_STORAGE_KEY, allSettings);
+  writeAgentSettings(AGENT_SETTINGS_STORAGE_KEY, JSON.stringify(allSettings));
 }
 
 function initialMessages(): AgentMessage[] {

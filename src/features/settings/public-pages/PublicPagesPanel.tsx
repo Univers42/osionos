@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import { useCallback, useEffect, useState } from "react";
 import { Copy, ExternalLink } from "lucide-react";
 
@@ -35,6 +36,8 @@ interface RowFailure {
   pageId: string;
   message: string;
 }
+
+const writePublicPages = noticingWriter('Public pages');
 
 export const PublicPagesPanel = () => {
   const publishEnabled = isPublishEnabled();
@@ -94,12 +97,8 @@ export const PublicPagesPanel = () => {
    * button cannot win against the URL.
    */
   const turnOnPublishing = () => {
-    try {
-      globalThis.localStorage?.setItem("osio.publish", "1");
-    } catch {
-      // A browser that refuses storage (private mode) keeps the feature off.
-    }
-    globalThis.location.reload();
+    // A refused write keeps the feature off: the notice says why, and a reload would hide it.
+    if (writePublicPages("osio.publish", "1")) globalThis.location.reload();
   };
 
   const pages = outcome?.kind === "pages" ? outcome.pages : [];

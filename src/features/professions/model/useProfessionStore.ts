@@ -22,23 +22,15 @@
  * so a pick and the profile form never carry two ETags for one row.
  */
 
+import { noticingJsonStorage } from '@/shared/lib/storage-full/noticingWrite';
 import { create } from 'zustand';
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 
 import { isProfessionId, type ProfessionId } from '@/data/professions/professions';
 import { useAccountProfileStore } from '@/store/settings/useAccountProfileStore';
 import { pushSettingsError } from '@/store/settings/settingsStoreUtils';
 
 const STORE_NAME = 'osionos:profession';
-
-// The default storage of the persist middleware reads the `localStorage` identifier,
-// which does not exist outside a browser: the pick would then be kept in memory only.
-// Reading it off globalThis keeps the store working where there is no storage at all.
-const browserStorage: StateStorage = {
-  getItem: (name) => globalThis.localStorage?.getItem(name) ?? null,
-  setItem: (name, value) => globalThis.localStorage?.setItem(name, value),
-  removeItem: (name) => globalThis.localStorage?.removeItem(name),
-};
 
 export interface ProfessionStore {
   profession: ProfessionId | null;
@@ -130,7 +122,7 @@ export const useProfessionStore = create<ProfessionStore>()(
     }),
     {
       name: STORE_NAME,
-      storage: createJSONStorage(() => browserStorage),
+      storage: noticingJsonStorage('Profession'),
       partialize: (state) => ({ profession: state.profession }),
     },
   ),

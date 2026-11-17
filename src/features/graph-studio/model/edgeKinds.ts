@@ -8,6 +8,7 @@
  * the store.
  */
 
+import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
 import type { IngestDoc } from "./toIngestDoc";
 
 /** The kinds of edge the graph knows. */
@@ -46,13 +47,11 @@ export function loadEdgeKinds(): EdgeKind[] {
 	}
 }
 
+const writeGraphView = noticingWriter("Graph view");
+
 /** The choice is remembered; a blocked storage lasts for this view only. */
 export function saveEdgeKinds(kinds: readonly EdgeKind[]): void {
-	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(kinds));
-	} catch {
-		// Storage blocked: the choice lasts for this view only.
-	}
+	writeGraphView(STORAGE_KEY, JSON.stringify(kinds));
 }
 
 /** One kind turned on or off; the last kind turned off turns them all back on. */

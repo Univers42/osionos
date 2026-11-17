@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter, trySetItem } from "@/shared/lib/storage-full/noticingWrite";
+
 /**
  * "This device": the engine that runs on the user's own machine.
  *
@@ -70,11 +72,7 @@ export function writeDeviceEngine(
   storage: DeviceStorage | null = browserStorage(),
 ): void {
   if (!storage) return;
-  try {
-    storage.setItem(DEVICE_ENGINE_STORAGE_KEY, JSON.stringify(engine));
-  } catch {
-    // A refused write is not a failure.
-  }
+  noticingWriter("On-device AI", (key, text) => trySetItem(key, text, storage))(DEVICE_ENGINE_STORAGE_KEY, JSON.stringify(engine));
 }
 
 /** Forgets the engine. */

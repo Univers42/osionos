@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
+
 // The last distinct slash commands the user picked, most recent first. The menu
 // shows them as its "Suggested" section; every storage access is guarded so a
 // private window or blocked storage simply yields an empty list.
@@ -41,11 +43,8 @@ export function readSlashRecents(): string[] {
   }
 }
 
+const writeRecentCommands = noticingWriter("Recent commands");
+
 export function recordSlashUse(id: string): void {
-  try {
-    const next = pushRecent(readSlashRecents(), id);
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Private window / blocked storage: recents are an enhancement, never an error.
-  }
+  writeRecentCommands(STORAGE_KEY, JSON.stringify(pushRecent(readSlashRecents(), id)));
 }
