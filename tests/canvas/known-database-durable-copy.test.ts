@@ -58,8 +58,8 @@ test("durable-copy: legacy keys migrate, the flag is set before they are removed
   const loaded = await open(store, legacy).ready;
 
   assert.deepEqual(loaded, { mode: "idb", text: "legacy-text", record: { a: "h1" } });
-  assert.deepEqual(stored(store, "state"), { text: "legacy-text", id: "migrated" });
-  assert.deepEqual(stored(store, "pushed"), { map: { a: "h1" }, stateId: "migrated" });
+  assert.deepEqual(stored(store, "state"), { text: "legacy-text", id: "migrated:tabA" });
+  assert.deepEqual(stored(store, "pushed"), { map: { a: "h1" }, stateId: "migrated:tabA" });
   assert.equal(legacy.values.get(KDS_IDB_FLAG_KEY), "1");
   assert.equal(legacy.values.has(STATE_KEY) || legacy.values.has(PUSHED_KEY), false);
   const mutations = legacy.calls.filter(call => !call.startsWith("get:"));
@@ -257,11 +257,12 @@ test("durable-copy: the next open redoes that migration from the newer legacy co
   await sleep(150);
   const second = createMemoryKeyValueStore(Object.fromEntries(first.entries));
   const newer = fakeLegacy({ [STATE_KEY]: "newer-text", [PUSHED_KEY]: JSON.stringify({ a: "h9" }) });
-  const loaded = await open(second, newer).ready;
+  const loaded = await open(second, newer, "tabB").ready;
 
   assert.deepEqual(loaded, { mode: "idb", text: "newer-text", record: { a: "h9" } });
-  assert.deepEqual(stored(second, "state"), { text: "newer-text", id: "migrated" });
-  assert.deepEqual(stored(second, "pushed"), { map: { a: "h9" }, stateId: "migrated" });
+  // ADR 0055 J-C1: a redo never reuses the id an unload journal of the first session names.
+  assert.deepEqual(stored(second, "state"), { text: "newer-text", id: "migrated:tabB" });
+  assert.deepEqual(stored(second, "pushed"), { map: { a: "h9" }, stateId: "migrated:tabB" });
   assert.equal(newer.values.get(KDS_IDB_FLAG_KEY), "1");
   assert.equal(newer.values.has(STATE_KEY) || newer.values.has(PUSHED_KEY), false);
 });
@@ -286,4 +287,15 @@ test("durable-copy: a non-migrated stored copy wins even when the flag is unset"
 
   assert.deepEqual(loaded, { mode: "idb", text: "stored-text", record: { b: "h2" } });
   assert.equal(store.writes, 0);
+});
+
+test("durable-copy: a copy an older build migrated under the bare id is still redone", async () => {
+  const store = createMemoryKeyValueStore({
+    state: { text: "stored-text", id: "migrated" },
+    pushed: { map: { b: "h2" }, stateId: "migrated" },
+  });
+  const loaded = await open(store, fakeLegacy(LEGACY)).ready;
+
+  assert.deepEqual(loaded, { mode: "idb", text: "legacy-text", record: { a: "h1" } });
+  assert.deepEqual(stored(store, "state"), { text: "legacy-text", id: "migrated:tabA" });
 });

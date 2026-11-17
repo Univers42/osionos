@@ -24,7 +24,11 @@ import { setItemEvictingPageCaches, type PageCacheStorage } from "@/store/pageSt
 // toast layer; this module stays free of it so it loads in the canvas tests.
 const LEGACY_STATE_KEY = "osionos.knownDatabaseState.v1";
 const LEGACY_PUSHED_KEY = "osionos.objectDb.pushed.v1";
-const MIGRATED_ID = "migrated";
+// ADR 0055 J-C1: a migrated copy's id names the tab that migrated it, so the redo rule never
+// writes an id an unload journal of an earlier session names. "migrated" is an older build's id.
+const MIGRATED_PREFIX = "migrated";
+const migratedId = (tabId: string): string => `${MIGRATED_PREFIX}:${tabId}`;
+const isMigratedId = (id: string): boolean => id === MIGRATED_PREFIX || id.startsWith(`${MIGRATED_PREFIX}:`);
 const DEFAULT_BUDGET_MS = 3000;
 
 export const KDS_IDB_FLAG_KEY = "osionos.kds.idb";
@@ -110,27 +114,28 @@ function snapshotLegacy(legacy: LegacyStorage): LegacySnapshot {
   };
 }
 
-function migratedEntries(text: string, map: Record<string, string>): Record<string, unknown> {
+function migratedEntries(text: string, map: Record<string, string>, id: string): Record<string, unknown> {
   return {
-    state: { text, id: MIGRATED_ID } satisfies StoredState,
-    pushed: { map, stateId: MIGRATED_ID } satisfies StoredPushed,
+    state: { text, id } satisfies StoredState,
+    pushed: { map, stateId: id } satisfies StoredPushed,
   };
 }
 
 // A stored "migrated" copy next to a legacy key that was never retired means an earlier migration
 // was abandoned by the budget before it could retire its source: the legacy copy kept receiving
 // edits, so it is the newer one and is migrated again.
-async function decideInitialCopy(store: KeyValueStore, legacy: LegacyStorage, isAbandoned: () => boolean): Promise<LoadedCopy> {
+async function decideInitialCopy(store: KeyValueStore, options: DurableCopyOptions, isAbandoned: () => boolean): Promise<LoadedCopy> {
+  const { legacy } = options;
   const source = snapshotLegacy(legacy);
   let loaded = loadedFrom(null, undefined);
   await store.update(["state", "pushed"], current => {
     const found = current.get("state");
-    const redo = isState(found) && found.id === MIGRATED_ID && !source.isRetired && source.text !== null;
+    const redo = isState(found) && isMigratedId(found.id) && !source.isRetired && source.text !== null;
     if (isState(found) && !redo) { loaded = loadedFrom(found, current.get("pushed")); return null; }
     // An abandoned session is a fallback one and must not write (I7).
     if (source.text === null || isAbandoned()) return null;
     loaded = { mode: "idb", text: source.text, record: source.map };
-    return migratedEntries(source.text, source.map);
+    return migratedEntries(source.text, source.map, migratedId(options.tabId));
   }, { durability: "strict" });
   // An abandoned session keeps writing the legacy keys; retiring them would orphan its edits.
   if (loaded.text !== null && !isAbandoned()) retireLegacy(legacy);
@@ -173,7 +178,7 @@ function startReady(session: Session, options: DurableCopyOptions): Promise<Load
       .then(opened => {
         if (session.abandoned) { opened.close(); return null; }
         session.store = opened;
-        return decideInitialCopy(opened, options.legacy, () => session.abandoned);
+        return decideInitialCopy(opened, options, () => session.abandoned);
       })
       .then(settle, () => settle(null));
   });
