@@ -36,6 +36,7 @@ import { useDocumentTitle } from "@/widgets/workspace-grid/model/tabTitle";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
 import { LazyCanvasDebugRoute, LazyMachineView, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
+import { syncObjectDbForAccount } from "./objectDbAccountSync";
 import { startDrawnCaret } from "@/features/theme/model/drawnCaret";
 import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { applyStoredTheme } from "@/shared/config/themeApply";
@@ -231,14 +232,10 @@ const App: React.FC = () => {
     // App it was the single largest module in the warm chunk. Loading it here moves
     // all of it to an async chunk fetched right after mount; the module is cached,
     // so account switches re-enter instantly.
-    void import("@/widgets/database-view/model/knownDatabaseState").then(
-      ({ resetObjectDatabaseSync, startObjectDatabaseSync }) => {
-        if (objectDbPrevUser.current && objectDbPrevUser.current !== objectDbActiveUser) {
-          resetObjectDatabaseSync();
-        }
-        objectDbPrevUser.current = objectDbActiveUser ?? null;
-        startObjectDatabaseSync();
-      },
+    return syncObjectDbForAccount(
+      () => import("@/widgets/database-view/model/knownDatabaseState"),
+      objectDbPrevUser,
+      objectDbActiveUser,
     );
   }, [objectDbActiveUser]);
 
