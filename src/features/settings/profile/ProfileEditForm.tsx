@@ -133,9 +133,9 @@ export const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ media, saveLab
       {media?.(draft.displayName)}
       <TextField name="displayName" autoComplete="name" label="Display name" hint="1 to 100 characters, on one line." max={100} value={draft.displayName} error={shown('displayName')} onChange={(v) => edit('displayName', v)} />
       {onChangeUsername && profile.username && (
-        <div className="flex items-center justify-between gap-3 py-2">
-          <p className="text-sm"><span className="font-medium">Username</span> <span className="text-[var(--osio-fg-muted)]">@{profile.username}</span></p>
-          <Button onClick={onChangeUsername}>Change username</Button>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2" data-testid="username-row">
+          <p className="min-w-0 break-all text-sm"><span className="font-medium">Username</span> <span className="text-[var(--osio-fg-muted)]">@{profile.username}</span></p>
+          <span className="shrink-0 whitespace-nowrap"><Button onClick={onChangeUsername}>Change username</Button></span>
         </div>
       )}
       <PronounsField value={draft.pronouns} error={shown('pronouns')} onChange={(v) => edit('pronouns', v)} />
