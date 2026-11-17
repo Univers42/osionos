@@ -45,3 +45,16 @@ export function linkKind(raw: string): LinkKind {
   }
   return "site";
 }
+
+// Shown in the profile sidebar: host (no "www.") plus path, so two links on one site differ.
+// Caveat: a "www." host that is a distinct site from the bare host is shown as the bare host;
+// the full URL stays in the row's title. Non-URL text comes back unchanged.
+export function linkLabel(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const path = url.pathname.replace(/\/+$/, "");
+    return `${url.host.replace(/^www\./i, "")}${path}`;
+  } catch {
+    return raw;
+  }
+}

@@ -78,7 +78,7 @@ test("links: the website first, then the links; a non-http entry and a bad ORCID
   const profile = { ...(FULL as object), website: "javascript:alert(1)", links: ["https://a.example/x", "ftp://b.example"], orcid: "nope" } as never;
   const model = build(profile);
   const links = model.facts.filter((fact: { id: string }) => fact.id.startsWith("link:"));
-  assert.deepEqual(links.map((fact: { label: string; href: string }) => [fact.label, fact.href]), [["a.example", "https://a.example/x"]]);
+  assert.deepEqual(links.map((fact: { label: string; href: string }) => [fact.label, fact.href]), [["a.example/x", "https://a.example/x"]]);
   assert.ok(!ids(profile).includes("orcid"));
 });
 

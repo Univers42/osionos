@@ -46,7 +46,7 @@ const FactRow: React.FC<{ fact: SidebarFact }> = ({ fact }) => {
     <li className="flex min-w-0 items-center gap-2">
       <Icon size={16} aria-hidden />
       {fact.href ? (
-        <a href={fact.href} target="_blank" rel="noopener noreferrer me" className="min-w-0 break-all text-[var(--osio-accent)] hover:underline">
+        <a href={fact.href} title={fact.href} target="_blank" rel="noopener noreferrer me" className="min-w-0 truncate text-[var(--osio-accent)] hover:underline">
           {fact.label}
         </a>
       ) : (

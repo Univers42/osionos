@@ -101,3 +101,22 @@ test("status form: sameStatus ignores nothing the person can change", () => {
   assert.equal(status.sameStatus(base, { ...base }), true);
   for (const patch of [{ emoji: "" }, { text: "y" }, { busy: true }, { minutes: 30 }]) assert.equal(status.sameStatus(base, { ...base, ...patch }), false);
 });
+
+test("linkLabel: host without www plus the path, no query, fragment or trailing slash", () => {
+  assert.equal(kinds.linkLabel("https://www.linkedin.com/in/ada"), "linkedin.com/in/ada");
+  assert.equal(kinds.linkLabel("https://github.com/LESdylan"), "github.com/LESdylan");
+  assert.equal(kinds.linkLabel("https://github.com/ada/"), "github.com/ada");
+  assert.equal(kinds.linkLabel("https://youtube.com/@ada?si=x#t=3"), "youtube.com/@ada");
+  assert.equal(kinds.linkLabel("https://ada.example.com"), "ada.example.com");
+  assert.equal(kinds.linkLabel("https://ada.example.com/"), "ada.example.com");
+  assert.equal(kinds.linkLabel("http://localhost:3000/a"), "localhost:3000/a");
+});
+
+test("linkLabel: IDN and percent-encoded paths stay as the URL API gives them", () => {
+  assert.equal(kinds.linkLabel("https://bücher.example/straße"), "xn--bcher-kva.example/stra%C3%9Fe");
+  assert.equal(kinds.linkLabel("https://example.com/a%20b"), "example.com/a%20b");
+});
+
+test("linkLabel: not a URL gives the raw text", () => {
+  assert.equal(kinds.linkLabel("not a url"), "not a url");
+});

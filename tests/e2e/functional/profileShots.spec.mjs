@@ -28,10 +28,12 @@ const VIEWS = [
   { width: 1440, theme: "dark" },
   { width: 375, theme: "light" },
 ];
+const LONG_PATH = "a".repeat(100);
+const LONG_LINK = `https://long.example.com/${LONG_PATH}`;
 const FACTS = {
   pronouns: "she/her", headline: "Analyst at the engine", bio: "Writes the first program.\nLoves looms and numbers.",
   company: "Analytical Engines", location: "Lyon, France", timezone: "Europe/Paris",
-  links: ["https://github.com/ada", "https://www.linkedin.com/in/ada", "https://youtube.com/@ada", "https://ada.example.com"],
+  links: ["https://github.com/LESdylan", "https://www.linkedin.com/in/ada", "https://youtube.com/@ada", "https://ada.example.com", LONG_LINK],
 };
 const STATUS = { emoji: "🎯", text: "Focusing", busy: true, expiresAt: null };
 
@@ -49,9 +51,12 @@ async function expectFilled(page, name) {
   for (const fact of [FACTS.pronouns, FACTS.headline, "Writes the first program.", FACTS.company, FACTS.location]) {
     await expect(side.getByText(fact).first()).toBeVisible();
   }
-  for (const host of ["github.com", "linkedin.com", "youtube.com", "ada.example.com"]) {
-    await expect(side.getByRole("link", { name: new RegExp(host) }).first()).toBeVisible();
+  for (const label of ["github.com/LESdylan", "linkedin.com/in/ada", "youtube.com/@ada", "ada.example.com"]) {
+    await expect(side.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
+  const long = side.getByRole("link", { name: new RegExp(`^long.example.com/${LONG_PATH}$`) });
+  await expect(long).toHaveAttribute("title", LONG_LINK);
+  expect(await side.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await expectNoErrorToast(page);
 }
