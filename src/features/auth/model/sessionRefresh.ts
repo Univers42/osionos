@@ -147,9 +147,9 @@ export interface RefreshDeps {
    *  out here while the route answered, so the result is not published (ADR 0056 S3). */
   adopt: (tokens: RefreshedTokens) => boolean | void;
   signOut: (code: string) => void;
-  /** Writes the result for the other tabs; the store hands in a writer that makes room on a full
-   *  origin (ADR 0056 A3). Without one, `storage.setItem`, dropped when it throws. */
-  publish?: (key: string, text: string) => boolean | void;
+  /** Writes what the other tabs read, the lease and the result; the store hands in a writer that
+   *  makes room on a full origin (ADR 0056 A3, AL1). Without one, `storage.setItem`, dropped when it throws. */
+  writeShared?: (key: string, text: string) => boolean | void;
   storage?: RefreshStorage | null;
   now?: () => number;
   wait?: (ms: number) => Promise<void>;
@@ -210,7 +210,7 @@ async function takeLease(deps: RefreshDeps, owner: string, ownRefreshToken: stri
     await wait(LEASE_POLL_MS);
     if (adoptPublished(deps, ownRefreshToken)) return 'adopted';
   }
-  writeJson(deps.storage, leaseKey(deps.userId), { owner, until: now() + LEASE_MS } satisfies Lease);
+  writeShared(deps, leaseKey(deps.userId), { owner, until: now() + LEASE_MS });
   return 'held';
 }
 
@@ -218,9 +218,9 @@ function releaseLease(deps: RefreshDeps, owner: string) {
   if (readJson<Lease>(deps.storage, leaseKey(deps.userId))?.owner === owner) remove(deps.storage, leaseKey(deps.userId));
 }
 
-function publishResult(deps: RefreshDeps, published: Published) {
-  if (deps.publish) deps.publish(resultKey(deps.userId), JSON.stringify(published));
-  else writeJson(deps.storage, resultKey(deps.userId), published);
+function writeShared(deps: RefreshDeps, key: string, value: Lease | Published) {
+  if (deps.writeShared) deps.writeShared(key, JSON.stringify(value));
+  else writeJson(deps.storage, key, value);
 }
 
 /** The route has already rotated, so the result is published even when adopting throws: without it
@@ -230,7 +230,7 @@ function adoptAndPublish(deps: RefreshDeps, tokens: RefreshedTokens, prev: strin
   try {
     kept = deps.adopt(tokens);
   } finally {
-    if (kept !== false) publishResult(deps, { prev, ...tokens });
+    if (kept !== false) writeShared(deps, resultKey(deps.userId), { prev, ...tokens });
   }
 }
 

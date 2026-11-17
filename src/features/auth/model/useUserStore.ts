@@ -535,7 +535,7 @@ const refreshOne = (userId: string): Promise<RefreshOutcome> => {
       return userId in readPersistedBridgeSessions();
     },
     signOut: (code) => { if (unchanged()) dropRefreshed(userId, code); },
-    publish: (key, text) => setItemEvictingPageCaches(key, text),
+    writeShared: (key, text) => setItemEvictingPageCaches(key, text),
   });
 };
 

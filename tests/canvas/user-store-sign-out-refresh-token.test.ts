@@ -15,7 +15,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BRIDGE_KEY, gate, leaseKey, persisted, reset, resultKey, signIn, storage, stubBridge, userStore, useToastStore } from "./user-store-fixtures.ts";
+import { BRIDGE_KEY, gate, leaseKey, persisted, reset, resultKey, signIn, storage, stubBridge, untilCalled, userStore, useToastStore } from "./user-store-fixtures.ts";
 
 const { useUserStore, dropLocalSession } = userStore;
 const RT_U1 = "osb_rt.u1-first.sig";
@@ -26,10 +26,6 @@ const cutoffsUnavailable = () => new Response(JSON.stringify({ ok: false, code: 
 /** Every stored key whose value holds one of the given tokens. */
 function keysHolding(...tokens: string[]): string[] {
   return [...storage.data].filter(([, value]) => tokens.some((rt) => value.includes(rt))).map(([key]) => key);
-}
-
-async function untilCalled(calls: string[]): Promise<void> {
-  while (calls.length === 0) await new Promise((resolve) => setImmediate(resolve));
 }
 
 test("S1 a local sign-out removes the account's refresh result and lease, and keeps the other account's", async () => {

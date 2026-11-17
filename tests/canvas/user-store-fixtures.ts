@@ -106,6 +106,11 @@ export function stubBridge({ refreshTo, held, logout }: Bridge): string[] {
   return calls;
 }
 
+/** Resolves once the stubbed refresh route has been called: the rotation is in flight. */
+export async function untilCalled(calls: string[]): Promise<void> {
+  while (calls.length === 0) await new Promise((resolve) => setImmediate(resolve));
+}
+
 /** A promise the test resolves by hand: the point where an interleaving is decided. */
 export function gate(): { opened: Promise<void>; open: () => void } {
   let open = () => {};
