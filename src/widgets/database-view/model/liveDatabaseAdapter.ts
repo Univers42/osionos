@@ -20,6 +20,7 @@
 
 import type { ObjectDatabaseAdapter } from "@notion-db/object-database";
 import { LiveMountAdapter } from "@/shared/notion-database-sys/src/store/live/liveMountAdapter";
+import { liveOutboxStorage } from "./liveOutboxStorage";
 import {
   isLiveDatabaseId,
   parseLiveDatabaseId,
@@ -116,7 +117,7 @@ export function getLiveDatabaseAdapter(databaseId: string): ObjectDatabaseAdapte
   const cached = liveAdapterCache.get(databaseId);
   if (cached) return cached;
   if (parseLiveDatabaseId(databaseId) === null) return null;
-  const adapter = withRevisitCache(new LiveMountAdapter(databaseId), databaseId);
+  const adapter = withRevisitCache(new LiveMountAdapter(databaseId, liveOutboxStorage), databaseId);
   liveAdapterCache.set(databaseId, adapter);
   return adapter;
 }
