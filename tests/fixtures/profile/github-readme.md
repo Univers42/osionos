@@ -170,6 +170,13 @@ I build things **from scratch** to understand how they really work: memory alloc
   <img width="100%" alt="Contribution activity graph" src="https://github-readme-activity-graph.vercel.app/graph?username=LESdylan&bg_color=0d1117&color=7ec8e3&line=00b4d8&point=e0f7ff&area=true&area_color=0a3d62&hide_border=true&radius=8&custom_title=Contribution%20activity"/>
 </div>
 
+<details>
+<summary><b>Shell shortcuts</b> used in the demos</summary>
+
+<kbd>Ctrl</kbd>+<kbd>R</kbd> searches the history, <kbd>Ctrl</kbd>+<kbd>D</kbd> closes the shell.
+
+</details>
+
 <!-- ═══════════════════════════ FOOTER ═══════════════════════════ -->
 <div align="center">
   <sub>
