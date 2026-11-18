@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import type { PageEntry } from '@/entities/page';
 import { fetchAccountProfile, type AccountProfileOutcome } from '@/shared/api/accountProfileApi';
 import { api, getActivePageJwt } from '@/shared/api/client';
 import { bridgeMediaUrl } from '@/shared/lib/media/bridgeMediaUrl';
@@ -93,6 +94,7 @@ export interface ProfileIo {
   getLegacy: () => Promise<MemberProfile>;
   getCard: (username: string) => Promise<Record<string, unknown>>;
   getOwn: () => Promise<AccountProfileOutcome>;
+  getOwnPage: (pageId: string) => Promise<PageEntry | null>;
 }
 
 // The card is looked up by NAME, and the legacy and typed tables can disagree about who holds
@@ -110,16 +112,36 @@ async function readCard(userId: string, username: string | null | undefined, io:
   } catch { return null; /* keep the first read, no error state */ }
 }
 
+// Same cap as the bridge's projectReadme, so the owner and a visitor agree on "too large".
+const README_BYTE_CAP = 200 * 1024;
+
+async function readOwnReadme(pageId: string, io: ProfileIo): Promise<ReadmeProjection | null> {
+  try {
+    const page = await io.getOwnPage(pageId);
+    if (!page || page.archivedAt) return null;
+    const blocks = page.content ?? [];
+    return new TextEncoder().encode(JSON.stringify(blocks)).length > README_BYTE_CAP
+      ? { pageId, truncated: true }
+      : { pageId, blocks };
+  } catch { return null; }
+}
+
 async function readOwnRow(io: ProfileIo): Promise<Record<string, unknown> | null> {
   try {
     const outcome = await io.getOwn();
-    return outcome.ok ? { ...outcome.profile } : null;
+    if (!outcome.ok) return null;
+    const { readmePageId } = outcome.profile;
+    const readme = readmePageId ? await readOwnReadme(readmePageId, io) : null;
+    return readme ? { ...outcome.profile, readme } : { ...outcome.profile };
   } catch { return null; }
 }
 
 /**
- * Caveat: the owner's own row carries no README projection, so without a matching card the
- * owner's page shows no README; the own row is read only when the viewer is the subject.
+ * Caveat: a visitor of an account with no username sees neither its card nor its README until
+ * a username is claimed. A failed read of the owner's own page looks like "no README". The
+ * owner's README here is their own page content un-neutralised (the bridge neutralises
+ * bindings for other viewers); that is the owner's own data shown to the owner only, and the
+ * own-row path is never taken for a visitor.
  */
 export async function loadProfile(userId: string, isOwner: boolean, io: ProfileIo): Promise<MemberProfile> {
   const legacy = await io.getLegacy();
@@ -145,6 +167,7 @@ export function useProfile(userId: string, isOwner = false) {
         getLegacy: () => api.get<MemberProfile>(`/api/profile/${encodeURIComponent(userId)}`, jwt),
         getCard: (username) => api.get<Record<string, unknown>>(`/api/users/${encodeURIComponent(username)}`, jwt),
         getOwn: fetchAccountProfile,
+        getOwnPage: (pageId) => api.get<PageEntry>(`/api/pages/${encodeURIComponent(pageId)}`, jwt),
       };
       loadProfile(userId, isOwner, io)
         .then((merged) => { if (alive) { setProfile(merged); setError(''); } })
