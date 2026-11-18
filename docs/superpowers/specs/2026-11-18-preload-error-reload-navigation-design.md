@@ -52,3 +52,7 @@ boot: sign-in redirect, same-tab external link, typed URL.
   only 15 of 20 runs; S1 (assign) can pass without exercising the defect. S1 (goto) is the
   deterministic one there (20 of 20 produce events).
 - S1 is vacuous on Chromium (no event fires); it passes there and says nothing.
+- Caveat (i): with an unconfirmed edit the page's leave guard asks again when the delayed reload
+  runs, so the user sees two dialogs, the second 10 s after the first Stay (2 dialogs in 120/120
+  runs on Firefox, WebKit and Chromium). Choosing Stay a second time leaves the failed lazy
+  feature broken until a manual refresh. Accepted, not fixed (ADR 0061 PR11).

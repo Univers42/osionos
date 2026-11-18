@@ -9,7 +9,10 @@
 //
 // Caveat: heuristic, localhost measurements, a modelled redeploy. It gets wrong:
 //  (i) a `beforeunload` that does not unload (Stay on page, Stop, a 204, a download) delays recovery
-//      by up to GUARD_WINDOW_MS, then one reload happens if a failure was swallowed;
+//      by up to GUARD_WINDOW_MS, then one reload happens if a failure was swallowed. With an
+//      unconfirmed edit (the pendingPages guard) that reload shows the leave dialog a second time,
+//      10 s after the user chose Stay (2 dialogs in 120/120 runs); a second Stay leaves the failed
+//      lazy feature broken until the user refreshes;
 //  (ii) a navigation still pending when the mark clears, whose imports were cancelled, is aborted once;
 //  (iii) where `beforeunload` does not fire (iOS Safari is reported not to; unmeasured) behaviour
 //      is the old one, reload on every failure;
