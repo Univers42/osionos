@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/11/17 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/11/17 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/18 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,6 +18,12 @@
 // the option is present and the file imports noticingWrite, not where the option leads). A
 // paren inside a string literal of a persist call can end the call early. Escape hatch for a
 // write that must stay bare: an ALLOWED_BARE_WRITES entry with its reason.
+// The agent-conversations wiring (A5: user content makes room, then is noticed) is checked as
+// text, which the component's effect-only writer leaves no other way to reach without a DOM. It
+// misses a writer reached through a re-export or a renamed binding (`const write = ...`, an
+// `import { noticingWriter as ... }`), and a copy of the expected line left in a comment still
+// counts while the live line changes. A brace inside a string literal of `writeThread` can end
+// its body early.
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -65,12 +71,12 @@ function sourceFiles(): string[] {
     .filter((path) => !path.startsWith(SUBMODULE));
 }
 
-/** The text of the call opened at `open` (the index of its "("), parens balanced. */
-function callText(source: string, open: number): string {
+/** The text opened at `open` (the index of its opening char), `pair` balanced: a call by default. */
+function callText(source: string, open: number, pair = "()"): string {
   let depth = 0;
   for (let at = open; at < source.length; at += 1) {
-    if (source[at] === "(") depth += 1;
-    else if (source[at] === ")") depth -= 1;
+    if (source[at] === pair[0]) depth += 1;
+    else if (source[at] === pair[1]) depth -= 1;
     if (depth === 0) return source.slice(open, at + 1);
   }
   return source.slice(open);
@@ -122,4 +128,59 @@ test("no bare localStorage.setItem outside the allowlist, and the allowlist is n
   const stale = Object.keys(ALLOWED_BARE_WRITES).filter((path) => !found.has(path));
   assert.deepEqual(unexpected.map(([path, count]) => `${path} (${count})`), []);
   assert.deepEqual(stale, [], "allowlist entries that no longer match");
+});
+
+const AGENT_PAGE = "widgets/agent-conversation/ui/AgentConversationPage.tsx";
+const AGENT_WRITER = /\bnoticingWriter\(\s*(['"])Agent conversations\1\s*,\s*setItemEvictingPageCaches\s*\)/g;
+const AGENT_WRITER_BINDING = /\bconst\s+writeAgentThreads\s*=\s*noticingWriter\(\s*(['"])Agent conversations\1\s*,\s*setItemEvictingPageCaches\s*\)/;
+const WRITE_CALL = /\b(\w*(?:[Ww]rite|setItem)\w*)\s*\(/g;
+
+/** The body of `function name(...)` in `source`, braces balanced; "" when it is not declared. */
+function functionBody(source: string, name: string): string {
+  const head = new RegExp(`\\bfunction\\s+${name}\\s*\\([^)]*\\)[^{]*\\{`).exec(source);
+  return head ? callText(source, head.index + head[0].length - 1, "{}") : "";
+}
+
+/** The text of every `useEffect(...)` call in `source`. */
+function effectCalls(source: string): string[] {
+  return [...source.matchAll(/\buseEffect\s*\(/g)].map((match) => callText(source, (match.index ?? 0) + match[0].length - 1));
+}
+
+/** Each write-like call in `body` as "name(firstArgument". */
+function writesIn(body: string): string[] {
+  return [...body.matchAll(WRITE_CALL)].map((match) => {
+    const call = callText(body, (match.index ?? 0) + match[0].length - 1);
+    return `${match[1]}(${call.slice(1).split(",")[0].trim()}`;
+  });
+}
+
+test("the wiring scanner reads a function body, an effect and its writes", () => {
+  const source = "function writeThread(a: T) { const t = f({ x: 1 }); writeAgentThreads(KEY, JSON.stringify(t)); }\n"
+    + "useEffect(() => { writeThread(pageId, messages); }, [messages, pageId]);";
+  assert.deepEqual(writesIn(functionBody(source, "writeThread")), ["writeAgentThreads(KEY"]);
+  assert.equal(functionBody(source, "readThread"), "");
+  assert.deepEqual(effectCalls(source).map((call) => call.includes("writeThread(pageId, messages)")), [true]);
+});
+
+test("A5 agent conversations: one noticing writer that makes room first, labelled for the store", () => {
+  const source = read(AGENT_PAGE);
+  assert.equal(source.match(AGENT_WRITER)?.length ?? 0, 1, "noticingWriter('Agent conversations', setItemEvictingPageCaches)");
+  assert.match(source, AGENT_WRITER_BINDING, "bound to writeAgentThreads");
+  assert.match(source, /import\s*\{[^}]*\bnoticingWriter\b[^}]*\}\s*from\s*["']@\/shared\/lib\/storage-full\/noticingWrite["']/);
+  assert.match(source, /import\s*\{[^}]*\bsetItemEvictingPageCaches\b[^}]*\}\s*from\s*["']@\/store\/pageStore\.helpers["']/);
+});
+
+test("A5 agent conversations: writeThread writes only through writeAgentThreads, under the threads key", () => {
+  const source = read(AGENT_PAGE);
+  assert.match(source, /\bconst\s+AGENT_THREADS_STORAGE_KEY\s*=\s*["']osionos:agent-conversations["']/);
+  const body = functionBody(source, "writeThread");
+  assert.notEqual(body, "", "writeThread is declared");
+  assert.deepEqual(writesIn(body), ["writeAgentThreads(AGENT_THREADS_STORAGE_KEY"]);
+  assert.doesNotMatch(body, /\b(?:local|session)Storage\b/, "no direct storage access");
+});
+
+test("A5 agent conversations: an effect writes the thread whenever the messages or the page change", () => {
+  const writers = effectCalls(read(AGENT_PAGE)).filter((call) => /\bwriteThread\(\s*pageId\s*,\s*messages\s*\)/.test(call));
+  assert.equal(writers.length, 1, "one useEffect calls writeThread(pageId, messages)");
+  assert.match(writers[0], /\[\s*(?:messages\s*,\s*pageId|pageId\s*,\s*messages)\s*\]\s*\)$/, "its deps are messages and pageId");
 });
