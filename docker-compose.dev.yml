@@ -59,6 +59,8 @@ services:
       PLAYWRIGHT_BRIDGE_STUB: ${PLAYWRIGHT_BRIDGE_STUB:-}
       # "1" runs only tests/e2e/ai-stub against a build with a (stubbed) AI service URL set.
       PLAYWRIGHT_AI_STUB: ${PLAYWRIGHT_AI_STUB:-}
+      # "production" serves a minified build through vite preview (specs that need built chunks).
+      PLAYWRIGHT_BUILD: ${PLAYWRIGHT_BUILD:-}
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     volumes:

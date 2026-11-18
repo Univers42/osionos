@@ -457,6 +457,15 @@ jobs:
           docker compose -f docker-compose.base.yml -f docker-compose.dev.yml run --rm --no-deps \
             browser-tests pnpm exec playwright test
 
+      # The stale-chunk reload spec needs built /assets chunks, which the dev server above lacks
+      # (playwright.config.ts ignores it there). The build + preview fit the 900 s webServer budget.
+      - name: Run the stale-chunk reload spec against a production build
+        env:
+          PLAYWRIGHT_BUILD: production
+        run: |
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml run --rm --no-deps \
+            browser-tests pnpm exec playwright test tests/e2e/bridge-stub/preloadErrorReload.spec.mjs
+
       # Same idea for the AI service: a build with a stub VITE_AI_URL, running only tests/e2e/ai-stub.
       - name: Run the stub-AI specs
         env:

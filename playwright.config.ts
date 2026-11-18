@@ -54,8 +54,9 @@ const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1"
 // only behind the "osio:perf" localStorage flag, which perfHarness.bootApp sets.
 const productionBuild = process.env.PLAYWRIGHT_BUILD === "production";
 const productionOutDir = "test-results/dist-e2e";
+// 6144: the --mode test build ran out of heap at 3072 (measured 2026-11-18, V8 OOM after 32 s).
 const webServerCommand = productionBuild
-  ? `NODE_ENV=production VITE_PERF_FIXTURES=true NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build --mode test --outDir ${productionOutDir} --emptyOutDir`
+  ? `NODE_ENV=production VITE_PERF_FIXTURES=true NODE_OPTIONS=--max-old-space-size=6144 pnpm exec vite build --mode test --outDir ${productionOutDir} --emptyOutDir`
     + ` && pnpm exec vite preview --mode test --outDir ${productionOutDir} --host 127.0.0.1 --port ${testPort} --strictPort`
   : `pnpm exec vite --mode test --host 127.0.0.1 --port ${testPort} --strictPort`;
 // The build-time legacy second brain gate (src/shared/config/legacySecondBrain.ts), default
@@ -102,6 +103,8 @@ export default defineConfig({
     ...(legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`)),
     ...(perfRun ? [] : ["**/perf/**"]),
     ...(coeditRun ? [] : ["**/latency/**"]),
+    // Needs built /assets chunks: only the production preload helper dispatches vite:preloadError.
+    ...(productionBuild ? [] : ["**/bridge-stub/preloadErrorReload.spec.mjs"]),
   ],
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
