@@ -17,6 +17,12 @@ boot: sign-in redirect, same-tab external link, typed URL.
 - Input: a `vite:preloadError` event on `window`, plus what the document knows about itself
   (has it started to unload, the guard timestamp, whether the host answers).
 - Output: either one `location.reload()` or nothing. Never a reload that cancels a navigation.
+- While the page is leaving (`beforeunload` fired) a failure is swallowed, not answered. The
+  leaving mark clears 10 s after `beforeunload` or on a bfcache `pageshow`; a swallowed failure on a
+  page still alive then reloads once, under the guard (a dismissed "Stay on page", Stop, a 204 or a
+  download leave cancelled imports failed). Authority: ADR 0061 PR1-PR9.
+- The guard write must read back from `sessionStorage`; without that there is no reload (no
+  in-memory fallback, which would loop across reloads).
 - Done when S1-S4 below pass on Chromium, Firefox and WebKit in the production build.
 
 ## Acceptance
