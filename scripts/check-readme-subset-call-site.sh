@@ -12,7 +12,8 @@ set -eu
 SITE="src/entities/block/ui/MarkdownSubsetPreview.tsx"
 [ -f "$SITE" ] || { printf 'check-readme-subset-call-site: %s is missing\n' "$SITE" >&2; exit 1; }
 
-hits=$(grep -rlE "htmlSubset\??[[:space:]]*:" src --include='*.ts' --include='*.tsx' | sort || true)
+# find + xargs, not grep --include: the quality container's grep is busybox and lacks it.
+hits=$(find src \( -name '*.ts' -o -name '*.tsx' \) -print | xargs grep -lE "htmlSubset\??[[:space:]]*:" 2>/dev/null | sort || true)
 if [ "$hits" != "$SITE" ]; then
 	printf 'check-readme-subset-call-site: htmlSubset must be enabled only in %s, found:\n%s\n' "$SITE" "$hits" >&2
 	exit 1
