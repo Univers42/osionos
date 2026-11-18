@@ -180,6 +180,23 @@ A profile that reads like a GitHub profile and is edited as fast as one:
 - Needs an architect contract (where it is evaluated, how it is cached and invalidated,
   cross-engine sources) and a ruling before any code.
 
+### U7c — README variables stay literal
+
+Ruling: groot ADR 0059, conditions MC-1..MC-7 (`0059-*.md` §2). Only the literal mode
+exists; metrics (U7b) add a second mode later, not here.
+
+- **In:** the README blocks of a profile (`ReadmeBlocks`), shown to the owner and to
+  every other viewer alike (MC-5), and the viewer's own env.json.
+- **Out:** every `{{expr}}` in the README shows as its source text. No viewer value is
+  read. Elsewhere (own pages, editor and read-only) `{{expr}}` resolves as before (MC-7).
+- **How:** `ReadmeBlocks` wraps its subtree in `VariableModeProvider mode="literal"`
+  (`mode` is required). The four read-only call sites (paragraph/inline, table, callout,
+  media caption; React and string paths) take the resolver from the mode (MC-1). The
+  inline cache key carries the mode (MC-2). A resolved value stays a text node or
+  escaped text (MC-4). `src/widgets/profile-page/` never names the resolvers (MC-6).
+- **Done when:** `tests/canvas/readme-variable-mode.test.ts` passes (MC-1, 2, 4, 5, 7,
+  and the MC-6 grep); typecheck, lint and the full canvas suite are green.
+
 ### U8 — anonymous view (only if wanted)
 
 - A signed-out read of the fields the owner marked public, rate-limited, with no
