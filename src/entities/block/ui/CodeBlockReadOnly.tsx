@@ -26,7 +26,9 @@ import React from "react";
 import { Check, Copy } from "lucide-react";
 import type { Block } from "@/entities/block";
 import { MermaidDiagram, CodeSyntaxHighlight } from "@/shared/ui";
+import { isMarkdownPreview } from "../model/markdownPreview";
 import { CodeGutter } from "./CodeGutter";
+import { MarkdownSubsetPreview } from "./MarkdownSubsetPreview";
 
 export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   const [copied, setCopied] = React.useState(false);
@@ -79,6 +81,8 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
         <div data-osio-fixed-scale>
           <MermaidDiagram chart={block.content} codeTheme={block.codeTheme ?? "dark"} />
         </div>
+      ) : isMarkdownPreview(block) ? (
+        <MarkdownSubsetPreview content={block.content} />
       ) : (
         <div className="flex">
           {showLineNumbers && (

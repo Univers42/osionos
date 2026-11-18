@@ -51,6 +51,7 @@ import { BlockListCollapse } from "./BlockListCollapse";
 import { isSqlRunEnabled } from "@/shared/config/featureFlags";
 import { SqlRunButton } from "@/features/sql-runner/ui/SqlRunButton";
 import { CodeGutter } from "@/entities/block/ui/CodeGutter";
+import { MarkdownSubsetPreview } from "@/entities/block/ui/MarkdownSubsetPreview";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
@@ -175,8 +176,10 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
     () => getBlockSurfaceStyle(block),
     [block],
   );
-  const codeView = (block.codeView ?? "preview") as "preview" | "source";
-  const isRenderable = RENDERABLE_LANGUAGES.has(block.language ?? "");
+  const isMarkdownCode = block.language === "markdown";
+  // Mermaid defaults to its diagram; markdown defaults to source (ADR 0058 U4-2).
+  const codeView = (block.codeView ?? (isMarkdownCode ? "source" : "preview")) as "preview" | "source";
+  const isRenderable = isMarkdownCode || RENDERABLE_LANGUAGES.has(block.language ?? "");
   const codeCaretColor = "var(--osio-code-caret)";
   const codeShowLineNumbers = Boolean(block.lineNumbers);
   const codeLineCount = Math.max(1, (block.content || "").split("\n").length);
@@ -747,12 +750,16 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           {codeBlockHeader}
           <div className="overflow-hidden rounded-b-xl">
             {isRenderable && codeView === "preview" ? (
-              <div data-osio-fixed-scale>
-                <MermaidDiagram
-                  chart={block.content}
-                  codeTheme={block.codeTheme ?? "dark"}
-                />
-              </div>
+              isMarkdownCode ? (
+                <MarkdownSubsetPreview content={block.content} />
+              ) : (
+                <div data-osio-fixed-scale>
+                  <MermaidDiagram
+                    chart={block.content}
+                    codeTheme={block.codeTheme ?? "dark"}
+                  />
+                </div>
+              )
             ) : (
               <div
                 data-code-height
