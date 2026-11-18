@@ -37,7 +37,7 @@ export const ReadmeBlocks: React.FC<{ readme: ReadmeProjection | null | undefine
   }
   if (!Array.isArray(readme.blocks) || readme.blocks.length === 0) return null;
   return (
-    <section aria-label="README" data-testid="profile-readme" className="mt-8">
+    <section aria-label="README" data-testid="profile-readme" className="osio-readme mt-8">
       <VariableModeProvider mode="literal">
         <BindingProvider record={record}>
           <BoundFieldEmptyText.Provider value={null}>

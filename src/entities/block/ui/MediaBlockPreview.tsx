@@ -154,6 +154,8 @@ export const ImageBlockPicture: React.FC<{ block: Block; animation: ImageAnimati
       ? "block h-full w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
       : "block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover";
   const style = aspect ? { aspectRatio: aspect } : undefined;
+  // A hook for the README, which draws a rectangular picture without its frame.
+  const pictureKind = block.mediaShape === "circle" ? "circle" : "frame";
 
   if (!animation.still) {
     return (
@@ -165,6 +167,7 @@ export const ImageBlockPicture: React.FC<{ block: Block; animation: ImageAnimati
         style={style}
         className={className}
         data-testid="media-block-image"
+        data-media-picture={pictureKind}
       />
     );
   }
@@ -177,6 +180,7 @@ export const ImageBlockPicture: React.FC<{ block: Block; animation: ImageAnimati
       style={style}
       className={className}
       data-testid="media-block-image-canvas"
+      data-media-picture={pictureKind}
     />
   );
 };
