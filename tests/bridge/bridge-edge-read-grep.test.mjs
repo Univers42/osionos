@@ -41,6 +41,19 @@ const MENTION_READERS = [
 	'src/features/page-export/model/inlineDialect.ts',
 ];
 
+/**
+ * A reader of a [[page:]] mention, in the two shapes the code has had: a
+ * capture group right after `page:` (the page-links migration's extractor),
+ * and a quoted literal that stops at `[[page:` (a scan for the opener, the
+ * engine's shape since it dropped the regex). The editor's insertions write
+ * `[[page:${id}]]`, which is neither.
+ *
+ * Caveat: a grep on the source text. It misses a reader that assembles the
+ * opener from pieces or takes it from a constant another file defines, so it
+ * under-reports; a new reader shape needs its pattern added here.
+ */
+const MENTION_READ = /page:\(|(["'`])\[\[page:\1/;
+
 /** The source files of the app, as the paths the repository knows them by. */
 function sourceFiles(dir = APP_ROOT) {
 	const out = [];
@@ -72,10 +85,7 @@ describe('one edge read (C99, C103)', () => {
 	});
 
 	it('no module but the renderer and the export dialect reads a [[page:]] mention', () => {
-		// The shape of the page-links migration's own extractor: a capture group
-		// right after `page:`. The editor's insertions write `[[page:${id}]]`,
-		// which is not one.
-		assert.deepEqual(filesMatching(/page:\(/), MENTION_READERS);
+		assert.deepEqual(filesMatching(MENTION_READ), MENTION_READERS);
 	});
 
 	it('the export dialect strips the mentions, it never reads an id out of them', () => {
