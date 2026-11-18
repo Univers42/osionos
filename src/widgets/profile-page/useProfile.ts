@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { fetchAccountProfile, type AccountProfileOutcome } from '@/shared/api/accountProfileApi';
 import { api, getActivePageJwt } from '@/shared/api/client';
 import { bridgeMediaUrl } from '@/shared/lib/media/bridgeMediaUrl';
 
@@ -88,7 +89,49 @@ export function withoutLegacyCard(base: MemberProfile): MemberProfile {
 
 const REFRESH_MS = 60_000;
 
-export function useProfile(userId: string) {
+export interface ProfileIo {
+  getLegacy: () => Promise<MemberProfile>;
+  getCard: (username: string) => Promise<Record<string, unknown>>;
+  getOwn: () => Promise<AccountProfileOutcome>;
+}
+
+// The card is looked up by NAME, and the legacy and typed tables can disagree about who holds
+// one (beta, 2026-11-18: account A's page showed account B's "dev"), so only the requested
+// user's own card is merged.
+function isCardOf(userId: string, card: Record<string, unknown>): boolean {
+  return typeof card.userId === 'string' && card.userId.toLowerCase() === userId.toLowerCase();
+}
+
+async function readCard(userId: string, username: string | null | undefined, io: ProfileIo) {
+  if (!username) return null;
+  try {
+    const card = await io.getCard(username);
+    return isCardOf(userId, card) ? card : null;
+  } catch { return null; /* keep the first read, no error state */ }
+}
+
+async function readOwnRow(io: ProfileIo): Promise<Record<string, unknown> | null> {
+  try {
+    const outcome = await io.getOwn();
+    return outcome.ok ? { ...outcome.profile } : null;
+  } catch { return null; }
+}
+
+/**
+ * Caveat: the owner's own row carries no README projection, so without a matching card the
+ * owner's page shows no README; the own row is read only when the viewer is the subject.
+ */
+export async function loadProfile(userId: string, isOwner: boolean, io: ProfileIo): Promise<MemberProfile> {
+  const legacy = await io.getLegacy();
+  const base = withoutLegacyCard(legacy);
+  const card = await readCard(userId, legacy.username, io);
+  const fields = card ?? (isOwner ? await readOwnRow(io) : null);
+  return fields ? mergePublicFields(base, fields) : base;
+}
+
+// isOwner comes from the caller (the views already hold the active user); it is not read from
+// the auth store here so the merge rules above stay importable without it.
+export function useProfile(userId: string, isOwner = false) {
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [error, setError] = useState('');
   const [reloads, setReloads] = useState(0);
@@ -98,17 +141,13 @@ export function useProfile(userId: string) {
     const load = () => {
       const jwt = getActivePageJwt();
       if (!jwt || !userId) return;
-      api.get<MemberProfile>(`/api/profile/${encodeURIComponent(userId)}`, jwt)
-        .then(async (reply) => {
-          let merged = withoutLegacyCard(reply);
-          if (reply.username) {
-            try {
-              const pub = await api.get<Record<string, unknown>>(`/api/users/${encodeURIComponent(reply.username)}`, jwt);
-              merged = mergePublicFields(merged, pub);
-            } catch { /* keep the first read, no error state */ }
-          }
-          if (alive) { setProfile(merged); setError(''); }
-        })
+      const io: ProfileIo = {
+        getLegacy: () => api.get<MemberProfile>(`/api/profile/${encodeURIComponent(userId)}`, jwt),
+        getCard: (username) => api.get<Record<string, unknown>>(`/api/users/${encodeURIComponent(username)}`, jwt),
+        getOwn: fetchAccountProfile,
+      };
+      loadProfile(userId, isOwner, io)
+        .then((merged) => { if (alive) { setProfile(merged); setError(''); } })
         .catch((cause) => { if (alive) setError(cause instanceof Error ? cause.message : 'Profile unavailable.'); });
     };
     load();
@@ -117,7 +156,7 @@ export function useProfile(userId: string) {
       alive = false;
       clearInterval(timer);
     };
-  }, [userId, reloads]);
+  }, [userId, isOwner, reloads]);
 
   const reload = useCallback(() => setReloads((count) => count + 1), []);
   return { profile, error, reload };

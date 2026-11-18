@@ -32,9 +32,9 @@ interface ProfileViewProps {
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
-  const { profile, error, reload } = useProfile(userId);
-  const readmeRecord = useMemo(() => toReadmeRecord(profile), [profile]);
   const isOwner = useUserStore((s) => s.activeUserId) === userId;
+  const { profile, error, reload } = useProfile(userId, isOwner);
+  const readmeRecord = useMemo(() => toReadmeRecord(profile), [profile]);
 
   if (error) {
     return (

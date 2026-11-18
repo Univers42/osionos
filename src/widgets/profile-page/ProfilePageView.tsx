@@ -35,8 +35,8 @@ import { BindingProvider, toBoundRecord, toReadmeRecord } from "./model/binding"
 import { useProfile } from "./useProfile";
 
 export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
-  const { profile, reload } = useProfile(userId);
   const activeUserId = useUserStore((state) => state.activeUserId);
+  const { profile, reload } = useProfile(userId, userId === activeUserId);
   const storeProfession = useProfessionStore((state) => state.profession);
   // The subject's profession is the server's when it carries one; for the member
   // viewing their own page the persisted pick covers the offline build, where
