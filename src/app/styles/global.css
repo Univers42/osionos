@@ -698,6 +698,15 @@ body {
   background: var(--osio-code-selection);
 }
 
+/* Tailwind preflight makes every <img> a block, which stacks the images of a badge row
+   one per line. Inline-content images flow like text, as on GitHub. Scoped to the text of
+   a paragraph: image and media blocks are separate components and are not inside it. */
+.osio-inline-content img {
+  display: inline;
+  vertical-align: middle;
+  max-width: 100%;
+}
+
 /* Link and Mention Unification */
 .editor-link {
   color: var(--osio-link) !important;

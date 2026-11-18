@@ -1306,7 +1306,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         spellCheck
         data-placeholder={hasFocus ? placeholder : ""}
         data-empty={hasFocus && isPlaceholderVisible}
-        className={`outline-none whitespace-pre-wrap break-words data-[empty=true]:before:content-[attr(data-placeholder)] data-[empty=true]:before:text-[var(--osio-fg-subtle)] data-[empty=true]:before:pointer-events-none ${className}`}
+        className={`osio-inline-content outline-none whitespace-pre-wrap break-words data-[empty=true]:before:content-[attr(data-placeholder)] data-[empty=true]:before:text-[var(--osio-fg-subtle)] data-[empty=true]:before:pointer-events-none ${className}`}
         style={style}
         onInput={handleInput}
         onKeyDown={handleKeyDown}

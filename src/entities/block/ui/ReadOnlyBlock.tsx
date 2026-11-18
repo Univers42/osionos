@@ -213,7 +213,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       return (
         <>
           {block.content ? (
-            <p className={`text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 min-h-[1.5em] ${tint}`} style={surface}>
+            <p className={`osio-inline-content text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 min-h-[1.5em] ${tint}`} style={surface}>
               <InlineMarkdown content={block.content} />
             </p>
           ) : (
