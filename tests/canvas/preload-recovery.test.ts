@@ -10,32 +10,41 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// R-BR5: the stale-chunk reload (src/app/preloadRecovery.ts) fires once per 10 s for a failed lazy
-// import, and never while the document is already being navigated away. RED until the module exists:
-// the handler is inline in src/app/main.tsx today and has no seam to test.
+// R-BR5 (ADR 0061): the stale-chunk reload (src/app/preloadRecovery.ts) fires once per 10 s for a
+// failed lazy import; stands down while the document is leaving, for at most 10 s, then recovers what
+// it skipped if the page is still alive; and never reloads without a guard that reads back.
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
 
-import { installPreloadRecovery } from "../../src/app/preloadRecovery.ts";
+import { installPreloadRecovery, type RecoveryStorage } from "../../src/app/preloadRecovery.ts";
 
-function harness(startAt = 1_000_000) {
-  const target = new EventTarget();
+const WINDOW_MS = 10_000;
+
+function memoryStorage(): RecoveryStorage {
   const values = new Map<string, string>();
-  let clock = startAt;
+  return { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => void values.set(key, value) };
+}
+
+function harness(storage: RecoveryStorage | null = memoryStorage()) {
+  const target = new EventTarget();
+  let clock = 1_000_000;
   let reloads = 0;
-  installPreloadRecovery(target, {
-    storage: { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => void values.set(key, value) },
-    now: () => clock,
-    reload: () => void (reloads += 1),
-  });
+  mock.timers.enable({ apis: ["setTimeout"] });
+  installPreloadRecovery(target, { storage: storage ?? undefined, now: () => clock, reload: () => void (reloads += 1) });
   return {
     fail: () => target.dispatchEvent(new Event("vite:preloadError")),
     leave: () => target.dispatchEvent(new Event("beforeunload")),
-    advance: (ms: number) => void (clock += ms),
+    restore: () => target.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true })),
+    advance: (ms: number) => {
+      clock += ms;
+      mock.timers.tick(ms);
+    },
     reloads: () => reloads,
   };
 }
+
+test.afterEach(() => mock.timers.reset());
 
 test("a failed lazy import reloads once", () => {
   const page = harness();
@@ -43,17 +52,52 @@ test("a failed lazy import reloads once", () => {
   assert.equal(page.reloads(), 1);
 });
 
-test("a failure after the document started navigating away does not reload", () => {
+test("a failure after the document started navigating away does not reload at once", () => {
   const page = harness();
   page.leave();
   page.fail();
   assert.equal(page.reloads(), 0);
 });
 
+test("a failure swallowed while leaving reloads once when the mark clears, not before", () => {
+  const page = harness();
+  page.leave();
+  page.fail();
+  page.advance(WINDOW_MS - 1);
+  assert.equal(page.reloads(), 0);
+  page.advance(1);
+  assert.equal(page.reloads(), 1);
+});
+
+test("leaving with no failure swallowed never reloads", () => {
+  const page = harness();
+  page.leave();
+  page.advance(WINDOW_MS * 2);
+  assert.equal(page.reloads(), 0);
+});
+
+test("a failure after the mark cleared reloads at once", () => {
+  const page = harness();
+  page.leave();
+  page.advance(WINDOW_MS);
+  page.fail();
+  assert.equal(page.reloads(), 1);
+});
+
+test("a bfcache restore clears the mark and recovers a swallowed failure once", () => {
+  const page = harness();
+  page.leave();
+  page.fail();
+  page.restore();
+  assert.equal(page.reloads(), 1);
+  page.advance(WINDOW_MS * 2);
+  assert.equal(page.reloads(), 1);
+});
+
 test("a burst of failures inside the guard window reloads once", () => {
   const page = harness();
   page.fail();
-  page.advance(9_999);
+  page.advance(WINDOW_MS - 1);
   page.fail();
   assert.equal(page.reloads(), 1);
 });
@@ -61,7 +105,34 @@ test("a burst of failures inside the guard window reloads once", () => {
 test("a failure after the guard window may reload again", () => {
   const page = harness();
   page.fail();
-  page.advance(10_001);
+  page.advance(WINDOW_MS + 1);
   page.fail();
   assert.equal(page.reloads(), 2);
+});
+
+test("without storage nothing reloads, across two simulated documents", () => {
+  for (let load = 0; load < 2; load += 1) {
+    const page = harness(null);
+    page.fail();
+    assert.equal(page.reloads(), 0);
+    mock.timers.reset();
+  }
+});
+
+test("storage that throws never reloads and never throws", () => {
+  const broken = () => {
+    throw new Error("SecurityError");
+  };
+  for (const storage of [{ getItem: broken, setItem: () => undefined }, { getItem: () => null, setItem: broken }]) {
+    const page = harness(storage);
+    assert.doesNotThrow(() => page.fail());
+    assert.equal(page.reloads(), 0);
+    mock.timers.reset();
+  }
+});
+
+test("a guard write that does not read back never reloads", () => {
+  const page = harness({ getItem: () => null, setItem: () => undefined });
+  page.fail();
+  assert.equal(page.reloads(), 0);
 });
