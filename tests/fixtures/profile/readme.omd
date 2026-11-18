@@ -1,0 +1,135 @@
+---
+title: "README"
+icon: "👋"
+---
+
+![Dylan Lesieur — Systems Programming • Low-Level C • 42 School](https://capsule-render.vercel.app/api?type=waving&color=0:0d1117,50:0a3d62,100:00b4d8&height=210&section=header&text=Dylan%20Lesieur&fontSize=56&fontColor=e0f7ff&fontAlignY=40&desc=Systems%20Programming%20%E2%80%A2%20Low-Level%20C%20%E2%80%A2%2042%20School&descSize=18&descAlignY=62&descColor=7ec8e3&animation=fadeIn)
+
+![Building systems from first principles](https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=18&pause=1200&color=00B4D8&center=true&vCenter=true&width=600&lines=Building+systems+from+first+principles;Allocators+%E2%80%A2+Shells+%E2%80%A2+Ray+tracers+%E2%80%A2+Linux+from+source;Valgrind-clean+or+it+doesn't+ship;Now%3A+full-stack+with+NestJS+%2B+React)
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0d1117?style=for-the-badge&logo=linkedin&logoColor=00b4d8)](https://www.linkedin.com/in/dylan-lesieur-1218aa1b1/) [![Portfolio](https://img.shields.io/badge/Portfolio-0d1117?style=for-the-badge&logo=notion&logoColor=00b4d8)](https://puzzled-basil-cc8.notion.site/18352b5682188018accae57b55410ea8?v=18f52b56821880ffbb72000cea8f882f&pvs=4) [![Email](https://img.shields.io/badge/Email-0d1117?style=for-the-badge&logo=gmail&logoColor=00b4d8)](mailto:dylan.lesieur@gmail.com) [![Univers42](https://img.shields.io/badge/Univers42-0d1117?style=for-the-badge&logo=github&logoColor=00b4d8)](https://github.com/Univers42)
+
+[![followers](https://img.shields.io/github/followers/LESdylan?style=flat-square&logo=github&logoColor=00b4d8&label=followers&labelColor=0d1117&color=0a3d62)](https://github.com/LESdylan?tab=followers) [![stars](https://img.shields.io/github/stars/LESdylan?style=flat-square&logo=github&logoColor=00b4d8&label=stars&labelColor=0d1117&color=0a3d62)](https://github.com/LESdylan?tab=repositories&sort=stargazers) [![Univers42 stars](https://img.shields.io/github/stars/Univers42?style=flat-square&logo=github&logoColor=00b4d8&label=Univers42%20stars&labelColor=0d1117&color=0a3d62)](https://github.com/Univers42) ![profile views](https://komarev.com/ghpvc/?username=LESdylan&style=flat-square&color=0a3d62&label=profile+views) ![open to internships & junior roles](https://img.shields.io/badge/open%20to-internships%20%26%20junior%20roles-0a3d62?style=flat-square&labelColor=0d1117)
+
+## `$ whoami`
+
+:::columns
+:::column 0.55
+```c
+typedef struct s_dev
+{
+    const char  *name;
+    const char  *school;
+    const char  *focus;
+    const char  *currently;
+    const char  *philosophy;
+}   t_dev;
+
+static const t_dev g_me = {
+    .name       = "Dylan Lesieur",
+    .school     = "42 School",
+    .focus      = "Systems / Memory / Concurrency",
+    .currently  = "ft_transcendence (NestJS + React)",
+    .philosophy = "If it passes Valgrind, you understood it.",
+};
+```
+:::
+
+:::column 0.45
+![Developer building things](https://github.com/abhisheknaiidu/abhisheknaiidu/blob/master/code.gif?raw=true)
+:::
+:::
+
+I build things **from scratch** to understand how they really work: memory allocators, a POSIX-style shell, a ray tracer, a Linux system compiled from source.
+
+42's model has no lectures and no teachers. Every project is defended in front of peers, so you either understand it or you fail. That shaped how I write code: **readable, leak-free, defensible.**
+
+**Currently**
+
+- 🛰️ Leading work on **ft_transcendence**, a 5-person real-time web app
+- 🧱 Building **mini-baas**, a Backend-as-a-Service, outside the curriculum
+- 🔍 Looking for **internships / junior roles** in systems or backend
+
+## `$ stack`
+
+| Systems | Infra & Tooling | Web |
+| :---: | :---: | :---: |
+| ![C, C++, Bash, Linux](https://skillicons.dev/icons?i=c,cpp,bash,linux&theme=dark) | ![Docker, Git, NGINX, Debian](https://skillicons.dev/icons?i=docker,git,nginx,debian&theme=dark) | ![TypeScript, NestJS, React, Vite, PostgreSQL, Redis](https://skillicons.dev/icons?i=ts,nestjs,react,vite,postgres,redis&theme=dark) |
+| `C` · `C++98` · `Make` · `GDB` · `Valgrind` | `Docker Compose` · `LFS` · `MariaDB` | `TypeScript` · `NestJS` · `React` · `PostgreSQL` · `Redis` |
+
+## `$ ls ./projects`
+
+:::columns
+:::column 0.25
+**🧠 Memory & Systems**
+
+- **[ft_malloc](https://github.com/Univers42/ft_malloc)** — `malloc` / `free` / `realloc` on top of `mmap`, zone-based allocation
+- **[catch_error](https://github.com/Univers42/catch_error)** — Zero-overhead error-handling framework for C
+- **[ft_linux](https://github.com/Univers42/ft_linux)** — A full Linux system built from source (LFS)
+:::
+
+:::column 0.25
+**⚙️ Processes & Concurrency**
+
+- **[mini_shell](https://github.com/Univers42/mini_shell)** — Bash-like shell: pipes, redirections, heredocs, built-ins, signals
+- **[philosopher](https://github.com/Univers42/philosopher)** — Dining philosophers with threads & mutexes, no data races, no deadlocks
+- **[Examen42](https://github.com/Univers42/Examen42)** — Exam rank 02–04 solutions
+:::
+
+:::column 0.25
+**🎨 Graphics**
+
+- **[minirt](https://github.com/Univers42/minirt)** — Ray tracer: ray–object intersections, lighting, shadows
+- **fdf** — Wireframe 3D terrain renderer
+- **push_swap** — Stack-based sorting under strict operation limits
+:::
+
+:::column 0.25
+**🐳 Infra & Web**
+
+- **[transcendence](https://github.com/Univers42/transcendence)** — Real-time full-stack capstone, 5-person team
+- **[mini-baas](https://github.com/Univers42/mini-baas)** — Mini Backend-as-a-Service, side project
+- **[Inception](https://github.com/Univers42/Inception)** — NGINX + WordPress + MariaDB, each in its own container
+:::
+:::
+
+### Featured
+
+:::columns
+:::column 0.5
+[![transcendence](https://github-readme-stats.vercel.app/api/pin/?username=Univers42&repo=transcendence&theme=transparent&hide_border=true&title_color=00b4d8&text_color=c9d1d9&icon_color=00b4d8&show_owner=true)](https://github.com/Univers42/transcendence)
+
+[![mini_shell](https://github-readme-stats.vercel.app/api/pin/?username=Univers42&repo=mini_shell&theme=transparent&hide_border=true&title_color=00b4d8&text_color=c9d1d9&icon_color=00b4d8&show_owner=true)](https://github.com/Univers42/mini_shell)
+:::
+
+:::column 0.5
+[![ft_malloc](https://github-readme-stats.vercel.app/api/pin/?username=Univers42&repo=ft_malloc&theme=transparent&hide_border=true&title_color=00b4d8&text_color=c9d1d9&icon_color=00b4d8&show_owner=true)](https://github.com/Univers42/ft_malloc)
+
+[![minirt](https://github-readme-stats.vercel.app/api/pin/?username=Univers42&repo=minirt&theme=transparent&hide_border=true&title_color=00b4d8&text_color=c9d1d9&icon_color=00b4d8&show_owner=true)](https://github.com/Univers42/minirt)
+:::
+:::
+
+## `$ stats`
+
+:::columns
+:::column 0.5
+![GitHub stats](https://github-readme-stats.vercel.app/api?username=LESdylan&show_icons=true&include_all_commits=true&count_private=true&theme=transparent&hide_border=true&title_color=00b4d8&icon_color=00b4d8&text_color=c9d1d9&ring_color=0a3d62)
+:::
+
+:::column 0.5
+![Most used languages](https://github-readme-stats.vercel.app/api/top-langs/?username=LESdylan&layout=compact&langs_count=6&theme=transparent&hide_border=true&title_color=00b4d8&text_color=c9d1d9)
+:::
+:::
+
+![Contribution streak](https://streak-stats.demolab.com/?user=LESdylan&theme=transparent&hide_border=true&stroke=0a3d62&ring=00b4d8&fire=00b4d8&currStreakLabel=00b4d8&sideLabels=c9d1d9&sideNums=e0f7ff&currStreakNum=e0f7ff&dates=7ec8e3)
+
+![Contribution activity graph](https://github-readme-activity-graph.vercel.app/graph?username=LESdylan&bg_color=0d1117&color=7ec8e3&line=00b4d8&point=e0f7ff&area=true&area_color=0a3d62&hide_border=true&radius=8&custom_title=Contribution%20activity)
+
+> [>] **Shell shortcuts** used in the demos
+	`Ctrl`+`R` searches the history, `Ctrl`+`D` closes the shell.
+
+---
+
+[LinkedIn](https://www.linkedin.com/in/dylan-lesieur-1218aa1b1/) · [Portfolio](https://puzzled-basil-cc8.notion.site/18352b5682188018accae57b55410ea8?v=18f52b56821880ffbb72000cea8f882f&pvs=4) · [dylan.lesieur@gmail.com](mailto:dylan.lesieur@gmail.com)
+
+![](https://capsule-render.vercel.app/api?type=waving&color=0:00b4d8,50:0a3d62,100:0d1117&height=120&section=footer&animation=fadeIn)
