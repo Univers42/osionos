@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { fileToPage, pageToFile } from "../../src/features/page-file/model/pageFileCodec.ts";
 import type { Block } from "../../src/entities/block/model/types.ts";
 import { serializeBlocksToMarkdown } from "../../src/services/page-actions/pageMarkdownSerialize.ts";
 import { parseMarkdownToBlocks } from "../../packages/markdown-engine/markdown/shortcuts.ts";
@@ -88,4 +89,14 @@ test("parser: a fence closes only on a fence at least as long as its opener", ()
   assert.equal(blocks[0]?.type, "code");
   assert.equal(blocks[0]?.content, "```\n\n\n\nx\n```");
   assert.equal(blocks.at(-1)?.content, "after");
+});
+
+test("U4b-5 a markdown preview block holding the fenced README survives the page file byte for byte", () => {
+  const block: Block = { id: "readme", type: "code", content: README, language: "markdown", codeView: "preview" };
+  const page = { _id: "p", workspaceId: "w", title: "README", content: [block] };
+  const back = fileToPage(pageToFile(page as never)).content;
+  assert.equal(back.length, 1);
+  assert.equal(back[0]?.type, "code");
+  assert.equal(back[0]?.content, README);
+  assert.equal(back[0]?.codeView, "preview");
 });
