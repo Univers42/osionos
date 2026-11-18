@@ -21,7 +21,7 @@
  *
  * Two rules, both about what an answer must never do to the reader:
  *
- * - NO RAW HTML. The renderer runs with `allowHtml: false`, so `<script>` or
+ * - NO RAW HTML. The renderer runs without `htmlSubset`, so `<script>` or
  *   `<img onerror=…>` in an answer is TEXT — never an element.
  * - NO REMOTE IMAGES. An image becomes its alt text and a link. A remote
  *   `<img>` would make the browser fetch a URL the answer chose — the reader's
@@ -58,7 +58,6 @@ function imageAsLink(src: string, alt: string): React.ReactElement {
 
 /** How an answer is rendered. The same options for every surface. */
 export const ASSISTANT_MARKDOWN_OPTIONS: ReactRenderOptions = {
-  allowHtml: false,
   externalLinks: true,
   imageRenderer: imageAsLink,
   codeBlockRenderer: (lang, code) => React.createElement(AnswerCodeBlock, { lang, code }),

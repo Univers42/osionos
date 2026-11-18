@@ -66,17 +66,30 @@ const ready = (source: string): PreviewState => ({ kind: "ready", document: pars
 test.beforeEach(() => mock.timers.enable({ apis: ["setTimeout"] }));
 test.afterEach(() => mock.timers.reset());
 
-test("a list too deep for postMessage's clone ends tooDeep, not tooSlow or a hang (EP21, G8)", () => {
-  // 500 levels: the parser takes it (node 22.23.4 here: up to ~1000 on one line), the clone
-  // does not (from ~350). Both preconditions are checked, so the test cannot pass vacuously.
+test("an answer postMessage's clone cannot copy is delivered once, as tooDeep (EP21, G8)", () => {
+  // ADR 0062 D3: the engine caps nesting at 32, so no source is known to reach the clone's
+  // limit any more; a browser's limit is its own stack. A hand-built tree keeps the guard tested.
+  let tooDeepToClone: object = {};
+  for (let level = 0; level < 100_000; level += 1) tooDeepToClone = { child: tooDeepToClone };
+  assert.throws(() => structuredClone(tooDeepToClone), RangeError);
+  const delivered: unknown[] = [];
+  let posts = 0;
+  answerPreviewRequest({ id: 7, source: "# A", images: "alt" }, (response) => {
+    posts += 1;
+    delivered.push(structuredClone(posts === 1 ? tooDeepToClone : response));
+  });
+  assert.deepEqual(delivered, [{ id: 7, document: { ok: false, reason: "tooDeep" } }]);
+});
+
+test("a list 500 levels deep, past the clone before the engine's cap, now arrives ready (EP21)", () => {
   const deep = `${"- ".repeat(500)}x\n`;
   const parsed = parsePreviewDocument(deep, "alt");
   assert.equal(parsed.ok, true);
-  assert.throws(() => structuredClone(parsed), RangeError);
+  assert.doesNotThrow(() => structuredClone(parsed));
   const { queue, states } = harness({ answering: true });
   queue.request(deep, "alt");
   mock.timers.tick(PREVIEW_PARSE_BUDGET_MS * 2);
-  assert.deepEqual(states, [{ kind: "ready", document: { ok: false, reason: "tooDeep" } }]);
+  assert.deepEqual(states, [ready(deep)]);
 });
 
 test("a worker error or messageerror ends unavailable, and nothing runs after it (EP21)", () => {

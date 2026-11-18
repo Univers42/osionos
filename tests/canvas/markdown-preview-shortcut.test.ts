@@ -136,11 +136,30 @@ test("the editor page shows no image at all, the app only https ones (EP3)", () 
   assert.match(app, /local/);
 });
 
-test("a file nested past the parser's stack shows a message, not a crash (EP5)", () => {
-  // 10 KB, 5000 list levels on one line: the parser's recursion overflows (48 ms measured).
-  const deep = `${"- ".repeat(5000)}x\n`;
-  assert.deepEqual(parsePreviewDocument(deep, "alt"), { ok: false, reason: "tooDeep" });
-  assert.match(render(deep, "alt"), /too deeply nested to preview/);
+// The innermost text down the first-child chain: where the engine's nesting cap
+// left the rest of the source.
+function innermostText(blocks: unknown[]): string {
+  let node = blocks[0] as { children?: unknown[]; value?: unknown };
+  while (node.children?.length) node = node.children[0] as typeof node;
+  return typeof node.value === "string" ? node.value : "";
+}
+
+test("a list nested past the engine's cap renders, the rest of its source as text, with no error (EP5)", () => {
+  // ADR 0062 D3: the engine stops at 32 levels and keeps the remainder as text. 5000 levels
+  // (10 KB) overflowed the parser before that cap; the largest such list under the preview cap
+  // (1 MiB, 524287 levels) is the worst a user can open.
+  const largest = (PREVIEW_MAX_CHARS - 2) / 2;
+  for (const levels of [5000, largest]) {
+    const deep = `${"- ".repeat(levels)}x\n`;
+    assert.ok(deep.length <= PREVIEW_MAX_CHARS, `${levels} levels`);
+    const preview = parsePreviewDocument(deep, "alt");
+    assert.equal(preview.ok, true, `${levels} levels`);
+    const rest = preview.ok ? innermostText(preview.blocks) : "";
+    assert.match(rest, /^(?:- )+x$/, `${levels} levels`);
+    const html = render(deep, "alt");
+    assert.ok(html.includes(rest), `${levels} levels: the remainder is shown`);
+    assert.doesNotMatch(html, /too deeply nested/, `${levels} levels`);
+  }
 });
 
 test("a file over the preview cap is not parsed (EP7)", () => {

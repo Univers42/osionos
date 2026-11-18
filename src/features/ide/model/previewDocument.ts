@@ -79,12 +79,12 @@ function cleanArray(items: readonly unknown[], images: ImagePolicy): unknown[] {
 }
 
 /**
- * Caveat: the engine parser recurses and has slow inputs. A list nested ~1000 deep (node
- * 22.23.4) overflows its stack (caught: tooDeep). Runs of unclosed openers are quadratic
- * (Univers42/markdown-engine#4): 100k unclosed `[` take ~6 s, and unclosed emphasis openers
- * ("*a " or "_a " x10000) 754 / 728 ms since engine 674dd65, cubic before it (45831 ms;
- * node 22). In the worker they cost the parse budget (PREVIEW_PARSE_BUDGET_MS), never the
- * editor.
+ * Caveat: the engine caps nesting at 32 levels and keeps deeper source as text (groot ADR
+ * 0062), so depth no longer throws: a 1 MiB list nested 524287 deep parses in ~0.3 s (node
+ * 22.23.5, engine 08301d0). tooDeep now means an unexpected engine throw; this catch is the
+ * only guard, and the cap lives in another repo behind a gitlink. Unclosed openers (100k `[`,
+ * "*a " or "_a " x10000) parse in under 20 ms there. In the worker a slow input costs the
+ * parse budget (PREVIEW_PARSE_BUDGET_MS), never the editor.
  */
 export function parsePreviewDocument(text: string, images: ImagePolicy): PreviewDocument {
   if (text.length > PREVIEW_MAX_CHARS) return { ok: false, reason: "tooLarge" };
@@ -101,10 +101,11 @@ export type PreviewResponse = { id: number; document: PreviewDocument };
 
 /**
  * The worker's whole job, outside the worker file so node:test can run it.
- * Caveat: a list nested a few hundred deep parses, but its tree is deeper than the
- * structured clone behind postMessage can recurse (RangeError from ~350 levels on node
- * 22.23.4, 869 on node 26; a browser's limit is its own stack). It reports tooDeep, where
- * the main-thread preview used to render it.
+ * Caveat: the structured clone behind postMessage recurses and throws RangeError on a tree
+ * deep enough for its stack (a list from ~350 levels on node 22.23.4 before the engine's
+ * cap; a browser's limit is its own stack). Under the 32-level cap no source is known to
+ * reach it, but nothing bounds the tree for every node type, so a clone failure still
+ * reports tooDeep.
  */
 export function answerPreviewRequest(request: PreviewRequest, post: (response: PreviewResponse) => void): void {
   const result = parsePreviewDocument(request.source, request.images);
