@@ -714,6 +714,60 @@ body {
   border-radius: 0;
 }
 
+/* GitHub-like typography for a markdown code block shown as a preview. Tailwind preflight
+   flattens headings, lists, tables and <pre>; the engine's subset emits bare elements, so the
+   look lives here, under one class, in tokens only. Inline images are left to the
+   `img` rule below so badge rows flow on one line. */
+.osio-markdown-preview > :first-child { margin-top: 0; }
+.osio-markdown-preview > :last-child { margin-bottom: 0; }
+.osio-markdown-preview :is(p, ul, ol, blockquote, table, pre, details) { margin: 0 0 1rem; }
+.osio-markdown-preview :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1.5rem 0 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.osio-markdown-preview h1 { font-size: 2em; }
+.osio-markdown-preview h2 { font-size: 1.5em; }
+.osio-markdown-preview h3 { font-size: 1.25em; }
+.osio-markdown-preview h4 { font-size: 1em; }
+.osio-markdown-preview :is(h1, h2) {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--osio-code-border);
+}
+.osio-markdown-preview ul { list-style: disc; padding-left: 2em; }
+.osio-markdown-preview ol { list-style: decimal; padding-left: 2em; }
+.osio-markdown-preview li + li { margin-top: 0.25em; }
+.osio-markdown-preview a { color: var(--osio-link); text-decoration: none; }
+.osio-markdown-preview a:hover { text-decoration: underline; }
+.osio-markdown-preview img { display: inline; max-width: 100%; vertical-align: middle; }
+.osio-markdown-preview hr { margin: 1.5rem 0; border-top: 1px solid var(--osio-code-border); }
+.osio-markdown-preview blockquote {
+  padding: 0 1em;
+  color: var(--osio-code-fg-muted);
+  border-left: 0.25em solid var(--osio-code-border);
+}
+.osio-markdown-preview table { display: block; width: max-content; max-width: 100%; overflow: auto; border-collapse: collapse; }
+.osio-markdown-preview :is(th, td) { padding: 6px 13px; border: 1px solid var(--osio-code-border); }
+.osio-markdown-preview th { font-weight: 600; }
+.osio-markdown-preview tr:nth-child(2n) { background: color-mix(in srgb, var(--osio-code-fg) 4%, transparent); }
+.osio-markdown-preview :is(code, kbd) {
+  padding: 0.2em 0.4em;
+  font-size: 85%;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--osio-code-fg) 12%, transparent);
+}
+.osio-markdown-preview pre {
+  padding: 1rem;
+  overflow: auto;
+  line-height: 1.45;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--osio-code-fg) 6%, transparent);
+}
+.osio-markdown-preview pre code { padding: 0; font-size: 85%; background: transparent; }
+.osio-markdown-preview kbd { border: 1px solid var(--osio-code-border); border-bottom-width: 2px; }
+.osio-markdown-preview summary { cursor: pointer; font-weight: 600; }
+.osio-markdown-preview details[open] > summary { margin-bottom: 0.5rem; }
+
 /* Link and Mention Unification */
 .editor-link {
   color: var(--osio-link) !important;

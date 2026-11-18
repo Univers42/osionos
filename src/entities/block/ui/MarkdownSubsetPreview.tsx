@@ -11,8 +11,7 @@ import { renderReact } from "@osionos/markdown-engine/react";
 const MEDIA_PREFIXES = ["/api/media/uploads/"];
 
 // Preflight makes img a block, which would stack a row of badges.
-const PREVIEW_CLASS =
-  "osio-markdown-preview overflow-x-auto p-4 text-sm leading-6 text-[var(--osio-code-fg)] [&_img]:inline [&_img]:max-w-full [&_img]:align-middle [&_table]:border-collapse [&_td]:px-2 [&_th]:px-2";
+const PREVIEW_CLASS = "osio-markdown-preview overflow-x-auto p-4 text-sm leading-6 text-[var(--osio-code-fg)]";
 
 export const MarkdownSubsetPreview: React.FC<{ content: string }> = ({ content }) => {
   const elements = React.useMemo(
