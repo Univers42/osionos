@@ -2,7 +2,7 @@
  * Whose `{{…}}` a read-only surface may resolve. `resolve` reads the open page's scope;
  * `literal` shows the source text and reads nothing. A profile README is someone else's
  * text, so it renders `literal`: the viewer's values never reach it (groot ADR 0059).
- * Caveat: the default is `resolve` because every other surface (own pages, previews)
+ * The default is `resolve` because every other surface (own pages, previews)
  * relies on it; only a subtree that mounts a provider changes mode.
  */
 

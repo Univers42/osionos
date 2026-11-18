@@ -79,12 +79,10 @@ test("MC-4: a resolved value is text, not markup: no element, no bold", () => {
   assert.equal(html.split("&lt;img").length - 1, 4, "escaped in all four call sites");
 });
 
-test("MC-5: the owner viewing their own README gets the same literal view as any viewer", () => {
-  const asOtherViewer = readme();
-  setEnv(SECRET);
-  const asOwner = readme();
-  assert.equal(asOwner, asOtherViewer);
-  assert.ok(!asOwner.includes(SECRET) && !asOwner.includes(PAGE_TITLE));
+test("MC-5: the session user owns the env.json and the page, and the README still shows none of it", () => {
+  const html = readme();
+  assert.ok(!html.includes(SECRET) && !html.includes(PAGE_TITLE));
+  assert.ok(html.includes("{{X}}"));
 });
 
 test("MC-7: on my own page {{…}} still resolves in all four read-only blocks", () => {
@@ -100,4 +98,8 @@ test("MC-5/6: every README call site is ReadmeBlocks, and the profile widget nam
   assert.deepEqual(offenders, []);
   const readmeUses = files.filter((f) => /<ReadmeBlocks\b/.test(readFileSync(join(dir, f), "utf8")));
   assert.deepEqual(readmeUses.sort(), ["ProfilePageView.tsx", "ProfileView.tsx"]);
+  // Owner and viewer take the same path: ReadmeBlocks has no input that tells them apart.
+  const source = readFileSync(join(dir, "ReadmeBlocks.tsx"), "utf8");
+  assert.match(source, /React\.FC<\{ readme: [^;]*; record: [^;]*\}>/);
+  assert.ok(!/owner|session|userId/i.test(source), "no owner/viewer input in ReadmeBlocks");
 });
