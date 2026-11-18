@@ -62,7 +62,7 @@ hits=$(printf '%s\n' "$sources" | xargs grep -nE "from ['\"]\.\./\.\./\.\./" 2>/
 # 4. React outside the react entry point — the root barrel must stay loadable by
 #    node --experimental-strip-types (see tests/canvas).
 hits=$(printf '%s\n' "$sources" \
-	| grep -vE "(^|/)(react\.tsx|shortcutsReact\.tsx|renderers/react\.tsx|renderers/reactHelpers\.tsx)$" \
+	| grep -vE "(^|/)(react\.tsx|shortcutsReact\.tsx|renderers/react\.tsx|renderers/reactHelpers\.tsx|renderers/reactHtmlSubset\.tsx)$" \
 	| xargs grep -nE "from ['\"]react(-dom)?['\"]" 2>/dev/null || true)
 [ -n "$hits" ] && report "imports react outside the ./react entry point" "$hits"
 
