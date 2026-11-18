@@ -32,7 +32,7 @@ import { timed } from '@osionos/perf-probe';
 import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceClass, getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 import { usePageStore } from "@/store/usePageStore";
-import { renderVariableChip } from "@/features/variables/ui/VariableChip";
+import { useVariableMode, variableRendererFor, type VariableMode } from "@/features/variables/ui/variableMode";
 import { runButtonBlock } from "@/services/button-program/runProgram";
 import { useRenderMode } from "./renderMode";
 import { buttonEffect } from "@/entities/block/model/buttonEffect";
@@ -93,19 +93,21 @@ function renderInternalPageLink(pageId: string) {
   return <InternalPageLink pageId={pageId} />;
 }
 
-function renderCachedInlineMarkdown(content: string): React.ReactNode {
-  const cached = inlineMarkdownCache.get(content);
+// The mode is part of the key: the same text renders resolved on an own page and literal in a README.
+function renderCachedInlineMarkdown(content: string, mode: VariableMode): React.ReactNode {
+  const key = `${mode}\u0000${content}`;
+  const cached = inlineMarkdownCache.get(key);
   if (cached !== undefined) {
-    inlineMarkdownCache.delete(content);
-    inlineMarkdownCache.set(content, cached);
+    inlineMarkdownCache.delete(key);
+    inlineMarkdownCache.set(key, cached);
     return cached;
   }
 
   const rendered = timed("renderInlineToReact", () => renderInlineToReact(content, {
     internalLinkRenderer: renderInternalPageLink,
-    variableRenderer: renderVariableChip,
+    variableRenderer: variableRendererFor(mode),
   }));
-  inlineMarkdownCache.set(content, rendered);
+  inlineMarkdownCache.set(key, rendered);
 
   if (inlineMarkdownCache.size > INLINE_MARKDOWN_CACHE_LIMIT) {
     const oldestKey = inlineMarkdownCache.keys().next().value;
@@ -116,10 +118,11 @@ function renderCachedInlineMarkdown(content: string): React.ReactNode {
 }
 
 const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
+  const mode = useVariableMode();
   const renderedContent = useMemo(() => {
     if (!content) return null;
-    return renderCachedInlineMarkdown(content);
-  }, [content]);
+    return renderCachedInlineMarkdown(content, mode);
+  }, [content, mode]);
 
   return <>{renderedContent}</>;
 };

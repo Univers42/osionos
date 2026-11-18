@@ -17,7 +17,8 @@ import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { IconValueView } from "@/shared/ui";
 import { parseInlineMarkdown } from "@osionos/markdown-engine";
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
-import { resolveVariableInActivePage, useVariablesVersion } from "@/features/variables/ui/VariableChip";
+import { useVariablesVersion } from "@/features/variables/ui/VariableChip";
+import { useVariableMode, variableResolverFor } from "@/features/variables/ui/variableMode";
 import { ReadOnlyBlock } from "./ReadOnlyBlock";
 
 /**
@@ -32,8 +33,9 @@ export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   const icon = calloutDisplayIcon(block.color);
   const hasChildren = Boolean(block.children?.length);
   useVariablesVersion(block.content);
+  const mode = useVariableMode();
   const content = block.content
-    ? { __html: parseInlineMarkdown(block.content, { resolveInternalLinkTitle: resolveInternalPageLinkTitle, resolveVariable: resolveVariableInActivePage }) }
+    ? { __html: parseInlineMarkdown(block.content, { resolveInternalLinkTitle: resolveInternalPageLinkTitle, resolveVariable: variableResolverFor(mode) }) }
     : null;
 
   return (

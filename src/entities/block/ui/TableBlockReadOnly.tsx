@@ -22,7 +22,7 @@ import {
 } from "@/entities/block/model/tableBlocks";
 import { InternalPageLink } from "@/entities/page";
 import { renderInlineToReact } from "@osionos/markdown-engine/react";
-import { renderVariableChip } from "@/features/variables/ui/VariableChip";
+import { useVariableMode, variableRendererFor } from "@/features/variables/ui/variableMode";
 
 const MAX_AUTO_COLUMN_WIDTH = 420;
 
@@ -37,13 +37,14 @@ function renderInternalPageLink(pageId: string) {
 }
 
 const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
+  const mode = useVariableMode();
   const renderedContent = useMemo(() => {
     if (!content) return null;
     return renderInlineToReact(content, {
       internalLinkRenderer: renderInternalPageLink,
-      variableRenderer: renderVariableChip,
+      variableRenderer: variableRendererFor(mode),
     });
-  }, [content]);
+  }, [content, mode]);
 
   return <>{renderedContent}</>;
 };

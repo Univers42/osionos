@@ -21,6 +21,7 @@ import React from "react";
 import type { Block } from "@/entities/block";
 import { BoundFieldEmptyText, type BoundRecord } from "@/entities/block/model/binding";
 import { PageBlocksRenderer } from "@/widgets/page-renderer/ui/PageBlocksRenderer";
+import { VariableModeProvider } from "@/features/variables/ui/variableMode";
 import { BindingProvider } from "./model/binding";
 
 export interface ReadmeProjection {
@@ -37,11 +38,13 @@ export const ReadmeBlocks: React.FC<{ readme: ReadmeProjection | null | undefine
   if (!Array.isArray(readme.blocks) || readme.blocks.length === 0) return null;
   return (
     <section aria-label="README" data-testid="profile-readme" className="mt-8">
-      <BindingProvider record={record}>
-        <BoundFieldEmptyText.Provider value={null}>
-          <PageBlocksRenderer blocks={readme.blocks} />
-        </BoundFieldEmptyText.Provider>
-      </BindingProvider>
+      <VariableModeProvider mode="literal">
+        <BindingProvider record={record}>
+          <BoundFieldEmptyText.Provider value={null}>
+            <PageBlocksRenderer blocks={readme.blocks} />
+          </BoundFieldEmptyText.Provider>
+        </BindingProvider>
+      </VariableModeProvider>
     </section>
   );
 };
