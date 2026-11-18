@@ -39,12 +39,16 @@ const OWN = {
   avatarUrl: "/api/media/avatars/a.webp", bannerUrl: "/api/media/avatars/a-banner.webp", readmePageId: null,
 };
 
-function fakeIo(card: Record<string, unknown> | Error, own: unknown = { ok: true, profile: OWN }) {
-  const calls = { card: 0, own: 0 };
+const BLOCKS = [{ id: "b1", type: "paragraph", content: "hello" }];
+const PAGE = { _id: "p1", workspaceId: "w", content: BLOCKS, archivedAt: null };
+
+function fakeIo(card: Record<string, unknown> | Error, own: unknown = { ok: true, profile: OWN }, page: unknown = PAGE) {
+  const calls = { card: 0, own: 0, page: 0 };
   const io = {
     getLegacy: async () => ({ ...LEGACY }) as never,
     getCard: async () => { calls.card++; if (card instanceof Error) throw card; return card; },
     getOwn: async () => { calls.own++; return own as never; },
+    getOwnPage: async () => { calls.page++; if (page instanceof Error) throw page; return page as never; },
   };
   return { io, calls };
 }
@@ -108,4 +112,37 @@ test("a visitor never triggers the own-row read, with or without a matching card
     await loadProfile(A, false, io);
     assert.equal(calls.own, 0);
   }
+});
+
+const withReadme = { ok: true, profile: { ...OWN, readmePageId: "p1" } };
+
+test("the owner without a card gets their README from their own page", async () => {
+  const { io, calls } = fakeIo({ userId: B }, withReadme);
+  const merged = await loadProfile(A, true, io);
+  assert.deepEqual(merged.readme, { pageId: "p1", blocks: BLOCKS });
+  assert.equal(calls.page, 1);
+});
+
+test("an owner README above the bridge's 200 KB cap is the truncated marker", async () => {
+  const big = { ...PAGE, content: [{ id: "b", type: "paragraph", content: "x".repeat(200 * 1024) }] };
+  const merged = await loadProfile(A, true, fakeIo({ userId: B }, withReadme, big).io);
+  assert.deepEqual(merged.readme, { pageId: "p1", truncated: true });
+});
+
+test("an unreadable, missing or archived owner page gives no README and no error", async () => {
+  for (const page of [new Error("404"), null, { ...PAGE, archivedAt: "2026-11-01T00:00:00Z" }]) {
+    const merged = await loadProfile(A, true, fakeIo({ userId: B }, withReadme, page).io);
+    assert.equal(merged.readme, undefined);
+    assert.equal(merged.headline, "Engineer");
+  }
+});
+
+test("no readmePageId, a matching card, or a visitor never reads the page", async () => {
+  const none = fakeIo({ userId: B });
+  await loadProfile(A, true, none.io);
+  const matching = fakeIo({ userId: A, readme: { pageId: "card" } }, withReadme);
+  assert.deepEqual((await loadProfile(A, true, matching.io)).readme, { pageId: "card" });
+  const visitor = fakeIo({ userId: B }, withReadme);
+  assert.equal((await loadProfile(A, false, visitor.io)).readme, undefined);
+  assert.deepEqual([none.calls.page, matching.calls.page, visitor.calls.page, visitor.calls.own], [0, 0, 0, 0]);
 });
