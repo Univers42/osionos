@@ -15,6 +15,7 @@ import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
 import { useMotionConfigMode } from "@/shared/config/useAppearance";
 import App from "./App.tsx";
+import { installPreloadRecovery, readSessionStorage } from "./preloadRecovery.ts";
 import { setInferencePort } from "@/features/chat/model/useChatStore";
 import { selectInferencePort } from "@/features/ai/model/aiInferencePort";
 import { installLinkFaviconFallback } from "@/shared/lib/embed/linkFaviconFallback";
@@ -41,18 +42,11 @@ if (import.meta.env.DEV || import.meta.env.VITE_PERF_FIXTURES === 'true') {
   void import('@/shared/lib/perf/perfFixtures');
 }
 
-// Self-recover from stale lazy chunks after a redeploy: when a dynamic import
-// 404s (its hashed file was replaced), Vite fires `vite:preloadError`. Reload
-// once to pull the fresh manifest, guarded so a genuinely-missing chunk can't
-// loop. Without this, an open tab keeps throwing "Failed to fetch dynamically
-// imported module" for mermaid, the database view, etc.
-globalThis.addEventListener("vite:preloadError", () => {
-  const key = "osionos:preload-reloaded-at";
-  const last = Number(globalThis.sessionStorage?.getItem(key) ?? 0);
-  if (Date.now() - last > 10_000) {
-    globalThis.sessionStorage?.setItem(key, String(Date.now()));
-    globalThis.location.reload();
-  }
+// Self-recover from stale lazy chunks after a redeploy (see preloadRecovery.ts).
+installPreloadRecovery(globalThis, {
+  storage: readSessionStorage(),
+  now: Date.now,
+  reload: () => globalThis.location.reload(),
 });
 
 /** react-doctor/require-reduced-motion: honour the person's motion choice for
