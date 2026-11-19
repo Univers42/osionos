@@ -17,6 +17,10 @@
 // Caveat: the context is read from the line alone. An opener-shaped line inside fenced code
 // or a blockquote still completes, and a `{` the engine would ignore (not at the end of the
 // opener) still opens key completion. It only offers text; the diagnostics say what counts.
+//
+// With osio.layout.modes off (the default) blocks render no style and column lists no mode,
+// so the console offers only `columns` and `column`, the writer's own kinds (PS11): no section,
+// no layout kind, no key. Hover still explains what is typed; it inserts nothing.
 import { PROP_SCALE, STYLE_SCALES } from "@/entities/block/model/blockStyle";
 import { LAYOUT_STYLE_KEYS } from "@/entities/block/model/blockStyleAttributes";
 
@@ -36,6 +40,11 @@ export interface ConsoleCompletions {
   items: ConsoleCompletion[];
 }
 
+export interface ConsoleFlags {
+  /** `useLayoutModes()`: sections, layout kinds and style keys complete only when on. */
+  layoutModes: boolean;
+}
+
 export interface ConsoleHover {
   startColumn: number;
   endColumn: number;
@@ -50,6 +59,8 @@ export const CONTAINER_KINDS = ["columns", "column", ...STYLE_SCALES.layout, "se
 
 type ContainerKind = (typeof CONTAINER_KINDS)[number];
 type LayoutKey = (typeof LAYOUT_STYLE_KEYS)[number];
+
+const WRITER_KINDS: readonly ContainerKind[] = ["columns", "column"];
 
 const KIND_DOCS: Readonly<Record<ContainerKind, string>> = {
   columns: "Column list: its `:::column` blocks sit side by side.",
@@ -106,13 +117,14 @@ function attributeCompletions(prefix: string, braceText: string): ConsoleComplet
 }
 
 /** What to offer with the caret after `linePrefix` (the line's text up to the caret). O(keys). */
-export function consoleCompletions(linePrefix: string): ConsoleCompletions {
+export function consoleCompletions(linePrefix: string, flags: ConsoleFlags): ConsoleCompletions {
   const kind = KIND_PREFIX_RE.exec(linePrefix);
   if (kind !== null) {
-    const items = CONTAINER_KINDS.map((name, index) => item(name, KIND_DOCS[name], "kind", index));
+    const kinds = flags.layoutModes ? CONTAINER_KINDS : WRITER_KINDS;
+    const items = kinds.map((name, index) => item(name, KIND_DOCS[name], "kind", index));
     return { startColumn: linePrefix.length - (kind[1]?.length ?? 0) + 1, items };
   }
-  const brace = BRACE_PREFIX_RE.exec(linePrefix);
+  const brace = flags.layoutModes ? BRACE_PREFIX_RE.exec(linePrefix) : null;
   return brace === null ? EMPTY : attributeCompletions(linePrefix, brace[1]);
 }
 

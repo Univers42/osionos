@@ -112,8 +112,17 @@ test("with Advanced never toggled, no code-editor chunk is requested", async ({ 
   expect(monaco).toEqual([]);
 });
 
+/** Before any page script: the flag is read once, when the app loads. */
+async function setLayoutModes(page, isOn) {
+  await page.addInitScript((on) => {
+    if (on) localStorage.setItem("osio.layout.modes", "1");
+    else localStorage.removeItem("osio.layout.modes");
+  }, isOn);
+}
+
 test("Advanced completes kinds and scale values and explains a key on hover", async ({ page, baseURL }) => {
   test.setTimeout(240_000);
+  await setLayoutModes(page, true);
   await openRaw(page, baseURL);
   await advanced(page).click();
   await expect(consoleEditor(page)).toBeVisible({ timeout: MONACO_TIMEOUT });
@@ -133,4 +142,23 @@ test("Advanced completes kinds and scale values and explains a key on hover", as
 
   await hoverCharacter(page, "::: grid {cols=1".indexOf("cols") + 1);
   await expect(page.locator(".monaco-hover").filter({ visible: true })).toContainText("Tracks of a grid");
+});
+
+test("with osio.layout.modes off, Advanced offers no section, layout kind or key", async ({ page, baseURL }) => {
+  test.setTimeout(240_000);
+  await setLayoutModes(page, false);
+  await openRaw(page, baseURL);
+  await advanced(page).click();
+  await expect(consoleEditor(page)).toBeVisible({ timeout: MONACO_TIMEOUT });
+  const suggestions = page.locator(".suggest-widget .monaco-list-row").filter({ visible: true });
+
+  await replaceConsoleText(page, "::: ");
+  await page.keyboard.press("Control+Space");
+  // The label alone: a row's text also holds its detail, and column's mentions a grid.
+  await expect(suggestions.locator(".label-name")).toHaveText(["columns", "column"]);
+  await page.keyboard.press("Escape");
+
+  await replaceConsoleText(page, "::: grid {cols=");
+  await page.keyboard.press("Control+Space");
+  await expect(suggestions.filter({ hasText: /^\d/ })).toHaveCount(0);
 });

@@ -27,10 +27,17 @@ const ITEM_KIND: Readonly<Record<ConsoleItemKind, languages.CompletionItemKind>>
   value: languages.CompletionItemKind.Value,
 };
 let isRegistered = false;
+// The providers serve every raw model, so the osio.layout.modes reading of the pane that owns
+// a model travels with that model. Unset reads as off, the flag's default.
+const layoutModesOf = new WeakMap<editor.ITextModel, boolean>();
+
+export function setConsoleLayoutModes(model: editor.ITextModel, isOn: boolean): void {
+  layoutModesOf.set(model, isOn);
+}
 
 function provideCompletionItems(model: editor.ITextModel, position: { lineNumber: number; column: number }): languages.CompletionList {
   const prefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
-  const { startColumn, items } = consoleCompletions(prefix);
+  const { startColumn, items } = consoleCompletions(prefix, { layoutModes: layoutModesOf.get(model) === true });
   const range = new Range(position.lineNumber, startColumn, position.lineNumber, position.column);
   const suggestions = items.map((item) => ({
     label: item.label, detail: item.detail, kind: ITEM_KIND[item.kind], insertText: item.label, sortText: item.sortText, range,

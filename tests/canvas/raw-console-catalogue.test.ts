@@ -22,7 +22,9 @@ import { PROP_SCALE, STYLE_SCALES } from "../../src/entities/block/model/blockSt
 import { LAYOUT_STYLE_KEYS } from "../../src/entities/block/model/blockStyleAttributes.ts";
 import { CONTAINER_KINDS, consoleCompletions, consoleHover } from "../../src/features/raw-mode/model/consoleCatalogue.ts";
 
-const labels = (prefix: string) => consoleCompletions(prefix).items.map((item) => item.label);
+const ON = { layoutModes: true };
+const OFF = { layoutModes: false };
+const labels = (prefix: string, flags = ON) => consoleCompletions(prefix, flags).items.map((item) => item.label);
 
 test("every catalogued kind is one the engine reads as a container", () => {
   assert.deepEqual([...CONTAINER_KINDS], ["columns", "column", "row", "stack", "grid", "section"]);
@@ -34,29 +36,37 @@ test("every catalogued kind is one the engine reads as a container", () => {
 
 test("an opener's kind completes from the kinds, replacing the typed part", () => {
   assert.deepEqual(labels(":::"), [...CONTAINER_KINDS]);
-  assert.deepEqual(consoleCompletions("  ::: gr"), { startColumn: 7, items: consoleCompletions(":::").items });
-  assert.equal(consoleCompletions(":::").items[0].kind, "kind");
+  assert.deepEqual(consoleCompletions("  ::: gr", ON), { startColumn: 7, items: consoleCompletions(":::", ON).items });
+  assert.equal(consoleCompletions(":::", ON).items[0].kind, "kind");
 });
 
 test("inside the braces the keys complete, layout keys first", () => {
   const keys = labels("::: grid {");
   assert.deepEqual(keys.slice(0, LAYOUT_STYLE_KEYS.length), [...LAYOUT_STYLE_KEYS]);
   assert.deepEqual([...keys].sort(), Object.keys(PROP_SCALE).sort());
-  assert.equal(consoleCompletions("::: grid {cols=3 mi").startColumn, 18);
-  assert.equal(consoleCompletions(":::column 0.5 {").items[0].kind, "key");
+  assert.equal(consoleCompletions("::: grid {cols=3 mi", ON).startColumn, 18);
+  assert.equal(consoleCompletions(":::column 0.5 {", ON).items[0].kind, "key");
 });
 
 test("after key= the values come from that key's scale", () => {
   assert.deepEqual(labels("::: grid {cols="), STYLE_SCALES.cols.map(String));
   assert.deepEqual(labels(":::column {span=2"), STYLE_SCALES.cols.map(String));
   assert.deepEqual(labels("::: grid {gap="), STYLE_SCALES.space.map(String));
-  assert.equal(consoleCompletions("::: grid {cols=1").startColumn, 16);
-  assert.equal(consoleCompletions("::: grid {cols=").items[0].kind, "value");
+  assert.equal(consoleCompletions("::: grid {cols=1", ON).startColumn, 16);
+  assert.equal(consoleCompletions("::: grid {cols=", ON).items[0].kind, "value");
 });
 
 test("nothing completes outside an opener, after the braces or for an unknown key", () => {
   for (const prefix of ["", "text ::: ", "::: grid {cols=3} ", "::: grid {bogus=", "> ::: grid {", "::: grid cols="]) {
     assert.deepEqual(labels(prefix), [], prefix);
+  }
+});
+
+test("with osio.layout.modes off, only the columns kinds complete: no section, layout kind, key or value", () => {
+  assert.deepEqual(labels(":::", OFF), ["columns", "column"]);
+  assert.deepEqual(labels("::: se", OFF), ["columns", "column"]);
+  for (const prefix of ["::: grid {", "::: grid {cols=", ":::column {span=", "::: section {gap="]) {
+    assert.deepEqual(labels(prefix, OFF), [], prefix);
   }
 });
 

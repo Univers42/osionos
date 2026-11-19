@@ -17,12 +17,13 @@
 // Uncontrolled like the textarea: the model owns the text, every change is reported to the
 // raw-mode hook, nothing is pushed back while mounted, and a remount reads the live text.
 import React, { useEffect, useMemo, useRef } from "react";
+import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import { editor, Uri } from "@/features/ide/model/monacoRuntime";
 import { loadMonacoLanguage } from "@/features/ide/model/monacoLanguages";
 import { editorFontFamily, OSIO_THEME, watchEditorTheme } from "@/features/ide/ui/monacoTheme";
 import { EDITOR_OPTIONS, prefersReducedMotion } from "@/features/ide/ui/useMonacoEditor";
 import { consoleDiagnostics } from "../model/consoleDiagnostics";
-import { RAW_CONSOLE_SCHEME, registerRawConsoleProviders, setConsoleMarkers } from "./rawConsoleMonaco";
+import { RAW_CONSOLE_SCHEME, registerRawConsoleProviders, setConsoleLayoutModes, setConsoleMarkers } from "./rawConsoleMonaco";
 
 export interface RawMonacoPaneProps {
   readSource: () => string;
@@ -98,6 +99,11 @@ export function RawMonacoPane({ readSource, onChange, checkSource, showLineNumbe
   const hostRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useConsoleEditor(hostRef, readSource, onChange);
   const count = useConsoleMarkers(editorRef, checkSource);
+  const layoutModes = useLayoutModes();
+  useEffect(() => {
+    const model = editorRef.current?.getModel();
+    if (model) setConsoleLayoutModes(model, layoutModes);
+  }, [editorRef, layoutModes]);
   useEffect(() => { editorRef.current?.updateOptions({ lineNumbers: showLineNumbers ? "on" : "off" }); }, [editorRef, showLineNumbers]);
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-surface)]">
