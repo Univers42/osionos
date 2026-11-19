@@ -13,17 +13,19 @@
 import React, { useCallback } from "react";
 
 import { BlockEditor } from "@/features/block-editor";
-import { BlockEditorSurface, type SurfaceBlockEditorProps } from "./BlockEditorSurface";
+import { BlockEditorSurface, type EmptyStarterEditor, type SurfaceBlockEditorProps } from "./BlockEditorSurface";
 
 interface PlaygroundPageEditorProps {
   pageId: string;
   locked?: boolean;
+  renderEmptyStarter?: (editor: EmptyStarterEditor) => React.ReactNode;
 }
 
 /** Editable block-based page editor for osionos pages. */
 export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
   pageId,
   locked = false,
+  renderEmptyStarter,
 }) => {
   const renderBlockEditor = useCallback(
     (props: SurfaceBlockEditorProps) => <BlockEditor {...props} />,
@@ -37,6 +39,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
       locked={locked}
       wideBlocks
       renderBlockEditor={renderBlockEditor}
+      renderEmptyStarter={renderEmptyStarter}
     />
   );
 };

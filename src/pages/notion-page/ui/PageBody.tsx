@@ -10,12 +10,14 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { PlaygroundPageEditor } from '@/features/block-editor';
 import { isPerfEnabled } from '@osionos/perf-probe';
 import { usePageConfigStore } from '@/shared/config/pageConfigStore';
 import { useUserStore } from '@/features/auth';
 import { RawModeView } from '@/features/raw-mode';
+import { ShellStarter } from '@/features/page-shells';
+import type { EmptyStarterEditor } from '@/features/block-editor/ui/BlockEditorSurface';
 
 interface PageBodyProps {
   pageId: string;
@@ -38,6 +40,11 @@ export const PageBody: React.FC<PageBodyProps> = ({ pageId, locked = false }) =>
   // — editing page A re-ran it for every mounted page. Default matches (false).
   const rawMode = usePageConfigStore((state) => state.configs[`${userId}:${pageId}`]?.rawMode ?? false);
 
+  const renderEmptyStarter = useCallback(
+    (editor: EmptyStarterEditor) => <ShellStarter pageId={pageId} locked={locked} target={editor} />,
+    [pageId, locked],
+  );
+
   useEffect(() => () => {
     if (isPerfEnabled()) {
       console.info(`[perf] PageBody renders before unmount: ${renderCountRef.current}`);
@@ -54,7 +61,7 @@ export const PageBody: React.FC<PageBodyProps> = ({ pageId, locked = false }) =>
 
   return (
     <div className="osionos-page-body">
-      <PlaygroundPageEditor pageId={pageId} locked={locked} />
+      <PlaygroundPageEditor pageId={pageId} locked={locked} renderEmptyStarter={renderEmptyStarter} />
     </div>
   );
 };

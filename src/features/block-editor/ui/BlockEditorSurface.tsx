@@ -142,6 +142,13 @@ interface BlockEditorSurfaceProps {
 	/** The page body itself: its top-level tables/databases may bleed to the page edge. */
 	wideBlocks?: boolean;
 	renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
+	/** Shown under an empty page's placeholder; `commitContent` is one undo step. */
+	renderEmptyStarter?: (editor: EmptyStarterEditor) => React.ReactNode;
+}
+
+export interface EmptyStarterEditor {
+	commitContent: (blocks: Block[]) => void;
+	focusBlock: (blockId: string) => void;
 }
 
 type EditorSurfaceSource =
@@ -381,6 +388,7 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	emptyPlaceholder = "Click here to start writing...",
 	wideBlocks = false,
 	renderBlockEditor,
+	renderEmptyStarter,
 }) => {
 	const surfaceId = useContext(EditorSurfaceIdContext);
 	const {
@@ -775,14 +783,17 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 
 	if (blocks.length === 0) {
 		return (
-			<button
-				type="button"
-				data-page-editor-empty-trigger
-				className={`min-h-[120px] min-w-0 flex-1 cursor-text text-left ${className}`}
-				onClick={() => handleInitBlock(blocks)}
-			>
-				<p className="select-none pt-1 text-sm italic text-[var(--osio-fg-subtle)]">{emptyPlaceholder}</p>
-			</button>
+			<>
+				<button
+					type="button"
+					data-page-editor-empty-trigger
+					className={`min-h-[120px] min-w-0 flex-1 cursor-text text-left ${className}`}
+					onClick={() => handleInitBlock(blocks)}
+				>
+					<p className="select-none pt-1 text-sm italic text-[var(--osio-fg-subtle)]">{emptyPlaceholder}</p>
+				</button>
+				{renderEmptyStarter?.({ commitContent, focusBlock })}
+			</>
 		);
 	}
 
