@@ -123,6 +123,9 @@ export interface ActivePage {
   visitedAt?: number;
 }
 
+/** The header fields an editor changes in place (groot ADR 0065 CV2). */
+export type PageHeaderPatch = Partial<Pick<PageEntry, "cover" | "coverPosition" | "icon">>;
+
 export interface PageIndexEntry {
   workspaceId: string;
   index: number;
@@ -265,6 +268,8 @@ export interface PageStore {
     patch: Partial<PageEntry> | ((page: PageEntry) => Partial<PageEntry>),
   ) => void;
   updatePageTitle: (pageId: string, title: string) => void;
+  /** This user's header edit, timestamped like a title edit so the outbox publishes it. */
+  editPageHeader: (pageId: string, patch: PageHeaderPatch) => void;
 
   // Selectors
   pagesForWorkspace: (workspaceId: string) => PageEntry[];

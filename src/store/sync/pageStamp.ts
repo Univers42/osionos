@@ -13,9 +13,12 @@
 /**
  * Pure desired-state builder for the page OUTBOX. Turns the page store into a stable
  * `id → stamp` map (what must reach the server) plus the payloads to send. The stamp
- * folds every field the bridge persists (title, parent, workspace, visibility, icon,
- * cover, properties, content) + `updatedAt`, so any edit changes the stamp and a no-op
- * does not — the ledger diff stays minimal and the BaaS holds the full page record.
+ * folds `updatedAt`, title, parent, workspace, visibility, icon, cover, properties, the
+ * template fields, content and a defined cover size, so an edit to any of them changes
+ * the stamp and a no-op does not. It does NOT fold `coverPosition`, which the bridge
+ * persists too: ledgers recorded without it would re-PATCH every positioned page (F7).
+ * A reposition reaches the server through the `updatedAt` bump its edit makes
+ * (`editPageHeader`, groot ADR 0065 CV2/CV5).
  *
  * CRITICAL: page block `content` is lazy-loaded (the tree arrives without it). When it
  * is NOT loaded the stamp uses a sentinel and the writer OMITS content — never sending
@@ -92,7 +95,8 @@ export function pageStamp(page: PageEntry): string {
 
 /** Empty for a page without a cover size, so its stamp stays what every ledger already holds
  *  (ADR 0064 PS26). coverPosition stays out: ledgers recorded without it would mark every
- *  repositioned page unpublished and re-PATCH it once. */
+ *  repositioned page unpublished and re-PATCH it once. A reposition publishes through the
+ *  updatedAt bump of its edit instead (ADR 0065 CV2). */
 function coverSizeStamp(page: PageEntry): string {
   if (page.coverHeight === undefined && page.coverWidth === undefined) return "";
   return `|c${page.coverHeight ?? ""}/${page.coverWidth ?? ""}`;

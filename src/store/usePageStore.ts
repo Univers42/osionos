@@ -480,6 +480,25 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
     notifyTabsOfPagePatch(pageId, { title });
   },
 
+  // groot ADR 0065 CV2: coverPosition is outside the stamp, so the updatedAt bump is what makes
+  // the outbox publish a reposition. A patch that changes nothing is no edit and bumps nothing.
+  editPageHeader: (pageId, patch) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (Object.entries(patch).every(([key, value]) => page[key as keyof PageEntry] === value)) return;
+
+    set((s) => timed("editPageHeader", () => {
+      const next = replacePage(s, pageId, withTimestamp((current) => ({ ...current, ...patch })));
+      schedulePagesCachePersist(next.pages, page.workspaceId);
+      return {
+        ...next,
+        ...patchActivePageSlice(s, pageId, patch),
+        pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
+      };
+    }));
+    if ("icon" in patch) notifyTabsOfPagePatch(pageId, { icon: patch.icon });
+  },
+
   pagesForWorkspace: (workspaceId) => get().pages[workspaceId] ?? [],
 
   rootPages: (workspaceId) =>

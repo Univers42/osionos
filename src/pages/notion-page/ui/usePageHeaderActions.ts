@@ -20,6 +20,7 @@ import { patchActivePageMetadata } from "./notionPageMeta";
 /** Icon + cover actions for the page header, plus the cover-picker popover state. */
 export function usePageHeaderActions(pageId: string, locked: boolean) {
   const patchPage = usePageStore((s) => s.patchPage);
+  const editPageHeader = usePageStore((s) => s.editPageHeader);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const coverPickerRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -85,10 +86,8 @@ export function usePageHeaderActions(pageId: string, locked: boolean) {
   }, [locked, pageId, patchPage]);
 
   const changeCoverPosition = useCallback((position: number) => {
-    if (locked) return;
-    patchPage(pageId, { coverPosition: position });
-    patchActivePageMetadata(pageId, { coverPosition: position });
-  }, [locked, pageId, patchPage]);
+    if (!locked) editPageHeader(pageId, { coverPosition: position });
+  }, [locked, pageId, editPageHeader]);
 
   const toggleCoverPicker = useCallback(() => {
     if (!locked) setCoverPickerOpen((open) => !open);
