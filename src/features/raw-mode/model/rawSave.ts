@@ -31,9 +31,14 @@ import { resolveContainerAttributes } from "@/features/page-file/model/container
  * the page file.
  *
  * Layout attributes on a `:::` opener win over the overlay's layout keys (ADR 0064
- * PS14). What the reader drops is not shown in raw mode yet: the page file reports it.
+ * PS14). What the reader drops is shown by the Advanced console (consoleDiagnostics.ts).
  */
 export function rawSourceToBlocks(source: string, current: readonly Block[]): Block[] {
-  const parsed = sanitizeLinkBlockFields(parseMarkdownToBlocks(source, { containerAttributes: true }));
-  return resolveContainerAttributes(applyOverlay(parsed, collectOverlay(current))).blocks;
+  return resolveContainerAttributes(applyOverlay(parseRawSource(source), collectOverlay(current))).blocks;
+}
+
+/** The engine's reading of raw source, `containerAttributes` still attached. The save and the
+ *  Advanced console's diagnostics both start here, so they cannot disagree (ADR 0064 PS23). */
+export function parseRawSource(source: string): Block[] {
+  return sanitizeLinkBlockFields(parseMarkdownToBlocks(source, { containerAttributes: true }));
 }
