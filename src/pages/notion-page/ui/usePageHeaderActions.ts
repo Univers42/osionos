@@ -15,11 +15,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import { usePageStore } from "@/store/usePageStore";
 import { randomUiCollectionEmoji } from "@/shared/ui/assets/collectionEmoji";
 import { PROFILE_HEADER_COVER } from "@/features/slash-commands/model/profileHeaderPreset";
-import { patchActivePageMetadata } from "./notionPageMeta";
 
 /** Icon + cover actions for the page header, plus the cover-picker popover state. */
 export function usePageHeaderActions(pageId: string, locked: boolean) {
-  const patchPage = usePageStore((s) => s.patchPage);
   const editPageHeader = usePageStore((s) => s.editPageHeader);
   const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const coverPickerRef = React.useRef<HTMLDivElement | null>(null);
@@ -42,16 +40,12 @@ export function usePageHeaderActions(pageId: string, locked: boolean) {
   }, [coverPickerOpen]);
 
   const changeIcon = useCallback((newIcon: string) => {
-    if (locked) return;
-    patchPage(pageId, { icon: newIcon });
-    patchActivePageMetadata(pageId, { icon: newIcon });
-  }, [locked, pageId, patchPage]);
+    if (!locked) editPageHeader(pageId, { icon: newIcon });
+  }, [locked, pageId, editPageHeader]);
 
   const removeIcon = useCallback(() => {
-    if (locked) return;
-    patchPage(pageId, { icon: undefined });
-    patchActivePageMetadata(pageId, { icon: undefined });
-  }, [locked, pageId, patchPage]);
+    if (!locked) editPageHeader(pageId, { icon: undefined });
+  }, [locked, pageId, editPageHeader]);
 
   const addIcon = useCallback(() => changeIcon(randomUiCollectionEmoji()), [changeIcon]);
 
@@ -67,23 +61,16 @@ export function usePageHeaderActions(pageId: string, locked: boolean) {
     const first = page.content?.[0];
     if (page.content?.length === 1 && first?.type === "layout" && first.layoutMode === "full_page") return;
     globalThis.dispatchEvent(new CustomEvent("osionos:customize-header", { detail: { pageId } }));
-    if (!page.cover) {
-      patchPage(pageId, { cover: PROFILE_HEADER_COVER });
-      patchActivePageMetadata(pageId, { cover: PROFILE_HEADER_COVER });
-    }
-  }, [locked, pageId, patchPage]);
+    if (!page.cover) editPageHeader(pageId, { cover: PROFILE_HEADER_COVER });
+  }, [locked, pageId, editPageHeader]);
 
   const changeCover = useCallback((newCover: string) => {
-    if (locked) return;
-    patchPage(pageId, { cover: newCover });
-    patchActivePageMetadata(pageId, { cover: newCover });
-  }, [locked, pageId, patchPage]);
+    if (!locked) editPageHeader(pageId, { cover: newCover });
+  }, [locked, pageId, editPageHeader]);
 
   const removeCover = useCallback(() => {
-    if (locked) return;
-    patchPage(pageId, { cover: undefined });
-    patchActivePageMetadata(pageId, { cover: undefined });
-  }, [locked, pageId, patchPage]);
+    if (!locked) editPageHeader(pageId, { cover: undefined });
+  }, [locked, pageId, editPageHeader]);
 
   const changeCoverPosition = useCallback((position: number) => {
     if (!locked) editPageHeader(pageId, { coverPosition: position });

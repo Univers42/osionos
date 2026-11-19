@@ -93,3 +93,33 @@ test("CV3: a cancel, or a save at the same value, leaves updatedAt and the stamp
   assert.equal(pageStamp(current()), pageStamp(before));
   assert.deepEqual(pending(), []);
 });
+
+// Finding B (ADR 0065): icon and cover edits were published, but with the old updatedAt, so
+// another device's list hydrate (newer rows only) never took them.
+const HEADER_EDITS: Array<[string, (actions: ReturnType<typeof usePageHeaderActions>) => void, Partial<PageEntry>]> = [
+  ["changeIcon", (a) => a.changeIcon("🌿"), { icon: "🌿" }],
+  ["removeIcon", (a) => a.removeIcon(), { icon: undefined }],
+  ["changeCover", (a) => a.changeCover("linear-gradient(green, blue)"), { cover: "linear-gradient(green, blue)" }],
+  ["removeCover", (a) => a.removeCover(), { cover: undefined }],
+];
+
+for (const [name, edit, expected] of HEADER_EDITS) {
+  test(`Finding B: ${name} is timestamped, so the outbox publishes a newer row`, () => {
+    const before = seedPublished();
+    usePageStore.setState({ ...derivePageState({ ws: [{ ...before, icon: "📄" }] }) });
+    saveOutboxLedger(PAGE_OUTBOX_KEY, { [P]: pageStamp(current()) });
+    edit(capture(() => usePageHeaderActions(P, false)));
+    for (const [key, value] of Object.entries(expected)) assert.equal(current()[key as keyof PageEntry], value, key);
+    assert.ok(current().updatedAt! > before.updatedAt!, "updatedAt advanced");
+    assert.deepEqual(pending(), [P]);
+  });
+}
+
+test("Finding B: a locked header changes nothing", () => {
+  const before = seedPublished();
+  const actions = capture(() => usePageHeaderActions(P, true));
+  actions.changeIcon("🌿");
+  actions.changeCover("linear-gradient(green, blue)");
+  actions.changeCoverPosition(20);
+  assert.deepEqual(current(), before);
+});
