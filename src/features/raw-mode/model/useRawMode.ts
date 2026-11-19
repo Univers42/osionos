@@ -20,15 +20,23 @@ import { pageConfigKey, usePageConfigStore } from "@/shared/config/pageConfigSto
 
 const PREVIEW_DEBOUNCE_MS = 90;
 
-/** On the way out of the document (a reload included) the unsaved text is kept for this tab. */
-function useKeepDraftOnPagehide(draftKey: string, sourceRef: { current: string }, dirtyRef: { current: boolean }) {
+/**
+ * On the way out of the document (a reload included) the unsaved text is kept for this tab. A
+ * reload never unmounts, so raw mode closing any other way (Exit, Save, the page menu's toggle,
+ * another page, a deleted page) ends the draft here: kept, it would come back later as unsaved
+ * and its Save would revert the page's newer edits.
+ */
+function useRawDraftKeep(draftKey: string, sourceRef: { current: string }, dirtyRef: { current: boolean }) {
   useEffect(() => {
     const keep = () => {
       if (dirtyRef.current) keepRawDraft(draftKey, sourceRef.current);
       else dropRawDraft(draftKey);
     };
     globalThis.addEventListener("pagehide", keep);
-    return () => globalThis.removeEventListener("pagehide", keep);
+    return () => {
+      globalThis.removeEventListener("pagehide", keep);
+      dropRawDraft(draftKey);
+    };
   }, [draftKey, sourceRef, dirtyRef]);
 }
 
@@ -85,12 +93,8 @@ export function useRawMode(pageId: string) {
   const userId = useUserStore((state) => state.activeUserId) || "anonymous";
   const { configKey, draftKey, initialSource, isRestored } = useRestoredRawSource(pageId, userId);
   const { sourceRef, dirtyRef, previewSource, dirty, edit, markSaved } = useRawSourceEditing(initialSource, isRestored);
-  useKeepDraftOnPagehide(draftKey, sourceRef, dirtyRef);
-  // Leaving raw mode, saved or not, ends the draft: an unsaved exit discards it, as it always has.
-  const exit = useCallback(() => {
-    dropRawDraft(draftKey);
-    void updateConfig(userId, pageId, { rawMode: false });
-  }, [draftKey, pageId, updateConfig, userId]);
+  useRawDraftKeep(draftKey, sourceRef, dirtyRef);
+  const exit = useCallback(() => { void updateConfig(userId, pageId, { rawMode: false }); }, [pageId, updateConfig, userId]);
   const save = useCallback(() => {
     const current = usePageStore.getState().pageById(pageId)?.content ?? [];
     markSaved();

@@ -226,3 +226,21 @@ test("Enter with a suggestion open starts a new line; it never accepts", async (
   await expect(consoleEditor(page).locator(".view-line")).toHaveCount(2);
   await expect(consoleEditor(page).locator(".view-lines")).not.toContainText("grid");
 });
+
+async function toggleRawFromPageMenu(page) {
+  await (await openPageMenuPanel(page, "more")).getByRole("button", { name: "Raw / code mode" }).click();
+}
+
+test("raw mode closed from the page menu drops the kept draft; reopened, it shows the page", async ({ page, baseURL }) => {
+  test.setTimeout(240_000);
+  await openRaw(page, baseURL);
+  await textarea(page).fill("Draft kept by the reload");
+  await page.reload();
+  await expect(textarea(page)).toHaveValue("Draft kept by the reload");
+
+  await toggleRawFromPageMenu(page);
+  await expect(textarea(page)).toHaveCount(0);
+  await toggleRawFromPageMenu(page);
+  await expect(textarea(page)).toHaveValue("Intro");
+  await expect(rawView(page).getByText("●")).toHaveCount(0);
+});
