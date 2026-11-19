@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+@use "block-layout";
+
 $tone-map: (
   "default": (color: var(--osio-fg-default), background: transparent),
   "primary": (color: var(--osio-accent-fg), background: var(--osio-accent)),
@@ -182,6 +184,7 @@ $radius-map: (
   }
   [data-s-gap="#{$n}"] {
     gap: calc(var(--spacing) * #{$n});
+    --osio-layout-gap: calc(var(--spacing) * #{$n});
   }
   [data-s-fixedWidth="#{$n}"] {
     width: calc(var(--spacing) * #{$n});

@@ -1,0 +1,108 @@
+// Container modes of a column_list row, from its stored style (ADR 0064 PS6). The
+// attributes exist only while the osio.layout.modes flag is on; with none of them
+// the row is today's flex row. Each value maps to a fixed rule or a custom
+// property here, never to a string taken from the stored style (PS2).
+//
+// Loaded before the column rules of block-style.scss, so an explicit "row" still
+// stacks below 28rem like a row with no layout at all.
+
+$layout-cols: var(--osio-layout-cols);
+$layout-min: var(--osio-layout-min);
+$layout-gap: var(--osio-layout-gap);
+
+// Defaults at zero specificity: any data-s-cols / minCol / gap on the row wins.
+:where(.osio-columns-row[data-s-layout="grid"], .osio-columns-row[data-s-wrap="wrap"]) {
+  --osio-layout-cols: 6;
+  --osio-layout-min: 12rem;
+  --osio-layout-gap: calc(var(--spacing) * 6);
+}
+
+:where(.osio-columns-row)[data-s-layout="row"] {
+  flex-direction: row;
+}
+
+.osio-columns-row[data-s-layout="stack"] {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+// Responsive by default: as many tracks as fit at minCol, at most cols, one
+// track once the row is narrower than minCol.
+.osio-columns-row[data-s-layout="grid"] {
+  display: grid;
+  gap: $layout-gap;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, max(calc((100% - (#{$layout-cols} - 1) * #{$layout-gap}) / #{$layout-cols}), #{$layout-min})), 1fr)
+  );
+  align-items: start;
+}
+
+@each $n in 1, 2, 3, 4, 5, 6 {
+  [data-s-cols="#{$n}"] {
+    --osio-layout-cols: #{$n};
+  }
+  // Caveat: a span wider than the tracks that fit adds implicit tracks, so
+  // the row grows uneven between minCol and 28rem; below 28rem spans reset.
+  .osio-columns-row[data-s-layout="grid"] > [data-s-span="#{$n}"] {
+    grid-column: span $n;
+  }
+}
+
+@each $rem in 10, 12, 16, 20 {
+  [data-s-minCol="#{$rem}"] {
+    --osio-layout-min: #{$rem}rem;
+  }
+}
+
+[data-s-wrap="nowrap"] {
+  flex-wrap: nowrap;
+}
+.osio-columns-row[data-s-wrap="wrap"] {
+  flex-wrap: wrap;
+  row-gap: $layout-gap;
+  > * {
+    min-width: min(100%, #{$layout-min});
+  }
+}
+
+// Resizing two neighbours means nothing once columns stack, wrap or sit on tracks.
+.osio-columns-row:is([data-s-layout="stack"], [data-s-layout="grid"], [data-s-wrap="wrap"]) > [role="separator"] {
+  display: none;
+}
+
+// Caveat: stackAt measures the row's own width (a container query), not the
+// device: a row in a narrow column stacks on a wide screen. That is the point
+// for nested sections, but "tablet" and "mobile" name widths, not devices.
+@container (max-width: 40rem) {
+  .osio-columns-row[data-s-stackAt="tablet"] {
+    flex-direction: column;
+    align-items: stretch;
+    > [role="separator"] {
+      display: none;
+    }
+  }
+  .osio-columns-row[data-s-layout="grid"][data-s-stackAt="tablet"] {
+    grid-template-columns: minmax(0, 1fr);
+    > [data-s-span] {
+      grid-column: auto;
+    }
+  }
+}
+
+@container (max-width: 28rem) {
+  .osio-columns-row[data-s-stackAt="mobile"] {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .osio-columns-row:not([data-s-layout="stack"], [data-s-layout="grid"], [data-s-wrap="wrap"])[data-s-stackAt="never"] {
+    flex-direction: row;
+    align-items: flex-start;
+    > [role="separator"] {
+      display: flex;
+    }
+  }
+  .osio-columns-row[data-s-layout="grid"] > [data-s-span] {
+    grid-column: auto;
+  }
+}

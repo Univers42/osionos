@@ -20,8 +20,10 @@ import {
   COMPONENT_DEFINED_PROPS,
   PROP_SCALE,
   STYLE_SCALES,
+  hasBlockStyle,
   sanitizeBlockStyle,
   resolveBlockStyle,
+  styleAttributes,
 } from "../../src/entities/block/model/blockStyle.ts";
 
 const SCSS_PATH = path.resolve(fileURLToPath(new URL("../../src/app/styles/block-style.scss", import.meta.url)));
@@ -60,7 +62,7 @@ test("seeded fuzz: 10k random style records never throw and keep only scale valu
   };
   const pick = <T,>(list: readonly T[]): T => list[Math.floor(rand() * list.length)];
   const keys = [...Object.keys(PROP_SCALE), ...Object.getOwnPropertyNames(Object.prototype), "x", ""];
-  const values: unknown[] = [0, 1, 3, -1, 1e9, "panel", "red", "", null, true, [], {}, "constructor"];
+  const values: unknown[] = [0, 1, 3, 6, 7, 16, 15, -1, 1e9, "panel", "red", "grid", "stack", "wrap", "never", "tablet", "", null, true, [], {}, "constructor"];
   for (let i = 0; i < 10_000; i++) {
     const record: Record<string, unknown> = {};
     const size = Math.floor(rand() * 6);
@@ -74,6 +76,29 @@ test("seeded fuzz: 10k random style records never throw and keep only scale valu
     }
     resolveBlockStyle({ style });
   }
+});
+
+// ADR 0064 PS6: container modes are enum scales inside `style`, never free strings.
+test("layout keys keep their scale values and drop everything else", () => {
+  const layout = { layout: "grid", wrap: "wrap", cols: 3, minCol: 16, stackAt: "tablet", span: 2 };
+  assert.deepEqual(sanitizeBlockStyle(layout), layout);
+  assert.deepEqual(sanitizeBlockStyle({ layout: "flex", wrap: true, cols: 7, minCol: 15, stackAt: "desktop", span: 0 }), {});
+  assert.deepEqual(resolveBlockStyle({ style: { layout: "stack", stackAt: "never" } }), { "data-s-layout": "stack", "data-s-stackAt": "never" });
+});
+
+test("hasBlockStyle is true only for a style with a scale value", () => {
+  assert.equal(hasBlockStyle({ style: { layout: "grid" } }), true);
+  assert.equal(hasBlockStyle({ style: { bogus: 1 } as never }), false);
+  assert.equal(hasBlockStyle({ textColor: "var(--osio-block-tint-red-fg)" }), false);
+  assert.equal(hasBlockStyle({}), false);
+});
+
+test("styleAttributes: none when the flag is off or the style holds no key (PS4, PS10)", () => {
+  const style = { padding: 3 } as const;
+  assert.equal(styleAttributes({ style }, false), undefined);
+  assert.equal(styleAttributes({ style: {} }, true), undefined);
+  assert.deepEqual(styleAttributes({ style }, true), { "data-s-padding": "3" });
+  assert.deepEqual(styleAttributes({ style: { gap: 2 }, textColor: "var(--osio-block-tint-red-fg)" }, true), { "data-s-gap": "2" });
 });
 
 test("resolve emits data-s-<key> attributes", () => {
@@ -150,4 +175,15 @@ test("width rules", () => {
   assert.match(css, /\[data-s-width="?hug"?\][^{]*\{[^}]*width:\s*fit-content/);
   assert.match(css, /\[data-s-width="?hug"?\][^{]*\{[^}]*max-width:\s*100%/);
   assert.match(css, /\[data-s-width="?fixed"?\][^{]*\{[^}]*flex-shrink:\s*0/);
+});
+
+test("grid tracks follow cols and minCol, span covers tracks", () => {
+  const css = compile(SCSS_PATH).css.replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.match(css, /\[data-s-layout="?grid"?\]\s*\{[^}]*display:\s*grid/);
+  assert.match(css, /\[data-s-layout="?grid"?\]\s*\{[^}]*grid-template-columns:[^;}]*var\(--osio-layout-cols\)[^;}]*var\(--osio-layout-min\)/);
+  assert.match(css, /\[data-s-minCol="?16"?\]\s*\{[^}]*--osio-layout-min:\s*16rem/);
+  assert.match(css, /\[data-s-cols="?3"?\]\s*\{[^}]*--osio-layout-cols:\s*3/);
+  assert.match(css, /\[data-s-span="?2"?\]\s*\{[^}]*grid-column:\s*span 2/);
+  assert.match(css, /\[data-s-layout="?stack"?\]\s*\{[^}]*flex-direction:\s*column/);
+  assert.match(css, /\[data-s-wrap="?wrap"?\]\s*\{[^}]*flex-wrap:\s*wrap/);
 });

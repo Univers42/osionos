@@ -27,6 +27,12 @@ export const STYLE_SCALES = {
   textSize: ['xs', 'sm', 'base', 'lg', 'xl'],
   weight: ['regular', 'medium', 'semibold'],
   shadow: ['none', 'menu', 'panel'],
+  // Container modes of a column_list, and a column's span in a grid (ADR 0064 PS6).
+  layout: ['row', 'stack', 'grid'],
+  wrap: ['nowrap', 'wrap'],
+  cols: [1, 2, 3, 4, 5, 6],
+  minCol: [10, 12, 16, 20],
+  stackAt: ['tablet', 'mobile', 'never'],
 } as const;
 
 export type Space = (typeof STYLE_SCALES.space)[number];
@@ -51,6 +57,14 @@ export interface BlockStyle {
   textSize?: (typeof STYLE_SCALES.textSize)[number];
   weight?: (typeof STYLE_SCALES.weight)[number];
   shadow?: (typeof STYLE_SCALES.shadow)[number];
+  layout?: (typeof STYLE_SCALES.layout)[number];
+  wrap?: (typeof STYLE_SCALES.wrap)[number];
+  cols?: (typeof STYLE_SCALES.cols)[number];
+  /** Narrowest grid or wrapped column, in rem. */
+  minCol?: (typeof STYLE_SCALES.minCol)[number];
+  stackAt?: (typeof STYLE_SCALES.stackAt)[number];
+  /** Grid tracks a column covers. */
+  span?: (typeof STYLE_SCALES.cols)[number];
 }
 
 /** Scale name (in STYLE_SCALES) for each BlockStyle property. */
@@ -74,6 +88,12 @@ export const PROP_SCALE: Record<string, keyof typeof STYLE_SCALES> = {
   textSize: 'textSize',
   weight: 'weight',
   shadow: 'shadow',
+  layout: 'layout',
+  wrap: 'wrap',
+  cols: 'cols',
+  minCol: 'minCol',
+  stackAt: 'stackAt',
+  span: 'cols',
 };
 
 /**
@@ -162,4 +182,24 @@ export function resolveBlockStyle(block: Pick<Block, 'style' | 'textColor' | 'ba
   const result = computeStyle(block);
   flatCache.set(fk, result);
   return result;
+}
+
+/** True when the stored style holds at least one key with a scale value. */
+export function hasBlockStyle(block: Pick<Block, 'style'>): boolean {
+  return Object.keys(resolveBlockStyle({ style: block.style })).length > 0;
+}
+
+/**
+ * The data-s-* attributes a block's own style puts on its DOM node: none while
+ * the layout-modes flag is off or the style holds no key (ADR 0064 PS4, PS10).
+ * The flat textColor/backgroundColor stay on their own path (F6), so they are
+ * not passed here.
+ */
+export function styleAttributes(
+  block: Pick<Block, 'style'>,
+  enabled: boolean,
+): Readonly<Record<string, string>> | undefined {
+  if (!enabled) return undefined;
+  const attributes = resolveBlockStyle({ style: block.style });
+  return Object.keys(attributes).length > 0 ? attributes : undefined;
 }
