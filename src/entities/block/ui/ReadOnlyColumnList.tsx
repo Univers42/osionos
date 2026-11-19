@@ -3,7 +3,9 @@ import React from "react";
 import type { Block } from "@/entities/block";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 
+import { styleAttributes } from "../model/blockStyle";
 import { flattenColumns } from "../model/blockTreeUtils";
+import { useLayoutModes } from "./layoutModes";
 import { ReadOnlyBlock } from "./ReadOnlyBlock";
 
 interface ReadOnlyColumnListProps {
@@ -21,15 +23,17 @@ function columnGrow(column: Block, columnCount: number): number {
 }
 
 export const ReadOnlyColumnList: React.FC<ReadOnlyColumnListProps> = ({ block, bulletDepth, numberedDepth }) => {
-  const columns = flattenColumns(block.children ?? []);
+  const layoutModes = useLayoutModes();
+  const columns = flattenColumns(block.children ?? [], layoutModes);
   return (
     <div className="osio-columns my-2">
-      <div className="osio-columns-row flex items-start gap-6">
+      <div className="osio-columns-row flex items-start gap-6" {...styleAttributes(block, layoutModes)}>
         {columns.map((column) => (
           <div
             key={column.id}
             className="min-w-0 rounded-md"
             style={{ flexGrow: columnGrow(column, columns.length), flexBasis: 0, ...getBlockSurfaceStyle(column) }}
+            {...styleAttributes(column, layoutModes)}
           >
             {(column.children ?? []).map((child, childIndex) => (
               <ReadOnlyBlock key={child.id} block={child} index={childIndex} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />

@@ -16,7 +16,7 @@ import { defaultRangeExtractor, useVirtualizer, type Range } from "@tanstack/rea
 import { Plus } from "lucide-react";
 
 import type { Block } from "@/entities/block";
-import { flattenColumns, findBlockInTree, isParentable, selfRendersChildren } from "@/entities/block";
+import { flattenColumns, findBlockInTree, isParentable, selfRendersChildren, styleAttributes, wrapperStyleAttributes } from "@/entities/block";
 import { dictationSession } from "@/features/voice/model/useDictation";
 import { insertTranscript } from "@/features/voice/model/insertTranscript";
 import { dictationLanguage } from "@/features/voice/model/language";
@@ -32,6 +32,7 @@ import { BlockVisibilityPopover } from "./visibility/BlockVisibilityPopover";
 import { VisibilityScopeProvider } from "@/entities/block/model/visibilityScope";
 import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
 import { RenderModeProvider } from "@/entities/block/ui/renderMode";
+import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
 import { complete as completeRoute } from "@/features/ai/api/aiClient";
@@ -1775,14 +1776,15 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 		commitBlockDraft(sourceKey, block.id, "unmount");
 	}, [block.id, sourceKey]);
 
+	const layoutModes = useLayoutModes();
 	const renderChildren = useCallback(() => {
 		if (!block.children?.length) return null;
 
 		if (block.type === "column_list") {
-			const columns = flattenColumns(block.children);
+			const columns = flattenColumns(block.children, layoutModes);
 			return (
 				<div className="osio-columns">
-					<div className="osio-columns-row flex items-start gap-0 rounded-md">
+					<div className="osio-columns-row flex items-start gap-0 rounded-md" {...styleAttributes({ style: block.style }, layoutModes)}>
 						{columns.map((column, index) => (
 							<React.Fragment key={column.id}>
 								{/* Per-COLUMN surface style: each column carries its own colors,
@@ -1795,6 +1797,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 										flexBasis: 0,
 										...getBlockSurfaceStyle(column),
 									}}
+									{...styleAttributes(column, layoutModes)}
 								>
 									<BlockTree
 										blocks={column.children ?? EMPTY_BLOCKS}
@@ -1883,10 +1886,10 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 				renderBlockEditor={renderBlockEditor}
 			/>
 		);
-	}, [block.children, block.id, block.type, bulletDepth, draggedBlockId, focusBlock, isHighlighted, moveBlock, moveBlockAcrossTree, numberedDepth, onBeforeStructuralEdit, onChange, onContextMenu, onDeleteBlock, onKeyDown, onPaste, onRequestSlashMenu, onUpdateBlock, pageId, registerRef, renderBlockEditor, rootBlocks, selectedBlockIds, setDraggedBlockId, source, sourceKey, updateContent]);
+	}, [block.children, block.id, block.style, block.type, bulletDepth, draggedBlockId, focusBlock, isHighlighted, layoutModes, moveBlock, moveBlockAcrossTree, numberedDepth, onBeforeStructuralEdit, onChange, onContextMenu, onDeleteBlock, onKeyDown, onPaste, onRequestSlashMenu, onUpdateBlock, pageId, registerRef, renderBlockEditor, rootBlocks, selectedBlockIds, setDraggedBlockId, source, sourceKey, updateContent]);
 
 	return (
-		<div data-block-id={block.id} data-block-type={block.type} data-page-id={pageId} ref={refCb} onKeyDown={handleVoidNavKey} className={`${getBlockSurfaceClass(block) || "-mx-1 rounded-md px-1"} focus:outline-none focus:ring-1 focus:ring-[var(--osio-accent)]`} style={getBlockSurfaceStyle(block)}>
+		<div data-block-id={block.id} data-block-type={block.type} data-page-id={pageId} ref={refCb} onKeyDown={handleVoidNavKey} className={`${getBlockSurfaceClass(block) || "-mx-1 rounded-md px-1"} focus:outline-none focus:ring-1 focus:ring-[var(--osio-accent)]`} style={getBlockSurfaceStyle(block)} {...wrapperStyleAttributes(block, layoutModes)}>
 			{renderBlockEditor({
 				pageId,
 				block: editorBlock,

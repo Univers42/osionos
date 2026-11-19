@@ -24,6 +24,8 @@ import { SizedBlockBox } from "./SizedBlockBox";
 import { keepsWideBleed } from "../model/blockSize";
 import { LayoutBlockReadOnly } from "./LayoutBlockReadOnly";
 import { ReadOnlyColumnList } from "./ReadOnlyColumnList";
+import { useLayoutModes } from "./layoutModes";
+import { wrapperStyleAttributes } from "../model/blockStyle";
 import { VisibleWhenGate } from "./VisibleWhenGate";
 import { BoundFieldReadOnly } from "./BoundFieldReadOnly";
 import { DeferredMount } from "./DeferredMount";
@@ -550,15 +552,18 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
 
 const ReadOnlyBlockImpl: React.FC<BlockProps> = (props) => {
   const { block } = props;
+  // A wrapper only for a block whose own style holds a key (ADR 0064 PS4).
+  const attributes = wrapperStyleAttributes(block, useLayoutModes());
+  const body = attributes ? <div {...attributes}><ReadOnlyBlockBody {...props} /></div> : <ReadOnlyBlockBody {...props} />;
   const visibleWhen = typeof block?.visibleWhen === "string" ? block.visibleWhen.trim() : "";
   if (visibleWhen) {
     return (
       <VisibleWhenGate block={block} mode="view">
-        <ReadOnlyBlockBody {...props} />
+        {body}
       </VisibleWhenGate>
     );
   }
-  return <ReadOnlyBlockBody {...props} />;
+  return body;
 };
 
 export const ReadOnlyBlock = React.memo(ReadOnlyBlockImpl, areReadOnlyBlockPropsEqual);

@@ -203,3 +203,12 @@ export function styleAttributes(
   const attributes = resolveBlockStyle({ style: block.style });
   return Object.keys(attributes).length > 0 ? attributes : undefined;
 }
+
+/** Attributes for the element wrapping a block. A column list carries its own on
+ *  its row and a column on its box, so neither gets a wrapper. */
+export function wrapperStyleAttributes(
+  block: Pick<Block, 'type' | 'style'>,
+  enabled: boolean,
+): Readonly<Record<string, string>> | undefined {
+  return block.type === 'column_list' || block.type === 'column' ? undefined : styleAttributes(block, enabled);
+}
