@@ -61,3 +61,28 @@ test("a missing storage, a throwing getter or a refused write never throws", () 
     assert.doesNotThrow(() => dropRawDraft(rawDraftKey("u:p"), source));
   }
 });
+
+// sessionStorage comes back with a reopened tab (Ctrl+Shift+T) and a restored browser session;
+// the case kept for is a reload seconds later, so anything older than 10 minutes is not a draft.
+test("a draft is restored within 10 minutes of being kept, never after", () => {
+  const storage = memoryStorage();
+  const source = () => storage;
+  const keptAt = 1_800_000_000_000;
+  const tenMinutes = 10 * 60_000;
+  keepRawDraft(rawDraftKey("u:p"), "recent", source, keptAt);
+  assert.equal(readRawDraft(rawDraftKey("u:p"), source, keptAt + 2_000), "recent");
+  assert.equal(readRawDraft(rawDraftKey("u:p"), source, keptAt + tenMinutes), "recent");
+  assert.equal(readRawDraft(rawDraftKey("u:p"), source, keptAt + tenMinutes + 1), null);
+  assert.equal(readRawDraft(rawDraftKey("u:p"), source, keptAt + 3 * 24 * 3_600_000), null);
+  // A clock set back between keep and read makes the age unknowable.
+  assert.equal(readRawDraft(rawDraftKey("u:p"), source, keptAt - 1), null);
+});
+
+test("a stored value that is not a kept draft reads as no draft", () => {
+  const storage = memoryStorage();
+  const source = () => storage;
+  for (const value of ["plain text from an older build", "{", "null", '{"text":1,"savedAt":0}', '{"text":"x"}']) {
+    storage.values.set(rawDraftKey("u:p"), value);
+    assert.equal(readRawDraft(rawDraftKey("u:p"), source), null, value);
+  }
+});
