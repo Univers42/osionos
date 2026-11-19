@@ -12,8 +12,12 @@
 
 // Whether raw mode opens on the Advanced console (ADR 0064 PS22). A preference, not a feature
 // flag: off by default, and a storage that is missing or throws (privacy modes, a full quota)
-// leaves it off rather than breaking raw mode.
+// leaves it off rather than breaking raw mode. A refused write holds for this session and is
+// told once, like every preference (ADR 0056 A5).
+import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
+
 const ADVANCED_CONSOLE_KEY = "osio.raw.advanced";
+const writeChoice = noticingWriter("Advanced console choice");
 
 export function readAdvancedConsole(): boolean {
   try {
@@ -24,9 +28,5 @@ export function readAdvancedConsole(): boolean {
 }
 
 export function writeAdvancedConsole(isOn: boolean): void {
-  try {
-    globalThis.localStorage?.setItem(ADVANCED_CONSOLE_KEY, isOn ? "1" : "0");
-  } catch {
-    // Unwritable storage: the choice holds for this raw-mode session only.
-  }
+  writeChoice(ADVANCED_CONSOLE_KEY, isOn ? "1" : "0");
 }
