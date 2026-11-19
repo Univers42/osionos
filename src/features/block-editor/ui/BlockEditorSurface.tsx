@@ -167,15 +167,6 @@ function getNestedTreeClassName(parentBlockType: Block["type"] | null, isRoot: b
 	return "ml-6 mt-0.5";
 }
 
-function findBlockById(blocks: Block[], blockId: string): Block | null {
-	for (const block of blocks) {
-		if (block.id === blockId) return block;
-		const nestedBlock = block.children?.length ? findBlockById(block.children, blockId) : null;
-		if (nestedBlock) return nestedBlock;
-	}
-	return null;
-}
-
 function blockContainsBlock(block: Block, candidateId: string): boolean {
 	return Boolean(block.children?.some((child) => child.id === candidateId || blockContainsBlock(child, candidateId)));
 }
@@ -345,7 +336,7 @@ function getDropIntent(
 
 function getHighlightedRootBlockId(blocks: Block[], focusedBlockId: string | null): string | null {
 	if (!focusedBlockId) return null;
-	return findBlockById(blocks, focusedBlockId)?.id ?? null;
+	return findBlockInTree(blocks, focusedBlockId)?.id ?? null;
 }
 
 function getDropIndicatorClassName(position: Exclude<DropPosition, null>) {
@@ -1048,10 +1039,10 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 			<BlockContextMenu menu={pageMenuState} sections={pageMenuSections} onClose={closePageMenu} />
 			{/* Portal to <body>: the pane's `contain: paint` would otherwise anchor
 			    `position: fixed` to the pane and clip the popover at its edge. */}
-			{visibilityPopoverBlockId && findBlockById(blocks, visibilityPopoverBlockId) ? createPortal(
+			{visibilityPopoverBlockId && findBlockInTree(blocks, visibilityPopoverBlockId) ? createPortal(
 				<div style={visibilityPopoverPosition ? { position: "fixed", left: visibilityPopoverPosition.left, top: visibilityPopoverPosition.top, zIndex: 50 } : undefined}>
 					<BlockVisibilityPopover
-						block={findBlockById(blocks, visibilityPopoverBlockId)!}
+						block={findBlockInTree(blocks, visibilityPopoverBlockId)!}
 						onSave={(updates) => { updateBlock(pageId, visibilityPopoverBlockId, updates); closeShowWhen(); }}
 						onClose={closeShowWhen}
 					/>
@@ -1489,7 +1480,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		if (!draggedId || draggedId === block.id) return;
 
 		const currentRootBlocks = surfaceRegistry.get(sourceKey)?.getContent() ?? rootBlocks;
-		const draggedBlock = findBlockById(currentRootBlocks, draggedId) ?? payload?.block ?? null;
+		const draggedBlock = findBlockInTree(currentRootBlocks, draggedId) ?? payload?.block ?? null;
 		if (!draggedBlock || blockContainsBlock(draggedBlock, block.id)) return;
 		if (source.kind === "cell" && blockContainsBlockOrSelf(draggedBlock, source.layoutBlockId)) return;
 
