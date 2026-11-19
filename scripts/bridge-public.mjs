@@ -29,7 +29,7 @@ import { bearerToken, moderationWarningBody, readJsonBody, rest, sendJson } from
 import { takeToken } from './bridge-ratelimit.mjs';
 import { clientAddress } from './bridge-guard.mjs';
 import { pagePublishText } from './bridge-page-text.mjs';
-import { publishSnapshot } from './bridge-publish-snapshot.mjs';
+import { publishContainersEnabled, publishSnapshot } from './bridge-publish-snapshot.mjs';
 import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 
 const PUBLISH_PATH = /^\/api\/pages\/([0-9a-fA-F-]{36})\/publish$/;
@@ -65,7 +65,7 @@ async function publish(deps, session, request, pageId, response, config) {
 		body: {
 			page_id: pageId, owner_id: session.userId,
 			title: row.title || 'Untitled', icon: row.icon ?? null,
-			content: publishSnapshot(row.content, { shown: shownIds(payload) }), published_at: new Date().toISOString(),
+			content: publishSnapshot(row.content, { shown: shownIds(payload), containers: publishContainersEnabled() }), published_at: new Date().toISOString(),
 		},
 		prefer: 'resolution=merge-duplicates,return=representation',
 	});

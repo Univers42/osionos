@@ -40,6 +40,8 @@
  * published copy until the page is published again.
  */
 
+import { sanitizeStyle } from './bridge-style-scales.mjs';
+
 const ALLOWED_TYPES = new Set([
 	'paragraph',
 	'heading_1',
@@ -58,6 +60,10 @@ const ALLOWED_TYPES = new Set([
 	'toggle',
 	'layout',
 ]);
+
+// Phase 7 (ADR 0064 PS39): only with the bridge switch on. Before the client that explains the
+// change is served (ADR 0067 PH5) a re-publish must keep dropping column content, as it always did.
+const CONTAINER_TYPES = new Set(['column_list', 'column']);
 
 // Fields the read-only renderer actually reads. Anything else (embed snapshots,
 // database ids, button programs, due dates) is not copied; a layout's grid and
@@ -195,11 +201,17 @@ function snapshotLayout(block, depth, state, next) {
 	next.layoutCells = cells;
 }
 
+// Style only, never a cover field: cover_height / cover_width / cover are not copied (ADR 0067 PH3).
+function copyStyle(block, next) {
+	const style = sanitizeStyle(block.style);
+	if (Object.keys(style).length > 0) next.style = style;
+}
+
 function snapshotBlock(block, depth, state) {
 	if (depth > MAX_DEPTH || state.nodes >= MAX_NODES) return null;
 	state.nodes += 1;
 	if (!block || typeof block !== 'object' || Array.isArray(block)) return null;
-	if (!ALLOWED_TYPES.has(block.type)) return null;
+	if (!ALLOWED_TYPES.has(block.type) && !(state.containers && CONTAINER_TYPES.has(block.type))) return null;
 	if (isGatedOut(block.visibleWhen, block.id, state)) return null;
 
 	const next = {};
@@ -209,6 +221,7 @@ function snapshotBlock(block, depth, state) {
 	for (const field of KEPT_FIELDS) {
 		if (field !== 'id' && Object.hasOwn(block, field)) next[field] = block[field];
 	}
+	if (state.containers) copyStyle(block, next);
 	if (block.type === 'layout') snapshotLayout(block, depth, state, next);
 	if (Array.isArray(block.children) && block.children.length > 0) {
 		const children = snapshotBlocks(block.children, depth + 1, state);
@@ -217,11 +230,18 @@ function snapshotBlock(block, depth, state) {
 	return next;
 }
 
+/** The bridge switch for Phase 7 snapshots: off unless the env is exactly `1`. */
+export function publishContainersEnabled(env = process.env) {
+	return env.OSIONOS_PUBLISH_CONTAINERS === '1';
+}
+
 /**
  * A publish-safe copy of `content`: allowlisted blocks, sanitised inline text.
  * `shown` holds the ids of the gated blocks and cells the owner's view showed.
+ * `containers` adds columns and scale-checked block style; it defaults to off so a caller that
+ * does not pass it gets today's snapshot.
  */
-export function publishSnapshot(content, { shown = new Set() } = {}) {
+export function publishSnapshot(content, { shown = new Set(), containers = false } = {}) {
 	if (!Array.isArray(content)) return [];
-	return snapshotBlocks(content, 1, { nodes: 0, shown });
+	return snapshotBlocks(content, 1, { nodes: 0, shown, containers });
 }
