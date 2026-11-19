@@ -13,7 +13,6 @@
 import React, { lazy, Suspense, useState, useMemo } from "react";
 import { EquationView } from "@/shared/ui";
 import type { Block } from '@/entities/block';
-import { flattenColumns } from '@/entities/block';
 import { getNumberedMarker, getBulletMarker } from '@/entities/block/model/listMarkers';
 import { getToggleHeadingClass } from '@/entities/block/model/toggleHeading';
 import { ChevronRight } from "lucide-react";
@@ -24,6 +23,7 @@ import { TableBlockReadOnly } from "./TableBlockReadOnly";
 import { SizedBlockBox } from "./SizedBlockBox";
 import { keepsWideBleed } from "../model/blockSize";
 import { LayoutBlockReadOnly } from "./LayoutBlockReadOnly";
+import { ReadOnlyColumnList } from "./ReadOnlyColumnList";
 import { VisibleWhenGate } from "./VisibleWhenGate";
 import { BoundFieldReadOnly } from "./BoundFieldReadOnly";
 import { DeferredMount } from "./DeferredMount";
@@ -381,35 +381,8 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         />
       );
 
-    case "column_list": {
-      const columns = flattenColumns(block.children ?? []);
-      return (
-        <div className="osio-columns my-2">
-          <div className="osio-columns-row flex items-start gap-6">
-            {columns.map((column) => (
-              <div
-                key={column.id}
-                className="min-w-0 rounded-md"
-                style={{
-                  // Same ratio floor as the editable renderer, and the same
-                  // per-COLUMN surface style — columns stay independent.
-                  flexGrow:
-                    typeof column.widthRatio === "number" && Number.isFinite(column.widthRatio)
-                      ? Math.max(0.08, column.widthRatio)
-                      : 1 / Math.max(columns.length, 1),
-                  flexBasis: 0,
-                  ...getBlockSurfaceStyle(column),
-                }}
-              >
-                {(column.children ?? []).map((child, childIndex) => (
-                  <ReadOnlyBlock key={child.id} block={child} index={childIndex} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    }
+    case "column_list":
+      return <ReadOnlyColumnList block={block} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />;
 
     case "column":
       return renderNestedChildren(block, bulletDepth, numberedDepth);
