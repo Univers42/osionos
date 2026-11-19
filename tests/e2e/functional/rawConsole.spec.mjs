@@ -188,3 +188,25 @@ test("text typed before a failed console chunk reloads the page is there after t
   await expect(textarea(page)).toHaveValue("Typed before the reload");
   await expect(rawView(page).getByText("●")).toBeVisible();
 });
+
+/** The console's markers anywhere in Monaco's marker service, attached model or not. */
+async function consoleMarkerCount(page) {
+  return page.evaluate(async () => {
+    const { editor } = await import("/src/features/ide/model/monacoRuntime.ts");
+    return editor.getModelMarkers({ owner: "osionos-raw" }).length;
+  });
+}
+
+test("closing the console clears its markers with its model", async ({ page, baseURL }) => {
+  test.setTimeout(240_000);
+  await openRaw(page, baseURL);
+  await advanced(page).click();
+  await expect(consoleEditor(page)).toBeVisible({ timeout: MONACO_TIMEOUT });
+  await replaceConsoleText(page, BAD);
+  await expect(problems(page)).toContainText("1 attribute");
+  expect(await consoleMarkerCount(page)).toBe(1);
+
+  await advanced(page).click();
+  await expect(consoleEditor(page)).toHaveCount(0);
+  expect(await consoleMarkerCount(page)).toBe(0);
+});

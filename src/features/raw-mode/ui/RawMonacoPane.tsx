@@ -68,6 +68,8 @@ function useConsoleEditor(hostRef: React.RefObject<HTMLDivElement | null>, readS
       subscription.dispose();
       stopTheme();
       instance.dispose();
+      // The marker service is global and keeps a disposed model's markers under its URI.
+      editor.setModelMarkers(model, RAW_CONSOLE_SCHEME, []);
       model.dispose();
       editorRef.current = null;
     };
