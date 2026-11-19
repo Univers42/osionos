@@ -47,6 +47,11 @@ import "monaco-editor/features/readOnlyMessage/register";
 import "monaco-editor/features/smartSelect/register";
 import "monaco-editor/features/snippet/register";
 import "monaco-editor/features/suggest/register";
+// features/suggest/register (0.56) brings only the inline-completion bridge; the controller
+// that owns the suggest widget and Ctrl+Space is registered by editor.main alone. Without
+// this line a registered completion provider showed no list (raw mode's console, 2026-11-19:
+// no .suggest-widget node, "command 'editor.action.triggerSuggest' not found").
+import "monaco-editor/editor/contrib/suggest/browser/suggestController";
 import "monaco-editor/features/tokenization/register";
 import "monaco-editor/features/toggleTabFocusMode/register";
 import "monaco-editor/features/unusualLineTerminators/register";
