@@ -35,6 +35,8 @@ import {
 } from "./blockColors";
 import { copyBlocks } from "./blockClipboard";
 import { createTableContextMenuSections, resolveBlockTableConfig, type TableConfigUpdate } from "./tableContextMenuSections";
+import { createLayoutContextMenuSections, requestLayoutInspector } from "./layoutContextMenuSection";
+import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import { getBlockDraftContent } from "./blockDraftStore";
 import { bindBlock, isBindableType, styleOf } from "@/features/profile-binding/model/bindingEdit";
 import { isReadmePage, PROFILE_FIELD_SETTINGS_EVENT } from "@/features/profile-binding/model/readmePage";
@@ -351,6 +353,13 @@ export function useBlockContextMenu({
     closeContextMenu();
   }, [closeContextMenu, contextMenu, pageId]);
 
+  const layoutModes = useLayoutModes();
+  const handleOpenLayout = useCallback(() => {
+    if (!contextMenu) return;
+    requestLayoutInspector({ sourceKey, blockId: contextMenu.blockId });
+    closeContextMenu();
+  }, [closeContextMenu, contextMenu, sourceKey]);
+
   const contextMenuSections = useMemo<BlockContextMenuSection[]>(() => {
     if (!blockLocation) return [];
 
@@ -619,6 +628,7 @@ export function useBlockContextMenu({
       transformSection,
       ...tableSections,
       ...buttonSections,
+      ...createLayoutContextMenuSections(blockLocation.block, layoutModes, handleOpenLayout),
       ...profileFieldSections,
       { label: "Actions", items: actionItems },
       {
@@ -680,6 +690,8 @@ export function useBlockContextMenu({
     handleSetTableConfig,
     handleToggleHeading,
     handleButtonSettings,
+    handleOpenLayout,
+    layoutModes,
     handleShowWhen,
     handleProfileFieldSettings,
     isReadme,

@@ -44,6 +44,7 @@ import {
 	type PlaygroundBlockEditorSource,
 } from "@/features/block-editor/model/usePlaygroundBlockEditor";
 import { BlockContextMenu } from "./BlockContextMenu";
+import { LayoutInspectorHost } from "./layout-inspector/LayoutInspectorHost";
 import { PageSelectorMenu } from "./PageSelectorMenu";
 import { VariableMenu } from "@/features/variables/ui/VariableMenu";
 import { PasteLinkMenu } from "./PasteLinkMenu";
@@ -1036,6 +1037,7 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 			) : null}
 
 			<BlockContextMenu menu={contextMenu} sections={contextMenuSections} onClose={closeContextMenu} />
+			<LayoutInspectorHost sourceKey={sourceKey} blocks={blocks} readContent={() => flushPendingDrafts("structural")} onCommit={commitContent} />
 			<BlockContextMenu menu={pageMenuState} sections={pageMenuSections} onClose={closePageMenu} />
 			{/* Portal to <body>: the pane's `contain: paint` would otherwise anchor
 			    `position: fixed` to the pane and clip the popover at its edge. */}
