@@ -19,8 +19,8 @@ import test from "node:test";
 
 import { parseMarkdownToBlocks } from "../../packages/markdown-engine/markdown/shortcuts.ts";
 import { PROP_SCALE, STYLE_SCALES } from "../../src/entities/block/model/blockStyle.ts";
-import { CONTAINER_KINDS, LAYOUT_STYLE_KEYS } from "../../src/entities/block/model/blockStyleAttributes.ts";
-import { consoleCompletions, consoleHover } from "../../src/features/raw-mode/model/consoleCatalogue.ts";
+import { LAYOUT_STYLE_KEYS } from "../../src/entities/block/model/blockStyleAttributes.ts";
+import { CONTAINER_KINDS, consoleCompletions, consoleHover } from "../../src/features/raw-mode/model/consoleCatalogue.ts";
 
 const labels = (prefix: string) => consoleCompletions(prefix).items.map((item) => item.label);
 

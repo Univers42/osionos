@@ -18,7 +18,7 @@
 // or a blockquote still completes, and a `{` the engine would ignore (not at the end of the
 // opener) still opens key completion. It only offers text; the diagnostics say what counts.
 import { PROP_SCALE, STYLE_SCALES } from "@/entities/block/model/blockStyle";
-import { CONTAINER_KINDS, LAYOUT_STYLE_KEYS } from "@/entities/block/model/blockStyleAttributes";
+import { LAYOUT_STYLE_KEYS } from "@/entities/block/model/blockStyleAttributes";
 
 export type ConsoleItemKind = "kind" | "key" | "value";
 
@@ -41,6 +41,12 @@ export interface ConsoleHover {
   endColumn: number;
   text: string;
 }
+
+/** The `:::` kinds the reader turns into a column list or column. The writer emits only
+ *  `columns` and `column` (PS11); row, stack and grid are the layout scale as input sugar.
+ *  Kept here, not beside LAYOUT_STYLE_KEYS: that module is in the boot entry, and only the
+ *  lazy console reads this list (entry +58 B when it lived there, 2026-11-19 build). */
+export const CONTAINER_KINDS = ["columns", "column", ...STYLE_SCALES.layout, "section"] as const;
 
 type ContainerKind = (typeof CONTAINER_KINDS)[number];
 type LayoutKey = (typeof LAYOUT_STYLE_KEYS)[number];
