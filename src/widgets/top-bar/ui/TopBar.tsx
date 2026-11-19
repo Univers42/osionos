@@ -36,17 +36,22 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
   const paletteOpen = usePalette((state) => state.open);
   const commands = useMemo(() => buildCommands(ctx, settingsCommands ?? []), [ctx, settingsCommands]);
 
-  // The settings registry is a feature: it loads WITH the palette, never with
-  // the entry chunk. One attempt, one warning — a failed load leaves the
-  // palette working without the settings entries.
+  // The settings and page registries load WITH the palette, never with the
+  // entry chunk. One attempt, one warning per failed module — the other module
+  // still loads and the palette keeps working without the failed entries.
   useEffect(() => {
     if (!paletteOpen || settingsCommands !== null) return;
-    void import("@/features/settings/model/settingsCommands")
-      .then((module) => setSettingsCommands(module.settingsPaletteCommands()))
-      .catch(() => {
-        console.warn("[top-bar] settings commands failed to load");
-        setSettingsCommands([]);
-      });
+    void Promise.allSettled([
+      import("@/features/settings/model/settingsCommands").then((module) => module.settingsPaletteCommands()),
+      import("@/features/page-shells/model/layoutPaletteCommands").then((module) => module.layoutPaletteCommands()),
+    ]).then(([settings, pages]) => {
+      if (settings.status === "rejected") console.warn("[top-bar] settings commands failed to load");
+      if (pages.status === "rejected") console.warn("[top-bar] page commands failed to load");
+      setSettingsCommands([
+        ...(settings.status === "fulfilled" ? settings.value : []),
+        ...(pages.status === "fulfilled" ? pages.value : []),
+      ]);
+    });
   }, [paletteOpen, settingsCommands]);
 
   return (
