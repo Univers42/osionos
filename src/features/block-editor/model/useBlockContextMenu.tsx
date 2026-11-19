@@ -87,8 +87,8 @@ function createButtonContextMenuSections(block: Block, onOpenSettings: () => voi
   ];
 }
 
-function createSaveSectionMenuSections(block: Block, onSave: () => void): BlockContextMenuSection[] {
-  if (block.type !== "column_list") return [];
+function createSaveSectionMenuSections(block: Block, layoutModes: boolean, onSave: () => void): BlockContextMenuSection[] {
+  if (!layoutModes || block.type !== "column_list") return [];
   return [{ label: "Section", items: [{ icon: <LayoutTemplate size={16} />, label: "Save section", onClick: onSave }] }];
 }
 
@@ -593,7 +593,7 @@ export function useBlockContextMenu({
     const buttonSections = createButtonContextMenuSections(blockLocation.block, handleButtonSettings);
 
     const profileFieldSections = createProfileFieldContextMenuSections(blockLocation.block, isReadme, handleProfileFieldSettings);
-    const saveSectionSections = createSaveSectionMenuSections(blockLocation.block, handleSaveSection);
+    const saveSectionSections = createSaveSectionMenuSections(blockLocation.block, layoutModes, handleSaveSection);
 
     const actionItems = [
       {

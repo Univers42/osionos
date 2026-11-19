@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 
 import { MenuSubmenu } from '@/shared/ui';
+import { useLayoutModes } from '@/entities/block/ui/layoutModes';
 import { runPageAction } from '@/entities/page/model/runPageAction';
 import { usePageDebugStore } from '@/shared/debug/pageDebugStore';
 import type { ReturnTypeOfUsePageActions } from './actionTypes';
@@ -65,6 +66,7 @@ export const PageMenu: React.FC<PageMenuProps> = ({
   const [query, setQuery] = useState('');
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const debugTools = usePageDebugStore((state) => state.enabled);
+  const canSaveShell = useLayoutModes();
 
   const openSubmenuFromSearch = (id: string) => { setQuery(''); setOpenSubmenu(id); };
   const submenuToggle = (id: string) => (open: boolean) =>
@@ -73,6 +75,7 @@ export const PageMenu: React.FC<PageMenuProps> = ({
     actions,
     pageSurface,
     canToggleWiki,
+    canSaveShell,
     toggleWiki,
     canDashboard,
     onImport,

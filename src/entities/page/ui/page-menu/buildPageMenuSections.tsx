@@ -35,6 +35,8 @@ export interface PageMenuContext {
   actions: ReturnTypeOfUsePageActions;
   pageSurface: string | undefined;
   canToggleWiki: boolean;
+  /** Saving a shell ships behind `osio.layout.modes`, like the shells it feeds (ADR 0064 PS10). */
+  canSaveShell: boolean;
   toggleWiki: () => void;
   canDashboard: boolean;
   onImport: () => void;
@@ -103,7 +105,7 @@ export function buildPageMenuSections(context: PageMenuContext): PageMenuSection
 
   const more = [
     { id: 'copy-contents', label: 'Copy page contents', icon: <Clipboard size={16} />, run: run(() => actions.copyContents()) },
-    { id: 'save-as-shell', label: 'Save as shell', icon: <LayoutTemplate size={16} />, run: run(() => actions.saveAsShell()) },
+    ...(context.canSaveShell ? [{ id: 'save-as-shell', label: 'Save as shell', icon: <LayoutTemplate size={16} />, run: run(() => actions.saveAsShell()) }] : []),
     { id: 'present', label: 'Present', icon: <Presentation size={16} />, shortcut: 'Ctrl+Alt+P', badge: 'Beta', checked: actions.config.presentationMode, keepOpen: true, run: run(() => actions.present(), true) },
     ...(context.canToggleWiki ? [{
       id: 'toggle-wiki',
