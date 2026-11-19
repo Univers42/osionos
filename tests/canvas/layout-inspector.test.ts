@@ -126,6 +126,12 @@ test("Reset clears the inspector keys on the list and its columns, and keeps the
   assert.equal("style" in (findById(next, "b") ?? {}), false);
 });
 
+test("Reset with no layout key leaves the tree as it is, so it adds no undo step", () => {
+  const blocks = [list({ tone: "subtle" }), para("p")];
+  assert.equal(resetLayout(blocks, "list"), blocks);
+  assert.equal(resetLayout(blocks, "p"), blocks);
+});
+
 test("parseLayoutChoice maps a select value back to the scale entry", () => {
   assert.equal(parseLayoutChoice("cols", "3"), 3);
   assert.equal(parseLayoutChoice("minCol", "16"), 16);

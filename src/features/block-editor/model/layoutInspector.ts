@@ -105,8 +105,9 @@ export function applyLayoutChoice(blocks: Block[], targetId: string, key: Layout
 }
 
 function clearLayoutKeys(block: Block): Block {
-  if (!block.style) return block;
-  const kept = Object.entries(rawStyle(block)).filter(([key]) => !RESET_KEYS.has(key));
+  const style = rawStyle(block);
+  const kept = Object.entries(style).filter(([key]) => !RESET_KEYS.has(key));
+  if (kept.length === Object.keys(style).length) return block;
   return withStyle(block, Object.fromEntries(kept));
 }
 
@@ -115,6 +116,8 @@ export function resetLayout(blocks: Block[], blockId: string): Block[] {
   return updateBlockInTree(blocks, blockId, (block) => {
     const cleared = clearLayoutKeys(block);
     if (block.type !== "column_list" || !block.children) return cleared;
-    return { ...cleared, children: block.children.map((child) => (child.type === "column" ? clearLayoutKeys(child) : child)) };
+    const children = block.children.map((child) => (child.type === "column" ? clearLayoutKeys(child) : child));
+    const changed = children.some((child, index) => child !== block.children?.[index]);
+    return changed ? { ...cleared, children } : cleared;
   });
 }
