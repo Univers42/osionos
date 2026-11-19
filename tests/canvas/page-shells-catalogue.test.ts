@@ -18,6 +18,18 @@ test("wave 1 is in the catalogue, each shell once", () => {
   assert.equal(new Set(ids).size, ids.length);
 });
 
+const WAVE_TWO = [
+  "product-launch", "app-landing", "team", "services", "agency", "case-study", "blog-index", "docs-home", "knowledge-base",
+  "faq", "personal-home", "webinar", "course", "newsletter", "product", "catalogue", "restaurant", "recipe", "gallery",
+  "dashboard", "roadmap", "meeting-notes", "careers", "coming-soon", "not-found",
+];
+
+test("wave 2 is in the catalogue, each shell with a title, an icon and a description", () => {
+  const wave = SHELLS.filter((shell) => WAVE_TWO.includes(shell.id));
+  assert.deepEqual(wave.map((shell) => shell.id).sort(), [...WAVE_TWO].sort());
+  for (const shell of wave) assert.ok(shell.title && shell.icon && shell.description.length >= 12, shell.id);
+});
+
 for (const { id } of SHELLS) {
   test(`shell ${id}: depth ≤ 8, both round trips unchanged, no cover-layout key`, async () => {
     const blocks = await loadShell(id);

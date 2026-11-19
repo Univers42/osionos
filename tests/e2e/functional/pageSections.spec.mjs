@@ -66,6 +66,6 @@ test("the catalogue loads without touching the page cache (PS18)", async ({ page
       .flatMap((key) => JSON.parse(localStorage.getItem(key) ?? "[]"));
     return { built: built.filter((blocks) => blocks?.length).length, cachedShells: cached.filter((entry) => titles.has(entry.title)).length };
   });
-  expect(loaded).toEqual({ built: 32, cachedShells: 0 });
+  expect(loaded).toEqual({ built: 57, cachedShells: 0 });
   expect(await cacheLength()).toBe(before);
 });
