@@ -23,6 +23,9 @@
 // that page elsewhere between the reload and the Save. The window trusts the wall clock: a
 // reload more than 10 minutes after the last pagehide loses the draft, and a clock changed
 // between the keep and the reload can drop a recent draft or restore an older one.
+// The key is per user and page, not per tab: Duplicate tab copies sessionStorage, so a copy
+// made within the window opens raw mode on that page with the original tab's draft, marked
+// unsaved, and a Save there replaces the page with it as well.
 
 /** The target is a reload seconds later; a reopened tab or restored session is older than this. */
 export const RAW_DRAFT_MAX_AGE_MS = 10 * 60_000;
