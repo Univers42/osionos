@@ -17,6 +17,7 @@
  *
  *   _id → id          title → title        icon → icon          cover → cover
  *   coverPosition → cover_position        surface → surface    visibility → visibility
+ *   coverHeight → cover_height            coverWidth → cover_width
  *   databaseId → database_id              isTemplate → template
  *   isDefaultTemplate → template_default  templateSurface → template_surface
  *   recurrence → recurrence               properties → properties
@@ -34,6 +35,7 @@ import type {
   PageRecurrenceEvery,
   PageVisibility,
 } from "@/entities/page";
+import { readCoverHeight, readCoverPosition, readCoverWidth } from "@/entities/page/model/coverFields";
 
 import type { PageFileMeta } from "./types";
 
@@ -67,12 +69,6 @@ function text(value: unknown): string | undefined {
 
 function bool(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
-}
-
-function percent(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100
-    ? value
-    : undefined;
 }
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
@@ -151,7 +147,9 @@ export function metaFromPage(page: PageEntry): PageFileMeta {
   put(meta, "title", text(page.title));
   put(meta, "icon", text(page.icon));
   put(meta, "cover", text(page.cover));
-  put(meta, "cover_position", percent(page.coverPosition));
+  put(meta, "cover_position", readCoverPosition(page.coverPosition));
+  put(meta, "cover_height", readCoverHeight(page.coverHeight));
+  put(meta, "cover_width", readCoverWidth(page.coverWidth));
   put(meta, "surface", page.surface === "page" ? undefined : oneOf(page.surface, SURFACES));
   put(meta, "visibility", oneOf(page.visibility, VISIBILITIES));
   put(meta, "database_id", text(page.databaseId));
@@ -174,7 +172,9 @@ export function patchFromMeta(meta: Record<string, unknown>): Partial<PageEntry>
   put(patch, "title", text(meta.title));
   put(patch, "icon", text(meta.icon));
   put(patch, "cover", text(meta.cover));
-  put(patch, "coverPosition", percent(meta.cover_position));
+  put(patch, "coverPosition", readCoverPosition(meta.cover_position));
+  put(patch, "coverHeight", readCoverHeight(meta.cover_height));
+  put(patch, "coverWidth", readCoverWidth(meta.cover_width));
   put(patch, "surface", oneOf(meta.surface, SURFACES));
   put(patch, "visibility", oneOf(meta.visibility, VISIBILITIES));
   put(patch, "databaseId", text(meta.database_id));

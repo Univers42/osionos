@@ -161,6 +161,8 @@ function metaOf(
   if (patch.icon !== undefined) meta.icon = patch.icon;
   if (patch.cover !== undefined) meta.cover = patch.cover;
   if (patch.coverPosition !== undefined) meta.cover_position = patch.coverPosition;
+  if (patch.coverHeight !== undefined) meta.cover_height = patch.coverHeight;
+  if (patch.coverWidth !== undefined) meta.cover_width = patch.coverWidth;
   if (patch.surface !== undefined) meta.surface = patch.surface;
   if (patch.visibility !== undefined) meta.visibility = patch.visibility;
   if (typeof patch.databaseId === "string") meta.database_id = patch.databaseId;

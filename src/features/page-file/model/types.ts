@@ -33,6 +33,8 @@ export interface PageFileMeta {
   icon?: string;
   cover?: string;
   cover_position?: number;
+  cover_height?: number;
+  cover_width?: PageEntry["coverWidth"];
   surface?: PageEntry["surface"];
   visibility?: PageVisibility;
   database_id?: string;
