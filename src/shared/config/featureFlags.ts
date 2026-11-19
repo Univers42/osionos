@@ -38,7 +38,8 @@ export type FeatureFlagName =
   | "osio.ai.channel"
   | "osio.account.delete"
   | "osio.themes"
-  | "osio.layout.modes";
+  | "osio.layout.modes"
+  | "osio.publish.containers";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -240,6 +241,15 @@ export function isThemesEnabled(): boolean {
  *  columns. */
 export function isLayoutModesEnabled(): boolean {
   return isFeatureFlagEnabled("osio.layout.modes", false);
+}
+
+/** Published pages carry columns and block style (ADR 0064 Phase 7, PS39-PS42): the public view
+ *  renders them and the publish dialog says a re-publish now includes column content. Off in
+ *  every live build (ADR 0067 PH1): turn on with `VITE_OSIO_PUBLISH_CONTAINERS=1` or
+ *  `?osio.publish.containers=1` per tab. The bridge copies them only with its own
+ *  `OSIONOS_PUBLISH_CONTAINERS=1`; this flag alone changes no stored copy. */
+export function isPublishContainersEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.publish.containers", false);
 }
 
 /** Live co-editing fast send: a draft change leaves as a realtime-only block

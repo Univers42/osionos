@@ -14,6 +14,8 @@ import React, { useState } from "react";
 import { Globe } from "lucide-react";
 import { ModerationWarningNotice } from "@/shared/moderation/ModerationWarningNotice";
 import type { ModerationWarning } from "@/shared/moderation/moderationWarning";
+import { isPublishContainersEnabled } from "@/shared/config/featureFlags";
+import { PublishContainersNotice } from "./PublishContainersNotice";
 import { publishPage, unpublishPage } from "./publishApi";
 
 /** "Publish to web" control in the Share dialog: snapshot a page to /p/:token. */
@@ -57,6 +59,7 @@ export const PublishSection: React.FC<{ pageId: string }> = ({ pageId }) => {
           <button type="button" onClick={() => void doPublish()} disabled={busy} className="shrink-0 rounded-md bg-[var(--osio-accent)] px-2.5 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90 disabled:opacity-50">{busy ? "…" : "Publish"}</button>
         )}
       </div>
+      {isPublishContainersEnabled() && <PublishContainersNotice />}
       {token && (
         <div className="mt-2 flex items-center gap-2">
           <input name="public-url" readOnly value={publicUrl} className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-2xs text-[var(--osio-fg-default)]" />
