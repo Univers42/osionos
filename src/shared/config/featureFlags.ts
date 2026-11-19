@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { createFeatureFlags } from "@osionos/feature-flags";
+import { createFeatureFlags, envKeyForFlag, flagValueToBoolean } from "@osionos/feature-flags";
 
 import { supportsCssZoom } from "@/shared/lib/dom/cssZoom";
 
@@ -39,7 +39,8 @@ export type FeatureFlagName =
   | "osio.account.delete"
   | "osio.themes"
   | "osio.layout.modes"
-  | "osio.publish.containers";
+  | "osio.publish.containers"
+  | "osio.profile.page";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -50,6 +51,23 @@ const flags = createFeatureFlags<FeatureFlagName>();
 
 export function isFeatureFlagEnabled(name: FeatureFlagName, fallback = false): boolean {
   return flags.isEnabled(name, fallback);
+}
+
+/** A flag only the build can turn on: URL and localStorage overrides are ignored, so a live
+ *  build without its `VITE_` value never runs the gated code (groot ADR 0067 PH2). */
+export function isEnvOnlyFlagEnabled(
+  name: FeatureFlagName,
+  fallback = false,
+  env: Record<string, unknown> = import.meta.env ?? {},
+): boolean {
+  const value = env[envKeyForFlag(name)];
+  return typeof value === "string" ? flagValueToBoolean(value, fallback) : fallback;
+}
+
+/** Profile = a page (ADR 0064 PS32–PS38). Env-only: beta builds set
+ *  `VITE_OSIO_PROFILE_PAGE=1`; live builds leave it unset (ADR 0067 PH1). */
+export function isProfilePageEnabled(): boolean {
+  return isEnvOnlyFlagEnabled("osio.profile.page");
 }
 
 /** Canvas V2 (free-frame builder) is the default canvas. The legacy V1 grid
@@ -245,11 +263,11 @@ export function isLayoutModesEnabled(): boolean {
 
 /** Published pages carry columns and block style (ADR 0064 Phase 7, PS39-PS42): the public view
  *  renders them and the publish dialog says a re-publish now includes column content. Off in
- *  every live build (ADR 0067 PH1): turn on with `VITE_OSIO_PUBLISH_CONTAINERS=1` or
- *  `?osio.publish.containers=1` per tab. The bridge copies them only with its own
+ *  every live build (ADR 0067 PH1) and env-only (PH2): only `VITE_OSIO_PUBLISH_CONTAINERS=1`
+ *  at build time turns it on; URL and localStorage overrides are ignored. The bridge copies them only with its own
  *  `OSIONOS_PUBLISH_CONTAINERS=1`; this flag alone changes no stored copy. */
 export function isPublishContainersEnabled(): boolean {
-  return isFeatureFlagEnabled("osio.publish.containers", false);
+  return isEnvOnlyFlagEnabled("osio.publish.containers");
 }
 
 /** Live co-editing fast send: a draft change leaves as a realtime-only block
