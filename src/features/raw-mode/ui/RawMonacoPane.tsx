@@ -48,29 +48,53 @@ function createConsoleModel(text: string): editor.ITextModel {
   return model;
 }
 
-function useConsoleEditor(hostRef: React.RefObject<HTMLDivElement | null>, readSource: () => string, onChange: (next: string) => void): EditorRef {
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const onChangeRef = useRef(onChange);
-  useEffect(() => { onChangeRef.current = onChange; });
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    registerRawConsoleProviders();
-    const stopTheme = watchEditorTheme(host);
-    const model = createConsoleModel(readSource());
-    const instance = editor.create(host, {
-      ...EDITOR_OPTIONS, model, theme: OSIO_THEME, fontFamily: editorFontFamily(host),
-      ariaLabel: "Raw markdown source", cursorBlinking: prefersReducedMotion() ? "solid" : "blink",
-    });
-    const subscription = model.onDidChangeContent(() => onChangeRef.current(model.getValue()));
-    editorRef.current = instance;
-    return () => {
+function lineNumbersOption(isShown: boolean): editor.LineNumbersType {
+  return isShown ? "on" : "off";
+}
+
+interface ConsoleMount {
+  readSource: () => string;
+  onChangeRef: React.RefObject<(next: string) => void>;
+  showLineNumbers: boolean;
+}
+
+/** Creates the console on `host`; the answer tears it down. */
+function mountConsole(host: HTMLDivElement, { readSource, onChangeRef, showLineNumbers }: ConsoleMount): { instance: editor.IStandaloneCodeEditor; teardown: () => void } {
+  registerRawConsoleProviders();
+  const stopTheme = watchEditorTheme(host);
+  const model = createConsoleModel(readSource());
+  const instance = editor.create(host, {
+    ...EDITOR_OPTIONS, model, theme: OSIO_THEME, fontFamily: editorFontFamily(host),
+    ariaLabel: "Raw markdown source", cursorBlinking: prefersReducedMotion() ? "solid" : "blink",
+    lineNumbers: lineNumbersOption(showLineNumbers),
+  });
+  const subscription = model.onDidChangeContent(() => onChangeRef.current(model.getValue()));
+  return {
+    instance,
+    teardown: () => {
       subscription.dispose();
       stopTheme();
       instance.dispose();
       // The marker service is global and keeps a disposed model's markers under its URI.
       editor.setModelMarkers(model, RAW_CONSOLE_SCHEME, []);
       model.dispose();
+    },
+  };
+}
+
+function useConsoleEditor(hostRef: React.RefObject<HTMLDivElement | null>, readSource: () => string, onChange: (next: string) => void, showLineNumbers: boolean): EditorRef {
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const onChangeRef = useRef(onChange);
+  // Read at creation only: the gutter's later changes go through updateOptions, not a new editor.
+  const showLineNumbersRef = useRef(showLineNumbers);
+  useEffect(() => { onChangeRef.current = onChange; showLineNumbersRef.current = showLineNumbers; });
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const { instance, teardown } = mountConsole(host, { readSource, onChangeRef, showLineNumbers: showLineNumbersRef.current });
+    editorRef.current = instance;
+    return () => {
+      teardown();
       editorRef.current = null;
     };
   }, [hostRef, readSource]);
@@ -99,14 +123,14 @@ function ProblemsLine({ count }: Readonly<{ count: number }>) {
 
 export function RawMonacoPane({ readSource, onChange, checkSource, showLineNumbers }: Readonly<RawMonacoPaneProps>) {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const editorRef = useConsoleEditor(hostRef, readSource, onChange);
+  const editorRef = useConsoleEditor(hostRef, readSource, onChange, showLineNumbers);
   const count = useConsoleMarkers(editorRef, checkSource);
   const layoutModes = useLayoutModes();
   useEffect(() => {
     const model = editorRef.current?.getModel();
     if (model) setConsoleLayoutModes(model, layoutModes);
   }, [editorRef, layoutModes]);
-  useEffect(() => { editorRef.current?.updateOptions({ lineNumbers: showLineNumbers ? "on" : "off" }); }, [editorRef, showLineNumbers]);
+  useEffect(() => { editorRef.current?.updateOptions({ lineNumbers: lineNumbersOption(showLineNumbers) }); }, [editorRef, showLineNumbers]);
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-surface)]">
       <div ref={hostRef} className="min-h-0 flex-1" />
