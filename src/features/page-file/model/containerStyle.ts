@@ -25,7 +25,8 @@ export interface ContainerAttributeDrop extends StyleAttributeDrop {
   blockId: string;
 }
 
-interface EngineAttributes {
+/** The engine's `containerAttributes`: an opener's kind, raw values and its own reports. */
+export interface EngineAttributes {
   kind: string;
   values: Readonly<Record<string, string>>;
   dropped: readonly string[];
@@ -33,7 +34,7 @@ interface EngineAttributes {
 
 const LAYOUT_KEYS: ReadonlySet<string> = new Set(LAYOUT_STYLE_KEYS);
 
-function isEngineAttributes(value: unknown): value is EngineAttributes {
+export function isEngineAttributes(value: unknown): value is EngineAttributes {
   if (value === null || typeof value !== "object") return false;
   const { kind, values, dropped } = value as Record<string, unknown>;
   return typeof kind === "string" && typeof values === "object" && values !== null && Array.isArray(dropped);

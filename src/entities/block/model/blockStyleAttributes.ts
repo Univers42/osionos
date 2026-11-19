@@ -19,6 +19,10 @@ import { PROP_SCALE, STYLE_SCALES, sanitizeBlockStyle, type BlockStyle } from '.
 /** The container keys of a style (PS6): the ones a `:::` opener carries. */
 export const LAYOUT_STYLE_KEYS = ['layout', 'wrap', 'cols', 'minCol', 'stackAt', 'span'] as const;
 
+/** The `:::` kinds the reader turns into a column list or column. The writer emits only
+ *  `columns` and `column` (PS11); row, stack and grid are the layout scale as input sugar. */
+export const CONTAINER_KINDS = ['columns', 'column', ...STYLE_SCALES.layout, 'section'] as const;
+
 /** One attribute that did not become style. Engine reports (`length`, `pairs`,
  *  `malformed`, `duplicate`) have no key; `unknown` / `value` / `kind` name theirs. */
 export interface StyleAttributeDrop {
