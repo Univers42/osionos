@@ -13,9 +13,11 @@
 /** Pure column-layout tree ops. Kept out of the React surface so the
  *  create-a-column logic (the source of the old catastrophic nesting) is
  *  testable in isolation. Invariant: a column_list holds a FLAT row of columns;
- *  a column_list is never nested directly inside a column. */
+ *  a column_list is never nested directly inside a column, unless it carries a
+ *  style (a grid inside a section, ADR 0064 PS7). */
 
 import type { Block } from "@/entities/block";
+import { hasBlockStyle } from "@/entities/block/model/blockStyle";
 
 function cloneBlock(block: Block): Block {
   return { ...block, children: block.children?.map(cloneBlock) };
@@ -49,9 +51,13 @@ export function appendBlockToColumn(blocks: Block[], columnId: string, newBlock:
   });
 }
 
+// A styled column_list (a grid in a section) is its own container: a block
+// inside it gets its new column there, not in the list around it.
+const isOwnContainer = (block: Block): boolean => block.type === "column_list" && hasBlockStyle(block);
+
 function columnContainsBlock(column: Block, targetId: string): boolean {
   const walk = (list?: Block[]): boolean =>
-    Array.isArray(list) && list.some((child) => child.id === targetId || walk(child.children));
+    Array.isArray(list) && list.some((child) => child.id === targetId || (!isOwnContainer(child) && walk(child.children)));
   return walk(column.children);
 }
 

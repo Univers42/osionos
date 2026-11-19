@@ -12,6 +12,7 @@
 
 import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import type { Block, BlockType } from "@/entities/block";
+import { hasBlockStyle } from "@/entities/block/model/blockStyle";
 import type { SeedPage } from "../data/seedPages";
 import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
 import { readCoverFields } from "@/entities/page/model/coverFields";
@@ -724,7 +725,8 @@ export function applyBlockInsert(
 /**
  * Drop columns emptied of all content and unwrap a column_list back to plain
  * blocks once 0 or 1 column remains, so dragging the content that created a
- * column out of it can never leave an unremovable empty column behind.
+ * column out of it can never leave an unremovable empty column behind. A styled
+ * list (a grid, a section) keeps its last column and its style (ADR 0064 PS7).
  */
 export function pruneColumns(blocks: Block[]): Block[] {
   const result: Block[] = [];
@@ -734,7 +736,7 @@ export function pruneColumns(blocks: Block[]): Block[] {
         .map((column) => ({ ...column, children: pruneColumns(column.children ?? []) }))
         .filter((column) => (column.children?.length ?? 0) > 0);
       if (columns.length === 0) continue;
-      if (columns.length === 1) {
+      if (columns.length === 1 && !hasBlockStyle(block)) {
         result.push(...(columns[0].children ?? []));
         continue;
       }
