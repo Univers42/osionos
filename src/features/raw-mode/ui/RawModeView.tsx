@@ -15,10 +15,11 @@ import { usePageStore } from "@/store/usePageStore";
 import { usePageConfigStore } from "@/shared/config/pageConfigStore";
 import { useUserStore } from "@/features/auth";
 import { RawModeHeader } from "./RawModeHeader";
-import { RawCodePane } from "./RawCodePane";
+import { RawSourcePane } from "./RawSourcePane";
 import { RawPreviewPane } from "./RawPreviewPane";
 import { startPaneDrag } from "./startPaneDrag";
 import { useRawMode } from "../model/useRawMode";
+import { readAdvancedConsole, writeAdvancedConsole } from "../model/advancedConsole";
 import { DEFAULT_RAW_LAYOUT, dropZoneFromX, type RawLayout, type RawLayoutMode } from "../model/rawModeLayout";
 
 /** VSCode-style raw markdown editor: tabs, a resizable split, and a drag-the-
@@ -35,9 +36,14 @@ export function RawModeView({ pageId }: Readonly<{ pageId: string }>) {
   const { readSource, previewSource, edit, save, exit, dirty } = useRawMode(pageId);
   const [layout, setLayout] = useState<RawLayout>(DEFAULT_RAW_LAYOUT);
   const [dragZone, setDragZone] = useState<RawLayoutMode | null>(null);
+  const [isAdvanced, setAdvanced] = useState(readAdvancedConsole);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const toggleLineNumbers = useCallback(() => { void updateConfig(userId, pageId, { showLineNumbers: !showLineNumbers }); }, [pageId, showLineNumbers, updateConfig, userId]);
+  const toggleAdvanced = useCallback(() => {
+    writeAdvancedConsole(!isAdvanced);
+    setAdvanced(!isAdvanced);
+  }, [isAdvanced]);
 
   const startHeaderDrag = useCallback((event: React.PointerEvent) => {
     event.preventDefault();
@@ -62,11 +68,11 @@ export function RawModeView({ pageId }: Readonly<{ pageId: string }>) {
 
   return (
     <div ref={containerRef} data-raw-mode className="relative flex h-full min-h-0 flex-col">
-      <RawModeHeader title={title} mode={layout.mode} dirty={dirty} showLineNumbers={showLineNumbers} onMode={(mode) => setLayout((current) => ({ ...current, mode }))} onToggleLineNumbers={toggleLineNumbers} onSave={save} onExit={exit} onDragStart={startHeaderDrag} />
+      <RawModeHeader title={title} mode={layout.mode} dirty={dirty} showLineNumbers={showLineNumbers} isAdvanced={isAdvanced} onMode={(mode) => setLayout((current) => ({ ...current, mode }))} onToggleLineNumbers={toggleLineNumbers} onToggleAdvanced={toggleAdvanced} onSave={save} onExit={exit} onDragStart={startHeaderDrag} />
       <div className="flex min-h-0 flex-1">
         {layout.mode !== "preview" && (
           <div className="min-h-0" style={{ width: layout.mode === "split" ? `${layout.ratio * 100}%` : "100%" }}>
-            <RawCodePane readSource={readSource} onChange={edit} showLineNumbers={showLineNumbers} />
+            <RawSourcePane isAdvanced={isAdvanced} readSource={readSource} onChange={edit} checkSource={previewSource} showLineNumbers={showLineNumbers} />
           </div>
         )}
         {layout.mode === "split" && (
