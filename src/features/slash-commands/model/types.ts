@@ -111,6 +111,13 @@ export interface SlashLinkBlockCommand extends SlashCommandBase {
   hintId?: string;
 }
 
+/** A page section from the library (`sectionId`), or one the user saved (`templatePageId`). */
+export interface SlashSectionCommand extends SlashCommandBase {
+  kind: "section";
+  sectionId: string;
+  templatePageId?: string;
+}
+
 export type SlashCommand =
   | SlashBlockCommand
   | SlashTurnIntoCommand
@@ -123,7 +130,8 @@ export type SlashCommand =
   | SlashAiCommand
   | SlashDictateCommand
   | SlashAiImageCommand
-  | SlashLinkBlockCommand;
+  | SlashLinkBlockCommand
+  | SlashSectionCommand;
 
 export interface SlashCommandSection {
   id: string;

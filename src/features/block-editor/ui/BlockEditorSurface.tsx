@@ -35,6 +35,7 @@ import { RenderModeProvider } from "@/entities/block/ui/renderMode";
 import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
+import { useSlashSectionSelect } from "@/features/slash-commands/model/useSlashSectionSelect";
 import { complete as completeRoute } from "@/features/ai/api/aiClient";
 import { registerInlineAiDeps, useInlineAiStore } from "@/features/ai/model/inlineAiStore";
 import { parseMarkdownClipboard } from "@/services/page-actions/blockClipboardSerialize";
@@ -440,6 +441,8 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 		commandRedo,
 		flushPendingDrafts,
 	} = usePlaygroundBlockEditor(source ?? pageId);
+	const getStructuralContent = useCallback(() => flushPendingDrafts("structural"), [flushPendingDrafts]);
+	const handleSlashSectionSelect = useSlashSectionSelect({ slashMenu, setSlashMenu, getContent: getStructuralContent, commitContent, focusBlock });
 	const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
 	const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
 	// The dictation: its state, and the language of the settings.
@@ -943,6 +946,10 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 						}
 						if (item.kind === "profile-field") {
 							handleSlashProfileFieldSelect();
+							return;
+						}
+						if (item.kind === "section") {
+							handleSlashSectionSelect(item);
 							return;
 						}
 						if (item.kind === "ai-image") {

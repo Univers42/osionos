@@ -31,19 +31,8 @@ import { isReadmePage } from "@/features/profile-binding/model/readmePage";
 import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
 import { usePageStore } from "@/store/usePageStore";
 import type {
-  SlashAiCommand,
-  SlashAiImageCommand,
-  SlashProfileFieldCommand,
-  SlashCreatePageCommand,
-  SlashDatabaseViewCommand,
-  SlashBlockCommand,
   SlashCommand,
-  SlashInlineCommand,
-  SlashLinkBlockCommand,
   SlashMediaPickerCommand,
-  SlashTurnIntoCommand,
-  SlashWhiteboardCommand,
-  SlashDictateCommand,
 } from "@/features/slash-commands/model/types";
 import { SlashCommandPreview } from "./SlashCommandPreview";
 
@@ -55,9 +44,7 @@ interface SlashCommandMenuProps {
   pageId?: string;
   position: { x: number; y: number; top: number };
   filter: string;
-  onSelect: (
-    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand | SlashProfileFieldCommand | SlashAiCommand | SlashDictateCommand | SlashAiImageCommand | SlashLinkBlockCommand,
-  ) => void;
+  onSelect: (item: SelectableSlashCommand) => void;
   onMediaSelect: (kind: MediaBlockType, value: string) => void;
   onClose: () => void;
 }
