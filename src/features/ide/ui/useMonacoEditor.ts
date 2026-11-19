@@ -66,6 +66,8 @@ export const EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
   minimap: { enabled: false },
   wordBasedSuggestions: "off",
   suggest: { showWords: false, preview: false },
+  // Enter is a new line, Tab accepts: with completion live while typing, Enter turned `pri` into `printf`.
+  acceptSuggestionOnEnter: "off",
   scrollBeyondLastLine: false,
   renderLineHighlight: "line",
   folding: true,

@@ -137,7 +137,7 @@ test("Advanced completes kinds and scale values and explains a key on hover", as
   await replaceConsoleText(page, "::: grid {cols=");
   await page.keyboard.press("Control+Space");
   await expect(suggestions.filter({ hasText: /^6/ })).toHaveCount(1);
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
   await expect(consoleEditor(page).locator(".view-lines")).toContainText("::: grid {cols=1");
 
   await hoverCharacter(page, "::: grid {cols=1".indexOf("cols") + 1);
@@ -209,4 +209,20 @@ test("closing the console clears its markers with its model", async ({ page, bas
   await advanced(page).click();
   await expect(consoleEditor(page)).toHaveCount(0);
   expect(await consoleMarkerCount(page)).toBe(0);
+});
+
+test("Enter with a suggestion open starts a new line; it never accepts", async ({ page, baseURL }) => {
+  test.setTimeout(240_000);
+  await setLayoutModes(page, true);
+  await openRaw(page, baseURL);
+  await advanced(page).click();
+  await expect(consoleEditor(page)).toBeVisible({ timeout: MONACO_TIMEOUT });
+  const suggestions = page.locator(".suggest-widget .monaco-list-row").filter({ visible: true });
+
+  await replaceConsoleText(page, "::: gr");
+  await page.keyboard.press("Control+Space");
+  await expect(suggestions.filter({ hasText: "grid" })).toHaveCount(1);
+  await page.keyboard.press("Enter");
+  await expect(consoleEditor(page).locator(".view-line")).toHaveCount(2);
+  await expect(consoleEditor(page).locator(".view-lines")).not.toContainText("grid");
 });
