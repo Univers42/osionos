@@ -35,19 +35,32 @@ async function bridge(page, { content = [], delayMs = 0, updatedAt } = {}) {
   return posts;
 }
 
-async function openHost(page, baseURL, content = []) {
-  await page.addInitScript(({ host, ws, blocks }) => {
+// Shells ship with the layout rendering (ADR 0064 PS10): the flag is on unless `layoutModes` is false.
+async function openHost(page, baseURL, content = [], layoutModes = true) {
+  await page.addInitScript(({ host, ws, blocks, on }) => {
+    if (on) localStorage.setItem("osio.layout.modes", "1");
+    else localStorage.removeItem("osio.layout.modes");
     if (sessionStorage.getItem("shells-seeded") !== null) return;
     sessionStorage.setItem("shells-seeded", "1");
     localStorage.setItem(`osio:pages:${ws}`, JSON.stringify([{ ...host, content: blocks }]));
     localStorage.setItem("pg:recents", "[]");
-  }, { host: HOST, ws: WS, blocks: content });
+  }, { host: HOST, ws: WS, blocks: content, on: layoutModes });
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await explorerRow(page, "Shell host").click();
   await page.evaluate(() => globalThis.__playgroundUserStore.setState({ activePageJwt: () => "e2e-page-jwt" }));
 }
 
 const starter = (page) => page.getByTestId("shell-starter");
+
+test("with osio.layout.modes off the empty page offers no shell", async ({ page, baseURL }) => {
+  await bridge(page);
+  await openHost(page, baseURL, [], false);
+  await expect(page.getByRole("button", { name: /Click here to start writing/i })).toBeVisible();
+  // Caveat: an absence check after a fixed 1.5 s; flag-on, the starter shows within the
+  // stub's answer (the test below waits 800 ms for it), so a later regression could slip by.
+  await page.waitForTimeout(1500);
+  await expect(starter(page)).toHaveCount(0);
+});
 
 test("the starter waits for the server's copy, then a shell lands in one undo step", async ({ page, baseURL }) => {
   const posts = await bridge(page, { delayMs: 800 });

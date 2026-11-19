@@ -8,6 +8,7 @@
 import React, { useEffect, useSyncExternalStore } from "react";
 
 import { SHELLS } from "@/data/templates/shells/shellIndex";
+import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import { useUserStore } from "@/features/auth";
 import { usePageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { Card } from "@/shared/ui";
@@ -36,8 +37,11 @@ function useStarterState(pageId: string, locked: boolean) {
   return state;
 }
 
+// Shells are built from layout containers, so the starter ships with their rendering
+// (ADR 0064 PS10): flag off counts as locked, which also skips the confirming fetch.
 export const ShellStarter: React.FC<ShellStarterProps> = ({ pageId, locked, target }) => {
-  if (useStarterState(pageId, locked) !== "offer") return null;
+  const layoutModes = useLayoutModes();
+  if (useStarterState(pageId, locked || !layoutModes) !== "offer") return null;
   return (
     <section data-testid="shell-starter" aria-labelledby={`shell-starter-${pageId}`} className="mt-2 flex flex-col gap-3 pb-8">
       <h2 id={`shell-starter-${pageId}`} className="text-sm font-medium text-[var(--osio-fg-muted)]">

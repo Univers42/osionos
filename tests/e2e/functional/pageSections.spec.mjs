@@ -10,7 +10,20 @@ import { activateFirstEditor, openFreshPage, slashCommandEntry, slashMenu } from
 
 const HERO_TITLE = "Say what you do in one line";
 
+// Sections ship with the layout rendering (ADR 0064 PS10): on unless a test says off.
+const withLayoutModes = (page, on = true) =>
+  page.addInitScript((value) => (value ? localStorage.setItem("osio.layout.modes", "1") : localStorage.removeItem("osio.layout.modes")), on);
+
+test("with osio.layout.modes off the slash menu offers no section", async ({ page, baseURL }) => {
+  await withLayoutModes(page, false);
+  await openFreshPage(page, baseURL);
+  const editor = await activateFirstEditor(page);
+  await editor.pressSequentially("/hero");
+  await expect(slashCommandEntry(page, "Hero")).toHaveCount(0);
+});
+
 test("slash Sections inserts the hero in place of the trigger; one undo takes it out", async ({ page, baseURL }) => {
+  await withLayoutModes(page);
   await openFreshPage(page, baseURL);
   const editor = await activateFirstEditor(page);
   await editor.pressSequentially("/hero");

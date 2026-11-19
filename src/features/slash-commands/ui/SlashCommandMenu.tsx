@@ -31,6 +31,8 @@ import { isReadmePage } from "@/features/profile-binding/model/readmePage";
 import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
 import { usePageStore } from "@/store/usePageStore";
 import { useMySectionCommands } from "@/features/slash-commands/model/mySections";
+import { SECTIONS_GROUP_ID } from "@/features/slash-commands/model/sectionSlashCommands";
+import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import type {
   SlashCommand,
   SlashMediaPickerCommand,
@@ -72,10 +74,12 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   const isTemplatePage = usePageStore((s) => (pageId ? Boolean(s.pageById(pageId)?.isTemplate) : false));
   // `/profile field` is README-only: hide it on every page but the owner's README.
   const isReadme = useAccountProfileStore((s) => isReadmePage(pageId, s.profile));
+  // Sections are layout containers: offered only where they render (ADR 0064 PS10).
+  const layoutModes = useLayoutModes();
   const mySections = useMySectionCommands(pageId);
   const filtered = useMemo(
-    () => filterSlashCommands(filter, mySections).filter((c) => (c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage) && (c.id !== PROFILE_FIELD_COMMAND_ID || isReadme) && isSlashCommandAvailable(c, AVAILABILITY)),
-    [filter, mySections, isTemplatePage, isReadme],
+    () => filterSlashCommands(filter, layoutModes ? mySections : []).filter((c) => (layoutModes || c.section !== SECTIONS_GROUP_ID) && (c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage) && (c.id !== PROFILE_FIELD_COMMAND_ID || isReadme) && isSlashCommandAvailable(c, AVAILABILITY)),
+    [filter, layoutModes, mySections, isTemplatePage, isReadme],
   );
   // Typing a query → one flat, relevance-ranked list so the best match sits on top
   // and arrow-to-pick is predictable. No query → Suggested recents, then the
