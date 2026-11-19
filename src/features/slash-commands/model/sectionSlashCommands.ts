@@ -2,6 +2,9 @@
 // (src/data/templates/sections), read from its sync index; the blocks load on select.
 
 import { SECTIONS } from "@/data/templates/sections/sectionIndex";
+import type { PageEntry } from "@/entities/page/model/types";
+import { isSectionTemplate } from "@/store/templateCopy";
+
 import type { SlashSectionCommand } from "./types";
 
 export const SECTIONS_GROUP_ID = "sections";
@@ -16,3 +19,22 @@ export const SECTION_SLASH_COMMANDS: SlashSectionCommand[] = SECTIONS.map((secti
   description: section.description,
   section: SECTIONS_GROUP_ID,
 }));
+
+export const MY_SECTIONS_GROUP_ID = "my-sections";
+
+/** The user's saved sections: live template pages marked as sections. */
+export function mySectionCommands(pages: readonly PageEntry[]): SlashSectionCommand[] {
+  return pages
+    .filter((page) => page.isTemplate && !page.archivedAt && isSectionTemplate(page))
+    .map((page) => ({
+      kind: "section",
+      id: `my-section:${page._id}`,
+      sectionId: page._id,
+      templatePageId: page._id,
+      label: page.title || "Untitled section",
+      aliases: ["section", "my section", "saved"],
+      icon: page.icon || "🧩",
+      description: "Your saved section",
+      section: MY_SECTIONS_GROUP_ID,
+    }));
+}

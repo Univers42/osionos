@@ -3,7 +3,7 @@
 // cover-layout field (coverHeight / coverWidth) before the Phase 5 writer.
 
 import type { Block } from "@/entities/block/model/types";
-import type { AddPageOptions, PageEntry } from "@/entities/page/model/types";
+import type { AddPageOptions, PageEntry, PagePropertyEntry } from "@/entities/page/model/types";
 
 export type TemplateCopy = Pick<AddPageOptions, "cover" | "coverPosition" | "properties">;
 
@@ -42,4 +42,30 @@ export function shellCopyOf(page: PageEntry): UserTemplateCopy | null {
   const copy: UserTemplateCopy = { title: `${page.title || "Untitled"} shell`, content: structuredClone(page.content) };
   if (page.icon !== undefined) copy.icon = page.icon;
   return { ...copy, ...templateCopyOptions(page, null) };
+}
+
+/** The property that marks a template page as a saved section, not a whole page. */
+export const SECTION_TEMPLATE_KIND: PagePropertyEntry = { key: "osio-template-kind", label: "Template kind", type: "text", value: "section" };
+
+export function isSectionTemplate(page: PageEntry): boolean {
+  return page.properties?.some((entry) => entry.key === SECTION_TEMPLATE_KIND.key && entry.value === SECTION_TEMPLATE_KIND.value) ?? false;
+}
+
+function firstHeading(blocks: Block[]): string | null {
+  for (const block of blocks) {
+    if (block.type.startsWith("heading") && block.content.trim()) return block.content.trim();
+    const inside = block.children ? firstHeading(block.children) : null;
+    if (inside) return inside;
+  }
+  return null;
+}
+
+/** "Save section": one container, named by its first heading, marked as a section. */
+export function sectionTemplateOf(container: Block): UserTemplateCopy & { properties: PagePropertyEntry[] } {
+  return {
+    title: firstHeading([container]) ?? "Untitled section",
+    icon: "🧩",
+    content: [structuredClone(container)],
+    properties: [{ ...SECTION_TEMPLATE_KIND }],
+  };
 }

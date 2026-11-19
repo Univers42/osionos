@@ -30,6 +30,7 @@ import { isBuiltInAppReady } from "@/features/whiteboard/model/whiteboardAvailab
 import { isReadmePage } from "@/features/profile-binding/model/readmePage";
 import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
 import { usePageStore } from "@/store/usePageStore";
+import { useMySectionCommands } from "@/features/slash-commands/model/mySections";
 import type {
   SlashCommand,
   SlashMediaPickerCommand,
@@ -71,9 +72,10 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   const isTemplatePage = usePageStore((s) => (pageId ? Boolean(s.pageById(pageId)?.isTemplate) : false));
   // `/profile field` is README-only: hide it on every page but the owner's README.
   const isReadme = useAccountProfileStore((s) => isReadmePage(pageId, s.profile));
+  const mySections = useMySectionCommands(pageId);
   const filtered = useMemo(
-    () => filterSlashCommands(filter).filter((c) => (c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage) && (c.id !== PROFILE_FIELD_COMMAND_ID || isReadme) && isSlashCommandAvailable(c, AVAILABILITY)),
-    [filter, isTemplatePage, isReadme],
+    () => filterSlashCommands(filter, mySections).filter((c) => (c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage) && (c.id !== PROFILE_FIELD_COMMAND_ID || isReadme) && isSlashCommandAvailable(c, AVAILABILITY)),
+    [filter, mySections, isTemplatePage, isReadme],
   );
   // Typing a query → one flat, relevance-ranked list so the best match sits on top
   // and arrow-to-pick is predictable. No query → Suggested recents, then the

@@ -17,6 +17,7 @@ import {
   Copy,
   CopyPlus,
   Eye,
+  LayoutTemplate,
   Link,
   MessageSquare,
   MoveRight,
@@ -42,6 +43,7 @@ import { bindBlock, isBindableType, styleOf } from "@/features/profile-binding/m
 import { isReadmePage, PROFILE_FIELD_SETTINGS_EVENT } from "@/features/profile-binding/model/readmePage";
 import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
 import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
+import { saveSection } from "@/features/page-shells/model/saveSection";
 import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
 import { BLOCK_TRANSFORM_OPTIONS } from "./blockTransformOptions";
 import { linkTurnIntoOptions, turnLinkBlockInto, type LinkTurnTarget } from "./linkTurnInto";
@@ -83,6 +85,11 @@ function createButtonContextMenuSections(block: Block, onOpenSettings: () => voi
       items: [{ icon: <Settings2 size={16} />, label: "Button settings", onClick: onOpenSettings }],
     },
   ];
+}
+
+function createSaveSectionMenuSections(block: Block, onSave: () => void): BlockContextMenuSection[] {
+  if (block.type !== "column_list") return [];
+  return [{ label: "Section", items: [{ icon: <LayoutTemplate size={16} />, label: "Save section", onClick: onSave }] }];
 }
 
 function createProfileFieldContextMenuSections(block: Block, isReadme: boolean, onOpen: (bind: boolean) => void): BlockContextMenuSection[] {
@@ -311,6 +318,12 @@ export function useBlockContextMenu({
     );
     closeContextMenu();
   }, [closeContextMenu, contextMenu, pageId]);
+
+  const handleSaveSection = useCallback(() => {
+    if (!blockLocation) return;
+    void saveSection(pageId, blockLocation.block);
+    closeContextMenu();
+  }, [blockLocation, closeContextMenu, pageId]);
 
   const handleShowWhen = useCallback(() => {
     if (!contextMenu) return;
@@ -580,6 +593,7 @@ export function useBlockContextMenu({
     const buttonSections = createButtonContextMenuSections(blockLocation.block, handleButtonSettings);
 
     const profileFieldSections = createProfileFieldContextMenuSections(blockLocation.block, isReadme, handleProfileFieldSettings);
+    const saveSectionSections = createSaveSectionMenuSections(blockLocation.block, handleSaveSection);
 
     const actionItems = [
       {
@@ -630,6 +644,7 @@ export function useBlockContextMenu({
       ...buttonSections,
       ...createLayoutContextMenuSections(blockLocation.block, layoutModes, handleOpenLayout),
       ...profileFieldSections,
+      ...saveSectionSections,
       { label: "Actions", items: actionItems },
       {
         items: [
@@ -694,6 +709,7 @@ export function useBlockContextMenu({
     layoutModes,
     handleShowWhen,
     handleProfileFieldSettings,
+    handleSaveSection,
     isReadme,
     handleUnavailable,
     handleAskAI,

@@ -25,7 +25,7 @@ import type { SlashQuery } from "./slashMenuFilter";
 import { EMBED_SLASH_COMMANDS } from "./embedSlashCommands";
 import { EMBEDS_SECTION_ID } from "./embedSlashEntries";
 import { buildSysSlashCommands } from "./sysSlashCommands";
-import { SECTION_SLASH_COMMANDS, SECTIONS_GROUP_ID } from "./sectionSlashCommands";
+import { MY_SECTIONS_GROUP_ID, SECTION_SLASH_COMMANDS, SECTIONS_GROUP_ID } from "./sectionSlashCommands";
 import type {
   SlashCreatePageCommand,
   SlashCommand,
@@ -101,6 +101,7 @@ export const EXTRA_SECTION_LABELS: Record<string, string> = {
   [EMBEDS_SECTION_ID]: "Embeds",
   "my-data": "My data",
   [SECTIONS_GROUP_ID]: "Sections",
+  [MY_SECTIONS_GROUP_ID]: "My sections",
 };
 
 /** Section labels this repo fixes on top of the collection's copy. */
@@ -446,8 +447,8 @@ export type { SlashQuery };
 
 /** Filter + rank the catalog by the command token (the arg after a space is ignored
  *  here — it is consumed by the selected command). Empty token → the full catalog. */
-export function filterSlashCommands(filter: string): SlashCommand[] {
-  return filterSlashCommandsFrom(slashCatalog(), filter);
+export function filterSlashCommands(filter: string, extra: readonly SlashCommand[] = []): SlashCommand[] {
+  return filterSlashCommandsFrom([...slashCatalog(), ...extra], filter);
 }
 
 export function groupSlashCommands(
