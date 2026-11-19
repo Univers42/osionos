@@ -37,7 +37,8 @@ export type FeatureFlagName =
   | "osio.ai.images"
   | "osio.ai.channel"
   | "osio.account.delete"
-  | "osio.themes";
+  | "osio.themes"
+  | "osio.layout.modes";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -231,6 +232,14 @@ export function isAccountDeleteEnabled(): boolean {
  *  the env says off). */
 export function isThemesEnabled(): boolean {
   return isFeatureFlagEnabled("osio.themes", true);
+}
+
+/** Container modes on column lists and the data-s-* attributes of a block's
+ *  stored style (ADR 0064 PS10). Off by default: beta turns it on with
+ *  `VITE_OSIO_LAYOUT_MODES=1`; off renders today's markup, styled lists as plain
+ *  columns. */
+export function isLayoutModesEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.layout.modes", false);
 }
 
 /** Live co-editing fast send: a draft change leaves as a realtime-only block
