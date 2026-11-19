@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block } from "@/entities/block";
+import { layoutAttributeText } from "@/entities/block/model/blockStyleAttributes";
 import { diagramBlockToMarkdown } from "@/features/diagram/model/diagramMarkdown";
 import { appFence, escapeParagraphContent, mediaBlockToMarkdown, tableBlockToMarkdown } from "./pageMarkdownEscape";
 import { indentLines, isListItem, joinTight, joinWithEmpties } from "./pageMarkdownJoin";
@@ -30,19 +31,22 @@ import type { SerializeOptions } from "./pageMarkdownEscape";
 //   diagram  -> ```mermaid fence (the SANITIZED source) or an osionos:diagram comment
 //   embed / bookmark -> ```osiembed / ```osibookmark JSON {content: url, embedHeight?, embed?}
 //                       (an older client shows the fence as a code block, URL included)
-//   columns  -> ":::columns" / ":::column <ratio>" containers
+//   columns  -> ":::columns" / ":::column <ratio>" containers; a style's layout keys
+//               follow the ratio (":::column 0.5 {span=2}"). Only these two kinds are
+//               written: `::: grid` and the other sugar are input only (ADR 0064 PS11).
 // Paragraph text that would parse as another block gets a backslash escape.
 // Pure view state (collapsed) has no markdown form and is not emitted.
 // Empty paragraphs are opt-in (`keepEmptyParagraphs`, page files only): each
 // adds one blank line at its indentation; without it they collapse away.
 
 function columnContainerToMarkdown(block: Block, depth: number, options?: SerializeOptions): string {
-  const opener =
+  const kind =
     block.type === "column" && typeof block.widthRatio === "number"
       ? `:::column ${block.widthRatio}`
       : block.type === "column"
         ? ":::column"
         : ":::columns";
+  const opener = `${kind}${layoutAttributeText(block.style)}`;
   const body = (block.children ?? [])
     .map((child) => blockToMarkdown(child, depth + 1, options))
     .join("\n\n");

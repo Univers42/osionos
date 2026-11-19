@@ -14,6 +14,7 @@ import type { Block } from "@/entities/block";
 import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import { parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
 import { applyOverlay, collectOverlay } from "@/features/page-file/model/blockOverlay";
+import { resolveContainerAttributes } from "@/features/page-file/model/containerStyle";
 
 /**
  * Rebuild a page's block tree from raw Markdown while preserving the ids and
@@ -28,7 +29,11 @@ import { applyOverlay, collectOverlay } from "@/features/page-file/model/blockOv
  * Caveat: matching is by pre-order position and type, so an edit that inserts a
  * block above a coloured one moves the colour off it. The same limit holds for
  * the page file.
+ *
+ * Layout attributes on a `:::` opener win over the overlay's layout keys (ADR 0064
+ * PS14). What the reader drops is not shown in raw mode yet: the page file reports it.
  */
 export function rawSourceToBlocks(source: string, current: readonly Block[]): Block[] {
-  return applyOverlay(sanitizeLinkBlockFields(parseMarkdownToBlocks(source)), collectOverlay(current));
+  const parsed = sanitizeLinkBlockFields(parseMarkdownToBlocks(source, { containerAttributes: true }));
+  return resolveContainerAttributes(applyOverlay(parsed, collectOverlay(current))).blocks;
 }

@@ -12,6 +12,7 @@
 
 import type { Block } from "@/entities/block";
 import type { PageEntry, PagePropertyEntry, PageRecurrence, PageVisibility } from "@/entities/page";
+import type { ContainerAttributeDrop } from "./containerStyle";
 
 /** A block page on disk: osionos's Markdown dialect + front-matter (ADR-004). */
 export { FOLDER_META_NAME, PAGE_FILE_SUFFIX } from "../../ide/model/pageFileNames";
@@ -55,4 +56,6 @@ export interface ParsedPageFile {
   content: Block[];
   /** Set when a `---` block was present but not parseable: it was kept as body text. */
   frontMatterError: string | null;
+  /** `{k=v}` attributes on `:::` openers that did not become style; absent when none. */
+  attributeDrops?: ContainerAttributeDrop[];
 }

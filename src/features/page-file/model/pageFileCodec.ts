@@ -19,6 +19,7 @@ import { parseMarkdownToBlocks } from "@osionos/markdown-engine/markdown/shortcu
 import { reconcileBlocks } from "@/features/raw-mode/model/reconcileBlocks";
 
 import { EXTRA_BLOCK_KEYS, SCOPED_OVERLAY_KEYS, applyOverlay, collectOverlay } from "./blockOverlay";
+import { resolveContainerAttributes } from "./containerStyle";
 import { joinFrontMatter, splitFrontMatter } from "./frontMatter";
 import { metaFromPage, patchFromMeta } from "./pageFileMeta";
 import { kindOfPage } from "./pagePaths";
@@ -125,15 +126,14 @@ export function fileToPage(text: string, existing?: PageEntry): ParsedPageFile {
   // Validated once: the guard walks every overlay entry, and both the meta and
   // the block restore need its verdict.
   const overlay = isBlockOverlay(split.meta.blocks) ? split.meta.blocks : undefined;
-  return {
-    meta: metaOf(split.meta, patch, overlay),
-    patch,
-    content: blocksOf(split.body, overlay, existing),
-    frontMatterError: split.error,
-  };
+  const { blocks, dropped } = resolveContainerAttributes(blocksOf(split.body, overlay, existing));
+  const parsed: ParsedPageFile = { meta: metaOf(split.meta, patch, overlay), patch, content: blocks, frontMatterError: split.error };
+  if (dropped.length > 0) parsed.attributeDrops = dropped;
+  return parsed;
 }
 
-/** Blocks for a body: the overlay restores ids/extras, else `existing` by position. */
+/** Blocks for a body: the overlay restores ids/extras, else `existing` by position.
+ *  Container attributes then win over either for layout keys (ADR 0064 PS14). */
 function blocksOf(body: string, overlay: BlockOverlay | undefined, existing?: PageEntry): Block[] {
   const blocks = parseBody(body);
   if (overlay !== undefined) return applyOverlay(blocks, overlay);
@@ -144,7 +144,7 @@ function blocksOf(body: string, overlay: BlockOverlay | undefined, existing?: Pa
 /** A parser crash must not eat a hand-edited file: one paragraph holds the body. */
 function parseBody(body: string): Block[] {
   try {
-    return sanitizeLinkBlockFields(parseMarkdownToBlocks(body, { keepEmptyParagraphs: true }));
+    return sanitizeLinkBlockFields(parseMarkdownToBlocks(body, { keepEmptyParagraphs: true, containerAttributes: true }));
   } catch {
     return [{ id: crypto.randomUUID(), type: "paragraph", content: body }];
   }
