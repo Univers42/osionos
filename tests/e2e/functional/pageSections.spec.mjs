@@ -1,8 +1,8 @@
 // The slash "Sections" group places a library section where "/" was typed, in one
 // undo step; and the section/shell catalogue is code, never a cached page (ADR 0064
-// PS18: the page cache's storedLength is the same before and after the catalogue loads).
+// PS18: no page-cache write or cached entry carries a shell while the catalogue loads).
 
-/* global localStorage */
+/* global localStorage, Storage */
 
 import { expect, test } from "@playwright/test";
 
@@ -41,31 +41,30 @@ test("slash Sections inserts the hero in place of the trigger; one undo takes it
 test("the catalogue loads without touching the page cache (PS18)", async ({ page, baseURL }) => {
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /New page/i }).first().or(page.getByRole("tab", { name: "Explorer" })).first().waitFor();
-  const cacheLength = () => page.evaluate(async () => {
-    const { storedLength } = await import("/src/widgets/database-view/model/knownDatabaseJournal.ts");
-    return Object.keys(localStorage).filter((key) => key.startsWith("osio:pages:"))
-      .reduce((sum, key) => sum + storedLength(localStorage.getItem(key) ?? ""), 0);
-  });
-  // The boot writes the seed into the cache: measure once two reads agree.
-  let before = -1;
-  await expect.poll(async () => {
-    const now = await cacheLength();
-    const settled = now > 0 && now === before;
-    before = now;
-    return settled;
-  }, { intervals: [300] }).toBe(true);
+  // Boot keeps syncing the cache after the first paint (CI 44541278487 grew it by
+  // 5,090 chars after two equal reads), so record the catalogue window's own writes
+  // instead of comparing totals.
   const loaded = await page.evaluate(async () => {
-    const shells = await import("/src/data/templates/shells/shellIndex.ts");
-    const sections = await import("/src/data/templates/sections/sectionIndex.ts");
-    const built = await Promise.all([
-      ...shells.SHELLS.map((shell) => shells.loadShell(shell.id)),
-      ...sections.SECTIONS.map((section) => sections.buildSection(section.id)),
-    ]);
-    const titles = new Set(shells.SHELLS.map((shell) => shell.title));
-    const cached = Object.keys(localStorage).filter((key) => key.startsWith("osio:pages:"))
-      .flatMap((key) => JSON.parse(localStorage.getItem(key) ?? "[]"));
-    return { built: built.filter((blocks) => blocks?.length).length, cachedShells: cached.filter((entry) => titles.has(entry.title)).length };
+    const writes = [];
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function record(key, value) {
+      if (String(key).startsWith("osio:pages:")) writes.push(String(value));
+      return setItem.call(this, key, value);
+    };
+    try {
+      const shells = await import("/src/data/templates/shells/shellIndex.ts");
+      const sections = await import("/src/data/templates/sections/sectionIndex.ts");
+      const built = await Promise.all([
+        ...shells.SHELLS.map((shell) => shells.loadShell(shell.id)),
+        ...sections.SECTIONS.map((section) => sections.buildSection(section.id)),
+      ]);
+      const titles = new Set(shells.SHELLS.map((shell) => shell.title));
+      const cached = [...writes, ...Object.keys(localStorage).filter((key) => key.startsWith("osio:pages:")).map((key) => localStorage.getItem(key) ?? "[]")]
+        .flatMap((value) => JSON.parse(value));
+      return { built: built.filter((blocks) => blocks?.length).length, cachedShells: cached.filter((entry) => titles.has(entry?.title)).length };
+    } finally {
+      Storage.prototype.setItem = setItem;
+    }
   });
   expect(loaded).toEqual({ built: 57, cachedShells: 0 });
-  expect(await cacheLength()).toBe(before);
 });
