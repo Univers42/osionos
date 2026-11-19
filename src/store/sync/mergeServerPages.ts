@@ -25,7 +25,7 @@
 
 import type { SyncLedger } from "@osionos/outbox-ledger";
 import type { PageEntry } from "@/entities/page";
-import { readCoverFields } from "@/entities/page/model/coverFields";
+import { readCoverFields, type CoverFields } from "@/entities/page/model/coverFields";
 import { isPersistedPageId } from "@/store/pageStore.helpers";
 import { pageStamp } from "./pageStamp";
 
@@ -123,9 +123,22 @@ export function mergeServerPages(
 }
 
 /**
+ * The cover layout a fetch takes. The size follows the page (it is in the stamp). coverPosition is
+ * outside the stamp, so "clean" says nothing about it: only a newer copy, or a page that has none,
+ * gives it (groot ADR 0065 CV4). O(1).
+ */
+function fetchedCoverFields(current: PageEntry, server: PageEntry, takeServer: boolean): CoverFields {
+  if (!takeServer) return {};
+  const { coverPosition, ...size } = readCoverFields(server);
+  const takesPosition = isNewer(server, current) || current.coverPosition === undefined;
+  return takesPosition && coverPosition !== undefined ? { ...size, coverPosition } : size;
+}
+
+/**
  * The page after a content fetch, or null when the server copy changes nothing (no store write,
  * no cache write). A clean page (nothing unpublished) takes the server copy whatever the
- * timestamps say: that also heals a cache an older merge left as {newer updatedAt, older body}.
+ * timestamps say (except coverPosition, fetchedCoverFields): that also heals a cache an older
+ * merge left as {newer updatedAt, older body}.
  * A page with an unpublished change takes it only when the server's updatedAt is newer.
  * `recordSynced`: the page was clean, so its new stamp is the server's and the outbox must not
  * PATCH that body back. Called on the store's CURRENT page (after the await): an edit typed
@@ -150,10 +163,10 @@ export function resolveFetchedPage(
     title: takeServer ? (server.title ?? current.title) : current.title,
     icon: takeServer ? (server.icon ?? current.icon) : current.icon,
     cover: takeServer ? (server.cover ?? current.cover) : current.cover,
-    ...(takeServer ? readCoverFields(server) : {}),
+    ...fetchedCoverFields(current, server, takeServer),
     updatedAt: takeServer ? (server.updatedAt ?? current.updatedAt) : current.updatedAt,
   };
-  // coverPosition is not in the stamp (pageStamp), so its change alone is compared here.
+  // coverPosition is not in the stamp (pageStamp), so a page gaining one is compared here.
   const unchanged = pageStamp(page) === pageStamp(current) && page.coverPosition === current.coverPosition;
   if (unchanged) return null;
   return { page, recordSynced: canPublish && clean };

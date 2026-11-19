@@ -53,10 +53,34 @@ test("a content fetch clamps the height and drops a width it does not know", () 
   assert.equal("coverWidth" in resolved.page, false);
 });
 
-test("a cover position change alone is still taken from a clean page's fetch", () => {
+// groot ADR 0065 CV4: coverPosition is outside the stamp, so "clean" is no evidence that a local
+// position was published. Before CV4 this case returned 20: a reposition snapped back on the
+// next content fetch of a page whose row held an older position.
+test("CV4: a clean page keeps its own cover position against a server copy that is not newer", () => {
   const current = mkPage({ coverPosition: 50 });
   const resolved = resolveFetchedPage(current, mkPage({ coverPosition: 20 }), cleanLedger(current), true);
+  assert.equal(resolved, null);
+});
+
+test("CV4: a newer server copy brings its cover position", () => {
+  const current = mkPage({ coverPosition: 50 });
+  const resolved = resolveFetchedPage(current, mkPage({ coverPosition: 20, updatedAt: T2 }), cleanLedger(current), true);
   assert.equal(resolved?.page.coverPosition, 20);
+});
+
+test("CV4: a page without a cover position takes the server's at the same updatedAt", () => {
+  const current = mkPage();
+  const resolved = resolveFetchedPage(current, mkPage({ coverPosition: 20 }), cleanLedger(current), true);
+  assert.equal(resolved?.page.coverPosition, 20);
+  assert.equal(resolved?.recordSynced, true);
+});
+
+test("CV4: a clean page still takes a cover size at the same updatedAt, not the position", () => {
+  const current = mkPage({ coverPosition: 50 });
+  const resolved = resolveFetchedPage(current, mkPage({ ...COVER }), cleanLedger(current), true);
+  assert.equal(resolved?.page.coverPosition, 50);
+  assert.equal(resolved?.page.coverHeight, 320);
+  assert.equal(resolved?.page.coverWidth, "content");
 });
 
 test("a page with an unpublished change keeps its own cover layout against an older server copy", () => {
@@ -68,8 +92,8 @@ test("a page with an unpublished change keeps its own cover layout against an ol
 
 // PS25: two writers alternate on the server, one that knows the cover keys and one that predates
 // them. `alternate` counts how many times the store was rewritten across the 10 fetches.
-function alternate(advanceClock: boolean): { page: PageEntry; rewrites: number } {
-  let page = mkPage();
+function alternate(advanceClock: boolean, start: Partial<PageEntry> = {}): { page: PageEntry; rewrites: number } {
+  let page = mkPage(start);
   const ledger: SyncLedger = cleanLedger(page);
   let rewrites = 0;
   for (let round = 0; round < 10; round += 1) {
@@ -99,6 +123,16 @@ test("PS25: with a newer server copy every round, the value survives all 10 rewr
   assert.equal(page.coverWidth, "content");
   assert.equal(page.coverPosition, 30);
   assert.equal(rewrites, 10);
+});
+
+// Re-stated under CV4: a device holding its own position (50) against an equal-time writer that
+// has 30 takes the size once and keeps 50 throughout; before CV4 it took 30 in that rewrite.
+test("PS25 + CV4: a local position survives 10 equal-time alternations, one rewrite for the size", () => {
+  const { page, rewrites } = alternate(false, { coverPosition: 50 });
+  assert.equal(page.coverPosition, 50);
+  assert.equal(page.coverHeight, 320);
+  assert.equal(page.coverWidth, "content");
+  assert.equal(rewrites, 1);
 });
 
 const SEED: SeedPage = { _id: P, title: "Seed", workspaceId: "ws-1", content: [] };
