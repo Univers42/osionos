@@ -12,7 +12,6 @@
 
 import type { Block } from "@/entities/block";
 import { diagramBlockToMarkdown } from "@/features/diagram/model/diagramMarkdown";
-import { fenceFor } from "@/shared/lib/markdown/codeFence";
 import { appFence, escapeParagraphContent, mediaBlockToMarkdown, tableBlockToMarkdown } from "./pageMarkdownEscape";
 import { indentLines, isListItem, joinTight, joinWithEmpties } from "./pageMarkdownJoin";
 import type { SerializeOptions } from "./pageMarkdownEscape";
@@ -96,11 +95,9 @@ export function blockToMarkdown(block: Block, depth = 0, options?: SerializeOpti
       break;
     }
     case "divider": line = "---"; break;
-    case "code": {
-      const fence = fenceFor(content);
-      line = `${fence}${block.language ?? ""}\n${content}\n${fence}`;
-      break;
-    }
+    // Caveat: a body holding its own ``` line closes this fence early. Kept at 3 backticks
+    // until the reader that accepts longer fences is live (devil FF-7 (e), 2026-11-18).
+    case "code": line = `\`\`\`${block.language ?? ""}\n${content}\n\`\`\``; break;
     case "equation": line = `$$\n${content}\n$$`; break;
     case "table_block": return tableBlockToMarkdown(block);
     // A drawing's content is an .osidraw JSON blob — fence it so it never leaks
