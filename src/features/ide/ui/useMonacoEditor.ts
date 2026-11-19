@@ -45,7 +45,7 @@ export interface MonacoEditorConfig {
   attachGutter?: (instance: editor.IStandaloneCodeEditor, uri: string) => () => void;
 }
 
-const prefersReducedMotion = (): boolean => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+export const prefersReducedMotion = (): boolean => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 // Posture: what CodeMirror shipped, not Monaco's defaults. No minimap, no
 // word-based suggestions (completion is the LSP's or nobody's), no sticky
@@ -56,7 +56,7 @@ const prefersReducedMotion = (): boolean => globalThis.matchMedia?.("(prefers-re
 // Indentation is per model (indentsWithTabs + detectIndentation at mount), never
 // global: insertSpaces here made Monaco force spaces on every model, so a Makefile
 // typed in the IDE failed with "missing separator" and C broke 42's norm.
-const EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
+export const EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
   automaticLayout: true,
   fontSize: 13,
   lineHeight: 21,
