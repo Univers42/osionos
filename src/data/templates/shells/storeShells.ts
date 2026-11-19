@@ -12,7 +12,7 @@ import { CARD, action, buttonPair, card, cardGrid, column, container, headingOf,
 
 /** Products as cards: a picture, a name, a price line and one action each. */
 function productGrid(names: string[]): Block {
-  return cardGrid(names.map((name) => [image(`Photo of ${name}`), h3(name), p('Price · one line on what it is'), action('View', 'secondary')]), 4, 12);
+  return cardGrid(names.map((name) => [image(`Photo of ${name}`), h3(name), p('Price · one line on what it is'), action('View', 'secondary')]), 4);
 }
 
 /** The product beside what it costs, what it is, and the two actions that buy or keep it. */
@@ -89,7 +89,7 @@ export function recipeShell(): Block[] {
   return [
     p('*Course · Cuisine*'), headingOf(1, 'Recipe name'), p('Two lines on why this recipe works and when to make it.'),
     image('The finished dish'),
-    cardGrid([card('Prep', '15 min'), card('Cook', '30 min'), card('Serves', '4'), card('Level', 'Easy')], 4, 10),
+    cardGrid([card('Prep', '15 min'), card('Cook', '30 min'), card('Serves', '4'), card('Level', 'Easy')], 4),
     recipeBody(),
     callout('A tip that makes the difference, or a swap for a missing ingredient.', '👩‍🍳'),
     h2('Notes'), p('How to store it, and how long it keeps.'),

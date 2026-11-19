@@ -30,10 +30,18 @@ export function equalColumns(groups: Block[][], style?: ColumnStyle): Block[] {
   return groups.map((group) => column(group, ratio, style));
 }
 
-/** A responsive grid of cards: auto-fills at `minCol` rem, never more than `cols`. */
-export function cardGrid(groups: Block[][], cols: ContainerStyle['cols'], minCol: ContainerStyle['minCol'] = 16): Block {
+// The narrowest track that still lets `cols` cards share one row of the default page
+// column (~44rem): a wider one left a lone card on a second row (3 cards at 16rem
+// came out 2 + 1 in the 1440 px shots).
+// Caveat: sized for the default page width; a narrow-width page can still wrap.
+const MIN_COL_FOR: Record<NonNullable<ContainerStyle['cols']>, NonNullable<ContainerStyle['minCol']>> = {
+  1: 20, 2: 16, 3: 12, 4: 10, 5: 10, 6: 10,
+};
+
+/** A responsive grid of cards: up to `cols` in a row, stacking on narrow screens. */
+export function cardGrid(groups: Block[][], cols: NonNullable<ContainerStyle['cols']>): Block {
   return container(
-    { layout: 'grid', cols, minCol, gap: 4, stackAt: 'mobile' },
+    { layout: 'grid', cols, minCol: MIN_COL_FOR[cols], gap: 4, stackAt: 'mobile' },
     equalColumns(groups, CARD),
   );
 }

@@ -85,7 +85,7 @@ export function courseShell(): Block[] {
   return [
     band([p('*Online course · Level · Length*'), headingOf(1, 'Course title'), p('What learners can do by the end that they cannot do today.'), buttonPair('Enrol now', 'Preview a lesson')], { padding: 8 }),
     image('Course trailer or cover picture'),
-    cardGrid([card('12 lessons', 'Short and focused'), card('4 hours', 'At your own pace'), card('Beginner', 'No experience needed'), card('Certificate', 'When you finish')], 4, 10),
+    cardGrid([card('12 lessons', 'Short and focused'), card('4 hours', 'At your own pace'), card('Beginner', 'No experience needed'), card('Certificate', 'When you finish')], 4),
     ...sectionTitle('What you will learn', 'The skills, in plain words.'),
     container({ layout: 'row', gap: 4, stackAt: 'mobile' }, [
       column([bullet('A first skill'), bullet('A second skill')], 0.5, CARD), column([bullet('A third skill'), bullet('A fourth skill')], 0.5, CARD),

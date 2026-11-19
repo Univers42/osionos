@@ -44,7 +44,7 @@ export function resumeShell(): Block[] {
     h2('Experience'), ...entry('Role', 'Company', '2023 – now'), ...entry('Role', 'Company', '2020 – 2023'),
     h2('Education'), ...entry('Degree', 'School', '2016 – 2020'),
     h2('Skills'),
-    cardGrid([[h3('Craft'), p('Your core skills.')], [h3('Tools'), p('What you work with.')], [h3('Languages'), p('What you speak.')]], 3, 10),
+    cardGrid([[h3('Craft'), p('Your core skills.')], [h3('Tools'), p('What you work with.')], [h3('Languages'), p('What you speak.')]], 3),
   ];
 }
 

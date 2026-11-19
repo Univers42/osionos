@@ -34,7 +34,7 @@ export function bentoSection(): Block[] {
 export function logoCloudSection(): Block[] {
   return [
     p('*Trusted by teams at*'),
-    container({ layout: 'grid', cols: 6, minCol: 10, gap: 4, align: 'center', stackAt: 'never' }, [
+    container({ layout: 'grid', cols: 3, minCol: 10, gap: 4, align: 'center', stackAt: 'never' }, [
       column([image('Logo')], 0.17), column([image('Logo')], 0.17), column([image('Logo')], 0.17),
       column([image('Logo')], 0.17), column([image('Logo')], 0.17), column([image('Logo')], 0.17),
     ]),
@@ -45,7 +45,7 @@ export function logoCloudSection(): Block[] {
 export function statsSection(): Block[] {
   const stat = (figure: string, label: string): Block[] => [headingOf(1, figure), p(label)];
   return [
-    cardGrid([stat('10k+', 'People reached'), stat('98%', 'Would recommend'), stat('24/7', 'Availability'), stat('5', 'Years running')], 4, 10),
+    cardGrid([stat('10k+', 'People reached'), stat('98%', 'Would recommend'), stat('24/7', 'Availability'), stat('5', 'Years running')], 4),
   ];
 }
 

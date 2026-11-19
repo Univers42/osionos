@@ -58,7 +58,7 @@ function webinarAgenda(): Block {
 export function webinarShell(): Block[] {
   return [
     announcement('Live webinar · Day, date · Time and time zone', 'Webinar title', 'Who it is for and the question it answers.', [action('Register for free')]),
-    cardGrid([card('Date', 'Day and date'), card('Time', 'Start time and time zone'), card('Length', '45 minutes and questions')], 3, 12),
+    cardGrid([card('Date', 'Day and date'), card('Time', 'Start time and time zone'), card('Length', '45 minutes and questions')], 3),
     webinarAgenda(), ...teamSection(), ...faqSection(),
     band([h3('Cannot make it live?'), p('Register anyway: the recording lands in your inbox the next day.'), action('Get the recording', 'secondary')], { align: 'center', padding: 6 }),
   ];
@@ -67,7 +67,7 @@ export function webinarShell(): Block[] {
 export function newsletterShell(): Block[] {
   return [
     announcement('A newsletter by Your name', 'Newsletter name', 'What readers get, how often, and why it is worth a place in their inbox.', [action('Subscribe')]),
-    cardGrid([card('Every Friday', 'When it arrives'), card('5 minutes', 'How long it takes to read'), card('2,000+', 'Readers so far')], 3, 10),
+    cardGrid([card('Every Friday', 'When it arrives'), card('5 minutes', 'How long it takes to read'), card('2,000+', 'Readers so far')], 3),
     ...testimonialsSection(),
     ...postListSection(),
     ...newsletterSection(),
@@ -77,7 +77,7 @@ export function newsletterShell(): Block[] {
 export function comingSoonShell(): Block[] {
   return [
     announcement('Your brand', 'Something new is coming', 'One line on what it is, and the day or season it opens.', [
-      cardGrid([card('12', 'Days'), card('08', 'Hours'), card('30', 'Minutes')], 3, 10),
+      cardGrid([card('12', 'Days'), card('08', 'Hours'), card('30', 'Minutes')], 3),
       action('Notify me'),
     ]),
     ...newsletterSection(),

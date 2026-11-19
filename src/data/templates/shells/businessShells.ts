@@ -21,7 +21,7 @@ function serviceCards(): Block[] {
 /** How an engagement runs, from first call to hand-over. */
 function processSteps(): Block[] {
   const steps = [card('1 · Talk', 'A first call to understand the goal.'), card('2 · Plan', 'A written scope, a price and dates.'), card('3 · Deliver', 'Work in short rounds, shown as it goes.'), card('4 · Hand over', 'Everything you need to carry on.')];
-  return [...sectionTitle('How we work', 'The same four steps on every project.'), cardGrid(steps, 4, 12)];
+  return [...sectionTitle('How we work', 'The same four steps on every project.'), cardGrid(steps, 4)];
 }
 
 export function servicesShell(): Block[] {
@@ -41,7 +41,7 @@ export function agencyShell(): Block[] {
 
 /** The project at a glance: who, what, how long and the headline result. */
 function caseFacts(): Block {
-  return cardGrid([card('Client', 'Who it was for'), card('Role', 'What you did'), card('Timeline', 'How long it took'), card('Result', 'The headline number')], 4, 10);
+  return cardGrid([card('Client', 'Who it was for'), card('Role', 'What you did'), card('Timeline', 'How long it took'), card('Result', 'The headline number')], 4);
 }
 
 /** The story: the problem, what you did about it, and what changed. */
@@ -86,7 +86,7 @@ export function careersShell(): Block[] {
     band([p('*Careers*'), headingOf(1, 'Do the best work of your life'), p('Why people join, and what makes the team different.'), action('See open roles')], { align: 'center', padding: 8 }),
     ...values(),
     ...sectionTitle('Benefits', 'What you get besides the work.'),
-    cardGrid([[h3('Time'), bullet('Holidays and flexible hours')], [h3('Growth'), bullet('A budget to learn')], [h3('Health'), bullet('Cover for you and yours')]], 3, 12),
+    cardGrid([[h3('Time'), bullet('Holidays and flexible hours')], [h3('Growth'), bullet('A budget to learn')], [h3('Health'), bullet('Cover for you and yours')]], 3),
     ...sectionTitle('Open roles', 'Do not see yours? Write to us anyway.'),
     opening('Role title', 'Team'), opening('Role title', 'Team'), opening('Role title', 'Team'),
     h2('How we hire'), numbered('A short call about you and the role.'), numbered('A task close to the real work.'), numbered('Meet the team, then an answer within a week.'),

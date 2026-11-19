@@ -22,7 +22,7 @@ export function teamSection(): Block[] {
   const member = (name: string, role: string): Block[] => [image(`Portrait of ${name}`), h3(name), p(role)];
   return [
     ...sectionTitle('The team', 'Who is behind it.'),
-    cardGrid([member('Name', 'Role'), member('Name', 'Role'), member('Name', 'Role'), member('Name', 'Role')], 4, 12),
+    cardGrid([member('Name', 'Role'), member('Name', 'Role'), member('Name', 'Role'), member('Name', 'Role')], 4),
   ];
 }
 

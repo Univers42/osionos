@@ -15,9 +15,9 @@ export function personalHomeShell(): Block[] {
       [h3('Today'), todo('The one thing that matters most'), todo('A smaller task'), todo('Something for later')],
       [h3('Quick links'), bullet('[Calendar](#)'), bullet('[Inbox](#)'), bullet('[Projects](#)')],
       [h3('Notes'), p('Ideas and reminders you want to see first.')],
-    ], 3, 12),
+    ], 3),
     ...sectionTitle('Goals this month', 'Three at most, each with how you will know it is done.'),
-    cardGrid([card('Goal one', 'Done when…'), card('Goal two', 'Done when…'), card('Goal three', 'Done when…')], 3, 12),
+    cardGrid([card('Goal one', 'Done when…'), card('Goal two', 'Done when…'), card('Goal three', 'Done when…')], 3),
     h2('Reading list'), todo('A book or article to read'), todo('Another one'),
     callout('A quote that keeps you going.', '🌱'),
   ];
@@ -33,9 +33,9 @@ export function dashboardShell(): Block[] {
     headingOf(1, 'Dashboard'), p('*What this dashboard tracks · Updated every Monday*'),
     ...statsSection(),
     ...sectionTitle('Projects', 'Every project in flight, one card each.'),
-    cardGrid([projectCard('Project one', 'On track'), projectCard('Project two', 'At risk'), projectCard('Project three', 'Done')], 3, 12),
+    cardGrid([projectCard('Project one', 'On track'), projectCard('Project two', 'At risk'), projectCard('Project three', 'Done')], 3),
     ...sectionTitle('This week', 'What moved, and what needs a decision.'),
-    cardGrid([[h3('Highlights'), bullet('A win worth sharing'), bullet('Another one')], [h3('Needs a decision'), bullet('The question, and who decides')]], 2, 16),
+    cardGrid([[h3('Highlights'), bullet('A win worth sharing'), bullet('Another one')], [h3('Needs a decision'), bullet('The question, and who decides')]], 2),
     callout('Risks: what could slip, and what you are doing about it.', '⚠️'),
   ];
 }
@@ -48,7 +48,7 @@ function roadmapLane(title: string, hint: string): Block[] {
 export function roadmapShell(): Block[] {
   return [
     ...pageHeaderSection(),
-    cardGrid([roadmapLane('Now', 'Being built this month'), roadmapLane('Next', 'Planned for the coming months'), roadmapLane('Later', 'Ideas we are exploring')], 3, 12),
+    cardGrid([roadmapLane('Now', 'Being built this month'), roadmapLane('Next', 'Planned for the coming months'), roadmapLane('Later', 'Ideas we are exploring')], 3),
     callout('How we decide: what we weigh, and how to suggest something.', '🧭'),
     ...timelineSection(),
   ];
@@ -57,7 +57,7 @@ export function roadmapShell(): Block[] {
 export function meetingNotesShell(): Block[] {
   return [
     headingOf(1, 'Meeting title'),
-    cardGrid([card('Date', 'Day, date and time'), card('Attendees', 'Who was there'), card('Goal', 'What this meeting decides')], 3, 10),
+    cardGrid([card('Date', 'Day, date and time'), card('Attendees', 'Who was there'), card('Goal', 'What this meeting decides')], 3),
     h2('Agenda'), numbered('First topic · who leads it'), numbered('Second topic'), numbered('Any other business'),
     h2('Notes'), bullet('What was said that matters later.'),
     h2('Decisions'), callout('What was decided, and why.', '✅'),
@@ -73,6 +73,6 @@ export function notFoundShell(): Block[] {
       buttonPair('Go home', 'Contact us'),
     ], { align: 'center', padding: 10 }),
     ...sectionTitle('Maybe you were looking for', 'The pages people open most.'),
-    cardGrid([card('Docs', 'Guides and reference.'), card('Blog', 'What is new.'), card('Help', 'Answers to common questions.')], 3, 12),
+    cardGrid([card('Docs', 'Guides and reference.'), card('Blog', 'What is new.'), card('Help', 'Answers to common questions.')], 3),
   ];
 }

@@ -37,7 +37,7 @@ function eventDetails(): Block[] {
   const detail = (title: string, body: string): Block[] => [h3(title), p(body)];
   return [
     ...sectionTitle('The details', 'Everything you need to plan your visit.'),
-    cardGrid([detail('When', 'Day, date · start and end time'), detail('Where', 'Venue, street, city'), detail('Price', 'Free, or the ticket price')], 3, 12),
+    cardGrid([detail('When', 'Day, date · start and end time'), detail('Where', 'Venue, street, city'), detail('Price', 'Free, or the ticket price')], 3),
   ];
 }
 
