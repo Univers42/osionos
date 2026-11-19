@@ -23,6 +23,7 @@ import {
 } from '@/shared/config/pageConfigStore';
 import { useToastStore } from '@/shared/ui';
 import { usePageStore } from '@/store/usePageStore';
+import { shellCopyOf } from '@/store/templateCopy';
 import {
   copyPageContents,
   copyPageLink,
@@ -132,6 +133,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
   const recordAction = usePageConfigStore((state) => state.recordAction);
   const addVersion = usePageConfigStore((state) => state.addVersion);
   const duplicatePage = usePageStore((state) => state.duplicatePage);
+  const addTemplate = usePageStore((state) => state.addTemplate);
   const archivePage = usePageStore((state) => state.archivePage);
   const updatePageTitle = usePageStore((state) => state.updatePageTitle);
   const updatePageContent = usePageStore((state) => state.updatePageContent);
@@ -228,6 +230,15 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     const newId = await duplicatePage(pageId, resolvedWorkspaceId);
     await logAction('duplicate', newId ? 'Page duplicated' : 'Duplicate blocked', { newId });
   }, [duplicatePage, logAction, page, pageId, resolvedWorkspaceId, snapshot]);
+
+  // A template page holding a copy: blocks are copied again on every use, so the
+  // shell never changes the page it came from, nor the pages made from it.
+  const saveAsShell = useCallback(async () => {
+    const copy = page ? shellCopyOf(page) : null;
+    if (!copy || !resolvedWorkspaceId) return;
+    const saved = await addTemplate(resolvedWorkspaceId, jwt ?? '', { ...copy, open: false });
+    pushToast(saved ? { kind: 'success', title: 'Saved as a shell in Templates' } : { kind: 'error', title: 'The shell could not be saved' });
+  }, [addTemplate, jwt, page, pushToast, resolvedWorkspaceId]);
 
   const moveToTrash = useCallback(async () => {
     if (!page || !pageId || !resolvedWorkspaceId) return;
@@ -418,6 +429,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     copyLink,
     copyContents,
     duplicate,
+    saveAsShell,
     moveToTrash,
     present,
     toggleSmallText,

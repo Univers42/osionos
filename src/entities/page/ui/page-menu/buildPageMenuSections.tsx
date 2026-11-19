@@ -11,6 +11,7 @@ import {
   Import,
   Languages,
   LayoutDashboard,
+  LayoutTemplate,
   ListTree,
   Link,
   Lock,
@@ -102,6 +103,7 @@ export function buildPageMenuSections(context: PageMenuContext): PageMenuSection
 
   const more = [
     { id: 'copy-contents', label: 'Copy page contents', icon: <Clipboard size={16} />, run: run(() => actions.copyContents()) },
+    { id: 'save-as-shell', label: 'Save as shell', icon: <LayoutTemplate size={16} />, run: run(() => actions.saveAsShell()) },
     { id: 'present', label: 'Present', icon: <Presentation size={16} />, shortcut: 'Ctrl+Alt+P', badge: 'Beta', checked: actions.config.presentationMode, keepOpen: true, run: run(() => actions.present(), true) },
     ...(context.canToggleWiki ? [{
       id: 'toggle-wiki',

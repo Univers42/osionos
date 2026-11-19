@@ -175,11 +175,12 @@ export interface PageStore {
     pageId: string,
     workspaceId: string,
   ) => Promise<string | null>;
-  /** Create a new template page (isTemplate=true) and open it for editing. */
+  /** Create a new template page (isTemplate=true) and open it for editing, unless
+   *  `open` is false. Content, cover and properties are a saved page's or section's copy. */
   addTemplate: (
     workspaceId: string,
     jwt: string,
-    options?: { title?: string; icon?: string },
+    options?: AddTemplateOptions,
   ) => Promise<PageEntry | null>;
   /** Mark one template as the workspace default, clearing any previous default. */
   setDefaultTemplate: (templateId: string, workspaceId: string) => void;
@@ -284,6 +285,11 @@ export interface PageStore {
   templatePageBySurface: (workspaceId: string, surface: NonNullable<PageEntry["templateSurface"]>) => PageEntry | undefined;
   /** Get full page data including content (for rendering) */
   pageById: (pageId: string) => PageEntry | undefined;
+}
+
+export interface AddTemplateOptions extends Pick<AddPageOptions, "icon" | "content" | "cover" | "coverPosition" | "properties"> {
+  title?: string;
+  open?: boolean;
 }
 
 export interface AddPageOptions {

@@ -54,7 +54,7 @@ import {
   applyArchived,
   applyDeleted,
 } from "./pageCascadeResult";
-import type { AddPageOptions, PageEntry, PageStore, ActivePage, PageRecurrence } from "@/entities/page";
+import type { AddPageOptions, AddTemplateOptions, PageEntry, PageStore, ActivePage, PageRecurrence } from "@/entities/page";
 
 type SetFn = (
   partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>),
@@ -755,16 +755,16 @@ export function createAddTemplate(_set: SetFn, get: GetFn) {
   return async (
     workspaceId: string,
     jwt: string,
-    options: { title?: string; icon?: string } = {},
+    options: AddTemplateOptions = {},
   ): Promise<PageEntry | null> => {
     const page = await get().addPage(
       workspaceId,
       options.title ?? "Untitled template",
       jwt,
       undefined,
-      { icon: options.icon, isTemplate: true },
+      { icon: options.icon, isTemplate: true, content: options.content, ...createExtrasOf(options) },
     );
-    if (page) {
+    if (page && options.open !== false) {
       get().openPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon });
     }
     return page;

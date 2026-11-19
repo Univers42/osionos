@@ -2,6 +2,7 @@
 // (ADR 0064 PS20). ADR 0065 CV15: only the keys the template has, and never a
 // cover-layout field (coverHeight / coverWidth) before the Phase 5 writer.
 
+import type { Block } from "@/entities/block/model/types";
 import type { AddPageOptions, PageEntry } from "@/entities/page/model/types";
 
 export type TemplateCopy = Pick<AddPageOptions, "cover" | "coverPosition" | "properties">;
@@ -27,4 +28,18 @@ export function createExtrasOf(options: AddPageOptions): TemplateCopy {
   if (options.coverPosition !== undefined) extras.coverPosition = options.coverPosition;
   if (options.properties !== undefined) extras.properties = options.properties;
   return extras;
+}
+
+export interface UserTemplateCopy extends TemplateCopy {
+  title: string;
+  icon?: string;
+  content: Block[];
+}
+
+/** "Save as shell": the page's blocks, title, icon and cover; null while its body is not loaded. */
+export function shellCopyOf(page: PageEntry): UserTemplateCopy | null {
+  if (!Array.isArray(page.content)) return null;
+  const copy: UserTemplateCopy = { title: `${page.title || "Untitled"} shell`, content: structuredClone(page.content) };
+  if (page.icon !== undefined) copy.icon = page.icon;
+  return { ...copy, ...templateCopyOptions(page, null) };
 }
