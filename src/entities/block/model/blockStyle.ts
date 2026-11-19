@@ -86,8 +86,10 @@ export function sanitizeBlockStyle(input: unknown): BlockStyle {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) return {};
   const out: BlockStyle = {};
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    // Own keys only: a synced style named `constructor` or `__proto__` would
+    // otherwise resolve on the prototype chain and throw (ADR 0064 F1).
+    if (!Object.hasOwn(PROP_SCALE, key)) continue;
     const scaleKey = PROP_SCALE[key];
-    if (!scaleKey) continue;
     const allowed = STYLE_SCALES[scaleKey] as readonly unknown[];
     if (!allowed.includes(value)) continue;
     (out as Record<string, unknown>)[key] = value;

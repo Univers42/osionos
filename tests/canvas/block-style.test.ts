@@ -36,6 +36,46 @@ test("sanitize returns {} for non-objects", () => {
   assert.deepEqual(sanitizeBlockStyle([]), {});
 });
 
+// ADR 0064 F1/PS1: a stored style is synced data, so a key that names an
+// Object.prototype member (or __proto__ as an own key, as JSON.parse makes it)
+// must be dropped, not looked up on the prototype chain and thrown on.
+test("sanitize and resolve ignore every prototype-member key", () => {
+  const names = [...Object.getOwnPropertyNames(Object.prototype), "prototype"];
+  for (const name of names) {
+    for (const value of [1, 3, "panel", null, {}]) {
+      const style = JSON.parse(JSON.stringify({ [name]: value, padding: 3 }));
+      assert.deepEqual(sanitizeBlockStyle(style), { padding: 3 }, name);
+      assert.deepEqual(resolveBlockStyle({ style }), { "data-s-padding": "3" }, name);
+    }
+  }
+});
+
+test("seeded fuzz: 10k random style records never throw and keep only scale values", () => {
+  let seed = 0x5eed64;
+  const rand = () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const pick = <T,>(list: readonly T[]): T => list[Math.floor(rand() * list.length)];
+  const keys = [...Object.keys(PROP_SCALE), ...Object.getOwnPropertyNames(Object.prototype), "x", ""];
+  const values: unknown[] = [0, 1, 3, -1, 1e9, "panel", "red", "", null, true, [], {}, "constructor"];
+  for (let i = 0; i < 10_000; i++) {
+    const record: Record<string, unknown> = {};
+    const size = Math.floor(rand() * 6);
+    for (let k = 0; k < size; k++) record[pick(keys)] = pick(values);
+    const style = JSON.parse(JSON.stringify(record));
+    const out = sanitizeBlockStyle(style) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(out)) {
+      assert.ok(Object.hasOwn(PROP_SCALE, key), key);
+      const scale = STYLE_SCALES[PROP_SCALE[key as keyof typeof PROP_SCALE]] as readonly unknown[];
+      assert.ok(scale.includes(value), `${key}=${String(value)}`);
+    }
+    resolveBlockStyle({ style });
+  }
+});
+
 test("resolve emits data-s-<key> attributes", () => {
   assert.deepEqual(resolveBlockStyle({ style: { padding: 3 } }), { "data-s-padding": "3" });
 });
