@@ -162,3 +162,29 @@ test("with osio.layout.modes off, Advanced offers no section, layout kind or key
   await page.keyboard.press("Control+Space");
   await expect(suggestions.filter({ hasText: /^\d/ })).toHaveCount(0);
 });
+
+/** Main-frame document requests: a reload is one more entry. */
+function recordDocuments(page) {
+  const documents = [];
+  page.on("request", (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documents.push(request.url());
+  });
+  return documents;
+}
+
+test("text typed before a failed console chunk reloads the page is there after the reload", async ({ page, baseURL }) => {
+  test.setTimeout(240_000);
+  await page.route(/RawMonacoPane/, (route) => route.abort());
+  const documents = recordDocuments(page);
+  await openRaw(page, baseURL);
+  const loaded = documents.length;
+  await textarea(page).fill("Typed before the reload");
+  await advanced(page).click();
+  // The dev server has no preload helper, so the failed import only rejects: fire the event the
+  // production helper fires for it. The handler and its reload are the app's own (ADR 0061).
+  await expect(rawView(page).getByText("did not load")).toBeVisible();
+  await page.evaluate(() => globalThis.dispatchEvent(new Event("vite:preloadError")));
+  await expect.poll(() => documents.length).toBe(loaded + 1);
+  await expect(textarea(page)).toHaveValue("Typed before the reload");
+  await expect(rawView(page).getByText("●")).toBeVisible();
+});
