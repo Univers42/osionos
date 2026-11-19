@@ -295,4 +295,8 @@ export interface AddPageOptions {
   isDefaultTemplate?: boolean;
   templateSurface?: PageEntry["templateSurface"];
   recurrence?: PageRecurrence | null;
+  /** Copied from a template (ADR 0064 PS20); sent only when set. */
+  cover?: string;
+  coverPosition?: number;
+  properties?: PagePropertyEntry[];
 }

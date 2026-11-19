@@ -47,6 +47,7 @@ import { isPageClean, resolveFetchedPage } from "./sync/mergeServerPages";
 import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./sync/pageStamp";
 import { setBase } from "./sync/pageBase";
 import { forgetAppRemovals, recordAppRemovals } from "./appRemovals";
+import { createExtrasOf, templateCopyOptions } from "./templateCopy";
 import {
   cascadeIdsFrom,
   applyArchived,
@@ -289,10 +290,12 @@ export function createAddPage(set: SetFn, get: GetFn) {
             isDefaultTemplate: options.isDefaultTemplate,
             templateSurface: options.templateSurface,
             recurrence: options.recurrence,
+            ...createExtrasOf(options),
           },
           apiJwt,
         );
         const pageWithTimestamp: PageEntry = {
+          ...createExtrasOf(options),
           ...page,
           surface: page.surface ?? options.surface,
           isTemplate: page.isTemplate ?? options.isTemplate ?? false,
@@ -336,6 +339,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
       isDefaultTemplate: options.isDefaultTemplate ?? false,
       templateSurface: options.templateSurface,
       recurrence: options.recurrence ?? null,
+      ...createExtrasOf(options),
     };
     set((s) => ({
       ...derivePageState({
@@ -801,7 +805,7 @@ export function createCreatePageFromTemplate(_set: SetFn, get: GetFn) {
       template.title || "Untitled",
       jwt,
       parentPageId,
-      { icon: template.icon, content: clonedContent },
+      { icon: template.icon, content: clonedContent, ...templateCopyOptions(template, null) },
     );
     if (page && options?.open !== false) {
       get().openPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon });
