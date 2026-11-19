@@ -24,8 +24,19 @@ import {
 } from "@/entities/block/model/blockVirtualization";
 import { usePageStore } from "@/store/usePageStore";
 import { mark, measure } from "@osionos/perf-probe";
+import { ErrorBoundary } from "@osionos/ui/atoms/ErrorBoundary";
 
 const INTERNAL_PAGE_LINK_PREFIX = "page://";
+
+// One block that throws (synced data the renderer did not expect) shows this
+// and the rest of the page still renders: public pages and the profile README
+// have no other boundary (ADR 0064 PS3). A block that threw keeps the fallback
+// until the renderer remounts; the boundary does not reset on new block data.
+const BLOCK_FALLBACK = (
+  <p role="note" data-testid="block-render-error" className="text-sm text-[var(--osio-fg-muted)]">
+    This block could not be displayed.
+  </p>
+);
 
 function getInternalPageIdFromHref(href: string) {
   return href.startsWith(INTERNAL_PAGE_LINK_PREFIX)
@@ -164,7 +175,9 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
               className="absolute left-0 right-0 top-0"
               style={{ transform: `translateY(${virtualItem.start - scrollMargin}px)` }}
             >
-              <ReadOnlyBlock block={item.block} index={item.effectiveIndex} properties={properties} />
+              <ErrorBoundary fallback={BLOCK_FALLBACK}>
+                <ReadOnlyBlock block={item.block} index={item.effectiveIndex} properties={properties} />
+              </ErrorBoundary>
             </div>
           );
         })}
@@ -177,7 +190,9 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
     <RenderModeProvider mode="preview">
       <div ref={rootRef} className="flex flex-col">
       {renderMeta.map((item) => (
-        <ReadOnlyBlock key={item.block.id} block={item.block} index={item.effectiveIndex} properties={properties} />
+        <ErrorBoundary key={item.block.id} fallback={BLOCK_FALLBACK}>
+          <ReadOnlyBlock block={item.block} index={item.effectiveIndex} properties={properties} />
+        </ErrorBoundary>
       ))}
     </div>
     </RenderModeProvider>
