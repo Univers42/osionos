@@ -7,17 +7,12 @@ import { contentSection, postListSection } from '../sections/contentSections';
 import { featureGridSection } from '../sections/featureSections';
 import { pageHeaderSection } from '../sections/frameSections';
 import { contactSection, newsletterSection } from '../sections/peopleSections';
-import { CARD, action, buttonPair, cardGrid, column, container, headingOf, image, sectionTitle } from '../sections/sectionBlocks';
-
-/** A round portrait slot. */
-function avatar(): Block {
-  return { ...image('Your portrait'), mediaShape: 'circle' };
-}
+import { CARD, action, buttonPair, cardGrid, column, container, headingOf, image, portrait, sectionTitle } from '../sections/sectionBlocks';
 
 /** Who you are: the portrait beside the name, a line and two actions. */
 function identity(): Block {
   return container({ layout: 'row', gap: 6, align: 'center', stackAt: 'mobile' }, [
-    column([avatar()], 0.25),
+    column([portrait('Your portrait')], 0.25),
     column([headingOf(1, 'Your name'), p('What you do, where, and what you care about, in one line.'), buttonPair('Follow', 'Message')], 0.75),
   ]);
 }
@@ -30,7 +25,7 @@ export function linkInBioShell(): Block[] {
   const links = ['My website', 'Latest project', 'Newsletter', 'Say hello'].map((label) => action(label, 'secondary'));
   return [
     container({ layout: 'stack', gap: 3, align: 'center', padding: 6 }, [
-      column([avatar(), headingOf(2, 'Your name'), p('One line about you.'), ...links], 1),
+      column([portrait('Your portrait'), headingOf(2, 'Your name'), p('One line about you.'), ...links], 1),
     ]),
   ];
 }
@@ -56,7 +51,7 @@ export function resumeShell(): Block[] {
 /** The author's card under a post. */
 function authorCard(): Block {
   return container({ layout: 'row', gap: 4, align: 'center', stackAt: 'never' }, [
-    column([avatar()], 0.2),
+    column([portrait('Your portrait')], 0.2),
     column([h3('Written by Your name'), p('One line about the author.')], 0.8),
   ]);
 }

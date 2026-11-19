@@ -51,6 +51,11 @@ export function image(alt: string): Block {
   return { id: bid(), type: 'image', content: '', asset: '', mediaAlt: alt };
 }
 
+/** A round portrait slot. */
+export function portrait(alt: string): Block {
+  return { ...image(alt), mediaShape: 'circle' };
+}
+
 /** A heading by level, so section builders pick the level from the shell's outline. */
 export function headingOf(level: 1 | 2 | 3, text: string): Block {
   if (level === 1) return h1(text);
