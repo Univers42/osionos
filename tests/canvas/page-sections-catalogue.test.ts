@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { SECTIONS, buildSection } from "../../src/data/templates/sections/sectionIndex.ts";
 import { SECTION_BUILDERS } from "../../src/data/templates/sections/sectionBuilders.ts";
-import { blockDepth, coverLayoutKeysIn, fileRoundTrip, markdownProjection, markdownRoundTrip } from "./support/catalogue-checks.ts";
+import { attributeRoundTrip, blockDepth, coverLayoutKeysIn, fileRoundTrip, layoutProjection, markdownProjection, markdownRoundTrip } from "./support/catalogue-checks.ts";
 
 test("the index and the builders name the same twenty sections", () => {
   assert.deepEqual(SECTIONS.map((section) => section.id).sort(), Object.keys(SECTION_BUILDERS).sort());
@@ -20,6 +20,7 @@ for (const { id } of SECTIONS) {
     assert.ok(blockDepth(blocks) <= 8, `${id} depth ${blockDepth(blocks)}`);
     assert.deepEqual(markdownProjection(markdownRoundTrip(blocks)), markdownProjection(blocks), `${id} markdown`);
     assert.deepEqual(fileRoundTrip(blocks), blocks, `${id} .omd`);
+    assert.deepEqual(layoutProjection(attributeRoundTrip(blocks)), layoutProjection(blocks), `${id} layout attributes`);
     assert.deepEqual(coverLayoutKeysIn(blocks), []);
   });
 }

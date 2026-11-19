@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { SEED_PAGES } from "@/data/seedPages";
 import { SHELLS, loadShell } from "../../src/data/templates/shells/shellIndex.ts";
-import { blockDepth, coverLayoutKeysIn, fileRoundTrip, markdownProjection, markdownRoundTrip } from "./support/catalogue-checks.ts";
+import { attributeRoundTrip, blockDepth, coverLayoutKeysIn, fileRoundTrip, layoutProjection, markdownProjection, markdownRoundTrip } from "./support/catalogue-checks.ts";
 
 const WAVE_ONE = ["profile", "landing", "portfolio", "docs", "blog-post", "about", "pricing", "changelog", "link-in-bio", "resume", "event", "contact"];
 
@@ -25,6 +25,7 @@ for (const { id } of SHELLS) {
     assert.ok(blockDepth(blocks) <= 8, `${id} depth ${blockDepth(blocks)}`);
     assert.deepEqual(markdownProjection(markdownRoundTrip(blocks)), markdownProjection(blocks), `${id} markdown`);
     assert.deepEqual(fileRoundTrip(blocks), blocks, `${id} .omd`);
+    assert.deepEqual(layoutProjection(attributeRoundTrip(blocks)), layoutProjection(blocks), `${id} layout attributes`);
     assert.deepEqual(coverLayoutKeysIn(blocks), []);
   });
 }

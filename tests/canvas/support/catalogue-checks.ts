@@ -6,6 +6,8 @@ import type { PageEntry } from "../../../src/entities/page/model/types.ts";
 import { serializeBlocksToMarkdown } from "../../../src/services/page-actions/pageMarkdownSerialize.ts";
 import { parseMarkdownToBlocks } from "../../../packages/markdown-engine/markdown/shortcuts.ts";
 import { fileToPage, pageToFile } from "../../../src/features/page-file/model/pageFileCodec.ts";
+import { LAYOUT_STYLE_KEYS } from "../../../src/entities/block/model/blockStyleAttributes.ts";
+import { rawSourceToBlocks } from "../../../src/features/raw-mode/model/rawSave.ts";
 
 const KEEP = { keepEmptyParagraphs: true } as const;
 
@@ -19,8 +21,8 @@ export function blockDepth(blocks: readonly Block[] | undefined): number {
   return deepest;
 }
 
-// The fields plain markdown carries. Ids and `style` ride only in the .omd overlay
-// (no attribute writer on develop yet), so the markdown path is compared on these.
+// The fields plain markdown carries. Ids and non-layout `style` ride only in the .omd
+// overlay; layout keys also ride as `{k=v}` on `:::` openers (layoutProjection).
 const MARKDOWN_KEYS = ["type", "content", "checked", "language", "widthRatio", "asset", "buttonLabel", "buttonHref", "buttonVariant", "mediaAlt"] as const;
 
 /** A block reduced to what markdown carries, children included. */
@@ -31,6 +33,20 @@ export function markdownProjection(blocks: readonly Block[] | undefined): unknow
     if (block.children?.length) picked.children = markdownProjection(block.children);
     return picked;
   });
+}
+
+/** Each block's type and the layout keys of its style, children included. */
+export function layoutProjection(blocks: readonly Block[] | undefined): unknown[] {
+  return (blocks ?? []).map((block) => {
+    const layout: Record<string, unknown> = {};
+    for (const key of LAYOUT_STYLE_KEYS) if (block.style?.[key] !== undefined) layout[key] = block.style[key];
+    return { type: block.type, layout, children: layoutProjection(block.children) };
+  });
+}
+
+/** The markdown alone, read back the way raw mode reads it: no overlay to lean on. */
+export function attributeRoundTrip(blocks: Block[]): Block[] {
+  return rawSourceToBlocks(serializeBlocksToMarkdown(blocks, KEEP), []);
 }
 
 export function markdownRoundTrip(blocks: Block[]): Block[] {
