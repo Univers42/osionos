@@ -80,5 +80,8 @@ export interface SeedPage {
   templateSurface?:   NonNullable<PageEntry["templateSurface"]>;
   surface?:           string;
   cover?:             string;
+  coverPosition?:     number;
+  coverHeight?:       number;
+  coverWidth?:        string;
   content:       Block[];
 }

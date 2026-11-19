@@ -73,7 +73,7 @@ function hashContentCached(content: unknown): string {
 /** The fields whose change must reach the server, folded into one stamp string. */
 export function pageStamp(page: PageEntry): string {
   const content = page.content === undefined ? CONTENT_UNLOADED : hashContentCached(page.content);
-  return [
+  const stamp = [
     page.updatedAt ?? "",
     page.title ?? "",
     page.parentPageId ?? "",
@@ -87,6 +87,15 @@ export function pageStamp(page: PageEntry): string {
     hashJson(page.recurrence ?? null),
     content,
   ].join("|");
+  return stamp + coverSizeStamp(page);
+}
+
+/** Empty for a page without a cover size, so its stamp stays what every ledger already holds
+ *  (ADR 0064 PS26). coverPosition stays out: ledgers recorded without it would mark every
+ *  repositioned page unpublished and re-PATCH it once. */
+function coverSizeStamp(page: PageEntry): string {
+  if (page.coverHeight === undefined && page.coverWidth === undefined) return "";
+  return `|c${page.coverHeight ?? ""}/${page.coverWidth ?? ""}`;
 }
 
 /** Desired outbox state: id → stamp + payloads, limited to pages the viewer may publish. */

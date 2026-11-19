@@ -1,0 +1,119 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   cover-reader.test.ts                               :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/11/19 12:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/11/19 12:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+// groot ADR 0064 PS24/PS25: the reader goes live before any client writes the cover layout.
+// A content fetch and a seed read coverPosition/coverHeight/coverWidth back, and a server copy
+// written by an older client (no key) never erases the value a newer one wrote.
+
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import type { SyncLedger } from "@osionos/outbox-ledger";
+import type { PageEntry } from "@/entities/page";
+import type { SeedPage } from "@/data/seedPages";
+import { seedToEntry } from "@/store/pageStore.helpers";
+import { pageStamp } from "@/store/sync/pageStamp";
+import { resolveFetchedPage } from "@/store/sync/mergeServerPages";
+
+const P = "fcf48b5b-2fed-41d6-9c5d-0075988728d1";
+const T1 = "2026-10-01T10:00:00.000Z";
+const T2 = "2026-10-02T10:00:00.000Z";
+const COVER = { coverPosition: 30, coverHeight: 320, coverWidth: "content" as const };
+
+function mkPage(overrides: Partial<PageEntry> = {}): PageEntry {
+  return { _id: P, title: "Page", workspaceId: "ws-1", updatedAt: T1, content: [], ...overrides };
+}
+
+const cleanLedger = (page: PageEntry): SyncLedger => ({ [P]: pageStamp(page) });
+
+test("a content fetch reads the three cover fields back", () => {
+  const current = mkPage();
+  const resolved = resolveFetchedPage(current, mkPage({ ...COVER }), cleanLedger(current), true);
+  assert.ok(resolved);
+  assert.equal(resolved.page.coverPosition, 30);
+  assert.equal(resolved.page.coverHeight, 320);
+  assert.equal(resolved.page.coverWidth, "content");
+});
+
+test("a content fetch clamps the height and drops a width it does not know", () => {
+  const current = mkPage();
+  const server = { ...mkPage(), coverHeight: 5000, coverWidth: "wide" } as unknown as PageEntry;
+  const resolved = resolveFetchedPage(current, server, cleanLedger(current), true);
+  assert.ok(resolved);
+  assert.equal(resolved.page.coverHeight, 640);
+  assert.equal("coverWidth" in resolved.page, false);
+});
+
+test("a cover position change alone is still taken from a clean page's fetch", () => {
+  const current = mkPage({ coverPosition: 50 });
+  const resolved = resolveFetchedPage(current, mkPage({ coverPosition: 20 }), cleanLedger(current), true);
+  assert.equal(resolved?.page.coverPosition, 20);
+});
+
+test("a page with an unpublished change keeps its own cover layout against an older server copy", () => {
+  const current = mkPage({ ...COVER, title: "edited", updatedAt: T2 });
+  const ledger: SyncLedger = { [P]: "an older stamp" };
+  const server = mkPage({ coverPosition: 80, coverHeight: 200, coverWidth: "full", content: undefined });
+  assert.equal(resolveFetchedPage(current, server, ledger, true), null);
+});
+
+// PS25: two writers alternate on the server, one that knows the cover keys and one that predates
+// them. `alternate` counts how many times the store was rewritten across the 10 fetches.
+function alternate(advanceClock: boolean): { page: PageEntry; rewrites: number } {
+  let page = mkPage();
+  const ledger: SyncLedger = cleanLedger(page);
+  let rewrites = 0;
+  for (let round = 0; round < 10; round += 1) {
+    const updatedAt = advanceClock ? new Date(Date.parse(T1) + (round + 1) * 1000).toISOString() : T1;
+    const server = round % 2 === 0 ? mkPage({ ...COVER, updatedAt }) : mkPage({ updatedAt });
+    const resolved = resolveFetchedPage(page, server, ledger, true);
+    if (!resolved) continue;
+    rewrites += 1;
+    page = resolved.page;
+    if (resolved.recordSynced) ledger[P] = pageStamp(page);
+  }
+  return { page, rewrites };
+}
+
+test("PS25: 10 alternations with and without the keys keep the value, one rewrite", () => {
+  const { page, rewrites } = alternate(false);
+  assert.deepEqual(
+    { coverPosition: page.coverPosition, coverHeight: page.coverHeight, coverWidth: page.coverWidth },
+    COVER,
+  );
+  assert.equal(rewrites, 1);
+});
+
+test("PS25: with a newer server copy every round, the value survives all 10 rewrites", () => {
+  const { page, rewrites } = alternate(true);
+  assert.equal(page.coverHeight, 320);
+  assert.equal(page.coverWidth, "content");
+  assert.equal(page.coverPosition, 30);
+  assert.equal(rewrites, 10);
+});
+
+const SEED: SeedPage = { _id: P, title: "Seed", workspaceId: "ws-1", content: [] };
+
+test("a seed page carries its cover layout into the store, validated", () => {
+  const entry = seedToEntry({ ...SEED, cover: "linear-gradient(red, blue)", ...COVER });
+  assert.equal(entry.coverPosition, 30);
+  assert.equal(entry.coverHeight, 320);
+  assert.equal(entry.coverWidth, "content");
+  const clamped = seedToEntry({ ...SEED, coverHeight: 12.2, coverPosition: 140 });
+  assert.equal(clamped.coverHeight, 120);
+  assert.equal("coverPosition" in clamped, false);
+});
+
+test("a seed page without a cover layout gains no cover keys", () => {
+  const entry = seedToEntry(SEED);
+  for (const key of ["coverPosition", "coverHeight", "coverWidth"]) assert.equal(key in entry, false, key);
+});

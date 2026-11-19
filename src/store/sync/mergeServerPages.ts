@@ -25,6 +25,7 @@
 
 import type { SyncLedger } from "@osionos/outbox-ledger";
 import type { PageEntry } from "@/entities/page";
+import { readCoverFields } from "@/entities/page/model/coverFields";
 import { isPersistedPageId } from "@/store/pageStore.helpers";
 import { pageStamp } from "./pageStamp";
 
@@ -149,8 +150,11 @@ export function resolveFetchedPage(
     title: takeServer ? (server.title ?? current.title) : current.title,
     icon: takeServer ? (server.icon ?? current.icon) : current.icon,
     cover: takeServer ? (server.cover ?? current.cover) : current.cover,
+    ...(takeServer ? readCoverFields(server) : {}),
     updatedAt: takeServer ? (server.updatedAt ?? current.updatedAt) : current.updatedAt,
   };
-  if (pageStamp(page) === pageStamp(current)) return null;
+  // coverPosition is not in the stamp (pageStamp), so its change alone is compared here.
+  const unchanged = pageStamp(page) === pageStamp(current) && page.coverPosition === current.coverPosition;
+  if (unchanged) return null;
   return { page, recordSynced: canPublish && clean };
 }

@@ -14,6 +14,7 @@ import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import type { Block, BlockType } from "@/entities/block";
 import type { SeedPage } from "../data/seedPages";
 import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
+import { readCoverFields } from "@/entities/page/model/coverFields";
 import { timed } from "@osionos/perf-probe";
 import { canEditPage, type PageAccessContext } from "@/shared/lib/auth/pageAccess";
 
@@ -542,6 +543,7 @@ export function seedToEntry(sp: SeedPage): PageEntry {
     templateSurface: sp.templateSurface,
     surface: sp.surface as PageEntry["surface"],
     cover: sp.cover,
+    ...readCoverFields(sp),
     content: sp.content,
   };
 }

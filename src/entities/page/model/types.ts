@@ -58,6 +58,10 @@ export interface PageEntry {
   cover?: string;
   /** Vertical focal point (%) of the cover image (CSS object-position); default 50 (centered). */
   coverPosition?: number;
+  /** Cover height in px, an integer in 120–640 (ADR 0064 PS27). */
+  coverHeight?: number;
+  /** Whether the cover spans the full page width or the content column. */
+  coverWidth?: "full" | "content";
   /** ISO timestamp of last modification (block edit, title change, etc.) */
   updatedAt?: string;
   workspaceId: string;
