@@ -32,20 +32,8 @@ function useKeepDraftOnPagehide(draftKey: string, sourceRef: { current: string }
   }, [draftKey, sourceRef, dirtyRef]);
 }
 
-/**
- * Owns the raw-markdown source for a page while raw mode is open.
- *
- * The live text lives in a ref (the textarea is uncontrolled), so keystrokes
- * never trigger a React render — typing stays native-fast on any document size.
- * Only a debounced `previewSource` is pushed to state, so the (heavy) preview
- * re-renders when typing pauses. Save reads the ref, so it always commits the
- * latest text.
- */
-export function useRawMode(pageId: string) {
-  const updatePageContent = usePageStore((state) => state.updatePageContent);
-  const updateConfig = usePageConfigStore((state) => state.updateConfig);
-  const userId = useUserStore((state) => state.activeUserId) || "anonymous";
-
+/** The text raw mode opens on: this tab's kept draft of the page, else the page's blocks. */
+function useRestoredRawSource(pageId: string, userId: string) {
   const configKey = pageConfigKey(userId, pageId);
   const draftKey = rawDraftKey(configKey);
   // Read, not taken: StrictMode runs this twice, and a reload before the next edit keeps it again.
@@ -54,13 +42,24 @@ export function useRawMode(pageId: string) {
     () => keptDraft ?? serializeBlocksToMarkdown(usePageStore.getState().pageById(pageId)?.content ?? []),
     [keptDraft, pageId],
   );
+  return { configKey, draftKey, initialSource, isRestored: keptDraft !== null };
+}
+
+/**
+ * The live text lives in a ref (the textarea is uncontrolled), so keystrokes
+ * never trigger a React render — typing stays native-fast on any document size.
+ * Only a debounced `previewSource` is pushed to state, so the (heavy) preview
+ * re-renders when typing pauses, as a low-priority transition: React 19 time-
+ * slices it and yields back to the keyboard, so typing stays native-fast even
+ * while a large document re-renders in the background. Save reads the ref, so
+ * it always commits the latest text.
+ */
+function useRawSourceEditing(initialSource: string, isRestored: boolean) {
   const sourceRef = useRef(initialSource);
-  const dirtyRef = useRef(keptDraft !== null);
+  const dirtyRef = useRef(isRestored);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [previewSource, setPreviewSource] = useState(initialSource);
-  const [dirty, setDirty] = useState(keptDraft !== null);
-  useKeepDraftOnPagehide(draftKey, sourceRef, dirtyRef);
-
+  const [dirty, setDirty] = useState(isRestored);
   const edit = useCallback((next: string) => {
     sourceRef.current = next;
     if (!dirtyRef.current) {
@@ -68,31 +67,38 @@ export function useRawMode(pageId: string) {
       setDirty(true);
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    // The preview parse/render is a low-priority transition: React 19 time-
-    // slices it and yields back to the keyboard, so typing stays native-fast
-    // even while a large document re-renders in the background.
     debounceRef.current = setTimeout(() => startTransition(() => setPreviewSource(next)), PREVIEW_DEBOUNCE_MS);
   }, []);
+  const markSaved = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    dirtyRef.current = false;
+    setDirty(false);
+  }, []);
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+  return { sourceRef, dirtyRef, previewSource, dirty, edit, markSaved };
+}
 
+/** Owns the raw-markdown source for a page while raw mode is open. */
+export function useRawMode(pageId: string) {
+  const updatePageContent = usePageStore((state) => state.updatePageContent);
+  const updateConfig = usePageConfigStore((state) => state.updateConfig);
+  const userId = useUserStore((state) => state.activeUserId) || "anonymous";
+  const { configKey, draftKey, initialSource, isRestored } = useRestoredRawSource(pageId, userId);
+  const { sourceRef, dirtyRef, previewSource, dirty, edit, markSaved } = useRawSourceEditing(initialSource, isRestored);
+  useKeepDraftOnPagehide(draftKey, sourceRef, dirtyRef);
   // Leaving raw mode, saved or not, ends the draft: an unsaved exit discards it, as it always has.
   const exit = useCallback(() => {
     dropRawDraft(draftKey);
     void updateConfig(userId, pageId, { rawMode: false });
   }, [draftKey, pageId, updateConfig, userId]);
   const save = useCallback(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
     const current = usePageStore.getState().pageById(pageId)?.content ?? [];
+    markSaved();
     updatePageContent(pageId, rawSourceToBlocks(sourceRef.current, current));
-    dirtyRef.current = false;
-    setDirty(false);
     exit();
-  }, [exit, pageId, updatePageContent]);
-
+  }, [exit, markSaved, pageId, sourceRef, updatePageContent]);
   // A code pane that remounts (Preview, then Code again) opens on this, not on initialSource:
   // the edits since raw mode opened live only in the ref.
-  const readSource = useCallback(() => sourceRef.current, []);
-
-  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
-
+  const readSource = useCallback(() => sourceRef.current, [sourceRef]);
   return { readSource, previewSource, edit, save, exit, dirty, configKey };
 }
