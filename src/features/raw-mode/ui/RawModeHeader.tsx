@@ -37,7 +37,7 @@ const TABS: ReadonlyArray<{ mode: RawLayoutMode; label: string; Icon: typeof Cod
 /** VSCode-style title/tab bar; the grip is draggable to slide & split panes. */
 export function RawModeHeader({ title, mode, dirty, showLineNumbers, isAdvanced, onMode, onToggleLineNumbers, onToggleAdvanced, onSave, onExit, onDragStart }: Readonly<RawModeHeaderProps>) {
   return (
-    <div className="flex items-center gap-2 border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1.5 text-sm select-none">
+    <div className="flex flex-wrap items-center gap-2 border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1.5 text-sm select-none">
       <button type="button" onPointerDown={onDragStart} title="Drag to split / reorganize the panes" className="flex cursor-grab items-center gap-1 rounded-xs px-1.5 py-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] active:cursor-grabbing">
         <GripVertical size={14} />
         <span className="max-w-40 truncate text-[var(--osio-fg-default)]">{title || "Untitled"}.md</span>
