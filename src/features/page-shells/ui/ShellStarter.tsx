@@ -12,7 +12,7 @@ import { useUserStore } from "@/features/auth";
 import { usePageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { Card } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
-import { hasServerCopy, subscribeServerCopies } from "@/store/sync/serverFetchedPages";
+import { serverBodyOf, subscribeServerCopies } from "@/store/sync/serverFetchedPages";
 
 import { applyShell, type ShellTarget } from "../model/applyShell";
 import { shellStarterState } from "../model/shellStarterGate";
@@ -26,8 +26,8 @@ interface ShellStarterProps {
 function useStarterState(pageId: string, locked: boolean) {
   const page = usePageStore((s) => s.pageById(pageId));
   const context = usePageAccessContext();
-  const serverConfirmed = useSyncExternalStore(subscribeServerCopies, () => hasServerCopy(pageId));
-  const state = page ? shellStarterState({ page, context, serverConfirmed, locked }) : "none";
+  const serverBody = useSyncExternalStore(subscribeServerCopies, () => serverBodyOf(pageId));
+  const state = page ? shellStarterState({ page, context, serverBody, locked }) : "none";
   const fetchPageContent = usePageStore((s) => s.fetchPageContent);
   const jwt = useUserStore((s) => s.activePageJwt() ?? "");
   useEffect(() => {
