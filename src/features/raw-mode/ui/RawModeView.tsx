@@ -32,7 +32,7 @@ export function RawModeView({ pageId }: Readonly<{ pageId: string }>) {
   const showLineNumbers = usePageConfigStore((state) => state.configs[`${userId}:${pageId}`]?.showLineNumbers ?? false);
   // The textarea is uncontrolled and owns the live text; the hook exposes only
   // a debounced `previewSource`, so keystrokes never re-render this tree.
-  const { initialSource, previewSource, edit, save, exit, dirty } = useRawMode(pageId);
+  const { readSource, previewSource, edit, save, exit, dirty } = useRawMode(pageId);
   const [layout, setLayout] = useState<RawLayout>(DEFAULT_RAW_LAYOUT);
   const [dragZone, setDragZone] = useState<RawLayoutMode | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -66,7 +66,7 @@ export function RawModeView({ pageId }: Readonly<{ pageId: string }>) {
       <div className="flex min-h-0 flex-1">
         {layout.mode !== "preview" && (
           <div className="min-h-0" style={{ width: layout.mode === "split" ? `${layout.ratio * 100}%` : "100%" }}>
-            <RawCodePane initialSource={initialSource} onChange={edit} showLineNumbers={showLineNumbers} />
+            <RawCodePane readSource={readSource} onChange={edit} showLineNumbers={showLineNumbers} />
           </div>
         )}
         {layout.mode === "split" && (

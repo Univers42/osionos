@@ -65,7 +65,11 @@ export function useRawMode(pageId: string) {
     exit();
   }, [exit, pageId, updatePageContent]);
 
+  // A code pane that remounts (Preview, then Code again) opens on this, not on initialSource:
+  // the edits since raw mode opened live only in the ref.
+  const readSource = useCallback(() => sourceRef.current, []);
+
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
-  return { initialSource, previewSource, edit, save, exit, dirty, configKey: pageConfigKey(userId, pageId) };
+  return { readSource, previewSource, edit, save, exit, dirty, configKey: pageConfigKey(userId, pageId) };
 }

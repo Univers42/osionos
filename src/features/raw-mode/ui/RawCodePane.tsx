@@ -13,7 +13,8 @@
 import React, { useMemo, useRef, useState } from "react";
 
 interface RawCodePaneProps {
-  initialSource: string;
+  /** The live text, read once on mount. */
+  readSource: () => string;
   onChange: (next: string) => void;
   showLineNumbers: boolean;
 }
@@ -31,10 +32,11 @@ function countLines(text: string): number {
  * (debounced) preview/save owner. Only the line count is tracked in state, and
  * only updated when it actually changes — so most keystrokes cause no render.
  */
-function RawCodePaneImpl({ initialSource, onChange, showLineNumbers }: Readonly<RawCodePaneProps>) {
+function RawCodePaneImpl({ readSource, onChange, showLineNumbers }: Readonly<RawCodePaneProps>) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
-  const [lineCount, setLineCount] = useState(() => countLines(initialSource));
+  const [mountSource] = useState(readSource);
+  const [lineCount, setLineCount] = useState(() => countLines(mountSource));
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const next = event.target.value;
@@ -63,7 +65,7 @@ function RawCodePaneImpl({ initialSource, onChange, showLineNumbers }: Readonly<
       )}
       <textarea name="raw-markdown-source"
         ref={textareaRef}
-        defaultValue={initialSource}
+        defaultValue={mountSource}
         spellCheck={false}
         onChange={handleChange}
         onScroll={syncScroll}
