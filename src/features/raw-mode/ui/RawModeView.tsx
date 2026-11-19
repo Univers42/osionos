@@ -41,8 +41,8 @@ export function RawModeView({ pageId }: Readonly<{ pageId: string }>) {
 
   const toggleLineNumbers = useCallback(() => { void updateConfig(userId, pageId, { showLineNumbers: !showLineNumbers }); }, [pageId, showLineNumbers, updateConfig, userId]);
   const toggleAdvanced = useCallback(() => {
-    writeAdvancedConsole(!isAdvanced);
     setAdvanced(!isAdvanced);
+    writeAdvancedConsole(!isAdvanced);
   }, [isAdvanced]);
 
   const startHeaderDrag = useCallback((event: React.PointerEvent) => {

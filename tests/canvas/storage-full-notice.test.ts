@@ -86,3 +86,17 @@ test("A5 a persisted store hands its text to the writer it is given", () => {
   assert.deepEqual(written, ['osionos:test-content={"state":{"body":"hello"},"version":0}']);
   assert.equal(notices().length, 1);
 });
+
+test("A5 a localStorage whose getter throws refuses the write without throwing or a notice", () => {
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    get() { throw new DOMException("The operation is insecure.", "SecurityError"); },
+  });
+  try {
+    assert.equal(trySetItem("k", "v"), false);
+    assert.equal(noticingWriter("Blocked store")("k", "v"), false);
+  } finally {
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, writable: true, value: storage });
+  }
+  assert.equal(notices().length, 0);
+});

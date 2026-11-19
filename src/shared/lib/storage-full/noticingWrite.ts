@@ -25,11 +25,22 @@ export type StorageWriter = (key: string, text: string) => boolean;
 const noticedStores = new Set<string>();
 
 /** `setItem` that reports a refusal (quota, blocked or absent storage) as false instead of throwing. */
-export function trySetItem(key: string, text: string, storage: Pick<Storage, "setItem"> | undefined = globalThis.localStorage): boolean {
-  if (!storage) return false;
+// The localStorage getter is read inside the try: a sandboxed frame or blocked storage throws a
+// SecurityError from the getter itself, before any setItem.
+export function trySetItem(key: string, text: string, storage?: Pick<Storage, "setItem">): boolean {
   try {
-    storage.setItem(key, text);
+    const target = storage ?? globalThis.localStorage;
+    if (!target) return false;
+    target.setItem(key, text);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasLocalStorage(): boolean {
+  try {
+    return Boolean(globalThis.localStorage);
   } catch {
     return false;
   }
@@ -46,11 +57,11 @@ function noticeStorageFull(store: string): void {
 }
 
 /** `write` that shows the storage-full notice the first time a write of `store` is refused this
- *  session. Without a localStorage nothing refused the write, so nothing is shown. Never throws. */
+ *  session. Without a reachable localStorage nothing refused the write, so nothing is shown. Never throws. */
 export function noticingWriter(store: string, write: StorageWriter = trySetItem): StorageWriter {
   return (key, text) => {
     if (write(key, text)) return true;
-    if (globalThis.localStorage) noticeStorageFull(store);
+    if (hasLocalStorage()) noticeStorageFull(store);
     return false;
   };
 }
