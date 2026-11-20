@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { applyCellRegion } from "./cellRegion";
 import {
   duplicateCellHandler,
   restoreHistoryHandler,
@@ -25,7 +26,7 @@ import type { CanvasAction, CanvasState } from "./types";
 const PERSISTABLE_ACTIONS = new Set<CanvasAction["type"]>([
   "addCell", "setCells", "updateCellFrame", "updateCellFrames", "updateCell", "removeCell", "removeCells",
   "duplicateCell", "setCellZ", "setCellsZ", "setSnapToGrid", "setNoOverlap", "updateLayoutConfig",
-  "undo", "redo", "setCellMeasuredHeight",
+  "undo", "redo", "setCellMeasuredHeight", "setCellRegion",
 ]);
 
 export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasState {
@@ -76,6 +77,8 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
       // released by the inspector's "Auto height" control, not by the undo stack.
       return { ...state, cells };
     }
+    case "setCellRegion":
+      return updateCellHandler(state, action.id, (cell) => applyCellRegion(cell, action), withHistory);
     case "removeCell":
       return canvasReducer(state, { type: "removeCells", ids: [action.id] });
     case "removeCells": {

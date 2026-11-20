@@ -18,6 +18,7 @@ import { bringToFront, sendToBack } from "../model/frameOps";
 import { gridCellFromFrame, normalizeVisibilityFormula } from "../model/migration";
 import { legacySizingFromCanvas, migrateHorizontalConstraint, migrateVerticalConstraint, sizingFromLegacy, unmigrateHorizontalConstraint, unmigrateVerticalConstraint } from "../model/migrationMaps";
 import type { CanvasStoreApi } from "../store/canvasStore";
+import { CellRegionControls } from "./CellRegionControls";
 import { CanvasNumberControl, CanvasSegmented, CanvasToggle } from "./CanvasInspectorControls";
 import { VisibilityFormulaField } from "../../visibility/VisibilityFormulaField";
 
@@ -104,6 +105,7 @@ export const CanvasInspector: React.FC<{ store: CanvasStoreApi; cellId: string; 
         options={["fixed", "auto-height", "auto-width", "auto"] as const}
         onChange={(sizing) => dispatch({ type: "updateCell", id: cell.id, patch: { sizing: sizingFromLegacy(sizing) } })}
       />
+      <CellRegionControls cell={cell} dispatch={dispatch} />
       <CanvasSegmented
         label="Width constraint"
         value={unmigrateHorizontalConstraint(cell.constraints.horizontal) ?? "stretch"}

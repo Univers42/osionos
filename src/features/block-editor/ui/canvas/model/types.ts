@@ -161,6 +161,8 @@ export type CanvasAction =
   | { type: "updateCell"; id: string; patch: CanvasCellPatch }
   /** Pin the height measured for a hug cell (whole px) and freeze the cell. */
   | { type: "setCellMeasuredHeight"; id: string; height: number }
+  /** Author a cell's page region, collapse width and stick flag; unknown values count as absent. */
+  | { type: "setCellRegion"; id: string; region?: unknown; stackAt?: unknown; sticky?: unknown }
   | { type: "removeCell"; id: string }
   | { type: "removeCells"; ids: string[] }
   | { type: "duplicateCell"; id: string; newId: string; frame?: CanvasFrame }
