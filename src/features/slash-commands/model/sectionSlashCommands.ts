@@ -1,7 +1,7 @@
 // The slash menu's "Sections" group: one entry per section of the library
 // (src/data/templates/sections), read from its sync index; the blocks load on select.
 
-import { SECTIONS } from "@/data/templates/sections/sectionIndex";
+import { PAGE_SHELLS, SECTIONS } from "@/data/templates/sections/sectionIndex";
 import type { PageEntry } from "@/entities/page/model/types";
 import { isSectionTemplate } from "@/store/templateCopy";
 
@@ -18,6 +18,21 @@ export const SECTION_SLASH_COMMANDS: SlashSectionCommand[] = SECTIONS.map((secti
   icon: section.icon,
   description: section.description,
   section: SECTIONS_GROUP_ID,
+}));
+
+export const PAGE_SHELLS_GROUP_ID = "page-shells";
+
+// The shells ride the same section select path (useSlashSectionSelect), so they
+// are SlashSectionCommands too — only their group and catalogue differ.
+export const PAGE_SHELL_SLASH_COMMANDS: SlashSectionCommand[] = PAGE_SHELLS.map((shell) => ({
+  kind: "section",
+  id: `section:${shell.id}`,
+  sectionId: shell.id,
+  label: shell.label,
+  aliases: ["section", ...shell.aliases],
+  icon: shell.icon,
+  description: shell.description,
+  section: PAGE_SHELLS_GROUP_ID,
 }));
 
 export const MY_SECTIONS_GROUP_ID = "my-sections";

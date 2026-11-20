@@ -7,6 +7,7 @@ import { bentoSection, comparisonSection, featureGridSection, logoCloudSection, 
 import { footerSection, heroSection, navSection, pageHeaderSection } from './frameSections';
 import { ctaSection, faqSection, pricingSection } from './offerSections';
 import { contactSection, newsletterSection, teamSection, testimonialsSection } from './peopleSections';
+import { headerFooterShell, leftSidebarShell, rightSidebarShell, twoSidebarsShell } from './shellSections';
 
 export const SECTION_BUILDERS: Readonly<Record<string, () => Block[]>> = {
   nav: navSection,
@@ -29,4 +30,14 @@ export const SECTION_BUILDERS: Readonly<Record<string, () => Block[]>> = {
   timeline: timelineSection,
   comparison: comparisonSection,
   footer: footerSection,
+};
+
+// The "/" page shells: full-page layouts of region cells, not sections — kept
+// in their own record (listed as PAGE_SHELLS) so SECTION_BUILDERS stays exactly
+// the section catalogue the tests pin down.
+export const SHELL_BUILDERS: Readonly<Record<string, () => Block[]>> = {
+  'shell-two-sidebars': twoSidebarsShell,
+  'shell-left-sidebar': leftSidebarShell,
+  'shell-right-sidebar': rightSidebarShell,
+  'shell-header-footer': headerFooterShell,
 };

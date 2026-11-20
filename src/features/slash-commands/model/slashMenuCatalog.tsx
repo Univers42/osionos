@@ -25,7 +25,7 @@ import type { SlashQuery } from "./slashMenuFilter";
 import { EMBED_SLASH_COMMANDS } from "./embedSlashCommands";
 import { EMBEDS_SECTION_ID } from "./embedSlashEntries";
 import { buildSysSlashCommands } from "./sysSlashCommands";
-import { MY_SECTIONS_GROUP_ID, SECTION_SLASH_COMMANDS, SECTIONS_GROUP_ID } from "./sectionSlashCommands";
+import { MY_SECTIONS_GROUP_ID, PAGE_SHELL_SLASH_COMMANDS, PAGE_SHELLS_GROUP_ID, SECTION_SLASH_COMMANDS, SECTIONS_GROUP_ID } from "./sectionSlashCommands";
 import type {
   SlashCreatePageCommand,
   SlashCommand,
@@ -102,6 +102,7 @@ export const EXTRA_SECTION_LABELS: Record<string, string> = {
   "my-data": "My data",
   [SECTIONS_GROUP_ID]: "Sections",
   [MY_SECTIONS_GROUP_ID]: "My sections",
+  [PAGE_SHELLS_GROUP_ID]: "Page shells",
 };
 
 /** Section labels this repo fixes on top of the collection's copy. */
@@ -428,6 +429,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   ...TURN_INTO_COMMANDS,
   ...buildSysSlashCommands(),
   ...SECTION_SLASH_COMMANDS,
+  ...PAGE_SHELL_SLASH_COMMANDS,
 ];
 
 /**

@@ -35,8 +35,17 @@ export const SECTIONS: readonly SectionMeta[] = [
   { id: 'footer', label: 'Footer', description: 'Link groups and the small print', icon: '🔚', aliases: ['footer', 'bottom'] },
 ];
 
-/** The blocks of one section, fresh on every call; null for an unknown id. */
+// The "/" menu's page shells: empty full-page layouts of named regions, never
+// part of SECTIONS (the section catalogue stays exactly the twenty sections).
+export const PAGE_SHELLS: readonly SectionMeta[] = [
+  { id: 'shell-two-sidebars', label: 'Two sidebars', description: 'A header, two sticky sidebars, a main column and a footer', icon: '🧱', aliases: ['layout', 'shell', 'sidebar', 'page'] },
+  { id: 'shell-left-sidebar', label: 'Left sidebar', description: 'A header, a sticky sidebar on the left, a main column and a footer', icon: '🗂️', aliases: ['layout', 'shell', 'sidebar', 'page'] },
+  { id: 'shell-right-sidebar', label: 'Right sidebar', description: 'A header, a main column, a sticky sidebar on the right and a footer', icon: '🗃️', aliases: ['layout', 'shell', 'sidebar', 'page'] },
+  { id: 'shell-header-footer', label: 'Header and footer', description: 'A header, one wide main column and a footer', icon: '📄', aliases: ['layout', 'shell', 'page'] },
+];
+
+/** The blocks of one section or page shell, fresh on every call; null for an unknown id. */
 export async function buildSection(id: string): Promise<Block[] | null> {
-  const { SECTION_BUILDERS } = await import('./sectionBuilders');
-  return SECTION_BUILDERS[id]?.() ?? null;
+  const { SECTION_BUILDERS, SHELL_BUILDERS } = await import('./sectionBuilders');
+  return SECTION_BUILDERS[id]?.() ?? SHELL_BUILDERS[id]?.() ?? null;
 }
