@@ -38,6 +38,54 @@ const ENTRIES: ReadonlyArray<CatalogueEntry> = [
     { id: "tpl:content-calendar", title: "Content calendar", icon: "🗓️", description: "Plan editorial work across channels from first draft to publication.", category: "team" },
     () => import("./content-calendar"),
   ),
+  entry(
+    { id: "tpl:habit-tracker", title: "Habit tracker", icon: "✅", description: "Build steady routines with weekly targets, streaks, and a view by area.", category: "personal" },
+    () => import("./habit-tracker"),
+  ),
+  entry(
+    { id: "tpl:reading-list", title: "Reading list", icon: "📚", description: "Organize books by reading status and genre, with ratings and page totals.", category: "personal" },
+    () => import("./reading-list"),
+  ),
+  entry(
+    { id: "tpl:student-semester", title: "Student semester", icon: "🎓", description: "Plan assignments, due dates, grades, and courses for the whole semester.", category: "school" },
+    () => import("./student-semester"),
+  ),
+  entry(
+    { id: "tpl:personal-finance", title: "Personal finance", icon: "💰", description: "Monitor spending, income, recurring costs, and account activity in one ledger.", category: "personal" },
+    () => import("./personal-finance"),
+  ),
+  entry(
+    { id: "tpl:okrs", title: "OKRs", icon: "🎯", description: "Score key results by objective, quarter, progress, and confidence.", category: "work" },
+    () => import("./okrs"),
+  ),
+  entry(
+    { id: "tpl:support-desk", title: "Support desk", icon: "🎧", description: "Triage tickets by status, priority, and channel with reply times in view.", category: "team" },
+    () => import("./support-desk"),
+  ),
+  entry(
+    { id: "tpl:inventory", title: "Inventory", icon: "📦", description: "Track stock by shelf and category, and reorder before items run out.", category: "work" },
+    () => import("./inventory"),
+  ),
+  entry(
+    { id: "tpl:travel-planner", title: "Travel planner", icon: "✈️", description: "Plan a trip day by day with costs, bookings, and a packing list.", category: "personal" },
+    () => import("./travel-planner"),
+  ),
+  entry(
+    { id: "tpl:team-wiki-home", title: "Team wiki home", icon: "📖", description: "Give the team one home for onboarding, processes, and engineering docs.", category: "team" },
+    () => import("./team-wiki-home"),
+  ),
+  entry(
+    { id: "tpl:product-roadmap", title: "Product roadmap", icon: "🗺️", description: "Plan features by quarter, status, effort, and impact from idea to launch.", category: "work" },
+    () => import("./product-roadmap"),
+  ),
+  entry(
+    { id: "tpl:event-planner", title: "Event planner", icon: "🎉", description: "Track event tasks, costs, and deadlines beside the guest list and RSVPs.", category: "personal" },
+    () => import("./event-planner"),
+  ),
+  entry(
+    { id: "tpl:job-search", title: "Job search", icon: "💼", description: "Follow every application from saved listing to offer with salary notes.", category: "personal" },
+    () => import("./job-search"),
+  ),
 ];
 
 export async function listCatalogue(): Promise<CatalogueCard[]> {
