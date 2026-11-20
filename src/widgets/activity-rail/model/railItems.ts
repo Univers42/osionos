@@ -19,6 +19,7 @@ import {
   Files,
   GitBranch,
   Globe,
+  LayoutTemplate,
   Library,
   ListTodo,
   Mail,
@@ -89,6 +90,7 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
       { id: "files", label: "Explorer", Icon: Files, action: { kind: "panel", panel: "files" }, commandId: "focusExplorer" },
       { id: "search", label: "Search", Icon: Search, action: { kind: "panel", panel: "search" }, commandId: "openSearchPanel" },
       { id: "database", label: "Databases", Icon: Database, action: { kind: "panel", panel: "database" } },
+      { id: "templates", label: "Templates", Icon: LayoutTemplate, action: { kind: "panel", panel: "templates" } },
       { id: "tasks", label: "My Tasks", Icon: ListTodo, action: { kind: "panel", panel: "tasks" } },
       // ponytail: nav LABEL renamed Public→Shared (AOC §12); panel id stays "public"
       // (R-R3) so the persisted uiStore activePanel keeps resolving.

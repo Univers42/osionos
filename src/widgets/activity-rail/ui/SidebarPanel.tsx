@@ -39,6 +39,7 @@ const PANEL_TITLES: Record<ActivePanel, string> = {
   public: "Shared", // label-only rename (AOC §12); id stays "public" (R-R3)
   marketplace: "Marketplace",
   database: "Databases",
+  templates: "Templates",
   scm: "Source Control",
   run: "Run",
   problems: "Problems",

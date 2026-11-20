@@ -10,23 +10,15 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 
 import type { CatalogueCard } from "@/data/templates/catalogue/types";
+import { useCatalogueCards } from "@/features/templates/model/useCatalogueCards";
 
 export function usePageShellCards(): CatalogueCard[] {
-  const [cards, setCards] = useState<CatalogueCard[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    void import("@/data/templates/catalogue")
-      .then(({ listCatalogue }) => listCatalogue())
-      .then((catalogue) => {
-        if (!cancelled) setCards(catalogue.filter((card) => card.category === "page"));
-      })
-      .catch((error) => console.warn("page shells unavailable", error));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return cards;
+  const cards = useCatalogueCards();
+  return useMemo(
+    () => cards?.filter((card) => card.category === "page") ?? [],
+    [cards],
+  );
 }

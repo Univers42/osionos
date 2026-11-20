@@ -24,6 +24,7 @@ export const PANEL_LOADERS = {
   public: () => import("./panels/PublicSwitcherPanel").then((m) => ({ default: m.PublicSwitcherPanel })),
   marketplace: () => import("./panels/MarketplacePanel").then((m) => ({ default: m.MarketplacePanel })),
   database: () => import("@/widgets/database-view/ui/DatabasesPanel").then((m) => ({ default: m.DatabasesPanel })),
+  templates: () => import("@/widgets/templates-panel/ui/TemplatesPanel").then((m) => ({ default: m.TemplatesPanel })),
   notifications: () => import("@/widgets/notifications/ui/NotificationsPanel").then((m) => ({ default: m.NotificationsPanel })),
   tasks: () => import("@/widgets/tasks/ui/MyTasksPanel").then((m) => ({ default: m.MyTasksPanel })),
   scm: () => import("@/features/ide/ui/IdeSourceControl").then((m) => ({ default: m.IdeSourceControl })),

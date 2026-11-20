@@ -27,6 +27,7 @@ export type ActivePanel =
   | 'tasks'
   | 'public'
   | 'database'
+  | 'templates'
   // Workbench panels (Source Control, Run, Problems).
   | 'scm'
   | 'run'
@@ -47,7 +48,7 @@ export function migratePanelId(panel: unknown): ActivePanel {
 }
 
 const KNOWN_PANELS = new Set<ActivePanel>([
-  'files', 'search', 'marketplace', 'agents', 'conversations', 'notifications', 'tasks', 'public', 'database',
+  'files', 'search', 'marketplace', 'agents', 'conversations', 'notifications', 'tasks', 'public', 'database', 'templates',
   'scm', 'run', 'problems', 'issues',
 ]);
 
