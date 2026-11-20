@@ -23,7 +23,7 @@ export const MoreFontsList: React.FC<Props> = ({ id, items }) => (
         className="osio-menu-item"
       >
         <span className="min-w-0 flex-1 truncate text-left" style={fontSampleStyle(item.font!)}>{item.label}</span>
-        {item.checked && <Check size={14} className="shrink-0 text-[var(--osio-accent)]" />}
+        {item.checked && <Check size={14} className="shrink-0 text-accent" />}
       </button>
     ))}
   </div>

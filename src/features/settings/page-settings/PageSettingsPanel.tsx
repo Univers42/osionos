@@ -54,7 +54,7 @@ export const PageSettingsPanel = () => {
             </Button>
           ))}
           {extraFont && (
-            <Button aria-pressed data-font={extraFont.id} className="justify-start border-[var(--osio-accent)]" onClick={() => runMaybeAsync(actions.setFont(extraFont.id))}>
+            <Button aria-pressed data-font={extraFont.id} className="justify-start border-accent" onClick={() => runMaybeAsync(actions.setFont(extraFont.id))}>
               <span className="text-base" style={fontSampleStyle(extraFont.id)}>Ag</span>{extraFont.label}
             </Button>
           )}
