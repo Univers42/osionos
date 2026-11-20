@@ -10,11 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 
 import type { CatalogueCard, CatalogueCategory } from "@/data/templates/catalogue/types";
+import { applyTemplateToActivePage, type ApplyAsk, type ApplyChoice } from "@/features/templates/model/applyFromPanel";
 import { useCatalogueCards } from "@/features/templates/model/useCatalogueCards";
+import { ApplyTemplateDialog } from "@/features/templates/ui/ApplyTemplateDialog";
 import { filterCards } from "../model/filterCards";
 import { TemplateCard } from "./TemplateCard";
 
@@ -25,6 +27,13 @@ const CATEGORIES: { id: Category; label: string }[] = [
   { id: "school", label: "School" }, { id: "team", label: "Team" }, { id: "page", label: "Pages" },
 ];
 const NAVIGATION_KEYS = new Set(["ArrowDown", "ArrowUp", "Home", "End"]);
+
+/** A dialog waiting for its answer. `resolve` closes the ask() promise. */
+interface PendingAsk {
+  template: string;
+  page: string;
+  resolve: (choice: ApplyChoice) => void;
+}
 
 function nextFocusIndex(key: string, current: number, count: number): number {
   if (key === "Home") return 0;
@@ -45,6 +54,29 @@ function useRovingFocus(count: number) {
     listRef.current?.querySelectorAll<HTMLElement>('[role="option"]')[next]?.focus();
   };
   return { focusedIndex, listRef, navigate, onFocus: setFocusedIndex, reset: () => setFocusedIndex(0) };
+}
+
+/** The apply dialog's lifecycle: ask() opens it and returns the promise the
+ *  engine awaits, choose() answers it, and focus goes back to the card that
+ *  opened the dialog once it has closed. */
+function useApplyDialog() {
+  const [pending, setPending] = useState<PendingAsk | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const ask: ApplyAsk = (titles) => new Promise((resolve) => { setPending({ ...titles, resolve }); });
+  const applyFromCard = (templateId: string, opener: HTMLElement | null) => {
+    openerRef.current = opener;
+    void applyTemplateToActivePage(templateId, ask);
+  };
+  const choose = (choice: ApplyChoice) => {
+    pending?.resolve(choice);
+    setPending(null);
+  };
+  useEffect(() => {
+    if (pending !== null) return;
+    openerRef.current?.focus();
+    openerRef.current = null;
+  }, [pending]);
+  return { pending, applyFromCard, choose };
 }
 
 function CategoryChips({ value, onChange }: { value: Category; onChange: (category: Category) => void }): React.ReactElement {
@@ -73,18 +105,19 @@ function Controls({ query, category, onQuery, onCategory }: { query: string; cat
   );
 }
 
-function Results({ cards, focusedIndex, listRef, onFocus, onNavigate }: {
+function Results({ cards, focusedIndex, listRef, onFocus, onNavigate, onApply }: {
   cards: CatalogueCard[] | null;
   focusedIndex: number;
   listRef: React.RefObject<HTMLDivElement | null>;
   onFocus: (index: number) => void;
   onNavigate: Navigate;
+  onApply: (templateId: string, opener: HTMLElement | null) => void;
 }): React.ReactElement {
   if (cards === null) return <p role="status" className="px-4 py-10 text-center text-sm text-[var(--osio-fg-muted)]">Loading templates…</p>;
   if (cards.length === 0) return <p className="px-4 py-10 text-center text-sm text-[var(--osio-fg-muted)]">No templates match</p>;
   return (
     <div ref={listRef} role="listbox" aria-label="Templates" className="min-h-0 flex-1 overflow-y-auto px-2 pb-5">
-      {cards.map((card, index) => <TemplateCard key={card.id} card={card} focused={focusedIndex === index}
+      {cards.map((card, index) => <TemplateCard key={card.id} card={card} focused={focusedIndex === index} onApply={onApply}
         onFocus={() => onFocus(index)} onNavigate={(event) => onNavigate(event, index)} />)}
     </div>
   );
@@ -94,6 +127,7 @@ export function TemplatesPanel(): React.ReactElement {
   const cards = useCatalogueCards();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category>("all");
+  const { pending, applyFromCard, choose } = useApplyDialog();
   const visible = useMemo(() => filterCards(cards ?? [], query, category), [cards, query, category]);
   const { focusedIndex, listRef, navigate, onFocus, reset } = useRovingFocus(visible.length);
   const changeQuery = (value: string) => { setQuery(value); reset(); };
@@ -101,7 +135,8 @@ export function TemplatesPanel(): React.ReactElement {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Controls query={query} category={category} onQuery={changeQuery} onCategory={changeCategory} />
-      <Results cards={cards === null ? null : visible} focusedIndex={focusedIndex} listRef={listRef} onFocus={onFocus} onNavigate={navigate} />
+      <Results cards={cards === null ? null : visible} focusedIndex={focusedIndex} listRef={listRef} onFocus={onFocus} onNavigate={navigate} onApply={applyFromCard} />
+      {pending === null ? null : <ApplyTemplateDialog templateTitle={pending.template} pageTitle={pending.page} onChoose={choose} />}
     </div>
   );
 }
