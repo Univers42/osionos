@@ -34,7 +34,7 @@ const isDatabaseBlock = (block: Block): boolean =>
 /** TD10: after the clone, every database block must point at a fresh clone or at a
  *  database the user already owned. A block left pointing at anything else would
  *  make two pages share a database, so apply aborts with no write. */
-function hasDanglingDatabase(content: Block[], created: CreatedEntry[], live: NotionState): boolean {
+export function hasDanglingDatabase(content: Block[], created: CreatedEntry[], live: NotionState): boolean {
   const known = new Set(Object.keys(live.databases));
   for (const entry of created) known.add(entry.id);
   let dangling = false;

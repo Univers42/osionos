@@ -495,7 +495,7 @@ jobs:
           PLAYWRIGHT_BUILD: production
         run: |
           docker compose -f docker-compose.base.yml -f docker-compose.dev.yml run --rm --no-deps \
-            browser-tests pnpm exec playwright test tests/e2e/bridge-stub/preloadErrorReload.spec.mjs
+            browser-tests sh -c 'pnpm exec playwright test tests/e2e/bridge-stub/preloadErrorReload.spec.mjs && node scripts/check-catalogue-chunks.mjs test-results/dist-e2e/.vite/manifest.json'
 
       # Same idea for the AI service: a build with a stub VITE_AI_URL, running only tests/e2e/ai-stub.
       - name: Run the stub-AI specs

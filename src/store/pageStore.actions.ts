@@ -56,6 +56,7 @@ import {
 } from "./pageCascadeResult";
 import type { AddPageOptions, AddTemplateOptions, PageEntry, PageStore, ActivePage, PageRecurrence } from "@/entities/page";
 import { isCatalogueId } from "@/data/templates/catalogue/tplId";
+import { createFromCatalogue } from "./pageStore.catalogue";
 
 type SetFn = (
   partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>),
@@ -793,6 +794,7 @@ export function createCreatePageFromTemplate(_set: SetFn, get: GetFn) {
     parentPageId?: string,
     options?: { open?: boolean },
   ): Promise<PageEntry | null> => {
+    if (isCatalogueId(templateId)) return createFromCatalogue(get, templateId, workspaceId, jwt, parentPageId, options);
     // Template content is lazy-loaded; hydrate it before cloning (no-op offline).
     await get().fetchPageContent(templateId, jwt);
     const template = get().pageById(templateId);

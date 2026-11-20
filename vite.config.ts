@@ -183,6 +183,8 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: path.resolve(root, 'build'),
+      // TD22: emit the chunk manifest used to detect catalogue leaks into static entries.
+      manifest: true,
       // No sourceMappingURL comments in the served prod bundle: Dockerfile.prod
       // strips the .map files, so a reference makes the browser fetch them and
       // get the SPA index.html fallback ("JSON.parse: unexpected character").

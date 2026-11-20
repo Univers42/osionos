@@ -76,6 +76,9 @@ import { LIBRARY_DB_ID } from '../model/libraryDatabaseModel';
 import { isSysDatabaseId } from '../model/sysDataSources';
 import './databaseBlockEmbed.css';
 import { databaseShellClass } from '../model/databaseShellClass';
+import { isCatalogueId } from '@/data/templates/catalogue/tplId';
+import { runAppAction } from '@/features/app-actions/model/runAppAction';
+import { CatalogueTemplatePeek } from './CatalogueTemplatePeek';
 
 // Async boundary: the full osionos page (and its editor tree) loads only when
 // a database row is opened — keeping the database view chunk free of the
@@ -172,23 +175,20 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     [],
   );
   const renderTemplatesPeek = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
-    (pageId, _state, onClose) => (
-      <WorkspaceRecordPeek
-        pageId={pageId}
-        onClose={onClose}
-        action={{
-          label: "Use template",
-          onClick: () => {
-            const workspaceId = useUserStore.getState().activeWorkspace()?._id;
-            const jwt = useUserStore.getState().activePageJwt() ?? "";
-            if (workspaceId) {
-              void usePageStore.getState().createPageFromTemplate(pageId, workspaceId, jwt);
-              onClose();
-            }
-          },
-        }}
-      />
-    ),
+    (pageId, _state, onClose) => {
+      const action = {
+        label: "Use template",
+        onClick: () => {
+          void runAppAction("template.apply", { templateId: pageId }, { mode: "live", trusted: true }).then((r) => {
+            if (r.status === "ok") onClose();
+          });
+        },
+      };
+      if (isCatalogueId(pageId)) {
+        return <CatalogueTemplatePeek templateId={pageId} onClose={onClose} action={action} />;
+      }
+      return <WorkspaceRecordPeek pageId={pageId} onClose={onClose} action={action} />;
+    },
     [],
   );
   // Notion-style row sub-items: every live record expands inline to its child

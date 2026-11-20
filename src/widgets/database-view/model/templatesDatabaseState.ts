@@ -30,8 +30,11 @@ import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
 import { dedupeById, safeCardCover } from "./homeLiveEntries";
 import { TEMPLATES_DB_ID, TEMPLATES_GALLERY_VIEW } from "./workspaceDatabaseConstants";
+import type { CatalogueCard } from "@/data/templates/catalogue/types";
 
 const TEMPLATE_TITLE = "home-template-title";
+const TEMPLATE_SOURCE = "home-template-source";
+const TEMPLATE_CATEGORY = "home-template-category";
 
 /** The active workspace's template pages (isTemplate, not archived, readable). */
 export function templateEntries(): PageEntry[] {
@@ -58,10 +61,29 @@ function entryToCard(entry: PageEntry): Page {
   };
 }
 
-/** One NotionState: the Templates database + its carousel gallery view. */
-function templatesState(): NotionState {
+function catalogueToCard(card: CatalogueCard): Page {
+  return {
+    id: card.id,
+    databaseId: TEMPLATES_DB_ID,
+    icon: card.icon,
+    properties: {
+      [TEMPLATE_TITLE]: card.title || "Untitled template",
+      [TEMPLATE_SOURCE]: "shipped",
+      [TEMPLATE_CATEGORY]: card.category,
+    },
+    content: [],
+    createdAt: UNKNOWN_TIME,
+    updatedAt: UNKNOWN_TIME,
+    createdBy: "osionos",
+    lastEditedBy: "osionos",
+  };
+}
+
+/** User templates first, then shipped cards: the Templates database + gallery. */
+export function templatesState(cards: CatalogueCard[] = []): NotionState {
   const pages: Record<string, Page> = {};
   for (const entry of templateEntries()) pages[entry._id] = entryToCard(entry);
+  for (const card of cards) pages[card.id] = catalogueToCard(card);
   return {
     databases: {
       [TEMPLATES_DB_ID]: {
@@ -70,7 +92,12 @@ function templatesState(): NotionState {
         icon: "🧩",
         description: "Start a new page from one of your templates.",
         titlePropertyId: TEMPLATE_TITLE,
-        properties: { [TEMPLATE_TITLE]: { id: TEMPLATE_TITLE, name: "Name", type: "title" } },
+        properties: {
+          [TEMPLATE_TITLE]: { id: TEMPLATE_TITLE, name: "Name", type: "title" },
+          [TEMPLATE_SOURCE]: { id: TEMPLATE_SOURCE, name: "Source", type: "select",
+            options: [{ id: "shipped", value: "Shipped", color: "bg-accent-muted text-accent-text-bold" }] },
+          [TEMPLATE_CATEGORY]: { id: TEMPLATE_CATEGORY, name: "Category", type: "text" },
+        },
       },
     },
     pages,
@@ -83,7 +110,7 @@ function templatesState(): NotionState {
         filters: [],
         filterConjunction: "and",
         sorts: [],
-        visibleProperties: [],
+        visibleProperties: [TEMPLATE_SOURCE],
         settings: {
           cardPreview: "page_cover", cardSize: "medium", galleryLayout: "carousel",
           showTitle: true, showPageIcon: true, fitMedia: true, openPagesIn: "side_peek",
@@ -93,18 +120,29 @@ function templatesState(): NotionState {
   };
 }
 
+let cataloguePromise: Promise<CatalogueCard[]> | null = null;
+
+function catalogueCards(): Promise<CatalogueCard[]> {
+  cataloguePromise ??= import("@/data/templates/catalogue")
+    .then((module) => module.listCatalogue())
+    .catch(() => { cataloguePromise = null; return []; });
+  return cataloguePromise;
+}
+
 class TemplatesDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   private readonly subscribers = new Set<(event: ChangeEvent) => void>();
 
-  async loadState(): Promise<NotionState> { return templatesState(); }
+  async loadState(): Promise<NotionState> { return templatesState(await catalogueCards()); }
 
   async findPages(query: PageQuery): Promise<Page[]> {
-    const pages = Object.values(templatesState().pages);
+    const pages = Object.values(templatesState(await catalogueCards()).pages);
     const scoped = query.databaseId ? pages.filter((page) => page.databaseId === query.databaseId) : pages;
     return typeof query.limit === "number" ? scoped.slice(0, query.limit) : scoped;
   }
 
-  async getPage(id: string): Promise<Page | null> { return templatesState().pages[id] ?? null; }
+  async getPage(id: string): Promise<Page | null> {
+    return templatesState(await catalogueCards()).pages[id] ?? null;
+  }
 
   // Records are real osionos template pages — CRUD is not the adapter's job.
   // Signal a reload instead of mutating, exactly like WorkspaceDatabaseAdapter.
@@ -115,7 +153,7 @@ class TemplatesDatabaseAdapter implements PersistableObjectDatabaseAdapter {
 
   async patchPage(id: string): Promise<Page> {
     this.emit({ type: "state-replaced" });
-    const found = templatesState().pages[id];
+    const found = templatesState(await catalogueCards()).pages[id];
     if (!found) throw new Error(`Templates record ${id} not found`);
     return found;
   }
