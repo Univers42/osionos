@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { LayoutCell, LayoutConfig } from "@/entities/block";
+import { normalizeRegion, normalizeStackAt, normalizeSticky, withRegionFields } from "@/entities/block/model/layoutRegion";
 import {
   CANVAS_DEFAULT_COLUMN_WIDTH,
   CANVAS_DEFAULT_FRAME,
@@ -90,7 +91,7 @@ export function migrate(legacyCell: LayoutCell, gridConfig: CanvasGridConfig, in
     section: legacyCell.section,
   };
   const pinned = measuredHeight === undefined ? cell : { ...cell, measuredHeight };
-  return visibilityFormula === undefined ? pinned : { ...pinned, visibilityFormula };
+  return withRegionFields(visibilityFormula === undefined ? pinned : { ...pinned, visibilityFormula }, legacyCell);
 }
 
 /**
@@ -114,6 +115,7 @@ export function normalizeVisibilityFormula(value: unknown): string | undefined {
 }
 
 export function unmigrate(canvasCell: CanvasCell, gridConfig: CanvasGridConfig): LayoutCell {
+  const region = normalizeRegion(canvasCell.region);
   const gridCell = gridCellFromFrame(canvasCell.frame, gridConfig);
   return pruneUndefined({
     id: canvasCell.id,
@@ -133,6 +135,9 @@ export function unmigrate(canvasCell: CanvasCell, gridConfig: CanvasGridConfig):
     padding: canvasCell.visuals.padding,
     fontSize: canvasCell.visuals.fontSize,
     section: canvasCell.section,
+    region,
+    stackAt: normalizeStackAt(canvasCell.stackAt),
+    sticky: normalizeSticky(canvasCell.sticky, region),
     measuredHeight: normalizeMeasuredHeight(canvasCell.measuredHeight),
     visibilityFormula: normalizeVisibilityFormula(canvasCell.visibilityFormula),
   });

@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block, LayoutCell, LayoutConfig } from "@/entities/block";
+import type { LayoutRegion, RegionStackAt } from "@/entities/block/model/layoutRegion";
 
 export const CANVAS_SCHEMA_VERSION = 2;
 export const CANVAS_DEFAULT_COLUMN_WIDTH = 96;
@@ -61,6 +62,12 @@ export interface CanvasCell {
   wrap?: boolean;
   /** Named section key — preserved across migrate/unmigrate for per-section grants. */
   section?: string;
+  /** Named page region occupied by the cell. */
+  region?: LayoutRegion;
+  /** Responsive width below which the cell stacks. */
+  stackAt?: RegionStackAt;
+  /** Whether a left or right region cell sticks while scrolling. */
+  sticky?: boolean;
   /**
    * Height pinned by the author on a hug cell, in whole px. It is the cell's
    * frozen size: `sizing.height` is "fixed" and `frame.height` carries the

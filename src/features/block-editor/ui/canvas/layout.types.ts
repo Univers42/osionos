@@ -13,6 +13,7 @@
 import type React from "react";
 
 import type { Block } from "@/entities/block";
+import type { LayoutRegion, RegionStackAt } from "@/entities/block/model/layoutRegion";
 
 export type LayoutMode = "inline" | "full_page";
 export type LayoutGuideVisibility = "auto" | "always" | "never";
@@ -56,6 +57,12 @@ export interface LayoutCell {
   wrap?: boolean;
   padding?: LayoutCellPadding;
   fontSize?: LayoutCellFontSize;
+  /** Named page region occupied by the cell. */
+  region?: LayoutRegion;
+  /** Responsive width below which the cell stacks. */
+  stackAt?: RegionStackAt;
+  /** Whether a left or right region cell sticks while scrolling. */
+  sticky?: boolean;
   /**
    * Height pinned on a hug cell, in whole px — carried over from the canvas
    * model so a legacy save keeps the pinned size.

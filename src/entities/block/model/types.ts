@@ -13,6 +13,7 @@
 import type { EmbedSnapshot } from '@/shared/lib/embed/embedInfo';
 import type { ButtonProgram } from './buttonProgram';
 import type { BlockStyle } from './blockStyle';
+import type { LayoutRegion, RegionStackAt } from './layoutRegion';
 
 /**
  * Standalone Block types for the playground application.
@@ -123,6 +124,12 @@ export interface LayoutCell {
   fontSize?: LayoutCellFontSize;
   /** Named section key (e.g. "header"/"about") — drives per-section template write-grants. */
   section?: string;
+  /** Named page region occupied by the cell. */
+  region?: LayoutRegion;
+  /** Responsive width below which the cell stacks. */
+  stackAt?: RegionStackAt;
+  /** Whether a left or right region cell sticks while scrolling. */
+  sticky?: boolean;
   /**
    * Height pinned on a hug cell, in whole px (see the canvas "Save measured
    * height" action). The cell renders at that height until "Auto height"
