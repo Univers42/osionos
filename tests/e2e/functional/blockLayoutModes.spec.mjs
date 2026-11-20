@@ -36,7 +36,8 @@ async function mount(page, blocks, width) {
 }
 
 async function seedEditor(page, blocks) {
-  await page.waitForFunction(async () => Boolean((await import("/src/store/usePageStore.ts")).usePageStore.getState().activePage));
+  const storeModule = await page.evaluateHandle(() => import("/src/store/usePageStore.ts"));
+  await page.waitForFunction(({ usePageStore }) => Boolean(usePageStore.getState().activePage), storeModule);
   await page.evaluate(async (b) => {
     const store = (await import("/src/store/usePageStore.ts")).usePageStore.getState();
     store.updatePageContent(store.activePage.id, b);

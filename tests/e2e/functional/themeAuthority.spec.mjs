@@ -44,7 +44,8 @@ const storedMode = (page) => page.evaluate(() => localStorage.getItem("osionos:t
 async function openBooted(page, baseURL) {
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await page.getByText("Explorer", { exact: true }).waitFor();
-  await page.waitForFunction(async () => (await import("/src/features/auth/model/useUserStore.ts")).useUserStore.getState().initialized);
+  const storeModule = await page.evaluateHandle(() => import("/src/features/auth/model/useUserStore.ts"));
+  await page.waitForFunction(({ useUserStore }) => useUserStore.getState().initialized, storeModule);
 }
 
 test.describe("theme authority", () => {

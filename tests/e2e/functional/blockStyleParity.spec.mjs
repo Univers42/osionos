@@ -51,10 +51,8 @@ async function readOnlyShot(page) {
 }
 
 async function editorShot(page) {
-  await page.waitForFunction(async () => {
-    const { usePageStore } = await import("/src/store/usePageStore.ts");
-    return Boolean(usePageStore.getState().activePage);
-  });
+  const storeModule = await page.evaluateHandle(() => import("/src/store/usePageStore.ts"));
+  await page.waitForFunction(({ usePageStore }) => Boolean(usePageStore.getState().activePage), storeModule);
   await page.evaluate(async (blocks) => {
     const { usePageStore } = await import("/src/store/usePageStore.ts");
     const store = usePageStore.getState();

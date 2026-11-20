@@ -16,10 +16,8 @@ const COLUMN_COUNT = 12;
 
 async function seedWideTables(page) {
   // The fresh page becomes active asynchronously on slow runners.
-  await page.waitForFunction(async () => {
-    const { usePageStore } = await import("/src/store/usePageStore.ts");
-    return Boolean(usePageStore.getState().activePage);
-  });
+  const storeModule = await page.evaluateHandle(() => import("/src/store/usePageStore.ts"));
+  await page.waitForFunction(({ usePageStore }) => Boolean(usePageStore.getState().activePage), storeModule);
   await page.evaluate((columns) => {
     const table = (id, count) => {
       const header = Array.from({ length: count }, (_, index) => `Column ${index + 1}`);

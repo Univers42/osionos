@@ -20,8 +20,11 @@ const PAGE = {
 
 test("an unreachable mount shows its failure in the block and logs nothing", async ({ page, baseURL }) => {
   const noise = [];
+  // Caveat: the dev build's `[perf]` span warnings (over 4 ms, perf-probe) are skipped: they time
+  // the machine, not the code, and a cache save trips them on a loaded runner.
   page.on("console", (message) => {
-    if (message.type() === "error" || message.type() === "warning") noise.push(`${message.type()}: ${message.text()}`);
+    const isNoise = message.type() === "error" || message.type() === "warning";
+    if (isNoise && !message.text().startsWith("[perf] ")) noise.push(`${message.type()}: ${message.text()}`);
   });
   let schemaCalls = 0;
   await stubBridge(page, (url) => {
