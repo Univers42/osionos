@@ -62,9 +62,13 @@ function cardKeyDown(event: React.KeyboardEvent<HTMLDivElement>, id: string, app
   navigate(event);
 }
 
+// Two text-sized controls; in the ~250 px panel they sit on their own row, or the
+// title truncates to nothing and the description wraps one word per line.
+const CARD_ACTION = "inline-flex shrink-0 cursor-pointer items-center rounded-[var(--osio-control-radius)] px-2 py-1 text-xs font-medium text-[var(--osio-accent-text)] hover:bg-[var(--osio-bg-hover)]";
+
 function NewPageButton({ templateId }: { templateId: string }): React.ReactElement {
   return (
-    <span role="button" className="inline-flex shrink-0 cursor-pointer items-center rounded-[var(--osio-control-radius)] px-2 py-1 text-xs font-medium text-[var(--osio-accent-text)] hover:bg-[var(--osio-bg-hover)]"
+    <span role="button" className={CARD_ACTION}
       onClick={(event) => { event.stopPropagation(); applyTemplate(templateId); }}>
       New page
     </span>
@@ -75,7 +79,7 @@ function NewPageButton({ templateId }: { templateId: string }): React.ReactEleme
  *  card's Shift+A shortcut. Disabled carries no click action. */
 function ApplyToPageButton({ disabled, onApply }: { disabled: boolean; onApply: () => void }): React.ReactElement {
   return (
-    <span role="button" aria-disabled={disabled ? "true" : undefined} className="inline-flex shrink-0 cursor-pointer items-center rounded-[var(--osio-control-radius)] px-2 py-1 text-xs font-medium text-[var(--osio-accent-text)] hover:bg-[var(--osio-bg-hover)]"
+    <span role="button" aria-disabled={disabled ? "true" : undefined} className={`${CARD_ACTION} aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent`}
       onClick={(event) => { event.stopPropagation(); if (!disabled) onApply(); }}>
       Apply to this page
     </span>
@@ -102,9 +106,11 @@ function CardOption({ card, focused, expanded, canApply, onApply, onToggle, onFo
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-[var(--osio-fg-default)]">{card.title}</span>
         <span className="mt-0.5 block text-xs leading-snug text-[var(--osio-fg-muted)]">{card.description}</span>
+        <span className="-ml-2 mt-1 flex flex-wrap gap-1 pb-1">
+          <NewPageButton templateId={card.id} />
+          <ApplyToPageButton disabled={!canApply} onApply={applyHere} />
+        </span>
       </span>
-      <NewPageButton templateId={card.id} />
-      <ApplyToPageButton disabled={!canApply} onApply={applyHere} />
     </div>
   );
 }
