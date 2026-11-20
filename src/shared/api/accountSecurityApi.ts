@@ -143,15 +143,23 @@ function jobOf(raw: unknown): ExportJob | null {
   };
 }
 
-/** Sends the emailed code. The address comes from the session, never from the client. */
-export const requestSudoCode = () =>
-  call('POST', '/api/account/sudo/email', {}, (payload) => ({ sentTo: text(payload.sentTo) ?? '' }));
+/**
+ * Sends the emailed code. The address comes from the session, never from the client.
+ * A session opened with a password must repeat it; the bridge answers `password_required`
+ * until it is sent, and `password_invalid` when the gateway refuses it.
+ */
+export const requestSudoCode = (password?: string) =>
+  call('POST', '/api/account/sudo/email', password ? { password } : {}, (payload) => ({ sentTo: text(payload.sentTo) ?? '' }));
 
 export const verifySudoCode = (code: string) =>
   call('POST', '/api/account/sudo/verify', { code }, () => null);
 
 export const sudoStatus = () =>
-  call('GET', '/api/account/sudo', undefined, (payload) => ({ active: payload.active === true, expiresAt: text(payload.expiresAt) }));
+  call('GET', '/api/account/sudo', undefined, (payload) => ({
+    active: payload.active === true,
+    expiresAt: text(payload.expiresAt),
+    passwordRequired: payload.passwordRequired === true,
+  }));
 
 export const changeUsername = (username: string) =>
   call('POST', '/api/account/username', { username }, (payload) => ({ username: text(payload.username) ?? username }));
