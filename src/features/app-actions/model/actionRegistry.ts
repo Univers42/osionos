@@ -88,6 +88,28 @@ export const APP_ACTIONS: Map<string, ActionDefinition> = new Map<string, Action
 		},
 	],
 	[
+		// TD14: create-only. There is deliberately no target-page argument; the runner
+		// refuses unknown arguments, so a button cannot point this at an existing page.
+		"template.apply",
+		{
+			name: "template.apply",
+			label: "Use template",
+			params: { templateId: { type: "string", required: true, maxLength: 64 } },
+			confirm: "simple",
+			confirmText: () => ({ title: "Use template", message: "Create a new page from this template?", actionLabel: "Create page" }),
+			sudo: "none",
+			destructive: false,
+			run: async (args) => {
+				const user = useUserStore.getState();
+				const workspace = user.activeWorkspace();
+				if (!workspace) return { status: "failed", message: "Open a workspace first" };
+				const page = await usePageStore.getState().createPageFromTemplate(String(args.templateId), workspace._id, user.activePageJwt() ?? "");
+				if (!page) return { status: "failed", message: "Template not found" };
+				return { status: "ok" };
+			},
+		},
+	],
+	[
 		"settings.open",
 		{
 			name: "settings.open",

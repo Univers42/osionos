@@ -79,8 +79,8 @@ function makeRegistry() {
 	return { reg, calls };
 }
 
-test("APP_ACTIONS holds exactly two entries and no test.* name", () => {
-	assert.equal(APP_ACTIONS.size, 4);
+test("APP_ACTIONS holds exactly five entries and no test.* name", () => {
+	assert.equal(APP_ACTIONS.size, 5);
 	for (const name of APP_ACTIONS.keys()) assert.equal(name.startsWith("test."), false);
 });
 

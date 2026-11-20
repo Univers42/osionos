@@ -116,12 +116,14 @@
 - [ ] e2e: page with a database → apply with keep-copy → copy exists in the sidebar, URL unchanged, database ids = old + clones; Ctrl+Z restores content, cover and icon.
 - [ ] Commit `feat(templates): apply a template to the open page after asking`.
 
+> **Split (2026-11-20).** 6a, the model with its canvas tests, shipped as 78f1c872a. The dialog, its e2e and the TD4 one-undo proof (6b) move into Task 11, because the panel's "Apply to this page" button is the dialog's only entry point. Until then the dialog cannot be reached and would ship as dead code. T2 does not reach develop on its own; it lands together with T4, as the ruling requires TD1–TD14 before develop.
+
 ### Task 7: `template.apply` app action, create-only
 
 **Files:** Modify `src/features/app-actions/model/actionRegistry.ts` (new entry). Test: `tests/canvas/template-apply-action.test.ts`.
 
 - [ ] Failing test: the definition has `params` `{ templateId: { type:"string", required:true } }` only, `confirm:"simple"`; passing a `pageId` arg does not touch that page; `run` calls `createPageFromTemplate`.
-- [ ] Implement; pass; commit `feat(app-actions): template.apply creates a page from a template`. Land T2; beta.
+- [ ] Implement; pass; commit `feat(app-actions): template.apply creates a page from a template`. T2 lands with T4 (see the Task 6 split).
 
 ## Phase T3 — catalogue
 
@@ -153,6 +155,7 @@
 
 - [ ] Failing e2e: open panel, search "crm" → 1 card; arrow keys move focus; Enter opens preview; `A` applies (dialog appears when the page has content); "Apply to this page" disabled on a read-only page; axe AA passes in light and dark.
 - [ ] Implement; previews render only on hover/focus (TD24); e2e green.
+- [ ] From Task 6: `ApplyTemplateDialog.tsx` (own component; the kit `ConfirmDialog` has 2 buttons and no dialog role), and `templateApply.spec.mjs` (keep-copy → copy in the sidebar, URL unchanged; Ctrl+Z restores content, cover and icon).
 - [ ] Perf: `boot-ab.sh` ABBA warm and cold within the ADR 0066 baseline (TD23); record the numbers in the commit body.
 - [ ] Commit `feat(templates): Templates panel with live previews`. Land T4; beta.
 
