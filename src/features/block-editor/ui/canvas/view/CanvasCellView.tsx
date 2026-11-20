@@ -20,6 +20,7 @@ import { gridCellFromFrame } from "../model/migration";
 import { legacySizingFromCanvas } from "../model/migrationMaps";
 import type { CanvasCell, CanvasFrame, CanvasGridConfig } from "../model/types";
 import { evaluateCellVisibility } from "@/entities/block/model/visibility";
+import { regionAttributes } from "@/entities/block/model/layoutRegion";
 import { CanvasCellChrome } from "./CanvasCellChrome";
 import { CanvasCellSurface } from "./CanvasCellSurface";
 import { CanvasResizeHandles, type CanvasResizeEdge } from "./CanvasResizeHandles";
@@ -135,6 +136,7 @@ const CanvasCellViewComponent: React.FC<CanvasCellViewProps> = ({
       data-layout-col-span={span.colSpan}
       data-layout-row-start={span.rowStart}
       data-layout-row-span={span.rowSpan}
+      {...regionAttributes(cell)}
       style={{
         zIndex: cell.z + 1,
         color: cell.visuals.foreground,

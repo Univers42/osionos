@@ -15,6 +15,7 @@ import type { Block, LayoutCell } from "@/entities/block";
 import type { PagePropertyEntry } from "@/entities/page/model/types";
 import { gridConfigFromLegacy } from "@/features/block-editor/ui/canvas/model/migration";
 import { filterVisibleCells, resolvePropertyMap } from "@/entities/block/model/visibility";
+import { regionAttributes } from "@/entities/block/model/layoutRegion";
 import { ReadOnlyBlock } from "./ReadOnlyBlock";
 
 /**
@@ -40,7 +41,12 @@ export function LayoutBlockReadOnly({ block, properties }: { block: Block; prope
     padding: "8px",
   };
   return (
-    <div className="osionos-layout-grid my-2" data-layout-guides="false" style={style}>
+    <div
+      className="osionos-layout-grid my-2"
+      data-layout-guides="false"
+      data-has-regions={cells.some((cell) => Object.values(regionAttributes(cell)).some(Boolean)) ? "true" : undefined}
+      style={style}
+    >
       {cells.map((cell) => (
         <LayoutCellReadOnly key={cell.id} cell={cell} />
       ))}
@@ -71,6 +77,7 @@ function LayoutCellReadOnly({ cell }: { cell: LayoutCell }): React.ReactElement 
       data-layout-font-size={cell.fontSize}
       data-layout-wrap={cell.wrap === false ? "false" : "true"}
       data-section={cell.section}
+      {...regionAttributes(cell)}
       style={cellPlacementStyle(cell)}
     >
       <div className="osionos-layout-cell-editor" style={{ paddingTop: "var(--osio-cell-padding-block)" }}>

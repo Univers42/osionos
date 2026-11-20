@@ -1,0 +1,50 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   layout-regions.css                                 :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/11/20 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/11/20 00:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+/* Page regions on a read-only layout grid (template dashboards, ruling TD19).
+   Only grids holding a region cell become a size container, so pages written
+   before regions keep their exact layout. The editor canvas places cells as
+   absolute frames and never stacks; these rules target the read-only grid. */
+
+.osionos-layout-grid[data-has-regions="true"] {
+  container-type: inline-size;
+}
+
+.osionos-layout-grid[data-has-regions="true"] > [data-region="header"] { order: 0; }
+.osionos-layout-grid[data-has-regions="true"] > [data-region="main"] { order: 1; }
+.osionos-layout-grid[data-has-regions="true"] > [data-region="left"] { order: 2; }
+.osionos-layout-grid[data-has-regions="true"] > [data-region="right"] { order: 3; }
+.osionos-layout-grid[data-has-regions="true"] > [data-region="footer"] { order: 4; }
+
+.osionos-layout-grid[data-has-regions="true"] > [data-sticky="true"] {
+  position: sticky;
+  top: var(--osio-topbar-h, 0px);
+  align-self: start;
+}
+
+/* !important: cell placement is an inline grid-column/grid-row style, which
+   only an important declaration outranks. */
+@container (max-width: 48rem) {
+  .osionos-layout-grid > [data-stack-at="tablet"] {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+    position: relative;
+  }
+}
+
+@container (max-width: 30rem) {
+  .osionos-layout-grid > [data-stack-at="mobile"] {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+    position: relative;
+  }
+}
