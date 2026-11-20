@@ -109,7 +109,7 @@
 
 **Files:** Create `src/features/templates/model/applyToPage.ts`, `src/features/templates/ui/ApplyTemplateDialog.tsx`. Modify `src/features/page-shells/model/applyShell.ts` (reuse `applyTemplateBlocks`' target shape). Test: `tests/canvas/apply-to-page.test.ts`, e2e `tests/e2e/functional/templateApply.spec.mjs`.
 
-**Interfaces:** `applyToPage(pageId: string, template: TemplateSource, mode: "keep-copy"|"replace"): Promise<{ ok: boolean; reason?: string; copyId?: string }>` — finds the page editor handle by `pageId` + `kind:"page"` (TD1); order gate → copy → clone → `saveAutosaveVersion(pageId, userId, "Before template: <title>", addVersion)` → `commitContent` (TD2–TD5). Keep-copy copies the root page from loaded content only, no navigation, `activePage` and recents unchanged (TD13).
+**Interfaces:** `applyToPage(pageId: string, template: TemplateSource, mode: "keep-copy"|"replace", userId: string): Promise<ApplyOutcome>` (`ApplyOutcome` = `{ ok: true; copyId: string | null; versionSaved: boolean } | { ok: false; reason: ApplyFailure; copyId?: string }` — a failure after the copy step carries the copy's id so the dialog can say it was kept) — finds the page editor handle by `pageId` + `kind:"page"` (TD1); order gate → copy → clone → `saveAutosaveVersion(pageId, userId, "Before template: <title>", addVersion)` → `commitContent` (TD2–TD5). Keep-copy copies the root page from loaded content only, no navigation, `activePage` and recents unchanged (TD13).
 
 - [ ] Failing canvas tests: each abort reason performs 0 store writes and 0 bridge calls (spy); keep-copy failure aborts before commit.
 - [ ] Implement; dialog buttons in order *Keep a copy and apply* (default focus), *Replace* (destructive style), *Cancel*. Pages with no content skip the dialog.
@@ -155,7 +155,7 @@
 
 - [ ] Failing e2e: open panel, search "crm" → 1 card; arrow keys move focus; Enter opens preview; `A` applies (dialog appears when the page has content); "Apply to this page" disabled on a read-only page; axe AA passes in light and dark.
 - [ ] Implement; previews render only on hover/focus (TD24); e2e green.
-- [ ] From Task 6: `ApplyTemplateDialog.tsx` (own component; the kit `ConfirmDialog` has 2 buttons and no dialog role), and `templateApply.spec.mjs` (keep-copy → copy in the sidebar, URL unchanged; Ctrl+Z restores content, cover and icon).
+- [ ] From Task 6: `ApplyTemplateDialog.tsx` (own component; the kit `ConfirmDialog` has 2 buttons and no dialog role), and `templateApply.spec.mjs` (keep-copy → copy in the sidebar, URL unchanged, `activePage` and recents unchanged; the copy reaches the bridge, not a local-only id; Ctrl+Z restores content, cover and icon; a page in two panes still applies after closing one). This e2e is the live-wiring proof for `applyToPageLive.ts` (flows review 2026-11-20).
 - [ ] Perf: `boot-ab.sh` ABBA warm and cold within the ADR 0066 baseline (TD23); record the numbers in the commit body.
 - [ ] Commit `feat(templates): Templates panel with live previews`. Land T4; beta.
 

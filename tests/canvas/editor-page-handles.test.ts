@@ -65,3 +65,29 @@ test("pageHandleFor on an unknown page is null", () => {
   useEditorCommandBus.setState({ pageHandles: {}, active: null });
   assert.equal(pageHandleFor("p1"), null);
 });
+
+test("one page in two panes: closing either pane keeps the other resolvable", () => {
+  useEditorCommandBus.setState({ pageHandles: {}, active: null });
+  const first = fakeHandle();
+  const second = fakeHandle();
+  const bus = useEditorCommandBus.getState();
+  bus.registerPageHandle(first);
+  bus.registerPageHandle(second);
+  assert.equal(pageHandleFor("p1"), second);
+  bus.unregisterPageHandle(second);
+  assert.equal(pageHandleFor("p1"), first);
+  bus.registerPageHandle(second);
+  bus.unregisterPageHandle(first);
+  assert.equal(pageHandleFor("p1"), second);
+  bus.unregisterPageHandle(second);
+  assert.equal(pageHandleFor("p1"), null);
+});
+
+test("re-registering the same handle does not duplicate it", () => {
+  useEditorCommandBus.setState({ pageHandles: {}, active: null });
+  const h = fakeHandle();
+  useEditorCommandBus.getState().registerPageHandle(h);
+  useEditorCommandBus.getState().registerPageHandle(h);
+  useEditorCommandBus.getState().unregisterPageHandle(h);
+  assert.equal(pageHandleFor("p1"), null);
+});

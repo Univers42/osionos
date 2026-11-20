@@ -134,9 +134,10 @@ async function expectRefusal(overrides: Partial<ApplyToPageDeps>, reason: ApplyF
   assertNoWrites(fake.trace.calls);
 }
 
-async function expectCopyFailure(overrides: Partial<ApplyToPageDeps>): Promise<void> {
+async function expectCopyFailure(overrides: Partial<ApplyToPageDeps>, copyId?: string): Promise<void> {
   const fake = fakeDeps(overrides);
-  assert.deepEqual(await run(fake), { ok: false, reason: "copy-failed" });
+  const expected = copyId === undefined ? { ok: false, reason: "copy-failed" } : { ok: false, reason: "copy-failed", copyId };
+  assert.deepEqual(await run(fake), expected);
   assertNoWrites(fake.trace.calls, true);
   assert.deepEqual(effects(fake.trace.calls), ["getContent", "copyPage"]);
 }
@@ -149,34 +150,39 @@ test("unloaded target → not-loaded", () => expectRefusal({
 test("database store not writable → db-read-only and no copy", () => expectRefusal({ dbWritable: () => false }, "db-read-only"));
 test("copy returns null → copy-failed", () => expectCopyFailure({ copyPage: async () => null }));
 test("copy throws → copy-failed", () => expectCopyFailure({ copyPage: async () => { throw new Error("copy failed"); } }));
-test("copy content differs → copy-failed", () => expectCopyFailure({
+test("copy content differs → copy-failed, and the made copy is reported", () => expectCopyFailure({
   copyPage: async (page) => ({ ...page, _id: "copy-1", content: [] }),
-}));
+}, "copy-1"));
 
-test("editor swapped during copy → not-open", async () => {
+test("editor swapped during copy → not-open, and the made copy is reported", async () => {
   const fake = fakeDeps();
   const other = { ...fake.handle };
   let lookups = 0;
   fake.deps.handleFor = () => { lookups += 1; return lookups === 1 ? fake.handle : other; };
-  assert.deepEqual(await run(fake), { ok: false, reason: "not-open" });
+  assert.deepEqual(await run(fake), { ok: false, reason: "not-open", copyId: "copy-1" });
   assertNoWrites(fake.trace.calls, true);
 });
 
-test("content edited during copy → changed-during-copy", async () => {
+test("content edited during copy → changed-during-copy, and the made copy is reported", async () => {
   const fake = fakeDeps();
   const read = fake.handle.getContent;
   const edited: Block[] = [{ id: "edited", type: "paragraph", content: "Edited" }];
   let reads = 0;
   fake.handle.getContent = () => { const content = read(); reads += 1; return reads === 2 ? edited : content; };
-  assert.deepEqual(await run(fake), { ok: false, reason: "changed-during-copy" });
+  assert.deepEqual(await run(fake), { ok: false, reason: "changed-during-copy", copyId: "copy-1" });
   assertNoWrites(fake.trace.calls, true);
 });
 
-test("commitDatabases throws → commit-failed", async () => {
+test("commitDatabases throws → commit-failed, and the made copy is reported", async () => {
   const fake = fakeDeps({ commitDatabases: () => { throw new Error("read only"); } });
-  assert.deepEqual(await run(fake), { ok: false, reason: "commit-failed" });
+  assert.deepEqual(await run(fake), { ok: false, reason: "commit-failed", copyId: "copy-1" });
   assert.equal(fake.trace.calls.includes("saveVersion"), false);
   assert.equal(fake.trace.calls.includes("updateContent"), false);
+});
+
+test("replace-mode failure carries no copyId", async () => {
+  const fake = fakeDeps({ commitDatabases: () => { throw new Error("read only"); } });
+  assert.deepEqual(await run(fake, "replace"), { ok: false, reason: "commit-failed" });
 });
 
 test("keep-copy happy path runs in order", async () => {

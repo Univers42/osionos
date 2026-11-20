@@ -23,7 +23,7 @@ export type ApplyMode = "keep-copy" | "replace";
 export type ApplyFailure = ApplyRefusal | "not-open" | "copy-failed" | "changed-during-copy" | "commit-failed";
 export type ApplyOutcome =
   | { ok: true; copyId: string | null; versionSaved: boolean }
-  | { ok: false; reason: ApplyFailure };
+  | { ok: false; reason: ApplyFailure; copyId?: string };
 export interface ApplyToPageDeps {
   handleFor: (pageId: string) => EditorHandle | null;
   page: (pageId: string) => PageEntry | undefined;
@@ -48,6 +48,11 @@ function planFor(deps: ApplyToPageDeps, target: PageEntry, template: TemplateSou
   });
 }
 
+/** A copy made before a later step failed is reported, so the caller can show it instead of orphaning it. */
+function failure(reason: ApplyFailure, copyId: string | null): ApplyOutcome & { ok: false } {
+  return copyId === null ? { ok: false, reason } : { ok: false, reason, copyId };
+}
+
 async function copyPageOrNull(deps: ApplyToPageDeps, target: PageEntry, before: Block[]): Promise<PageEntry | null> {
   try {
     return await deps.copyPage(target, before);
@@ -58,16 +63,17 @@ async function copyPageOrNull(deps: ApplyToPageDeps, target: PageEntry, before: 
 
 async function prepareCopy(
   deps: ApplyToPageDeps, pageId: string, target: PageEntry, handle: EditorHandle, mode: ApplyMode,
-): Promise<{ ok: true; copyId: string | null } | { ok: false; reason: ApplyFailure }> {
+): Promise<{ ok: true; copyId: string | null } | (ApplyOutcome & { ok: false })> {
   const before = handle.getContent();
   let copyId: string | null = null;
   if (mode === "keep-copy") {
     const copy = await copyPageOrNull(deps, target, before);
-    if (copy === null || !deepEqual(copy.content, before)) return { ok: false, reason: "copy-failed" };
+    if (copy === null) return failure("copy-failed", null);
     copyId = copy._id;
+    if (!deepEqual(copy.content, before)) return failure("copy-failed", copyId);
   }
-  if (deps.handleFor(pageId) !== handle) return { ok: false, reason: "not-open" };
-  if (!deepEqual(handle.getContent(), before)) return { ok: false, reason: "changed-during-copy" };
+  if (deps.handleFor(pageId) !== handle) return failure("not-open", copyId);
+  if (!deepEqual(handle.getContent(), before)) return failure("changed-during-copy", copyId);
   return { ok: true, copyId };
 }
 
@@ -75,13 +81,13 @@ function finishApply(
   deps: ApplyToPageDeps, pageId: string, template: TemplateSource, handle: EditorHandle, copyId: string | null,
 ): ApplyOutcome {
   const fresh = deps.page(pageId);
-  if (!fresh) return { ok: false, reason: "not-loaded" };
+  if (!fresh) return failure("not-loaded", copyId);
   const plan = planFor(deps, fresh, template);
-  if (!plan.ok) return plan;
+  if (!plan.ok) return failure(plan.reason, copyId);
   try {
     deps.commitDatabases(plan.state, plan.created);
   } catch {
-    return { ok: false, reason: "commit-failed" };
+    return failure("commit-failed", copyId);
   }
   const versionSaved = deps.saveVersion(pageId, `Before template: ${template.title}`);
   handle.updateContent(plan.content);
