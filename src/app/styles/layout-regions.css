@@ -33,11 +33,16 @@
 
 /* !important: cell placement is an inline grid-column/grid-row style, which
    only an important declaration outranks. */
+/* Header and footer leave their fixed rows too: a stacked cell is auto-placed,
+   and auto-placement flows around a footer still pinned to row 3, which put the
+   footer between main and the sidebars at 400 px (pageShells.spec.mjs). */
 @container (max-width: 48rem) {
+  .osionos-layout-grid[data-has-regions="true"] > :is([data-region="header"], [data-region="footer"]):not([data-stack-at="never"]),
   .osionos-layout-grid[data-has-regions="true"] > [data-stack-at="tablet"] {
     grid-column: 1 / -1 !important;
     grid-row: auto !important;
     position: relative;
+    top: auto;
   }
 }
 
@@ -46,5 +51,6 @@
     grid-column: 1 / -1 !important;
     grid-row: auto !important;
     position: relative;
+    top: auto;
   }
 }
