@@ -26,11 +26,11 @@ import type { CatalogueCard } from "@/data/templates/catalogue/types";
 import { database, record } from "../../src/data/templates/catalogue/builders/databases.ts";
 import { view } from "../../src/data/templates/catalogue/builders/views.ts";
 import "./support/user-store-env.ts";
+import { templateKeys } from "../../scripts/check-catalogue-chunks.mjs";
 
 type Commit = { state: NotionState; created: CreatedEntry[]; workspaceId: string };
 const INDEX = "src/data/templates/catalogue/index.ts";
 const ENTRY = "src/app/main.tsx";
-const SLUG_FILES = ["project-tracker.ts", "sprint-board.ts", "crm-pipeline.ts", "content-calendar.ts"];
 
 function source(content: Block[] = [dbInline("slice-db", "view-board")]): TemplateSource {
   return {
@@ -63,7 +63,7 @@ function manifest(catalogue = true) {
   };
   if (catalogue) {
     entries[INDEX] = { file: "assets/catalogue.js", isDynamicEntry: true };
-    for (const file of SLUG_FILES) entries[`src/data/templates/catalogue/${file}`] = { file: `assets/${file}.js`, isDynamicEntry: true };
+    for (const key of templateKeys()) entries[key] = { file: `assets/${key}.js`, isDynamicEntry: true };
   }
   return entries;
 }

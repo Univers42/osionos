@@ -43,7 +43,7 @@ function staticEntryFiles(manifest) {
   return files;
 }
 
-function templateKeys() {
+export function templateKeys() {
   const metadata = new Set(["index.ts", "tplId.ts", "types.ts"]);
   return readdirSync(PREFIX)
     .filter((file) => file.endsWith(".ts") && !metadata.has(file))
