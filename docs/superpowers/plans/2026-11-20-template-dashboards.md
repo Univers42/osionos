@@ -137,7 +137,7 @@ The gallery peek reads `pageById` (`WorkspaceDatabaseBlock.tsx:49`), so a `tpl:`
 
 #### Task 8b: builders + lazy loader + entry-graph test (TD22 source half)
 
-**Files:** Create `src/data/templates/catalogue/build/{regions,views,cards,databases}.ts`, `catalogue/types.ts` (`CatalogueCategory`, `CatalogueCard`, `CatalogueTemplate`), `catalogue/index.ts` (`listCatalogue`, `loadTemplate`, an empty `ENTRIES` that Task 9 fills with `import()` loaders). Tests: `tests/canvas/catalogue-builders.test.ts`, `tests/canvas/catalogue-entry-graph.test.ts`. Contract: `scratch/tpl/task8b-contract.md`.
+**Files:** Create `src/data/templates/catalogue/builders/{regions,views,cards,databases}.ts`, `catalogue/types.ts` (`CatalogueCategory`, `CatalogueCard`, `CatalogueTemplate`), `catalogue/index.ts` (`listCatalogue`, `loadTemplate`, an empty `ENTRIES` that Task 9 fills with `import()` loaders). Tests: `tests/canvas/catalogue-builders.test.ts`, `tests/canvas/catalogue-entry-graph.test.ts`. Contract: `scratch/tpl/task8b-contract.md`.
 
 - [ ] Failing tests: `regionPage` fills only named regions without mutating the shell; `tileRow` rejects 0 or > 4 tiles; `database()` rejects a foreign `databaseId`; `mergeSlices` rejects duplicate keys; a built example passes `planApply`; a static-import walk from `src/app/main.tsx` reaches no `catalogue/` file except `tplId.ts`.
 - [ ] Implement; pass; commit `feat(templates): catalogue builders and lazy loader (TD22 source half)`.
