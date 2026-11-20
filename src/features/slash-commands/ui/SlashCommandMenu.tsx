@@ -31,7 +31,7 @@ import { isReadmePage } from "@/features/profile-binding/model/readmePage";
 import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
 import { usePageStore } from "@/store/usePageStore";
 import { useMySectionCommands } from "@/features/slash-commands/model/mySections";
-import { SECTIONS_GROUP_ID } from "@/features/slash-commands/model/sectionSlashCommands";
+import { LAYOUT_MODE_GROUP_IDS } from "@/features/slash-commands/model/sectionSlashCommands";
 import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import type {
   SlashCommand,
@@ -78,7 +78,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   const layoutModes = useLayoutModes();
   const mySections = useMySectionCommands(pageId);
   const filtered = useMemo(
-    () => filterSlashCommands(filter, layoutModes ? mySections : []).filter((c) => (layoutModes || c.section !== SECTIONS_GROUP_ID) && (c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage) && (c.id !== PROFILE_FIELD_COMMAND_ID || isReadme) && isSlashCommandAvailable(c, AVAILABILITY)),
+    () => filterSlashCommands(filter, layoutModes ? mySections : []).filter((c) => (layoutModes || !LAYOUT_MODE_GROUP_IDS.has(c.section)) && (c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage) && (c.id !== PROFILE_FIELD_COMMAND_ID || isReadme) && isSlashCommandAvailable(c, AVAILABILITY)),
     [filter, layoutModes, mySections, isTemplatePage, isReadme],
   );
   // Typing a query → one flat, relevance-ranked list so the best match sits on top

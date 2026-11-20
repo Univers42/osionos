@@ -35,6 +35,9 @@ export const PAGE_SHELL_SLASH_COMMANDS: SlashSectionCommand[] = PAGE_SHELLS.map(
   section: PAGE_SHELLS_GROUP_ID,
 }));
 
+/** Groups offered only where layout containers render (ADR 0064 PS10). */
+export const LAYOUT_MODE_GROUP_IDS: ReadonlySet<string> = new Set([SECTIONS_GROUP_ID, PAGE_SHELLS_GROUP_ID]);
+
 export const MY_SECTIONS_GROUP_ID = "my-sections";
 
 /** The user's saved sections: live template pages marked as sections. */
