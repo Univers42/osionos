@@ -116,6 +116,9 @@ export function templatesState(cards: CatalogueCard[] = []): NotionState {
         settings: {
           cardPreview: "page_cover", cardSize: "medium", galleryLayout: "carousel",
           showTitle: true, showPageIcon: true, fitMedia: true, openPagesIn: "side_peek",
+          // Code-owned: the read-only adapter rebuilds this view on every load,
+          // and persistState only reloads on an edit — no stored view can win.
+          cardClick: "use_template",
         },
       },
     },

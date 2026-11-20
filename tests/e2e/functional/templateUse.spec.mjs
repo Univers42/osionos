@@ -43,7 +43,6 @@ async function useStudentDashboard(page) {
   await page.getByText("Featured templates").scrollIntoViewIfNeeded();
   const templatesBlock = page.locator('[data-database-id="home-templates"]');
   await templatesBlock.getByText("Student Dashboard").first().click();
-  await page.getByRole("button", { name: "Use template" }).click();
   // TD14: template.apply is an app action with confirm "simple".
   await page.getByRole("button", { name: "Create page", exact: true }).click();
   // The preview closes only once the action resolves; until then it shows its own page title.

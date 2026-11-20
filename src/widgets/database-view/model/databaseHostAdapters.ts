@@ -19,6 +19,12 @@ import { collabTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { readAutofillLabels } from "./databaseAutofill";
 import { dashboardAskAI } from "./dashboardAskAi";
+import { runAppAction } from "@/features/app-actions/model/runAppAction";
+
+/** The only template-create path: the app action owns the guard and the page. */
+function applyTemplate(pageId: string): void {
+  void runAppAction("template.apply", { templateId: pageId }, { mode: "live", trusted: true });
+}
 
 export function useDatabaseHostAdapters(): HostAdapters {
   const personas = useUserStore((s) => s.personas);
@@ -36,6 +42,8 @@ export function useDatabaseHostAdapters(): HostAdapters {
       // service the kit offers no "AI sentiment" type: its column would stay "—" for good.
       autofill: isAiConfigured() ? { read: readAutofillLabels } : undefined,
       onAskAI: dashboardAskAI(isAiConfigured()),
+      // Module-level function: the useMemo deps do not change.
+      onUseTemplate: applyTemplate,
     }),
     [personas],
   );

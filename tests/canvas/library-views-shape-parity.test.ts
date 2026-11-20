@@ -24,7 +24,7 @@ import { LIBRARY_DB_ID } from "@/widgets/database-view/model/libraryDatabaseMode
 
 const KIT = "src/shared/notion-database-sys/packages/contract-types/src/index.ts";
 // Views stay layout: what runs or embeds another surface is not shareable in a Library view.
-const EXCLUDED_SETTINGS = ["automations", "widgets", "dashboardWidgets", "dashboardRows", "dashboardFilters", "formulaAnalytics", "relationAnalytics"];
+const EXCLUDED_SETTINGS = ["automations", "widgets", "dashboardWidgets", "dashboardRows", "dashboardFilters", "formulaAnalytics", "relationAnalytics", "cardClick"];
 
 // The kit source is read as text: node's strip-only TypeScript cannot load it (it has
 // parameter properties).
