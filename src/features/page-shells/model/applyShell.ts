@@ -13,9 +13,15 @@ export interface ShellTarget {
   focusBlock: (blockId: string) => void;
 }
 
+/** A template's blocks under fresh ids, so no page made from it shares the template's
+ *  block ids (TD7). One source of fresh ids: apply and the shells both go through here. */
+export function freshTemplateContent(blocks: Block[] | null | undefined): Block[] {
+  return instantiateTemplateContent(blocks ?? undefined).map((block) => cloneBlock(block, true));
+}
+
 /** Fill the page with the blocks given, fresh ids each time; false when there are none. */
 export function applyTemplateBlocks(blocks: Block[] | null, target: ShellTarget): boolean {
-  const content = instantiateTemplateContent(blocks ?? undefined).map((block) => cloneBlock(block, true));
+  const content = freshTemplateContent(blocks);
   if (content.length === 0) return false;
   target.commitContent(content);
   const caret = firstLeafId(content);

@@ -17,7 +17,7 @@
 import type { Block } from "@/entities/block";
 import type { NotionState } from "@notion-db/object-database";
 
-interface CreatedEntry {
+export interface CreatedEntry {
   id: string;
   viewId: string;
   name: string;
