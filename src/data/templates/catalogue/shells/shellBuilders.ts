@@ -1,4 +1,4 @@
-// Shell id → builder. Loaded on demand by loadShell (shellIndex.ts).
+// Shell id → builder. Loaded on demand by the page template catalogue.
 
 import type { Block } from '@/entities/block';
 import { agencyShell, careersShell, caseStudyShell, servicesShell, teamShell } from './businessShells';

@@ -13,7 +13,7 @@
 import type { Block } from "@/entities/block";
 import type { DatabaseSlice } from "@/features/templates/model/templateSlice";
 
-export type CatalogueCategory = "work" | "personal" | "school" | "team";
+export type CatalogueCategory = "work" | "personal" | "school" | "team" | "page";
 
 export interface CatalogueCard {
   id: string;

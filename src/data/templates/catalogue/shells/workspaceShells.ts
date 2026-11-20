@@ -2,11 +2,11 @@
 // dashboard, a roadmap, meeting notes and a 404 page.
 
 import type { Block } from '@/entities/block';
-import { bullet, callout, divider, h2, h3, numbered, p, todo } from '../../seedBlockHelpers';
-import { timelineSection } from '../sections/contentSections';
-import { statsSection } from '../sections/featureSections';
-import { pageHeaderSection } from '../sections/frameSections';
-import { band, buttonPair, card, cardGrid, headingOf, sectionTitle } from '../sections/sectionBlocks';
+import { bullet, callout, divider, h2, h3, numbered, p, todo } from '@/data/seedBlockHelpers';
+import { timelineSection } from '@/data/templates/sections/contentSections';
+import { statsSection } from '@/data/templates/sections/featureSections';
+import { pageHeaderSection } from '@/data/templates/sections/frameSections';
+import { band, buttonPair, card, cardGrid, headingOf, sectionTitle } from '@/data/templates/sections/sectionBlocks';
 
 export function personalHomeShell(): Block[] {
   return [

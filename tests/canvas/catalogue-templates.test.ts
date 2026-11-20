@@ -44,7 +44,7 @@ const ENGINE = "../../src/shared/notion-database-sys/src/components/views/dashbo
 const { statEntries } = await import(`${ENGINE}/statEntries.ts`);
 
 const PROPERTY_TYPES = new Set(["title", "text", "number", "select", "multi_select", "date", "checkbox", "url"]);
-const CATEGORIES = new Set(["work", "personal", "school", "team"]);
+const CATEGORIES = new Set(["work", "personal", "school", "team", "page"]);
 const LIVE: NotionState = { databases: {}, views: {}, pages: {} };
 
 function slashTypes(): Set<string> {
@@ -203,7 +203,7 @@ test("the / menu accepts layout blocks used by catalogue shells", () => {
   assert.ok(INSERTABLE.has("layout"), "layout has an inline/full-page slash item");
 });
 
-for (const card of CARDS) {
+for (const card of CARDS.filter((card) => card.category !== "page")) {
   test(`catalogue ${card.id}: structure, round trips, widgets and isolated apply`, async (t) => {
     const template = await loadTemplate(card.id);
     assert.ok(template, `${card.id} loads`);
@@ -222,6 +222,17 @@ for (const card of CARDS) {
     assert.ok(bytes <= 32768, `${card.id} databases are ${bytes} bytes`);
   });
 }
+
+test("all 37 page cards load non-empty content and zero databases", async () => {
+  const pageCards = CARDS.filter((card) => card.category === "page");
+  assert.equal(pageCards.length, 37);
+  for (const card of pageCards) {
+    const template = await loadTemplate(card.id);
+    assert.ok(template, `${card.id} loads`);
+    assert.ok((template.content?.length ?? 0) > 0, `${card.id} has content`);
+    assert.equal(Object.keys(template.databases.databases).length, 0, `${card.id} has no databases`);
+  }
+});
 
 test("selectProperty builds select options from id, label and color tuples", () => {
   assert.deepEqual(selectProperty("status", "Status", [["opt-done", "Done", "green"]]), {

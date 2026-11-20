@@ -2,12 +2,12 @@
 // and changelog.
 
 import type { Block } from '@/entities/block';
-import { bullet, callout, code, divider, h2, h3, p } from '../../seedBlockHelpers';
-import { contentSection, postListSection } from '../sections/contentSections';
-import { featureGridSection } from '../sections/featureSections';
-import { pageHeaderSection } from '../sections/frameSections';
-import { contactSection, newsletterSection } from '../sections/peopleSections';
-import { CARD, action, buttonPair, cardGrid, column, container, headingOf, image, portrait, sectionTitle } from '../sections/sectionBlocks';
+import { bullet, callout, code, divider, h2, h3, p } from '@/data/seedBlockHelpers';
+import { contentSection, postListSection } from '@/data/templates/sections/contentSections';
+import { featureGridSection } from '@/data/templates/sections/featureSections';
+import { pageHeaderSection } from '@/data/templates/sections/frameSections';
+import { contactSection, newsletterSection } from '@/data/templates/sections/peopleSections';
+import { CARD, action, buttonPair, cardGrid, column, container, headingOf, image, portrait, sectionTitle } from '@/data/templates/sections/sectionBlocks';
 
 /** Who you are: the portrait beside the name, a line and two actions. */
 function identity(): Block {

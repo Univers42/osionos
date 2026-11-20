@@ -16,7 +16,7 @@ function target() {
 
 test("a known shell lands in one commit and takes the caret", async () => {
   const { calls, editor } = target();
-  assert.equal(await applyShell("landing", editor), true);
+  assert.equal(await applyShell("tpl:landing", editor), true);
   assert.equal(calls.commits.length, 1);
   assert.ok(calls.commits[0].length > 0);
   assert.equal(calls.focus.length, 1);
@@ -24,7 +24,7 @@ test("a known shell lands in one commit and takes the caret", async () => {
 
 test("every block gets a fresh unique id, not a seed counter id", async () => {
   const { calls, editor } = target();
-  await applyShell("profile", editor);
+  await applyShell("tpl:profile", editor);
   const all = ids(calls.commits[0]);
   assert.equal(new Set(all).size, all.length);
   assert.equal(all.some((id) => /"block-\d+"/.test(id)), false);
@@ -32,6 +32,12 @@ test("every block gets a fresh unique id, not a seed counter id", async () => {
 
 test("an unknown shell commits nothing", async () => {
   const { calls, editor } = target();
-  assert.equal(await applyShell("nope", editor), false);
+  assert.equal(await applyShell("tpl:nope", editor), false);
+  assert.equal(calls.commits.length, 0);
+});
+
+test("a dashboard template is left for the apply dialog", async () => {
+  const { calls, editor } = target();
+  assert.equal(await applyShell("tpl:project-tracker", editor), false);
   assert.equal(calls.commits.length, 0);
 });

@@ -1,7 +1,6 @@
 // Fill an empty page with a shell from the catalogue in one commit, so a single
 // undo returns the page to empty.
 
-import { loadShell } from "@/data/templates/shells/shellIndex";
 import type { Block } from "@/entities/block";
 import { cloneBlock } from "@/features/block-editor/model/blockContextMenu.helpers";
 import { firstLeafId } from "@/features/slash-commands/model/sectionInsert";
@@ -29,6 +28,9 @@ export function applyTemplateBlocks(blocks: Block[] | null, target: ShellTarget)
   return true;
 }
 
-export async function applyShell(shellId: string, target: ShellTarget): Promise<boolean> {
-  return applyTemplateBlocks(await loadShell(shellId), target);
+export async function applyShell(templateId: string, target: ShellTarget): Promise<boolean> {
+  const { loadTemplate } = await import("@/data/templates/catalogue");
+  const source = await loadTemplate(templateId);
+  if (!source || Object.keys(source.databases.databases).length > 0) return false;
+  return applyTemplateBlocks(source.content ?? null, target);
 }

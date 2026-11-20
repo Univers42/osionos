@@ -2,13 +2,13 @@
 // product, a catalogue, a restaurant, a recipe and a gallery.
 
 import type { Block } from '@/entities/block';
-import { bullet, callout, h2, h3, numbered, p, quote, todo, toggle } from '../../seedBlockHelpers';
-import { gallerySection } from '../sections/contentSections';
-import { bentoSection } from '../sections/featureSections';
-import { footerSection, navSection, pageHeaderSection } from '../sections/frameSections';
-import { faqSection } from '../sections/offerSections';
-import { contactSection, newsletterSection, testimonialsSection } from '../sections/peopleSections';
-import { CARD, action, buttonPair, card, cardGrid, column, container, headingOf, image, sectionTitle } from '../sections/sectionBlocks';
+import { bullet, callout, h2, h3, numbered, p, quote, todo, toggle } from '@/data/seedBlockHelpers';
+import { gallerySection } from '@/data/templates/sections/contentSections';
+import { bentoSection } from '@/data/templates/sections/featureSections';
+import { footerSection, navSection, pageHeaderSection } from '@/data/templates/sections/frameSections';
+import { faqSection } from '@/data/templates/sections/offerSections';
+import { contactSection, newsletterSection, testimonialsSection } from '@/data/templates/sections/peopleSections';
+import { CARD, action, buttonPair, card, cardGrid, column, container, headingOf, image, sectionTitle } from '@/data/templates/sections/sectionBlocks';
 
 /** Products as cards: a picture, a name, a price line and one action each. */
 function productGrid(names: string[]): Block {

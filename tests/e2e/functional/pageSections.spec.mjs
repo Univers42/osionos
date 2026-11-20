@@ -52,10 +52,11 @@ test("the catalogue loads without touching the page cache (PS18)", async ({ page
       return setItem.call(this, key, value);
     };
     try {
-      const shells = await import("/src/data/templates/shells/shellIndex.ts");
+      const shells = await import("/src/data/templates/catalogue/shells/shellIndex.ts");
+      const catalogue = await import("/src/data/templates/catalogue/index.ts");
       const sections = await import("/src/data/templates/sections/sectionIndex.ts");
       const built = await Promise.all([
-        ...shells.SHELLS.map((shell) => shells.loadShell(shell.id)),
+        ...shells.SHELLS.map(async (shell) => (await catalogue.loadTemplate(`tpl:${shell.id}`))?.content),
         ...sections.SECTIONS.map((section) => sections.buildSection(section.id)),
       ]);
       const titles = new Set(shells.SHELLS.map((shell) => shell.title));

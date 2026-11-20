@@ -7,7 +7,6 @@
 
 import React, { useEffect, useSyncExternalStore } from "react";
 
-import { SHELLS } from "@/data/templates/shells/shellIndex";
 import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import { useUserStore } from "@/features/auth";
 import { usePageAccessContext } from "@/shared/lib/auth/pageAccess";
@@ -17,6 +16,7 @@ import { serverBodyOf, subscribeServerCopies } from "@/store/sync/serverFetchedP
 
 import { applyShell, type ShellTarget } from "../model/applyShell";
 import { shellStarterState } from "../model/shellStarterGate";
+import { usePageShellCards } from "../model/usePageShellCards";
 
 interface ShellStarterProps {
   pageId: string;
@@ -41,20 +41,21 @@ function useStarterState(pageId: string, locked: boolean) {
 // (ADR 0064 PS10): flag off counts as locked, which also skips the confirming fetch.
 export const ShellStarter: React.FC<ShellStarterProps> = ({ pageId, locked, target }) => {
   const layoutModes = useLayoutModes();
-  if (useStarterState(pageId, locked || !layoutModes) !== "offer") return null;
+  const cards = usePageShellCards();
+  if (useStarterState(pageId, locked || !layoutModes) !== "offer" || cards.length === 0) return null;
   return (
     <section data-testid="shell-starter" aria-labelledby={`shell-starter-${pageId}`} className="mt-2 flex flex-col gap-3 pb-8">
       <h2 id={`shell-starter-${pageId}`} className="text-sm font-medium text-[var(--osio-fg-muted)]">
         Or start from a page shell
       </h2>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">
-        {SHELLS.map((shell) => (
+        {cards.map((card) => (
           <Card
-            key={shell.id}
-            icon={<span aria-hidden="true">{shell.icon}</span>}
-            title={shell.title}
-            description={shell.description}
-            onClick={() => void applyShell(shell.id, target)}
+            key={card.id}
+            icon={<span aria-hidden="true">{card.icon}</span>}
+            title={card.title}
+            description={card.description}
+            onClick={() => void applyShell(card.id, target)}
           />
         ))}
       </div>

@@ -2,12 +2,12 @@
 // docs or wiki home, a knowledge base, an FAQ and a course.
 
 import type { Block } from '@/entities/block';
-import { bullet, callout, h2, h3, numbered, p, toggle } from '../../seedBlockHelpers';
-import { postListSection } from '../sections/contentSections';
-import { pageHeaderSection } from '../sections/frameSections';
-import { faqSection } from '../sections/offerSections';
-import { newsletterSection, testimonialsSection } from '../sections/peopleSections';
-import { CARD, action, band, buttonPair, card, cardGrid, column, container, headingOf, image, portrait, sectionTitle } from '../sections/sectionBlocks';
+import { bullet, callout, h2, h3, numbered, p, toggle } from '@/data/seedBlockHelpers';
+import { postListSection } from '@/data/templates/sections/contentSections';
+import { pageHeaderSection } from '@/data/templates/sections/frameSections';
+import { faqSection } from '@/data/templates/sections/offerSections';
+import { newsletterSection, testimonialsSection } from '@/data/templates/sections/peopleSections';
+import { CARD, action, band, buttonPair, card, cardGrid, column, container, headingOf, image, portrait, sectionTitle } from '@/data/templates/sections/sectionBlocks';
 
 /** The one post worth reading first, its picture beside the teaser. */
 function featuredPost(): Block {

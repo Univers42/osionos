@@ -1,13 +1,13 @@
 // Site-style shells: whole pages composed from the section library.
 
 import type { Block } from '@/entities/block';
-import { h3, p } from '../../seedBlockHelpers';
-import { contentSection, gallerySection, timelineSection } from '../sections/contentSections';
-import { comparisonSection, featureGridSection, logoCloudSection, statsSection } from '../sections/featureSections';
-import { footerSection, heroSection, navSection, pageHeaderSection } from '../sections/frameSections';
-import { ctaSection, faqSection, pricingSection } from '../sections/offerSections';
-import { contactSection, newsletterSection, teamSection, testimonialsSection } from '../sections/peopleSections';
-import { CARD, action, cardGrid, column, container, sectionTitle } from '../sections/sectionBlocks';
+import { h3, p } from '@/data/seedBlockHelpers';
+import { contentSection, gallerySection, timelineSection } from '@/data/templates/sections/contentSections';
+import { comparisonSection, featureGridSection, logoCloudSection, statsSection } from '@/data/templates/sections/featureSections';
+import { footerSection, heroSection, navSection, pageHeaderSection } from '@/data/templates/sections/frameSections';
+import { ctaSection, faqSection, pricingSection } from '@/data/templates/sections/offerSections';
+import { contactSection, newsletterSection, teamSection, testimonialsSection } from '@/data/templates/sections/peopleSections';
+import { CARD, action, cardGrid, column, container, sectionTitle } from '@/data/templates/sections/sectionBlocks';
 
 export function landingShell(): Block[] {
   return [

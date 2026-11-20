@@ -7,7 +7,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { SEED_PAGES } from "@/data/seedPages";
-import { SHELLS, loadShell } from "../../src/data/templates/shells/shellIndex.ts";
+import { loadTemplate } from "../../src/data/templates/catalogue/index.ts";
+import { SHELLS } from "../../src/data/templates/catalogue/shells/shellIndex.ts";
 import { attributeRoundTrip, blockDepth, coverLayoutKeysIn, fileRoundTrip, layoutProjection, markdownProjection, markdownRoundTrip } from "./support/catalogue-checks.ts";
 
 const WAVE_ONE = ["profile", "landing", "portfolio", "docs", "blog-post", "about", "pricing", "changelog", "link-in-bio", "resume", "event", "contact"];
@@ -32,7 +33,7 @@ test("wave 2 is in the catalogue, each shell with a title, an icon and a descrip
 
 for (const { id } of SHELLS) {
   test(`shell ${id}: depth ≤ 8, both round trips unchanged, no cover-layout key`, async () => {
-    const blocks = await loadShell(id);
+    const blocks = (await loadTemplate(`tpl:${id}`))?.content;
     assert.ok(blocks && blocks.length > 0, `${id} builds blocks`);
     assert.ok(blockDepth(blocks) <= 8, `${id} depth ${blockDepth(blocks)}`);
     assert.deepEqual(markdownProjection(markdownRoundTrip(blocks)), markdownProjection(blocks), `${id} markdown`);
@@ -55,5 +56,5 @@ test("PS18: no shell is a seed page, and the seeded template index never imports
 });
 
 test("an unknown shell loads nothing", async () => {
-  assert.equal(await loadShell("no-such-shell"), null);
+  assert.equal(await loadTemplate("tpl:no-such-shell"), null);
 });

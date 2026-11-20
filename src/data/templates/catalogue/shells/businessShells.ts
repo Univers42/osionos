@@ -2,13 +2,13 @@
 // services, an agency, a case study, a team page and careers.
 
 import type { Block } from '@/entities/block';
-import { bullet, h2, h3, numbered, p, quote } from '../../seedBlockHelpers';
-import { gallerySection, timelineSection } from '../sections/contentSections';
-import { logoCloudSection, statsSection } from '../sections/featureSections';
-import { footerSection, heroSection, navSection, pageHeaderSection } from '../sections/frameSections';
-import { ctaSection, faqSection } from '../sections/offerSections';
-import { contactSection, teamSection, testimonialsSection } from '../sections/peopleSections';
-import { action, band, card, cardGrid, column, container, headingOf, image, sectionTitle } from '../sections/sectionBlocks';
+import { bullet, h2, h3, numbered, p, quote } from '@/data/seedBlockHelpers';
+import { gallerySection, timelineSection } from '@/data/templates/sections/contentSections';
+import { logoCloudSection, statsSection } from '@/data/templates/sections/featureSections';
+import { footerSection, heroSection, navSection, pageHeaderSection } from '@/data/templates/sections/frameSections';
+import { ctaSection, faqSection } from '@/data/templates/sections/offerSections';
+import { contactSection, teamSection, testimonialsSection } from '@/data/templates/sections/peopleSections';
+import { action, band, card, cardGrid, column, container, headingOf, image, sectionTitle } from '@/data/templates/sections/sectionBlocks';
 
 /** What you can be hired for: one card per service, each with a price hint and an ask. */
 function serviceCards(): Block[] {

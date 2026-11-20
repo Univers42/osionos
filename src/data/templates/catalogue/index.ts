@@ -14,11 +14,20 @@
 import type { TemplateSource } from "@/features/templates/model/templateSlice";
 import { isCatalogueId } from "./tplId";
 import type { CatalogueCard, CatalogueTemplate, TemplateBody } from "./types";
+import { SHELLS, type ShellMeta } from "./shells/shellIndex";
 
 type CatalogueEntry = { card: CatalogueCard; load: () => Promise<CatalogueTemplate> };
 
 function entry(card: CatalogueCard, loader: () => Promise<{ default: TemplateBody }>): CatalogueEntry {
   return { card, load: () => loader().then((module) => ({ ...card, ...module.default })) };
+}
+
+function shellEntry(meta: ShellMeta): CatalogueEntry {
+  return entry({ ...meta, id: `tpl:${meta.id}`, category: "page" }, () =>
+    import("./shells/shellBuilders").then(({ SHELL_BUILDERS }) => ({
+      default: { content: SHELL_BUILDERS[meta.id](), databases: { databases: {}, views: {}, pages: {} } },
+    })),
+  );
 }
 
 const ENTRIES: ReadonlyArray<CatalogueEntry> = [
@@ -86,6 +95,7 @@ const ENTRIES: ReadonlyArray<CatalogueEntry> = [
     { id: "tpl:job-search", title: "Job search", icon: "💼", description: "Follow every application from saved listing to offer with salary notes.", category: "personal" },
     () => import("./job-search"),
   ),
+  ...SHELLS.map(shellEntry),
 ];
 
 export async function listCatalogue(): Promise<CatalogueCard[]> {

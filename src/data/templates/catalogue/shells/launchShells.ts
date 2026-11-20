@@ -2,13 +2,13 @@
 // launch, an app landing page, a webinar, a newsletter and a coming-soon page.
 
 import type { Block } from '@/entities/block';
-import { bullet, h2, h3, p } from '../../seedBlockHelpers';
-import { postListSection } from '../sections/contentSections';
-import { bentoSection, featureGridSection, logoCloudSection, statsSection } from '../sections/featureSections';
-import { footerSection, navSection } from '../sections/frameSections';
-import { ctaSection, faqSection } from '../sections/offerSections';
-import { newsletterSection, teamSection, testimonialsSection } from '../sections/peopleSections';
-import { CARD, action, band, buttonPair, card, cardGrid, column, container, headingOf, image, sectionTitle } from '../sections/sectionBlocks';
+import { bullet, h2, h3, p } from '@/data/seedBlockHelpers';
+import { postListSection } from '@/data/templates/sections/contentSections';
+import { bentoSection, featureGridSection, logoCloudSection, statsSection } from '@/data/templates/sections/featureSections';
+import { footerSection, navSection } from '@/data/templates/sections/frameSections';
+import { ctaSection, faqSection } from '@/data/templates/sections/offerSections';
+import { newsletterSection, teamSection, testimonialsSection } from '@/data/templates/sections/peopleSections';
+import { CARD, action, band, buttonPair, card, cardGrid, column, container, headingOf, image, sectionTitle } from '@/data/templates/sections/sectionBlocks';
 
 /** A centred opening band: an eyebrow, the title, a lead and what comes after. */
 function announcement(eyebrow: string, title: string, lead: string, then: Block[]): Block {

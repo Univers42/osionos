@@ -8,7 +8,8 @@ import test from "node:test";
 
 // @ts-expect-error plain .mjs, no declaration file
 import { publishSnapshot } from "../../scripts/bridge-publish-snapshot.mjs";
-import { SHELLS, loadShell } from "../../src/data/templates/shells/shellIndex.ts";
+import { loadTemplate } from "../../src/data/templates/catalogue/index.ts";
+import { SHELLS } from "../../src/data/templates/catalogue/shells/shellIndex.ts";
 
 const BUDGET = 200;
 const size = (value: unknown): number => JSON.stringify(value).length;
@@ -20,7 +21,7 @@ let worstPerNode = 0;
 
 for (const { id } of SHELLS) {
   test(`shell ${id}: published size and added bytes per added node`, async () => {
-    const blocks = await loadShell(id);
+    const blocks = (await loadTemplate(`tpl:${id}`))?.content;
     assert.ok(blocks);
     const before = publishSnapshot(blocks);
     const after = publishSnapshot(blocks, { containers: true });
