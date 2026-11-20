@@ -41,7 +41,10 @@ test.afterEach(() => {
   expect(consoleNoise).toEqual([]);
 });
 
-const frameOf = (page, type) => page.locator(`[data-block-type="${type}"] [data-block-resize-frame]`).first();
+// The Home tab stays mounted (hidden, or shown by the phone layout) and its dashboard carries database
+// blocks of its own, first in DOM order: only the seeded block's own article, and its visible copy, counts.
+const blockOf = (page, { id, type }) => page.locator(`article[data-draggable-block-id="${id}"][data-block-type="${type}"]`);
+const frameOf = (page, block) => blockOf(page, block).locator("[data-block-resize-frame]").filter({ visible: true }).first();
 const gripOf = (frame, edge) => frame.locator(`:scope > [data-resize-edge="${edge}"]`);
 // The text column a width is a share of: the content box of the frame's band's parent.
 const columnOf = (frame) => frame.evaluate((node) => {
@@ -87,7 +90,7 @@ for (const { type, block } of BLOCKS) {
   test(`${type} at 1440px grows past the column into both margins and keeps it across a reload`, async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await seedPage(page, baseURL, [block]);
-    const frame = frameOf(page, type);
+    const frame = frameOf(page, block);
     await expect(frame).toBeVisible();
     expect(await edgeHits(frame)).toEqual([]);
 
@@ -106,7 +109,7 @@ for (const { type, block } of BLOCKS) {
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await explorerRow(page, "Embed seed").click();
-    const kept = await frameOf(page, type).boundingBox();
+    const kept = await frameOf(page, block).boundingBox();
     expect(Math.abs(kept.width - after.width)).toBeLessThanOrEqual(2);
     expect(Math.abs(kept.x - after.x)).toBeLessThanOrEqual(2);
   });
@@ -115,7 +118,7 @@ for (const { type, block } of BLOCKS) {
 test("an outward drag stops at the pane, minus its gutters", async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await seedPage(page, baseURL, [BLOCKS[0].block]);
-  const frame = frameOf(page, "table_block");
+  const frame = frameOf(page, BLOCKS[0].block);
   await drag(page, frame, "right", 600, 0);
   const [box, pane] = [await frame.boundingBox(), await paneOf(page)];
   expect(Math.abs(box.width - (pane.width - 64))).toBeLessThanOrEqual(2);
@@ -128,10 +131,10 @@ for (const { type, block } of BLOCKS) {
     await seedPage(page, baseURL, [{ ...block, mediaWidth: 150 }]);
     // Resized after the page is open: the phone layout opens on Home, not on the page.
     await page.setViewportSize({ width: 390, height: 844 });
-    const frame = frameOf(page, type);
+    const frame = frameOf(page, block);
     await expect(frame).toBeVisible();
     const column = await columnOf(frame);
-    const band = page.locator(`[data-block-type="${type}"] [data-block-breakout]`).first();
+    const band = blockOf(page, block).locator("[data-block-breakout]").filter({ visible: true }).first();
     const scroll = await band.evaluate((node) => ({ width: node.scrollWidth, client: node.clientWidth, overflowX: getComputedStyle(node).overflowX }));
     expect(scroll.overflowX).toBe("auto");
     expect(scroll.width).toBeGreaterThan(scroll.client);
@@ -146,20 +149,21 @@ for (const { type, block } of BLOCKS) {
 test("the top edge changes the height of a table, the bottom edge of code", async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await seedPage(page, baseURL, [BLOCKS[0].block, BLOCKS[4].block]);
-  const table = frameOf(page, "table_block");
+  const table = frameOf(page, BLOCKS[0].block);
   const before = await table.boundingBox();
   await drag(page, table, "top", 0, -50);
   expect(Math.abs((await table.boundingBox()).height - before.height - 50)).toBeLessThanOrEqual(2);
 
-  const code = frameOf(page, "code");
+  const code = frameOf(page, BLOCKS[4].block);
   const codeBefore = await code.boundingBox();
   await drag(page, code, "bottom", 0, 60);
   expect(Math.abs((await code.boundingBox()).height - codeBefore.height - 60)).toBeLessThanOrEqual(2);
 });
 
 test("an image narrows from a side, stays centred, and never grows past its column", async ({ page, baseURL }) => {
-  await seedPage(page, baseURL, [{ id: "i1", type: "image", content: "", asset: "https://img.example/tiny.png" }]);
-  const frame = frameOf(page, "image");
+  const image = { id: "i1", type: "image", content: "", asset: "https://img.example/tiny.png" };
+  await seedPage(page, baseURL, [image]);
+  const frame = frameOf(page, image);
   await expect(frame).toBeVisible();
   const before = await frame.boundingBox();
   await drag(page, frame, "right", 100, 0);

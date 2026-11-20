@@ -26,19 +26,68 @@ import { createHash } from 'node:crypto';
 import { maskAddress } from '../../scripts/bridge-account-sudo.mjs';
 import { createOtpService, otpProof } from './support/account-otp.mjs';
 import { createTtlKv } from './support/account-kv.mjs';
-import { ACCOUNT_JWT_SECRET, send, sessionToken, startAccountWorld, startBridgeWorld, USER_A, USER_B } from './support/account-world.mjs';
+import { accountConfig, ACCOUNT_JWT_SECRET, send, sessionToken, startAccountWorld, startBridgeWorld, USER_A, USER_B } from './support/account-world.mjs';
 
 const ADDRESS = 'ada.lovelace@example.com';
 const MASKED = 'a•••@e•••.com';
 const CODE = '123456';
 
+/** The claims of an app-session token, to seed the session row it names. */
+function claimsOf(token) {
+	return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+}
+
+/** The session row `recordSession` would have written for this token. */
+function sessionRow(token, authMethod, userId = USER_A) {
+	const claims = claimsOf(token);
+	return {
+		id: claims.jti,
+		user_id: userId,
+		family_id: claims.jti,
+		auth_method: authMethod,
+		created_at: new Date().toISOString(),
+		expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+		revoked_at: null,
+	};
+}
+
+/** The gateway's verify-password route, as the bridge expects it (prismatica's half). */
+function createPasswordGateway({ password = 'correct horse battery staple', status = 200, retryAfter = null } = {}) {
+	const calls = [];
+	const fetchImpl = async (url, init = {}) => {
+		const { pathname } = new URL(String(url));
+		const body = init.body ? JSON.parse(String(init.body)) : {};
+		calls.push({ path: pathname, method: init.method ?? 'GET', body, headers: { ...(init.headers ?? {}) } });
+		if (pathname !== '/api/auth/verify-password') return new Response('{}', { status: 404 });
+		if (status !== 200) {
+			const headers = { 'content-type': 'application/json', ...(retryAfter ? { 'retry-after': String(retryAfter) } : {}) };
+			return new Response(JSON.stringify({ valid: false }), { status, headers });
+		}
+		return Response.json({ valid: body.password === password });
+	};
+	return { fetchImpl, calls };
+}
+
 /** A world with the OTP service, a clock the test moves, and the caller's session. */
-async function world(t, { otp, kv, env = { JWT_SECRET: ACCOUNT_JWT_SECRET }, rows = {}, fail = null } = {}) {
+async function world(t, { otp, kv, env = { JWT_SECRET: ACCOUNT_JWT_SECRET }, rows = {}, fail = null, config = accountConfig(), authMethod = null, gateway = null } = {}) {
 	const clock = { at: Date.now() };
 	const store = kv ?? createTtlKv({ now: () => clock.at });
 	const service = otp ?? createOtpService({ email: ADDRESS, secret: ACCOUNT_JWT_SECRET, now: () => clock.at });
-	const built = await startAccountWorld(t, { rows, fail, otp: service, kv: store, env, now: () => clock.at });
-	return { ...built, token: sessionToken(built.config, USER_A), clock, kv: store, otp: service };
+	const token = sessionToken(config, USER_A);
+	const seeded = authMethod ? { ...rows, sessions: [...(rows.sessions ?? []), sessionRow(token, authMethod)] } : rows;
+	if (gateway) {
+		const original = service.fetchImpl;
+		service.fetchImpl = (url, init) => (String(url).startsWith(config.gatewayUrl) ? gateway.fetchImpl(url, init) : original(url, init));
+	}
+	const built = await startAccountWorld(t, { config, rows: seeded, fail, otp: service, kv: store, env, now: () => clock.at });
+	return { ...built, token, clock, kv: store, otp: service, gateway };
+}
+
+/** The config of a world that records sessions, which is what makes a password sign-in readable. */
+function recordedConfig() {
+	const config = accountConfig();
+	config.sessionRecords = { enabled: true };
+	return config;
 }
 
 /** The calls the fake saw, by path. */
@@ -408,5 +457,88 @@ describe('the route through the whole bridge', () => {
 		const response = await send(base, '/api/account/sudo', { token: sessionToken(config, USER_A) });
 		assert.equal(response.status, 200);
 		assert.equal(response.body.active, false);
+	});
+});
+
+describe('the password of an account that has one', () => {
+	const PASSWORD = 'correct horse battery staple';
+
+	it('refuses to send a code without the password', async (t) => {
+		const gateway = createPasswordGateway({ password: PASSWORD });
+		const { base, token, otp } = await world(t, { config: recordedConfig(), authMethod: 'password', gateway });
+		const response = await send(base, '/api/account/sudo/email', { method: 'POST', token });
+		assert.equal(response.status, 403);
+		assert.equal(response.body.code, 'password_required');
+		assert.equal(callsTo(otp, '/v1/auth/otp/request').length, 0);
+		assert.equal(gateway.calls.length, 0);
+	});
+
+	it('refuses a wrong password before it sends a code', async (t) => {
+		const gateway = createPasswordGateway({ password: PASSWORD });
+		const { base, token, otp } = await world(t, { config: recordedConfig(), authMethod: 'password', gateway });
+		const response = await send(base, '/api/account/sudo/email', { method: 'POST', token, body: { password: 'wrong' } });
+		assert.equal(response.status, 403);
+		assert.equal(response.body.code, 'password_invalid');
+		assert.equal(callsTo(otp, '/v1/auth/otp/request').length, 0);
+		assert.equal(gateway.calls[0].path, '/api/auth/verify-password');
+		assert.equal(gateway.calls[0].body.email, ADDRESS);
+		assert.equal(gateway.calls[0].headers['x-osionos-sudo-signature'] !== undefined, true);
+	});
+
+	it('sends the code when the password is right', async (t) => {
+		const gateway = createPasswordGateway({ password: PASSWORD });
+		const { base, token, otp } = await world(t, { config: recordedConfig(), authMethod: 'password', gateway });
+		const response = await send(base, '/api/account/sudo/email', { method: 'POST', token, body: { password: PASSWORD } });
+		assert.equal(response.status, 202);
+		assert.deepEqual(response.body, { method: 'email', sentTo: MASKED });
+		assert.equal(callsTo(otp, '/v1/auth/otp/request').length, 1);
+	});
+
+	it('keeps the emailed code for a handoff session, which carries no password', async (t) => {
+		const gateway = createPasswordGateway({ password: PASSWORD });
+		const { base, token, otp } = await world(t, { config: recordedConfig(), authMethod: 'handoff', gateway });
+		const response = await send(base, '/api/account/sudo/email', { method: 'POST', token });
+		assert.equal(response.status, 202);
+		assert.equal(callsTo(otp, '/v1/auth/otp/request').length, 1);
+		assert.equal(gateway.calls.length, 0);
+	});
+
+	it('reports passwordRequired on the state route', async (t) => {
+		const { base, token } = await world(t, { config: recordedConfig(), authMethod: 'password', gateway: createPasswordGateway() });
+		const state = await send(base, '/api/account/sudo', { token });
+		assert.equal(state.status, 200);
+		assert.equal(state.body.passwordRequired, true);
+		const other = await world(t, { config: recordedConfig(), authMethod: 'handoff', gateway: createPasswordGateway() });
+		const otherState = await send(other.base, '/api/account/sudo', { token: other.token });
+		assert.equal(otherState.body.passwordRequired, false);
+	});
+
+	it('answers 503 sudo_unavailable when the gateway cannot verify the password', async (t) => {
+		const gateway = createPasswordGateway({ password: PASSWORD, status: 404 });
+		const { base, token, otp } = await world(t, { config: recordedConfig(), authMethod: 'password', gateway });
+		const response = await send(base, '/api/account/sudo/email', { method: 'POST', token, body: { password: PASSWORD } });
+		assert.equal(response.status, 503);
+		assert.equal(response.body.code, 'sudo_unavailable');
+		assert.equal(callsTo(otp, '/v1/auth/otp/request').length, 0);
+	});
+
+	it('carries the gateway Retry-After when the password check is throttled', async (t) => {
+		const gateway = createPasswordGateway({ password: PASSWORD, status: 429, retryAfter: 42 });
+		const { base, token } = await world(t, { config: recordedConfig(), authMethod: 'password', gateway });
+		const response = await send(base, '/api/account/sudo/email', { method: 'POST', token, body: { password: PASSWORD } });
+		assert.equal(response.status, 429);
+		assert.equal(response.body.code, 'rate_limited');
+		assert.equal(response.body.retryAfterSeconds, 42);
+	});
+
+	it('limits password failures apart from the send limit', async (t) => {
+		const gateway = createPasswordGateway({ password: PASSWORD, status: 401 });
+		const { base, token } = await world(t, { config: recordedConfig(), authMethod: 'password', gateway });
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			const refused = await send(base, '/api/account/sudo/email', { method: 'POST', token, body: { password: 'wrong' } });
+			assert.equal(refused.status, 403, `attempt ${attempt + 1} answers ${refused.status}`);
+		}
+		const limited = await send(base, '/api/account/sudo/email', { method: 'POST', token, body: { password: 'wrong' } });
+		assert.equal(limited.status, 429);
 	});
 });

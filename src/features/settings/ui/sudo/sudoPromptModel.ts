@@ -60,6 +60,8 @@ export function startSudoListener(): () => void {
 }
 
 const SENTENCES: Record<string, string> = {
+  password_required: 'Enter your account password to get a code.',
+  password_invalid: 'That password is not right. Try again.',
   code_invalid: 'That code is not right. Check the six digits and try again.',
   code_expired: 'That code has expired. Ask for a new one.',
   code_locked: 'Too many wrong codes. Ask for a new code later.',

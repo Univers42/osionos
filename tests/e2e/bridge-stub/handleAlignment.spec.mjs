@@ -85,7 +85,9 @@ const MEDIA = [
 test("media and database handles sit on the top row of what they move", async ({ page, baseURL }) => {
   await stubSysViews(page);
   await seedPage(page, baseURL, MEDIA);
-  await page.locator(".osionos-page [data-database-title]").first().waitFor();
+  // The hidden Home tab stays mounted with database titles of its own, often first in DOM order: wait on
+  // the seeded database's own title.
+  await page.locator('.osionos-page article[data-draggable-block-id="m-db"] [data-database-title]').filter({ visible: true }).first().waitFor();
   await page.locator('.osionos-page article[data-draggable-block-id="m-img"] img').evaluate((img) => img.decode());
 
   for (const { id } of MEDIA) {
