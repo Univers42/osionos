@@ -24,6 +24,9 @@ const VIDEO_EXT_RE = /\.(mp4|webm|mov|m4v|ogv)$/i;
 /** Pathnames the bridge answers uploads under, before bridgeMediaUrl prefixes them. */
 const UPLOADS_PREFIX = '/api/media/uploads/';
 
+/** No app or bridge known: relative values match only the shape rule. */
+const NO_ORIGINS = { app: '', bridge: '' };
+
 /** A "\", a C0 control or DEL never appears in a URL the way a person reads it:
  *  a browser folds "\" into "/" and strips TAB/LF/CR. Refused before any parsing. */
 function hasHostileChar(value) {
@@ -68,7 +71,7 @@ function isBridgeMedia(value, origins, parsed) {
  *  string of a sane length, hostile characters, unparseable, credentials
  *  embedded, a scheme other than https ("http:", "data:", "blob:",
  *  "javascript:", "//host"), or a path off neither the app nor the bridge. */
-export function classifyImageSource(value, origins) {
+export function classifyImageSource(value, origins = NO_ORIGINS) {
 	if (typeof value !== 'string' || value.length === 0 || value.length > MAX_IMAGE_SOURCE_LENGTH) return null;
 	if (hasHostileChar(value)) return null;
 	const parsed = parseImageSource(value, origins);
@@ -80,17 +83,26 @@ export function classifyImageSource(value, origins) {
 }
 
 /** Profile banner/avatar policy: any kind above. */
-export function isProfileImageSource(value, origins) {
+export function isProfileImageSource(value, origins = NO_ORIGINS) {
 	return classifyImageSource(value, origins) !== null;
 }
 
-/** Block background policy (BG3): 'https', or a bridge/uploads pathname, never
- *  a source naming a video. */
-export function sanitizeBackdropSource(value, origins) {
+/** An upload as the browser will fetch it: dot segments ('..', '%2e%2e')
+ *  resolved, so an owner check on the result checks the upload actually read. */
+function resolvedUpload(kind, parsed) {
+	if (!parsed.pathname.startsWith(UPLOADS_PREFIX)) return null;
+	const path = `${parsed.pathname}${parsed.search}`;
+	const resolved = kind === 'bridge-media' ? `${parsed.origin}${path}` : path;
+	return resolved.length > MAX_IMAGE_SOURCE_LENGTH ? null : resolved;
+}
+
+/** Block background policy (BG3): 'https' as given, or a bridge/uploads path
+ *  returned resolved, never a source naming a video. */
+export function sanitizeBackdropSource(value, origins = NO_ORIGINS) {
 	if (typeof value !== 'string') return null;
 	const kind = classifyImageSource(value, origins);
 	if (kind === null) return null;
 	const parsed = parseImageSource(value, origins);
 	if (parsed === null || VIDEO_EXT_RE.test(parsed.pathname)) return null;
-	return kind === 'https' || parsed.pathname.startsWith(UPLOADS_PREFIX) ? value : null;
+	return kind === 'https' ? value : resolvedUpload(kind, parsed);
 }

@@ -59,3 +59,28 @@ test("sanitizeBackdropSource: https and bridge uploads are kept, the rest refuse
   assert.equal(sanitizeBackdropSource("/api/media/uploads/u/k.png", ORIGINS), "/api/media/uploads/u/k.png");
   assert.equal(sanitizeBackdropSource("https://cdn.example/a.mp4", ORIGINS), null);
 });
+
+// Security pass 2026-11-20: the raw value was returned, so "A/../B" passed an
+// owner check on A while the browser fetched B's upload. The answer is the
+// resolved path, never the string that was checked.
+test("sanitizeBackdropSource: dot segments come back resolved, not as typed", () => {
+  const table: [string, string | null][] = [
+    ["/api/media/uploads/A/../B/k.png", "/api/media/uploads/B/k.png"],
+    ["/api/media/uploads/A/%2e%2e/B/k.png", "/api/media/uploads/B/k.png"],
+    ["/api/media/uploads/A/.%2E/B/k.png", "/api/media/uploads/B/k.png"],
+    ["http://localhost:4000/api/media/uploads/A/../B/k.png", "http://localhost:4000/api/media/uploads/B/k.png"],
+    ["/api/media/uploads/../../x.png", null],
+  ];
+  for (const [value, expected] of table) assert.equal(sanitizeBackdropSource(value, ORIGINS), expected, label(value));
+});
+
+test("sanitizeBackdropSource: a path that grows past the bound once encoded is refused", () => {
+  const wide = `/api/media/uploads/u/${"　".repeat(300)}.png`;
+  assert.ok(wide.length <= 2048);
+  assert.equal(sanitizeBackdropSource(wide, ORIGINS), null);
+});
+
+test("classifyImageSource: missing origins are treated as none, never thrown", () => {
+  const call = classifyImageSource as (value: unknown, origins?: ImageOrigins) => unknown;
+  assert.equal(call("/img/a.png"), "same-origin");
+});

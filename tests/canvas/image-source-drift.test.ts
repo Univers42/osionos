@@ -33,6 +33,11 @@ const VECTORS: unknown[] = [
   42,
   `https://cdn.example/${"a".repeat(2049 - "https://cdn.example/".length)}`,
   "https://cdn.example/a.mp4",
+  "/api/media/uploads/A/../B/k.png",
+  "/api/media/uploads/A/%2e%2e/B/k.png",
+  "/api/media/uploads/A/.%2E/B/k.png",
+  "http://localhost:4000/api/media/uploads/A/../B/k.png",
+  `/api/media/uploads/u/${"　".repeat(300)}.png`,
 ];
 
 // A seeded Lehmer LCG: plain integer arithmetic, no dependency, and the same
