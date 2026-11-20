@@ -28,3 +28,18 @@ export function regionPage(
     return { ...block, layoutCells };
   });
 }
+
+/** Re-id every block and layout cell as `<prefix>-block-N` / `<prefix>-cell-N` so templates never collide. */
+export function scopeIds(blocks: Block[], prefix: string): Block[] {
+  let blockNumber = 0;
+  let cellNumber = 0;
+  const scope = (block: Block): Block => {
+    const next = { ...block, id: `${prefix}-block-${++blockNumber}` };
+    if (block.children) next.children = block.children.map(scope);
+    if (block.layoutCells) next.layoutCells = block.layoutCells.map((cell) => ({
+      ...cell, id: `${prefix}-cell-${++cellNumber}`, blocks: cell.blocks.map(scope),
+    }));
+    return next;
+  };
+  return blocks.map(scope);
+}

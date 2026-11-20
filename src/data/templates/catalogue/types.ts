@@ -23,7 +23,9 @@ export interface CatalogueCard {
   category: CatalogueCategory;
 }
 
-export interface CatalogueTemplate extends CatalogueCard {
+export interface TemplateBody {
   content: Block[];
   databases: DatabaseSlice;
 }
+
+export type CatalogueTemplate = CatalogueCard & TemplateBody;

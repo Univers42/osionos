@@ -30,6 +30,7 @@ import "./support/user-store-env.ts";
 type Commit = { state: NotionState; created: CreatedEntry[]; workspaceId: string };
 const INDEX = "src/data/templates/catalogue/index.ts";
 const ENTRY = "src/app/main.tsx";
+const SLUG_FILES = ["project-tracker.ts", "sprint-board.ts", "crm-pipeline.ts", "content-calendar.ts"];
 
 function source(content: Block[] = [dbInline("slice-db", "view-board")]): TemplateSource {
   return {
@@ -60,7 +61,10 @@ function manifest(catalogue = true) {
     [ENTRY]: { file: "assets/main.js", isEntry: true, imports: ["src/app/shared.ts"] },
     "src/app/shared.ts": { file: "assets/shared.js" },
   };
-  if (catalogue) entries[INDEX] = { file: "assets/catalogue.js", isDynamicEntry: true };
+  if (catalogue) {
+    entries[INDEX] = { file: "assets/catalogue.js", isDynamicEntry: true };
+    for (const file of SLUG_FILES) entries[`src/data/templates/catalogue/${file}`] = { file: `assets/${file}.js`, isDynamicEntry: true };
+  }
   return entries;
 }
 
@@ -127,6 +131,16 @@ test("templatesState appends shipped records with source and category", async ()
 test("catalogueLeaks accepts a separate dynamic catalogue entry", async () => {
   const { catalogueLeaks } = await import("../../scripts/check-catalogue-chunks.mjs");
   assert.deepEqual(catalogueLeaks(manifest()), []);
+});
+
+test("catalogueLeaks requires an own dynamic chunk for every template slug", async () => {
+  const { catalogueLeaks } = await import("../../scripts/check-catalogue-chunks.mjs");
+  const leaked = manifest();
+  delete leaked["src/data/templates/catalogue/project-tracker.ts"];
+  leaked["src/data/templates/catalogue/sprint-board.ts"] = { file: "assets/sprint-board.js", isDynamicEntry: false };
+  const lines = catalogueLeaks(leaked);
+  assert.ok(lines.some((line: string) => line.includes("LEAK src/data/templates/catalogue/project-tracker.ts has no chunk of its own")));
+  assert.ok(lines.some((line: string) => line.includes("LEAK src/data/templates/catalogue/sprint-board.ts has no chunk of its own")));
 });
 
 test("catalogueLeaks reports a catalogue file in an entry's static closure", async () => {

@@ -21,7 +21,7 @@ import { planApply } from "@/features/templates/model/applyTemplate";
 import type { DatabaseSlice, TemplateSource } from "@/features/templates/model/templateSlice";
 import type { NotionState } from "@notion-db/object-database";
 import { VIEW_TYPES } from "@notion-db/contract-types";
-import { regionPage } from "../../src/data/templates/catalogue/builders/regions.ts";
+import { regionPage, scopeIds } from "../../src/data/templates/catalogue/builders/regions.ts";
 import { view } from "../../src/data/templates/catalogue/builders/views.ts";
 import { dashboardSettings, statTile, tileRow, viewTile } from "../../src/data/templates/catalogue/builders/cards.ts";
 import { CATALOGUE_TIME, database, mergeSlices, record } from "../../src/data/templates/catalogue/builders/databases.ts";
@@ -102,6 +102,18 @@ test("regionPage fills only named non-empty regions and never mutates its shell"
 test("regionPage adds no layoutCells key to a block that has none", () => {
   const [built] = regionPage(() => [p("Plain")], { main: [p("Filled")] });
   assert.equal(Object.hasOwn(built, "layoutCells"), false);
+});
+
+test("scopeIds re-ids blocks and cells depth-first and leaves its input untouched", () => {
+  const nested = { ...p("Child") };
+  const original = [{ ...p("Parent"), children: [nested] }, ...twoSidebarsShell()];
+  const before = JSON.stringify(original);
+  const scoped = scopeIds(original, "slug");
+  assert.equal(JSON.stringify(original), before);
+  assert.deepEqual([scoped[0].id, scoped[0].children?.[0].id], ["slug-block-1", "slug-block-2"]);
+  const cellIds = scoped[1].layoutCells?.map((cell) => cell.id) ?? [];
+  assert.ok(cellIds.length >= 2);
+  assert.deepEqual(cellIds, cellIds.map((_, n) => `slug-cell-${n + 1}`));
 });
 
 test("view builds all VIEW_TYPES with exactly the nine required keys", () => {
@@ -196,8 +208,8 @@ test("record stamps both timestamps with CATALOGUE_TIME", () => {
   assert.deepEqual([built.createdBy, built.lastEditedBy, built.content], ["osionos", "osionos", []]);
 });
 
-test("the empty lazy catalogue lists no cards or unknown templates", async () => {
-  assert.deepEqual(await listCatalogue(), []);
+test("the lazy catalogue lists cards and no unknown templates", async () => {
+  assert.ok((await listCatalogue()).length >= 4);
   assert.equal(await loadTemplate("x"), null);
   assert.equal(await loadTemplate("tpl:none"), null);
 });

@@ -10,11 +10,11 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// Caveat: the manifest lists chunks, not modules: a catalogue module merged INTO a shared
-// static chunk has no key of its own and is caught only as a missing key (index.ts) — a merged
-// <slug> module is invisible to this check until Task 9 asserts every slug has a key.
+// Caveat: the manifest lists chunks, not modules; every top-level slug must have its own
+// dynamic key. Slug coverage comes from a top-level directory listing, so a template in a
+// subdirectory is not checked.
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const PREFIX = "src/data/templates/catalogue/";
@@ -43,11 +43,21 @@ function staticEntryFiles(manifest) {
   return files;
 }
 
+function templateKeys() {
+  const metadata = new Set(["index.ts", "tplId.ts", "types.ts"]);
+  return readdirSync(PREFIX)
+    .filter((file) => file.endsWith(".ts") && !metadata.has(file))
+    .map((file) => `${PREFIX}${file}`);
+}
+
 export function catalogueLeaks(manifest) {
   const keys = catalogueKeys(manifest);
   if (keys.length === 0) return ["LEAK no catalogue chunks (vacuous check)"];
   const leaks = [];
   if (manifest[INDEX]?.isDynamicEntry !== true) leaks.push(`LEAK ${INDEX} is not a dynamic entry`);
+  for (const key of templateKeys()) {
+    if (manifest[key]?.isDynamicEntry !== true) leaks.push(`LEAK ${key} has no chunk of its own`);
+  }
   const files = staticEntryFiles(manifest);
   for (const key of keys) {
     const file = manifest[key]?.file;
