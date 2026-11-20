@@ -55,6 +55,7 @@ import {
   applyDeleted,
 } from "./pageCascadeResult";
 import type { AddPageOptions, AddTemplateOptions, PageEntry, PageStore, ActivePage, PageRecurrence } from "@/entities/page";
+import { isCatalogueId } from "@/data/templates/catalogue/tplId";
 
 type SetFn = (
   partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>),
@@ -436,6 +437,7 @@ export function createAddDatabasePage(set: SetFn, get: GetFn) {
 
 export function createArchivePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string, jwt: string) => {
+    if (isCatalogueId(pageId)) return;
     const page = get().pageById(pageId);
     const context = getCurrentPageAccessContext();
     // Archiving is a PATCH of archived_at, so it asks 'update' (bridge-api.mjs:3005),
@@ -736,6 +738,7 @@ async function duplicateViaServer(options: DuplicateServerOptions): Promise<stri
 
 export function createDuplicatePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string): Promise<string | null> => {
+    if (isCatalogueId(pageId)) return null;
     const context = getCurrentPageAccessContext();
     const wsPages = get().pages[workspaceId] ?? [];
     const rootPage = wsPages.find((p) => p._id === pageId);
@@ -987,6 +990,7 @@ export function createMovePage(set: SetFn, get: GetFn) {
 
 export function createRestorePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string, jwt: string) => {
+    if (isCatalogueId(pageId)) return;
     const page = get().pageById(pageId);
     const context = getCurrentPageAccessContext();
     // Restoring clears archived_at with the same PATCH as archiving — 'update'.
@@ -1030,6 +1034,7 @@ export function createPermanentlyDeletePage(set: SetFn, get: GetFn) {
 
 export function createDeletePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string, jwt: string) => {
+    if (isCatalogueId(pageId)) return;
     const page = get().pageById(pageId);
     const context = getCurrentPageAccessContext();
     if (!page || !canDeletePage(page, context)) return;

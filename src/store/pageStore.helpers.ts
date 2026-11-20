@@ -18,6 +18,7 @@ import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
 import { readCoverFields } from "@/entities/page/model/coverFields";
 import { timed } from "@osionos/perf-probe";
 import { canEditPage, type PageAccessContext } from "@/shared/lib/auth/pageAccess";
+import { isCatalogueId } from "@/data/templates/catalogue/tplId";
 
 const RECENTS_KEY = "pg:recents";
 const ACTIVE_PAGE_KEY = "pg:activePage";
@@ -54,6 +55,19 @@ export function isUuidId(id: string): boolean {
 
 export function isPersistedPageId(id: string): boolean {
   return isMongoId(id) || isUuidId(id);
+}
+
+export function withoutCatalogueEntries(
+  pages: Record<string, PageEntry[]>,
+): Record<string, PageEntry[]> {
+  let result: Record<string, PageEntry[]> | null = null;
+  for (const [workspaceId, entries] of Object.entries(pages)) {
+    const kept = entries.filter((page) => !isCatalogueId(page._id));
+    if (kept.length === entries.length) continue;
+    result ??= { ...pages };
+    result[workspaceId] = kept;
+  }
+  return result ?? pages;
 }
 
 /** A saved page whose body has not been fetched: an edit now would publish over the server's body. */
@@ -243,7 +257,7 @@ export function savePagesCache(
   pages: Record<string, PageEntry[]>,
   dirtyWorkspaceIds?: string | string[],
 ) {
-  enqueuePagesCachePersist(pages, dirtyWorkspaceIds);
+  enqueuePagesCachePersist(withoutCatalogueEntries(pages), dirtyWorkspaceIds);
 }
 
 let pendingPagesCache: Record<string, PageEntry[]> | null = null;

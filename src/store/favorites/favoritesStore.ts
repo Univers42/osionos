@@ -20,6 +20,7 @@ import { noticingJsonStorage } from "@/shared/lib/storage-full/noticingWrite";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { isServerPageId } from "./favoritesScope";
+import { isCatalogueId } from "@/data/templates/catalogue/tplId";
 
 interface FavoritesStore {
   pageIds: string[];
@@ -42,6 +43,7 @@ export const useFavoritesStore = create<FavoritesStore>()(
         } catch { /* offline / no session — keep the cached set */ }
       },
       toggle: async (pageId) => {
+        if (isCatalogueId(pageId)) return;
         const prev = get().pageIds;
         const has = prev.includes(pageId);
         set({ pageIds: has ? prev.filter((id) => id !== pageId) : [pageId, ...prev] });

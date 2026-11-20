@@ -71,6 +71,7 @@ import {
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 import { timed } from "@osionos/perf-probe";
+import { isCatalogueId } from "@/data/templates/catalogue/tplId";
 
 // Re-export types so existing imports from this module still work
 export type { PageEntry, ActivePageKind, ActivePage } from "@/entities/page";
@@ -197,6 +198,7 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
   permanentlyDeletePage: createPermanentlyDeletePage(set, get),
 
   openPage: (page) => {
+    if (isCatalogueId(page.id)) return;
     const context = getCurrentPageAccessContext();
     const currentPage = get().pageById(page.id);
     if (
@@ -435,6 +437,7 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
   },
 
   patchPage: (pageId, patch) => {
+    if (isCatalogueId(pageId)) return;
     const page = get().pageById(pageId);
     if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
 

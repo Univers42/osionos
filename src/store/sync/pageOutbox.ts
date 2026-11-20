@@ -28,6 +28,7 @@
 
 import { api, ApiError, API_BASE, getActivePageJwt } from "@/shared/api/client";
 import type { PageEntry } from "@/entities/page";
+import { isCatalogueId } from "@/data/templates/catalogue/tplId";
 import { baseFor, setBase } from "./pageBase";
 import {
   conflictFrom,
@@ -118,6 +119,9 @@ export async function publishPage(
   page: PageEntry,
   deps: OutboxDeps = realDeps,
 ): Promise<PublishOutcome> {
+  // A catalogue template never reaches the bridge. "ok" with no version confirms it in place:
+  // "gone" would send it down the flush's copy-recovery path, which POSTs a copy (TD17).
+  if (isCatalogueId(page._id)) return { result: "ok", ignored: [], version: null, conflict: null };
   const jwt = deps.token();
   if (!jwt) return { result: "failed", ignored: [], version: null, conflict: null }; // not signed in yet → stay pending, retry on the timer
   const base = baseFor(page);
@@ -158,6 +162,7 @@ export async function publishPage(
  * invisible here: the pending copy is what carries the edit to the next load.
  */
 export function publishPageKeepalive(page: PageEntry, deps: OutboxDeps = realDeps): void {
+  if (isCatalogueId(page._id)) return;
   const jwt = deps.token();
   if (!jwt || !deps.base()) return;
   try {
