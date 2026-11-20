@@ -37,7 +37,17 @@ const VECTORS: unknown[] = [
 
 // A seeded Lehmer LCG: plain integer arithmetic, no dependency, and the same
 // 2,000 strings on every run, so a failure is reproducible from its message.
-const ALPHABET = ["/", "\\", "\t", "h", "t", "p", "s", ":", ".", "a", "u", "@", "api", "media", "uploads"];
+const ALPHABET = [
+  "/", "\\", "\t", "\n", "\r", " ", "\u0000", "　", "h", "H", "t", "p", "s", ":", ".", "..", "a", "u", "@",
+  "?", "#", "%", "%2f", "%5C", "[", "]", "api", "media", "uploads", "localhost", "4000", "evil.example",
+  "data", "blob", "javascript", "https://", "http://", "//",
+];
+// Random tokens alone almost never form a URL (1,999 of 2,000 refused, measured
+// 2026-11-20), so most strings start from a prefix both copies would accept.
+const PREFIXES = [
+  "", "https://cdn.example/", "https://cdn.example/a.png", "/api/media/uploads/", "/api/media/uploads/u/",
+  "http://localhost:4000/api/media/uploads/", "https://app.example/api/media/uploads/u/", "/img/",
+];
 const MODULUS = 2147483647;
 const MULTIPLIER = 48271;
 
@@ -46,8 +56,9 @@ function randomSources(count: number): string[] {
   const out: string[] = [];
   for (let i = 0; i < count; i += 1) {
     seed = (seed * MULTIPLIER) % MODULUS;
-    const tokens = 1 + (seed % 32);
-    let value = "";
+    const tokens = seed % 8;
+    seed = (seed * MULTIPLIER) % MODULUS;
+    let value = PREFIXES[seed % PREFIXES.length];
     for (let token = 0; token < tokens; token += 1) {
       seed = (seed * MULTIPLIER) % MODULUS;
       value += ALPHABET[seed % ALPHABET.length];
