@@ -18,6 +18,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { pageConfigKey, resolvePageConfig, usePageConfigStore } from "@/shared/config/pageConfigStore";
 import { pageHeadingFontVars } from "@/shared/config/pageHeadingFont";
+import { knownPageFont } from "@/shared/config/pageFontCatalog";
 import { usePageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { isPageReadOnly } from "@/shared/lib/auth/pageReadOnly";
 import { isPerfEnabled } from "@osionos/perf-probe";
@@ -161,7 +162,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
     <div
       className={[
         "osionos-page",
-        `osionos-page--font-${pageConfig.font}`,
+        `osionos-page--font-${knownPageFont(pageConfig.font)}`,
         pageConfig.smallText ? "osionos-page--small-text" : "",
         pageConfig.fullWidth ? "osionos-page--full-width" : "",
         pageConfig.showProperties ? "" : "osionos-page--hide-properties",

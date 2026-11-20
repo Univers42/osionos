@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { PageFont } from './pageConfigStore';
+import { EXTRA_PAGE_FONTS } from './pageFontCatalog';
 
 type HeadingFontVars = Partial<Record<'--osio-font-heading' | '--osio-font-display', string>>;
 
@@ -21,6 +22,7 @@ type HeadingFontVars = Partial<Record<'--osio-font-heading' | '--osio-font-displ
 const HEADING_TOKEN: Partial<Record<PageFont, string>> = {
   serif: 'var(--osio-font-family-serif)',
   mono: 'var(--osio-font-family-mono)',
+  ...Object.fromEntries(EXTRA_PAGE_FONTS.map((font) => [font.id, font.family])),
 };
 
 export function pageHeadingFontVars(font: PageFont): HeadingFontVars {

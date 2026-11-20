@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 
 import { PAGE_DEBUG_TOOLS, usePageDebugStore, type PageDebugToolId } from '@/shared/debug/pageDebugStore';
+import { EXTRA_PAGE_FONTS } from '@/shared/config/pageFontCatalog';
 import { AlertTriangle, Activity, Bug, Grid3X3, Info, PaintBucket, Ruler, Square, TextCursor } from 'lucide-react';
 import type { ReturnTypeOfUsePageActions } from './actionTypes';
 import type { PageMenuSection } from './types';
@@ -85,6 +86,12 @@ export function buildPageMenuSections(context: PageMenuContext): PageMenuSection
     { id: 'font-default', label: 'Default', font: 'default' as const, checked: actions.config.font === 'default' },
     { id: 'font-serif', label: 'Serif', font: 'serif' as const, checked: actions.config.font === 'serif' },
     { id: 'font-mono', label: 'Mono', font: 'mono' as const, checked: actions.config.font === 'mono' },
+    ...EXTRA_PAGE_FONTS.map((font) => ({
+      id: `font-${font.id}`,
+      label: font.label,
+      font: font.id,
+      checked: actions.config.font === font.id,
+    })),
   ].map((font) => ({
     id: font.id,
     label: font.label,

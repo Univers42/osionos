@@ -20,8 +20,9 @@ import { useUserStore } from '@/features/auth/model/useUserStore';
 import { noticingJsonStorage, trySetItem } from '@/shared/lib/storage-full/noticingWrite';
 import { setItemEvictingPageCaches } from '@/store/pageStore.helpers';
 import { shrinkConfigForApi } from './pageConfigBudget';
+import { EXTRA_PAGE_FONTS, type ExtraPageFont } from './pageFontCatalog';
 
-export type PageFont = 'default' | 'serif' | 'mono';
+export type PageFont = 'default' | 'serif' | 'mono' | ExtraPageFont;
 
 export interface PageCssTokens {
   fontFamily: string;
@@ -169,6 +170,7 @@ const PAGE_FONT_FAMILY: Record<PageFont, string> = {
   default: 'var(--osio-font-ui)',
   serif: 'var(--osio-font-heading)',
   mono: 'var(--osio-font-family-mono)',
+  ...(Object.fromEntries(EXTRA_PAGE_FONTS.map((font) => [font.id, font.family])) as Record<ExtraPageFont, string>),
 };
 
 function buildCssTokens(config: PageConfig): PageCssTokens {

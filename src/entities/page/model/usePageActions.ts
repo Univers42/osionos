@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useUserStore } from '@/features/auth';
@@ -21,6 +22,7 @@ import {
   type PageFont,
   type PageVersion,
 } from '@/shared/config/pageConfigStore';
+import { extraPageFont } from '@/shared/config/pageFontCatalog';
 import { useToastStore } from '@/shared/ui';
 import { usePageStore } from '@/store/usePageStore';
 import { shellCopyOf } from '@/store/templateCopy';
@@ -64,6 +66,11 @@ export function fontSampleClass(font: PageFont): string {
   if (font === 'serif') return 'font-serif';
   if (font === 'mono') return 'font-mono';
   return '';
+}
+
+export function fontSampleStyle(font: PageFont): React.CSSProperties {
+  const face = extraPageFont(font);
+  return face ? { fontFamily: face.family } : {};
 }
 
 /** How long ago `updatedAt` was: "just now", "5 min ago", "3 days ago", or "recently" when unknown. */

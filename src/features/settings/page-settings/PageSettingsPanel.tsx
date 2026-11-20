@@ -14,7 +14,8 @@ import React, { useRef, useState } from 'react';
 import { Copy, FileDown, FileText, FileX, Globe, Import, Trash2 } from 'lucide-react';
 
 import { usePageStore } from '@/store/usePageStore';
-import { TRANSLATION_LANGUAGES, fontSampleClass, usePageActions } from '@/entities/page';
+import { TRANSLATION_LANGUAGES, fontSampleClass, fontSampleStyle, usePageActions } from '@/entities/page';
+import { extraPageFont } from '@/shared/config/pageFontCatalog';
 import { Button, Dropdown, Toggle } from '@/shared/ui';
 import { ConfirmModal } from '../ui/ConfirmModals';
 import { EmptyState, Section, SettingRow } from '../ui/settingsKit';
@@ -30,6 +31,7 @@ export const PageSettingsPanel = () => {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [confirmTrash, setConfirmTrash] = useState(false);
   const actions = usePageActions(activePage?.id ?? '', activePage?.workspaceId ?? '');
+  const extraFont = extraPageFont(actions.config.font);
 
   if (!activePage) {
     return <EmptyState icon={<FileX size={16} />} title="No page open" hint="Open a page to see its settings." />;
@@ -44,7 +46,20 @@ export const PageSettingsPanel = () => {
   return (
     <>
       <SettingRow title="Page" description={title} />
-      <Section title="Style"><div className="grid gap-2 sm:grid-cols-3">{(['default', 'serif', 'mono'] as const).map((font) => <Button key={font} className={`justify-start ${actions.config.font === font ? 'border-[var(--osio-accent)]' : ''}`} onClick={() => runMaybeAsync(actions.setFont(font))}><span className={`text-base ${fontSampleClass(font)}`}>Ag</span>{font[0].toUpperCase() + font.slice(1)}</Button>)}</div></Section>
+      <Section title="Style">
+        <div className={`grid gap-2 ${extraFont ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+          {(['default', 'serif', 'mono'] as const).map((font) => (
+            <Button key={font} className={`justify-start ${actions.config.font === font ? 'border-[var(--osio-accent)]' : ''}`} onClick={() => runMaybeAsync(actions.setFont(font))}>
+              <span className={`text-base ${fontSampleClass(font)}`}>Ag</span>{font[0].toUpperCase() + font.slice(1)}
+            </Button>
+          ))}
+          {extraFont && (
+            <Button aria-pressed data-font={extraFont.id} className="justify-start border-[var(--osio-accent)]" onClick={() => runMaybeAsync(actions.setFont(extraFont.id))}>
+              <span className="text-base" style={fontSampleStyle(extraFont.id)}>Ag</span>{extraFont.label}
+            </Button>
+          )}
+        </div>
+      </Section>
       <Section title="Actions">
         <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={16} />Copy link</span>} description="Ctrl+Alt+L" action={<Button onClick={() => runMaybeAsync(actions.copyLink())}>Copy</Button>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><FileText size={16} />Copy page contents</span>} action={<Button onClick={() => runMaybeAsync(actions.copyContents())}>Copy</Button>} />
