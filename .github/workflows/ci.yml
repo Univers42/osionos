@@ -224,13 +224,13 @@ jobs:
     if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
     # A hung test (a quadratic engine regression in bench:ci) otherwise runs GitHub's
-    # 360-minute default. 30 = about 2.7x the slowest green run (root 11.3 min,
-    # markengine 3.8 min; 6 runs, 2026-11-19/20).
+    # 360-minute default. 30 = about 2.7x the slowest green root run (11.3 min;
+    # 6 runs, 2026-11-19/20).
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        scope: [root, markengine-submodule]
+        scope: [root]
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -256,29 +256,6 @@ jobs:
         run: |
           docker compose -f docker-compose.base.yml -f docker-compose.dev.yml \
             build playground
-
-      - name: Build MarkEngine image
-        if: matrix.scope == 'markengine-submodule'
-        run: |
-          docker buildx build \
-            --build-context public.ecr.aws/docker/library/node:24-alpine=docker-image://node:24-alpine \
-            --target build packages/markdown-engine
-
-      - name: Setup Node.js for MarkEngine benchmarks
-        if: matrix.scope == 'markengine-submodule'
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: packages/markdown-engine/package-lock.json
-
-      - name: Run MarkEngine tests & benchmark guard
-        if: matrix.scope == 'markengine-submodule'
-        working-directory: packages/markdown-engine
-        run: |
-          npm ci --ignore-scripts
-          npm test
-          npm run bench:ci
 
       # Types and lint, plus the package-boundary and token guards that used to
       # run only on a developer's machine: the same gate as `npm run test:quality`.
@@ -310,6 +287,56 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
         run: make sonar
+
+  markengine-guard:
+    # ADR 0068 interim I1-I7: the engine guard is its own check so a red guard no
+    # longer skips the browser jobs, which need only `quality` (root). It stays red
+    # until the step counter (D) lands; never rerun it, never add continue-on-error.
+    name: quality (markengine-submodule)
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
+    runs-on: ubuntu-latest
+    # 15 = about 3.9x the slowest green guard run (3.8 min, 2026-11-19/20).
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Cache Docker layers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-buildx-
+
+      - name: Build MarkEngine image
+        run: |
+          docker buildx build \
+            --build-context public.ecr.aws/docker/library/node:24-alpine=docker-image://node:24-alpine \
+            --target build packages/markdown-engine
+
+      - name: Setup Node.js for MarkEngine benchmarks
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: packages/markdown-engine/package-lock.json
+
+      - name: Run MarkEngine tests & benchmark guard
+        working-directory: packages/markdown-engine
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          npm run bench:ci
 
   # The AI service (services/osionos-ai) has its own suite: a throwaway Postgres and Redis,
   # the groot models migrations, node --test. Until 2026-10-26 no CI job ran it — the service
