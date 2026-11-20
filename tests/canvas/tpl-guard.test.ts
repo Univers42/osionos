@@ -187,3 +187,13 @@ test("savePagesCache never writes a catalogue entry", () => {
   assert.equal(written.includes("tpl:"), false);
   assert.deepEqual(JSON.parse(written).map((page: PageEntry) => page._id), [ORDINARY_ID]);
 });
+
+// A create echo from a server that omits _id reached savePagesCache and threw inside
+// addPage (profileShots 375px, develop a6f4a4331). Ids from storage and the network are untyped.
+test("isCatalogueId is false for a missing or non-string id, and the cache filter keeps such a page", () => {
+  for (const id of [undefined, null, 42, {}]) assert.equal(isCatalogueId(id), false, String(id));
+  const idless = makePage(ORDINARY_ID);
+  Reflect.deleteProperty(idless, "_id");
+  const pages = { [WORKSPACE]: [idless] };
+  assert.equal(withoutCatalogueEntries(pages), pages);
+});

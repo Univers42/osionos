@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-export function isCatalogueId(id: string): boolean {
-  return id.startsWith("tpl:");
+// Takes unknown: ids arrive from storage and server echoes, which can omit them.
+export function isCatalogueId(id: unknown): boolean {
+  return typeof id === "string" && id.startsWith("tpl:");
 }
