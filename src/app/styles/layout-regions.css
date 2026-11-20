@@ -34,7 +34,7 @@
 /* !important: cell placement is an inline grid-column/grid-row style, which
    only an important declaration outranks. */
 @container (max-width: 48rem) {
-  .osionos-layout-grid > [data-stack-at="tablet"] {
+  .osionos-layout-grid[data-has-regions="true"] > [data-stack-at="tablet"] {
     grid-column: 1 / -1 !important;
     grid-row: auto !important;
     position: relative;
@@ -42,7 +42,7 @@
 }
 
 @container (max-width: 30rem) {
-  .osionos-layout-grid > [data-stack-at="mobile"] {
+  .osionos-layout-grid[data-has-regions="true"] > [data-stack-at="mobile"] {
     grid-column: 1 / -1 !important;
     grid-row: auto !important;
     position: relative;

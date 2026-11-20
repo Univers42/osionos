@@ -29,6 +29,7 @@ export function LayoutBlockReadOnly({ block, properties }: { block: Block; prope
   const cells = filterVisibleCells(block.layoutCells ?? [], resolvePropertyMap(properties as never));
   if (cells.length === 0) return null;
   const grid = gridConfigFromLegacy(block.layoutConfig);
+  const hasRegions = cells.some((cell) => Object.values(regionAttributes(cell)).some(Boolean));
   const style: React.CSSProperties = {
     display: "grid",
     gridTemplateColumns: `repeat(${grid.columns}, minmax(0, 1fr))`,
@@ -44,7 +45,7 @@ export function LayoutBlockReadOnly({ block, properties }: { block: Block; prope
     <div
       className="osionos-layout-grid my-2"
       data-layout-guides="false"
-      data-has-regions={cells.some((cell) => Object.values(regionAttributes(cell)).some(Boolean)) ? "true" : undefined}
+      data-has-regions={hasRegions ? "true" : undefined}
       style={style}
     >
       {cells.map((cell) => (
