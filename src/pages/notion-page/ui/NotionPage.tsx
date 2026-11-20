@@ -17,6 +17,7 @@ import type { ActivePage } from "@/entities/page";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { pageConfigKey, resolvePageConfig, usePageConfigStore } from "@/shared/config/pageConfigStore";
+import { pageHeadingFontVars } from "@/shared/config/pageHeadingFont";
 import { usePageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { isPageReadOnly } from "@/shared/lib/auth/pageReadOnly";
 import { isPerfEnabled } from "@osionos/perf-probe";
@@ -153,6 +154,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
     "--page-font-size-scale": pageConfig.cssTokens.fontSizeScale,
     "--page-content-max-width": pageConfig.cssTokens.contentMaxWidth,
     "--page-content-padding-inline": pageConfig.cssTokens.contentPaddingInline,
+    ...pageHeadingFontVars(pageConfig.font),
   };
 
   return (

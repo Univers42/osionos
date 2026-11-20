@@ -218,6 +218,19 @@ test.describe("type scale", () => {
     expect(look.letterSpacing).toBe("-0.8px");
   });
 
+  test("the page font reaches the title and headings, and Default gives the theme back", async ({ page, baseURL }) => {
+    const { heading } = await typeHeadingThenParagraph(page, baseURL);
+    const title = page.getByRole("textbox", { name: "Page title" });
+    await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByTestId("page-menu-appearance").click();
+    await page.locator('[data-font="mono"]').click();
+    await expect(page.locator('[data-font="mono"]')).toHaveAttribute("aria-pressed", "true");
+    expect(await firstFamily(title)).toBe("JetBrains Mono");
+    expect(await firstFamily(heading)).toBe("JetBrains Mono");
+    await page.locator('[data-font="default"]').click();
+    expect(await firstFamily(title)).toBe("Newsreader");
+  });
+
   test("on a phone the title stays a step above the 30px reading h1", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openFreshPage(page, baseURL);
