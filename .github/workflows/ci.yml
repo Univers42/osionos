@@ -223,6 +223,10 @@ jobs:
     needs: pr-dedupe
     if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
+    # A hung test (a quadratic engine regression in bench:ci) otherwise runs GitHub's
+    # 360-minute default. 30 = about 2.7x the slowest green run (root 11.3 min,
+    # markengine 3.8 min; 6 runs, 2026-11-19/20).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
