@@ -35,6 +35,10 @@ interface EditorCommandBusState {
   setActive: (handle: EditorHandle) => void;
   /** Clear only if this surface still owns the active slot (avoids races). */
   clearActive: (sourceKey: string) => void;
+  /** Page-body editors by pageId (TD1): apply resolves its target here, never from `active`. */
+  pageHandles: Record<string, EditorHandle>;
+  registerPageHandle: (handle: EditorHandle) => void;
+  unregisterPageHandle: (handle: EditorHandle) => void;
 }
 
 export const useEditorCommandBus = create<EditorCommandBusState>((set, get) => ({
@@ -43,4 +47,21 @@ export const useEditorCommandBus = create<EditorCommandBusState>((set, get) => (
   clearActive: (sourceKey) => {
     if (get().active?.sourceKey === sourceKey) set({ active: null });
   },
+  pageHandles: {},
+  registerPageHandle: (handle) => {
+    if (handle.sourceKey !== `page:${handle.pageId}`) return;
+    set((state) => ({ pageHandles: { ...state.pageHandles, [handle.pageId]: handle } }));
+  },
+  unregisterPageHandle: (handle) => {
+    if (get().pageHandles[handle.pageId] !== handle) return;
+    set((state) => {
+      const pageHandles = { ...state.pageHandles };
+      delete pageHandles[handle.pageId];
+      return { pageHandles };
+    });
+  },
 }));
+
+export function pageHandleFor(pageId: string): EditorHandle | null {
+  return useEditorCommandBus.getState().pageHandles[pageId] ?? null;
+}

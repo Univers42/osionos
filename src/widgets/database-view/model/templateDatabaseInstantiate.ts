@@ -15,11 +15,12 @@
 // of pageStore.actions' warm chunk: it is reached only through a dynamic import.
 
 import type { Block } from "@/entities/block";
+import type { NotionState } from "@notion-db/object-database";
 import { isKnownDatabaseWritable, useKnownDatabaseStateStore, whenKnownDatabaseReady } from "./knownDatabaseState";
 import { KnownDatabaseReadOnlyError } from "./knownDatabaseReadOnlyError";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import { rememberDatabaseWorkspace } from "./objectDatabaseWorkspaces";
-import { cloneTemplateDatabases } from "./templateDatabaseClone";
+import { cloneTemplateDatabases, type CreatedEntry } from "./templateDatabaseClone";
 
 /** Waits for the stored copy: cloned into the seed, the template's databases would be dropped
  *  when the stored copy replaces it. Throws KnownDatabaseReadOnlyError, before any write, when the
@@ -28,15 +29,19 @@ export async function instantiateTemplateDatabases(content: Block[], workspaceId
   await whenKnownDatabaseReady();
   const state = useKnownDatabaseStateStore.getState().state;
   const result = cloneTemplateDatabases(content, state, (prefix) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`);
-  if (result.created.length > 0) {
+  commitClonedDatabases(result.state, result.created, workspaceId);
+  return result.content;
+}
+
+export function commitClonedDatabases(state: NotionState, created: CreatedEntry[], workspaceId: string): void {
+  if (created.length > 0) {
     if (!isKnownDatabaseWritable()) throw new KnownDatabaseReadOnlyError();
-    useKnownDatabaseStateStore.getState().replaceState(result.state);
+    useKnownDatabaseStateStore.getState().replaceState(state);
     useDatabaseStore.getState().ensureRegistered(
-      result.created.map((entry) => ({ id: entry.id, name: entry.name, viewId: entry.viewId })),
+      created.map((entry) => ({ id: entry.id, name: entry.name, viewId: entry.viewId })),
     );
-    for (const entry of result.created) {
+    for (const entry of created) {
       rememberDatabaseWorkspace(entry.id, workspaceId);
     }
   }
-  return result.content;
 }

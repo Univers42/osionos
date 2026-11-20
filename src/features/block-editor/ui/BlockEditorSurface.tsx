@@ -522,6 +522,11 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	useEffect(() => {
 		editorHandleRef.current = editorHandle;
 	}, [editorHandle]);
+	useEffect(() => {
+		const bus = useEditorCommandBus.getState();
+		bus.registerPageHandle(editorHandle);
+		return () => bus.unregisterPageHandle(editorHandle);
+	}, [editorHandle]);
 
 	const { menu: pageMenuState, sections: pageMenuSections, open: openPageMenu, close: closePageMenu } = usePageContextMenu(sourceKey);
 
