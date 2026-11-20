@@ -127,18 +127,35 @@
 
 ## Phase T3 — catalogue
 
-### Task 8: Catalogue builders + loader + `tpl:` guard
+### Task 8: Catalogue — split into 8a / 8b / 8c (2026-11-20)
 
-**Files:** Create `src/data/templates/catalogue/build/{regions,cards,views,databases}.ts`, `src/data/templates/catalogue/index.ts` (`listCatalogue(): Promise<CatalogueCard[]>`, `loadTemplate(id: string): Promise<TemplateSource | null>`, both via `import()`), `src/data/templates/catalogue/tplId.ts` (`isCatalogueId(id: string): boolean` = `id.startsWith("tpl:")`). Modify `templatesDatabaseState.ts:37` (`templateEntries` adds catalogue cards with a "Shipped" badge, read-only). Guard `isCatalogueId` at the store's page insert, page cache write, recents/favorites add, duplicate and outbox enqueue. Tests: `tests/canvas/catalogue-builders.test.ts`, `tests/canvas/tpl-guard.test.ts`, `tests/canvas/catalogue-entry-graph.test.ts`.
+The gallery peek reads `pageById` (`WorkspaceDatabaseBlock.tsx:49`), so a `tpl:` card would open "Page unavailable" and its "Use template" would reach `createPageFromTemplate` (`pageStore.actions.ts:788`) unguarded. The data and the UI land separately.
 
-- [ ] Failing tests: builders output only block types and views reachable from `/`, the view menu or "Add widget" (walk vs those three catalogues); a `tpl:` id offered to each guarded path makes 0 bridge calls and 0 store entries (TD17); no static import of `catalogue/` from any module reachable from `src/main.tsx` (source scan + build manifest, TD22).
-- [ ] Implement; pass; commit `feat(templates): catalogue builders, lazy loader and tpl: guard`.
+#### Task 8a: `tpl:` guard (TD17) — done, 643646ecf
+
+`catalogue/tplId.ts` `isCatalogueId`; guards in `openPage`, `patchPage`, archive/duplicate/restore/delete, favorites `toggle`, `savePagesCache` (`withoutCatalogueEntries`), and the outbox. The outbox answers `"ok"` with version null for a `tpl:` page: `"gone"` would take the copy-recovery path and POST a copy. Test: `tests/canvas/tpl-guard.test.ts`.
+
+#### Task 8b: builders + lazy loader + entry-graph test (TD22 source half)
+
+**Files:** Create `src/data/templates/catalogue/build/{regions,views,cards,databases}.ts`, `catalogue/types.ts` (`CatalogueCategory`, `CatalogueCard`, `CatalogueTemplate`), `catalogue/index.ts` (`listCatalogue`, `loadTemplate`, an empty `ENTRIES` that Task 9 fills with `import()` loaders). Tests: `tests/canvas/catalogue-builders.test.ts`, `tests/canvas/catalogue-entry-graph.test.ts`. Contract: `scratch/tpl/task8b-contract.md`.
+
+- [ ] Failing tests: `regionPage` fills only named regions without mutating the shell; `tileRow` rejects 0 or > 4 tiles; `database()` rejects a foreign `databaseId`; `mergeSlices` rejects duplicate keys; a built example passes `planApply`; a static-import walk from `src/app/main.tsx` reaches no `catalogue/` file except `tplId.ts`.
+- [ ] Implement; pass; commit `feat(templates): catalogue builders and lazy loader (TD22 source half)`.
+
+#### Task 8c: gallery merge + `tpl:` peek (TD22 manifest half)
+
+**Files:** Modify `templatesDatabaseState.ts:37` (catalogue cards with a "Shipped" badge, read-only, `category`), the Templates peek (`DatabaseBlock.tsx:174-190` → render `loadTemplate(id)` when `isCatalogueId`), "Use template" → `template.apply` (Task 7); guard `createPageFromTemplate` for `tpl:` ids. Enable a vite build manifest and check it (TD22).
+
+- [ ] Failing tests: a `tpl:` card opens a read-only preview, not "Page unavailable"; "Use template" on it creates one page with fresh database ids; the build manifest puts every `catalogue/<slug>` module in a chunk not imported by the entry chunk.
+- [ ] Implement; pass; commit `feat(templates): shipped templates in the gallery`.
+
+The "builders output only block types and views reachable from `/`, the view menu or Add widget" check moves to Task 9's table test, where the content exists.
 
 ### Task 9: 16 templates (split into 4 commits of 4)
 
 **Files:** `src/data/templates/catalogue/<slug>.ts` for: project-tracker, sprint-board, crm-pipeline, content-calendar, habit-tracker, reading-list, student-semester, personal-finance, team-wiki-home, product-roadmap, event-planner, job-search, okrs, support-desk, inventory, travel-planner. Test: `tests/canvas/catalogue-templates.test.ts`.
 
-- [ ] Failing test (table over all 16): ≥ 2 regions, ≥ 1 database with ≥ 3 views, ≥ 1 dashboard tile row; nesting depth ≤ 8 (TD21); round-trips markdown and `.omd` unchanged; two `planApply` runs share no database id; records each template's database byte size to `tests/canvas/__artifacts__/catalogue-bytes.json` (TD12).
+- [ ] Failing test (table over all 16): every block type and view type is reachable from `/`, the view menu or "Add widget"; ≥ 2 regions, ≥ 1 database with ≥ 3 views, ≥ 1 dashboard tile row; nesting depth ≤ 8 (TD21); round-trips markdown and `.omd` unchanged; two `planApply` runs share no database id; records each template's database byte size to `tests/canvas/__artifacts__/catalogue-bytes.json` (TD12).
 - [ ] Implement 4 at a time, test green after each; commits `feat(templates): <names> templates`.
 
 ### Task 10: Retire the old shell catalogue
