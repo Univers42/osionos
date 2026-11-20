@@ -70,6 +70,10 @@ test("isSafeImageSource: a protocol-relative, plain-http or script URL is refuse
   }
 });
 
+test("isSafeImageSource: a backslash off-site path is refused", () => {
+  assert.equal(isSafeImageSource("/\\evil.example/p.png"), false);
+});
+
 const { withoutLegacyCard } = await import("../../src/widgets/profile-page/useProfile.ts");
 
 test("withoutLegacyCard: the legacy route's bio, headline and location are not read", () => {
