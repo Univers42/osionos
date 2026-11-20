@@ -128,6 +128,20 @@ test("templatesState appends shipped records with source and category", async ()
   assert.ok(Object.values(state.views)[0]?.visibleProperties.includes("home-template-source"));
 });
 
+test("templatesState leaves page shells out so user templates stay on the first page", async () => {
+  const { templatesState } = await import("@/widgets/database-view/model/templatesDatabaseState");
+  const { listCatalogue } = await import("@/data/templates/catalogue");
+  const { usePageStore } = await import("@/store/usePageStore");
+  const user = { _id: "user-template", title: "Mine", workspaceId: "ws", isTemplate: true } as PageEntry;
+  usePageStore.setState({ templatePages: () => [user] });
+  const cards = await listCatalogue();
+  assert.ok(cards.some((card) => card.category === "page"));
+  const state = templatesState(cards);
+  const categories = Object.values(state.pages).map((page) => page.properties["home-template-category"]);
+  assert.equal(categories.includes("page"), false);
+  assert.ok(Object.keys(state.pages).length <= 50);
+});
+
 test("catalogueLeaks accepts a separate dynamic catalogue entry", async () => {
   const { catalogueLeaks } = await import("../../scripts/check-catalogue-chunks.mjs");
   assert.deepEqual(catalogueLeaks(manifest()), []);

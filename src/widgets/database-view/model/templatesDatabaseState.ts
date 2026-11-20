@@ -83,7 +83,9 @@ function catalogueToCard(card: CatalogueCard): Page {
 export function templatesState(cards: CatalogueCard[] = []): NotionState {
   const pages: Record<string, Page> = {};
   for (const entry of templateEntries()) pages[entry._id] = entryToCard(entry);
-  for (const card of cards) pages[card.id] = catalogueToCard(card);
+  // Page shells have their own surfaces (empty-page starter, Templates panel); 37 of them here
+  // pushed user templates past the gallery's 50-row first page (CI 44802342502).
+  for (const card of cards) if (card.category !== "page") pages[card.id] = catalogueToCard(card);
   return {
     databases: {
       [TEMPLATES_DB_ID]: {
