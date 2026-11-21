@@ -3,6 +3,7 @@ import { compareCodeUnits } from './order.ts';
 import { buildCatalog, type PlatformCatalog } from './gateway/catalog.ts';
 import { decodePlatformModels, type PlatformModelEntry } from './platformModels.ts';
 import { decodePlatformProviders } from './platformProviders.ts';
+import { MAX_PASS_BUDGET_MS } from './approvals/timeouts.ts';
 
 /**
  * The configuration is parsed once, at import time, and frozen.
@@ -99,9 +100,11 @@ const envSchema = z.object({
 	// The builder tool (P6a). OFF unless exactly "on": the public overlay leaves
 	// it empty. Off, `build_plan` is not in any tool set.
 	OSIONOS_AI_BUILDERS: z.string().optional(),
-	// The time budget of one build, in milliseconds (P6a-3b): the plan is built
-	// item by item until this runs out, and the rest is left to resume.
-	OSIONOS_AI_BUILD_BUDGET_MS: z.coerce.number().int().positive().default(25_000),
+	// The time budget of one build, resume or undo pass, in milliseconds (P6a-3b):
+	// the plan is worked item by item until this runs out, and the rest is left
+	// to the next pass. Above MAX_PASS_BUDGET_MS a pass could outrun the sweeper
+	// window (groot ADR 0071, Q7), so the boot refuses it.
+	OSIONOS_AI_BUILD_BUDGET_MS: z.coerce.number().int().positive().max(MAX_PASS_BUDGET_MS).default(25_000),
 	// The plans one user may have waiting for a decision at once (C161).
 	OSIONOS_AI_PENDING_PLANS: z.coerce.number().int().positive().default(3),
 	// The build passes of one user in a UTC day (C161).

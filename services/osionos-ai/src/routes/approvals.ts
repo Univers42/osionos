@@ -9,8 +9,8 @@ import { decideApproval } from '../approvals/execute.ts';
 import { claimPartial, recordOutcome } from '../approvals/repo.ts';
 import { revalidateStoredPlan } from '../builders/plan.ts';
 import { executePlan } from '../builders/execute.ts';
-import { donePageItems } from '../builders/items.ts';
-import { undoBuild } from '../builders/undo.ts';
+import { undoClaimed, undoPages, undoRefusal, type UndoOutcome } from '../builders/undoApproval.ts';
+import type { ApprovalRow } from '../approvals/types.ts';
 import { hookRefusal } from '../context/hooks.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
@@ -210,6 +210,12 @@ export async function handleApprovalResume(ctx: RouteContext): Promise<number> {
 	return 200;
 }
 
+/** A refusal, written for the caller; the handler returns its status. */
+function refuse(ctx: RouteContext, status: number, code: string): number {
+	sendError(ctx.response, status, code);
+	return status;
+}
+
 /**
  * POST /api/ai/approvals/:id/undo
  *
@@ -219,8 +225,11 @@ export async function handleApprovalResume(ctx: RouteContext): Promise<number> {
  * that child is the user's own page. The databases are kept: an object
  * database has no soft-archive path.
  *
- * There is no body. The approval's status does not change; its result gains
- * the number of pages the undo archived.
+ * There is no body. The approval's status is the same after the undo; its
+ * result gains the number of pages the undo archived, and the answer the pages
+ * the pass budget did not reach (`remaining`). An undo of a partial approval
+ * holds it 'executing' meanwhile (groot ADR 0071): a resume or a second undo is
+ * a 409, and an undo whose claim the sweeper took is a 409 'approval_swept'.
  */
 export async function handleApprovalUndo(ctx: RouteContext): Promise<number> {
 	const user = requireUser(ctx);
@@ -228,44 +237,34 @@ export async function handleApprovalUndo(ctx: RouteContext): Promise<number> {
 	// The undo is rate-limited like the decisions: it costs one bridge write per
 	// page.
 	const rate = await checkRunRateLimit(ctx.deps.redis, user.userId, config.runsPerMinute);
-	if (!rate.allowed) {
-		sendError(ctx.response, 429, 'rate_limited');
-		return 429;
-	}
-	const id = ctx.params[0] ?? '';
-	if (!UUID.test(id)) {
-		sendError(ctx.response, 404, 'not_found');
-		return 404;
-	}
-	const approval = await getOwnedApproval(ctx.deps.db, { id, ownerId: user.userId });
-	if (!approval) {
-		sendError(ctx.response, 404, 'not_found');
-		return 404;
-	}
-	if (approval.tool !== 'build_plan') {
-		sendError(ctx.response, 409, 'not_a_plan');
-		return 409;
-	}
-	if (approval.status !== 'executed' && approval.status !== 'partial') {
-		sendError(ctx.response, 409, 'approval_not_built');
-		return 409;
-	}
+	if (!rate.allowed) return refuse(ctx, 429, 'rate_limited');
+	const approval = await undoTarget(ctx, user.userId);
+	if (typeof approval === 'number') return approval;
 	const sessionToken = bearerToken(ctx.request);
-	if (!sessionToken) {
-		sendError(ctx.response, 401, 'unauthorized');
-		return 401;
-	}
-	// No page is done any more: the first undo already took them.
-	const pages = await donePageItems(ctx.deps.db, approval.id);
-	if (pages.length === 0) {
-		sendError(ctx.response, 409, 'nothing_to_undo');
+	if (!sessionToken) return refuse(ctx, 401, 'unauthorized');
+	const run = { db: ctx.deps.db, sessionToken, approval };
+	const outcome = approval.status === 'partial' ? await undoClaimed(run, user.userId) : await undoPages(run);
+	return answerUndo(ctx, approval.id, outcome);
+}
+
+/** The approval an undo names, or the status of the refusal already written. */
+async function undoTarget(ctx: RouteContext, ownerId: string): Promise<ApprovalRow | number> {
+	const id = ctx.params[0] ?? '';
+	const approval = UUID.test(id) ? await getOwnedApproval(ctx.deps.db, { id, ownerId }) : null;
+	if (!approval) return refuse(ctx, 404, 'not_found');
+	const refusal = undoRefusal(approval);
+	return refusal ? refuse(ctx, 409, refusal) : approval;
+}
+
+function answerUndo(ctx: RouteContext, approvalId: string, outcome: UndoOutcome): number {
+	if (outcome.kind === 'refused') return refuse(ctx, outcome.status, outcome.code);
+	if (!outcome.restored) {
+		// The pass ran, but the sweeper made the row 'unknown' under it: a 200
+		// would say the approval is still partial and may be resumed.
+		const code = 'approval_swept';
+		sendJson(ctx.response, 409, { ok: false, code, error: { code }, approvalId, ...outcome.result });
 		return 409;
 	}
-	const undone = await undoBuild({
-		db: ctx.deps.db,
-		sessionToken,
-		approval,
-	});
-	sendJson(ctx.response, 200, { ok: true, approvalId: approval.id, ...undone });
+	sendJson(ctx.response, 200, { ok: true, approvalId, ...outcome.result });
 	return 200;
 }

@@ -26,6 +26,7 @@ describe('builder undo and limits', () => {
 			kept: 0,
 			keptDatabases: 1,
 			failed: 0,
+			remaining: 0,
 		});
 
 		const patched = patchedIds();
@@ -72,6 +73,7 @@ describe('builder undo and limits', () => {
 			kept: 1,
 			keptDatabases: 1,
 			failed: 0,
+			remaining: 0,
 		});
 
 		const patched = patchedIds();
@@ -143,6 +145,7 @@ describe('builder undo and limits', () => {
 			kept: 0,
 			keptDatabases: 1,
 			failed: 1,
+			remaining: 0,
 		});
 
 		// The first page in the reverse order is the failing one.

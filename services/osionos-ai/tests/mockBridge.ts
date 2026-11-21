@@ -31,6 +31,8 @@ export interface MockBridge {
 	readonly files: ReadonlyMap<string, BridgeFile>;
 	/** A hook that runs before the mock answers a PATCH, e.g. to mirror the archive in the database. */
 	onPatch?: (call: { path: string; body: unknown }) => void | Promise<void>;
+	/** A hook that runs before the mock answers a page or database POST; a throw answers 500 (retryable). */
+	onPost?: (call: { path: string; body: unknown }) => void | Promise<void>;
 	/**
 	 * The content and version of a page the append route (POST /api/pages/:id/blocks)
 	 * writes to. The route mirrors public.osionos_page_append: the anchor is a TOP-LEVEL
@@ -235,6 +237,13 @@ export async function startMockBridge(): Promise<MockBridge> {
 				if (mock.failWith) {
 					response.writeHead(mock.failWith, { 'content-type': 'application/json' });
 					response.end(JSON.stringify({ error: { message: 'refused' } }));
+					return;
+				}
+				try {
+					await mock.onPost?.({ path, body });
+				} catch {
+					response.writeHead(500, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ error: { message: 'hook failed' } }));
 					return;
 				}
 				const finish = () => {

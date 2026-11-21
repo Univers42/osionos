@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import { config } from '../config.ts';
-import { bridgeWrite, refusalMessage } from '../approvals/bridge.ts';
+import { BRIDGE_TIMEOUT_MS, bridgeWrite, refusalMessage } from '../approvals/bridge.ts';
 import type { BridgeAnswer } from '../approvals/bridge.ts';
 import type { ApprovalRow } from '../approvals/types.ts';
 import {
@@ -8,6 +8,7 @@ import {
 	countDoneDatabases,
 	donePageItems,
 	releaseItem,
+	type PlanItemRow,
 } from './items.ts';
 
 /**
@@ -30,6 +31,8 @@ export interface UndoBuildResult {
 	kept: number;
 	keptDatabases: number;
 	failed: number;
+	/** The built pages this pass did not reach before its budget ran out: they stay 'done'. */
+	remaining: number;
 }
 
 /** The sentence an item carries when the cascade would touch pages the plan did not build. */
@@ -69,69 +72,87 @@ function archiveWrite(pageId: string): { method: 'PATCH'; path: string; body: Re
 	};
 }
 
-/**
- * Undo the built pages of an approval, deepest and latest first.
- *
- * The caller has already checked that the approval is a built plan of the
- * caller. Each item is claimed with a conditional UPDATE before any bridge
- * call, so a race archives each page once; a claim that loses is skipped.
- */
-export async function undoBuild(input: {
+/** The input of an undo pass. The clock is a parameter, so the tests may move it. */
+export interface UndoBuildInput {
 	db: Pool;
 	sessionToken: string;
 	approval: ApprovalRow;
-}): Promise<UndoBuildResult> {
-	const { db, sessionToken, approval } = input;
+	budgetMs?: number;
+	now?: () => number;
+}
+
+type ItemOutcome = 'undone' | 'kept' | 'failed' | 'skipped';
+
+async function archivePage(sessionToken: string, pageId: string, timeoutMs: number): Promise<BridgeAnswer> {
+	const url = config.bridgeUrl;
+	if (!url) return { ok: false, status: 0, body: '' };
+	return bridgeWrite({ url, token: sessionToken, write: archiveWrite(pageId), timeoutMs });
+}
+
+/**
+ * Undo one built page. The item is claimed with a conditional UPDATE before any
+ * bridge call, so a race archives each page once; a claim that loses is skipped.
+ */
+async function undoItem(input: UndoBuildInput, row: PlanItemRow, timeoutMs: number): Promise<ItemOutcome> {
+	const { db, approval } = input;
+	const claim = await claimItemForUndo(db, approval.id, row.item_key);
+	if (!claim.claimed) return 'skipped';
+	const pageId = claim.createdId ?? row.created_id;
+	if (!pageId) {
+		await releaseItem(db, approval.id, row.item_key, null, 'kept: the built page is unknown');
+		return 'kept';
+	}
+	// The bridge's archive cascades. A live child the plan did not build is
+	// the user's own page: archiving this page would take it too.
+	if ((await liveChildCount(db, approval.id, pageId)) > 0) {
+		await releaseItem(db, approval.id, row.item_key, pageId, KEPT_FOREIGN_CHILDREN);
+		return 'kept';
+	}
+	const answer = await archivePage(input.sessionToken, pageId, timeoutMs);
+	if (answer.ok) return 'undone';
+	await releaseItem(db, approval.id, row.item_key, pageId, refusalMessage(answer));
+	return 'failed';
+}
+
+/**
+ * Undo the built pages of an approval, deepest and latest first, within one
+ * pass budget (groot ADR 0071, Q6). The caller has already checked that the
+ * approval is a built plan of the caller.
+ *
+ * Caveat: the budget is checked between items and caps each PATCH, but not the
+ * database statements of an item (db.ts bounds those), so a pass can overrun it
+ * by one item's worth of database waits.
+ */
+export async function undoBuild(input: UndoBuildInput): Promise<UndoBuildResult> {
+	const { db, approval } = input;
+	const budgetMs = input.budgetMs ?? config.buildBudgetMs;
+	const now = input.now ?? Date.now;
+	const started = now();
 	const pages = await donePageItems(db, approval.id);
 	const keptDatabases = await countDoneDatabases(db, approval.id);
-	const bridgeUrl = config.bridgeUrl;
-
-	let undone = 0;
-	let kept = 0;
-	let failed = 0;
-
-	for (const row of pages) {
-		const claim = await claimItemForUndo(db, approval.id, row.item_key);
-		// Another undo already has this page: it archives it once.
-		if (!claim.claimed) continue;
-		const pageId = claim.createdId ?? row.created_id;
-		if (!pageId) {
-			await releaseItem(db, approval.id, row.item_key, null, 'kept: the built page is unknown');
-			kept++;
-			continue;
+	const tally = { undone: 0, kept: 0, failed: 0, remaining: 0 };
+	for (const [index, row] of pages.entries()) {
+		const left = budgetMs - (now() - started);
+		if (left <= 0) {
+			tally.remaining = pages.length - index;
+			break;
 		}
-
-		// The bridge's archive cascades. A live child the plan did not build is
-		// the user's own page: archiving this page would take it too.
-		const children = await liveChildCount(db, approval.id, pageId);
-		if (children > 0) {
-			await releaseItem(db, approval.id, row.item_key, pageId, KEPT_FOREIGN_CHILDREN);
-			kept++;
-			continue;
-		}
-
-		let answer: BridgeAnswer;
-		if (!bridgeUrl) {
-			answer = { ok: false, status: 0, body: '' };
-		} else {
-			answer = await bridgeWrite({ url: bridgeUrl, token: sessionToken, write: archiveWrite(pageId) });
-		}
-		if (answer.ok) {
-			undone++;
-			continue;
-		}
-		await releaseItem(db, approval.id, row.item_key, pageId, refusalMessage(answer));
-		failed++;
+		const outcome = await undoItem(input, row, Math.min(BRIDGE_TIMEOUT_MS, left));
+		if (outcome !== 'skipped') tally[outcome]++;
 	}
+	await recordUndone(db, approval.id, tally.undone);
+	return { ...tally, keptDatabases };
+}
 
-	// The approval stays executed or partial: the undo is an outcome of its own,
-	// and the row keeps it beside the build's counts.
+/**
+ * The undo is an outcome of its own: the row keeps it beside the build's counts,
+ * and its status is the caller's to set.
+ */
+async function recordUndone(db: Pool, approvalId: string, undone: number): Promise<void> {
 	await db.query(
 		`update public.ai_approvals
 		    set result = coalesce(result, '{}'::jsonb) || jsonb_build_object('undone', $2::int)
 		  where id = $1`,
-		[approval.id, undone],
+		[approvalId, undone],
 	);
-
-	return { undone, kept, keptDatabases, failed };
 }

@@ -144,6 +144,23 @@ export function classify(
 	return { status: 'failed', error: refusalMessage(answer) };
 }
 
+type ParentGate = { kind: 'post' } | { kind: 'wait' } | { kind: 'fail'; reason: string };
+
+/**
+ * Whether a child may be POSTed (groot ADR 0071, Q8): only under a parent that
+ * is exactly 'done'. A 'pending' parent is retried before its child on the next
+ * pass, so the child waits. Any other state fails the child: an 'undone' parent
+ * is archived, and the bridge would nest a live page under it.
+ */
+async function parentGate(db: Pool, approvalId: string, parentKey: string | null): Promise<ParentGate> {
+	if (!parentKey) return { kind: 'post' };
+	const parent = (await allItems(db, approvalId)).find((row) => row.item_key === parentKey);
+	if (parent?.status === 'done') return { kind: 'post' };
+	if (parent?.status === 'pending') return { kind: 'wait' };
+	const reason = parent?.status === 'undone' ? 'its parent was undone' : 'its parent was not created';
+	return { kind: 'fail', reason };
+}
+
 /** Execute the pending items of a plan, in position order. */
 export async function executePlan(input: {
 	db: Pool;
@@ -196,20 +213,11 @@ export async function executePlan(input: {
 		const f = flatByKey.get(row.item_key);
 		if (!f) continue;
 
-		// parent handling
-		const parentKey = f.parentKey;
-		if (parentKey) {
-			const all = await allItems(db, approval.id);
-			const parentRow = all.find((r) => r.item_key === parentKey);
-			const parentStatus = parentRow?.status;
-			if (parentStatus === 'pending') {
-				// stays pending
-				continue;
-			}
-			if (parentStatus === 'failed' || parentStatus === 'skipped') {
-				await setItem(db, approval.id, f.key, 'failed', null, 'its parent was not created');
-				continue;
-			}
+		const gate = await parentGate(db, approval.id, f.parentKey);
+		if (gate.kind === 'wait') continue;
+		if (gate.kind === 'fail') {
+			await setItem(db, approval.id, f.key, 'failed', null, gate.reason);
+			continue;
 		}
 
 		const planItem = planByKey.get(f.key)!;

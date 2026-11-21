@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { config } from '../config.ts';
 import type { ApprovalRow, ApprovalSource, ApprovalStatus } from './types.ts';
+import { EXECUTING_TIMEOUT_MS } from './timeouts.ts';
 
 /**
  * The approvals, in the database.
@@ -28,8 +29,7 @@ function mcpApprovalTtlMs(): number {
 	return config.mcpApprovalTtlMinutes * 60_000;
 }
 
-/** How long a write may stay 'executing' before the sweeper reconciles it. */
-export const EXECUTING_TIMEOUT_MS = 5 * 60_000;
+export { EXECUTING_TIMEOUT_MS };
 
 /** How long a decided approval is kept before it is deleted. */
 export const APPROVAL_RETENTION_DAYS = 7;

@@ -126,6 +126,55 @@ export function holdPatch(pageId: string, options: { fail?: boolean } = {}): { r
 	return { reached: reachedPromise, release };
 }
 
+/**
+ * Park the POST of the page titled `title` inside the mock until `release()`:
+ * the build that sent it holds its claim on the approval meanwhile.
+ */
+export function holdPost(title: string): { reached: Promise<void>; release: () => void } {
+	let release!: () => void;
+	let reached!: () => void;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	const reachedPromise = new Promise<void>((resolve) => (reached = resolve));
+	bridge.onPost = async ({ body }) => {
+		if ((body as { title?: unknown } | null)?.title !== title) return;
+		reached();
+		await gate;
+	};
+	return { reached: reachedPromise, release };
+}
+
+/**
+ * A build left 'partial' with no clock involved: the POST of `notes` (the child
+ * of `home`) answers 500 once, so it stays pending under a built parent. The
+ * day bucket the build spent is flushed, so the next resume may run.
+ */
+export async function buildPartial(): Promise<{ approvalId: string; ids: Record<string, string> }> {
+	bridge.onPost = ({ body }) => {
+		if ((body as { title?: unknown } | null)?.title === 'Notes') throw new Error('refused once');
+	};
+	const built = await buildPlan();
+	bridge.onPost = undefined;
+	const row = await app.db.query('select status from public.ai_approvals where id = $1', [built.approvalId]);
+	assert.equal(row.rows[0].status, 'partial', 'the build is partial');
+	await seedBuiltPages(built.approvalId);
+	await flushLimits();
+	bridge.reset();
+	return built;
+}
+
+/** The status of an approval row, read straight from the table. */
+export async function approvalStatus(approvalId: string): Promise<string> {
+	const row = await app.db.query('select status from public.ai_approvals where id = $1', [approvalId]);
+	return String(row.rows[0]?.status);
+}
+
+/** The page and database POSTs the service sent since the last reset. */
+export function buildPosts(): { path: string; body: { parentPageId?: string; title?: string } }[] {
+	return bridge.calls
+		.filter((c) => c.method === 'POST' && (c.path === '/api/pages' || c.path === '/api/object-databases'))
+		.map((c) => ({ path: c.path, body: c.body as { parentPageId?: string; title?: string } }));
+}
+
 /** The archive-stamping PATCH hook and the per-case reset, for a describe block. */
 export function installUndoHooks(): void {
 	let defaultPatchHook: typeof bridge.onPatch;
@@ -140,6 +189,7 @@ export function installUndoHooks(): void {
 
 	beforeEach(async () => {
 		bridge.onPatch = defaultPatchHook;
+		bridge.onPost = undefined;
 		await app.db.query('delete from public.ai_plan_items');
 		await app.db.query('delete from public.ai_approvals');
 		await app.db.query('delete from public.osionos_pages where workspace_id = $1', [WORKSPACE_A]);
