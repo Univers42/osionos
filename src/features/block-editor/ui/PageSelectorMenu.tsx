@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FilePlus2, FileText, Database, Layers } from "lucide-react";
 import { caretPopoverStyle } from "@/shared/lib/dom/caretPosition";
@@ -63,7 +63,16 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
   heading = "Link to page",
 }) => {
   const ref = useRef<HTMLDivElement>(null);
-  const [activeIdx, setActiveIdx] = useState(0);
+  // The highlight belongs to the filter it was moved under, so a new filter starts at the top
+  // again. Keying the menu on the filter did that by remounting the portal on every keystroke,
+  // which replayed its pop-in and detached the node under anything reading it (#340).
+  const [highlight, setHighlight] = useState({ filter, index: 0 });
+  const activeIdx = highlight.filter === filter ? highlight.index : 0;
+  const setActiveIdx = useCallback(
+    (next: (index: number) => number) =>
+      setHighlight((current) => ({ filter, index: next(current.filter === filter ? current.index : 0) })),
+    [filter],
+  );
 
   const pagesMap = usePageStore((s) => s.pages);
   const pages = useMemo(() => Object.values(pagesMap).flat(), [pagesMap]);
@@ -176,7 +185,7 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
 
     document.addEventListener("keydown", handler, true);
     return () => document.removeEventListener("keydown", handler, true);
-  }, [effectiveActiveIdx, selectorOptions, onSelect, onCreate, onClose, leading]);
+  }, [effectiveActiveIdx, selectorOptions, onSelect, onCreate, onClose, leading, setActiveIdx]);
 
   const menuStyle = useMemo(
     () => caretPopoverStyle({ x: position.x, y: position.y, top: position.top }, MENU_WIDTH, MENU_MAX_HEIGHT),
@@ -227,7 +236,7 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
               type="button"
               className="osio-menu-item"
               data-active={isActive}
-              onMouseEnter={() => setActiveIdx(idx)}
+              onMouseEnter={() => setActiveIdx(() => idx)}
               onClick={() => {
                 if (option.kind === "create") {
                   onCreate?.(option.title);

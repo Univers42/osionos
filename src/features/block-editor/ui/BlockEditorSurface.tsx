@@ -995,7 +995,7 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 
 			{pageSelector ? (
 				<PageSelectorMenu
-					key={`${pageSelector.blockId}:${pageSelector.filter}`}
+					key={pageSelector.blockId}
 					position={pageSelector.position}
 					filter={pageSelector.filter}
 					onSelect={handlePageSelectorSelect}
