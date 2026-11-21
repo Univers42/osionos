@@ -25,8 +25,8 @@ test("the preview hangs right of the menu, on the caret's side of it", () => {
   const { menu, preview } = placeSlashMenu(caret, 1280, 800);
   assert.equal(menu.left, 200);
   assert.equal(preview?.left, 200 + 324 + 6);
-  assert.equal(preview?.bottom, menu.bottom);
-  assert.equal(preview?.top, undefined);
+  assert.equal(preview?.top, menu.top);
+  assert.equal(preview?.bottom, undefined);
 });
 
 test("the preview moves left when the right has no room, and goes when neither has", () => {

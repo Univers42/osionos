@@ -53,15 +53,20 @@ export function placeSlashMenu(caret: SlashCaret, viewportWidth: number, viewpor
 
   const spaceAbove = caret.top - MENU_GAP - MENU_MARGIN;
   const spaceBelow = viewportHeight - caret.y - MENU_GAP - MENU_MARGIN;
-  // Prefer ABOVE the caret: pin the panel's BOTTOM edge just above the "/" (via
-  // `bottom`, so the bottom-left corner sits right on the caret line with NO gap
-  // whatever the item count) and grow upward. Flip below only when the caret is
-  // too near the top of the viewport to fit a usable panel above it.
-  const placeAbove = spaceAbove >= Math.min(menuHeight, 180) || spaceAbove >= spaceBelow;
-  // The preview shares the menu's edge on the caret side, so both grow the same way.
-  const vertical: CSSProperties = placeAbove
-    ? { bottom: viewportHeight - (caret.top - MENU_GAP), maxHeight: Math.min(menuHeight, spaceAbove) }
-    : { top: caret.y + MENU_GAP, maxHeight: Math.min(menuHeight, spaceBelow) };
+  // The panel is content-sized and filters while the user types, so its TOP edge
+  // is the only edge that may be a fixed coordinate: pinned by its bottom, every
+  // filter step moved the rows under the pointer and a miss closed the menu
+  // (#330). Below the caret when the full panel fits, so it sits flush with no
+  // gap at any row count; otherwise on the roomier side, with `top` computed from
+  // the full height. Caveat: above the caret, a short list leaves a gap between
+  // its bottom and the caret, up to the height of the full panel.
+  const placeBelow = spaceBelow >= menuHeight || spaceBelow > spaceAbove;
+  const maxHeight = Math.min(menuHeight, placeBelow ? spaceBelow : spaceAbove);
+  // The preview shares the menu's top edge, so both stay put together.
+  const vertical: CSSProperties = {
+    top: placeBelow ? caret.y + MENU_GAP : caret.top - MENU_GAP - maxHeight,
+    maxHeight,
+  };
 
   const sideLeft = previewLeft(left, menuWidth, viewportWidth);
   return {
