@@ -33,6 +33,8 @@ interface LayoutState {
   /** openPage handoff: reflect the legacy active page as a tab (no mirror-back). */
   syncFromActivePage: (page: ActivePage) => void;
   openTab: (tab: WorkspaceTab, paneId?: string) => void;
+  /** Add a tab without focusing it: no active pane, tab or page change (#339). */
+  openBackgroundTab: (tab: WorkspaceTab, paneId: string) => void;
   /** Insert a tab at a specific index in a pane (file→tab-strip drop). */
   openTabAt: (tab: WorkspaceTab, paneId: string, index: number) => void;
   /** Swap the tab at `tabId` for `tab` in place (file→tab "replace" drop). */
@@ -132,6 +134,14 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
       const target = paneId && findPane(state.root, paneId) ? paneId : state.activePaneId;
       const root = updatePane(state.root, target, (p) => ({ ...p, tabs: [...p.tabs, tab], activeTabId: tab.tabId }));
       commit(root, target, tab);
+    },
+
+    openBackgroundTab: (tab, paneId) => {
+      const state = get();
+      if (findOpenTab(state.root, tab.pageId)) return;
+      const target = findPane(state.root, paneId) ? paneId : state.activePaneId;
+      const root = updatePane(state.root, target, (p) => ({ ...p, tabs: [...p.tabs, tab] }));
+      commit(root, state.activePaneId, false);
     },
 
     openTabAt: (tab, paneId, index) => {

@@ -57,6 +57,7 @@ import {
 import type { AddPageOptions, AddTemplateOptions, PageEntry, PageStore, ActivePage, PageRecurrence } from "@/entities/page";
 import { isCatalogueId } from "@/data/templates/catalogue/tplId";
 import { createFromCatalogue } from "./pageStore.catalogue";
+import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 
 type SetFn = (
   partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>),
@@ -761,6 +762,7 @@ export function createAddTemplate(_set: SetFn, get: GetFn) {
     jwt: string,
     options: AddTemplateOptions = {},
   ): Promise<PageEntry | null> => {
+    const origin = captureOpenOrigin(options.open !== false);
     const page = await get().addPage(
       workspaceId,
       options.title ?? "Untitled template",
@@ -768,9 +770,7 @@ export function createAddTemplate(_set: SetFn, get: GetFn) {
       undefined,
       { icon: options.icon, isTemplate: true, content: options.content, ...createExtrasOf(options) },
     );
-    if (page && options.open !== false) {
-      get().openPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon });
-    }
+    if (page) openCreatedPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon }, origin);
     return page;
   };
 }
@@ -795,6 +795,7 @@ export function createCreatePageFromTemplate(_set: SetFn, get: GetFn) {
     options?: { open?: boolean },
   ): Promise<PageEntry | null> => {
     if (isCatalogueId(templateId)) return createFromCatalogue(get, templateId, workspaceId, jwt, parentPageId, options);
+    const origin = captureOpenOrigin(options?.open !== false);
     // Template content is lazy-loaded; hydrate it before cloning (no-op offline).
     await get().fetchPageContent(templateId, jwt);
     const template = get().pageById(templateId);
@@ -814,9 +815,7 @@ export function createCreatePageFromTemplate(_set: SetFn, get: GetFn) {
       parentPageId,
       { icon: template.icon, content: clonedContent, ...templateCopyOptions(template, null) },
     );
-    if (page && options?.open !== false) {
-      get().openPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon });
-    }
+    if (page) openCreatedPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon }, origin);
     return page;
   };
 }

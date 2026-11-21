@@ -12,6 +12,7 @@
 
 import type { Block } from "@/entities/block";
 import type { PageEntry, PageStore } from "@/entities/page";
+import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 import { notifyTemplateFailure } from "./pageCreateFeedback";
 
 type GetFn = () => PageStore;
@@ -25,6 +26,7 @@ export async function createFromCatalogue(
   parentPageId?: string,
   options?: { open?: boolean },
 ): Promise<PageEntry | null> {
+  const origin = captureOpenOrigin(options?.open !== false);
   let prepared: Prepared | null;
   try {
     const { prepareCatalogueTemplate } = await import("@/features/templates/model/catalogueInstantiate");
@@ -36,8 +38,6 @@ export async function createFromCatalogue(
   const page = await get().addPage(workspaceId, prepared.title, jwt, parentPageId, {
     icon: prepared.icon, content: prepared.content,
   });
-  if (page && options?.open !== false) {
-    get().openPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon });
-  }
+  if (page) openCreatedPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon }, origin);
   return page;
 }

@@ -16,6 +16,7 @@
 
 import { FilePlus, FolderPlus, FolderOpen, FolderSearch, Image, History } from "lucide-react";
 import { usePalette } from "@/widgets/top-bar/model/usePalette";
+import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 import type { MenuActionCtx, PageMenuAction } from "../types";
 
 /** Sidebar listens for this to expand ancestors + scroll a page into view. */
@@ -42,6 +43,7 @@ function descendantIds(ctx: MenuActionCtx): string[] {
 /** Create a child page (or folder) under this dir and open it when it's a file. */
 export async function createChild(ctx: MenuActionCtx, asFolder: boolean): Promise<void> {
   const title = asFolder ? "New folder" : "Untitled";
+  const origin = captureOpenOrigin(!asFolder);
   const child = await ctx.store
     .getState()
     .addPage(ctx.workspaceId, title, ctx.jwt, ctx.page._id, asFolder ? { surface: "folder" } : undefined);
@@ -49,9 +51,7 @@ export async function createChild(ctx: MenuActionCtx, asFolder: boolean): Promis
     ctx.toast({ kind: "error", title: asFolder ? "Couldn't create folder" : "Couldn't create file" });
     return;
   }
-  if (!asFolder) {
-    ctx.store.getState().openPage({ id: child._id, workspaceId: ctx.workspaceId, kind: "page", title: child.title });
-  }
+  openCreatedPage({ id: child._id, workspaceId: ctx.workspaceId, kind: "page", title: child.title }, origin);
 }
 
 export const DIR_ACTIONS: PageMenuAction[] = [

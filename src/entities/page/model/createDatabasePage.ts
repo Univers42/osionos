@@ -2,6 +2,7 @@ import { useUserStore } from '@/features/auth';
 import { useDatabaseStore } from '@/store/useDatabaseStore';
 import { usePageStore } from '@/store/usePageStore';
 import { rememberDatabaseWorkspace } from '@/widgets/database-view/model/objectDatabaseWorkspaces';
+import { captureOpenOrigin, openCreatedPage } from '@/widgets/workspace-grid/model/createdPageOpen';
 
 /**
  * The one path that creates a full-page database: the "Database - Full page"
@@ -16,20 +17,21 @@ export async function createDatabasePageInPrivateWorkspace(title = 'Untitled dat
   const jwt = session?.accessToken ?? '';
   const databaseReference = useDatabaseStore.getState().createInlineDatabase(title);
   rememberDatabaseWorkspace(databaseReference.databaseId, privateWorkspaceId);
+  const origin = captureOpenOrigin();
   const page = await usePageStore
     .getState()
     .addDatabasePage(privateWorkspaceId, title, jwt, databaseReference.databaseId);
 
   if (!page) return null;
 
-  usePageStore.getState().openPage({
+  openCreatedPage({
     id: page._id,
     workspaceId: privateWorkspaceId,
     kind: 'database',
     title: page.title,
     icon: page.icon,
     databaseId: page.databaseId ?? databaseReference.databaseId,
-  });
+  }, origin);
 
   return { id: page._id };
 }

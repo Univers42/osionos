@@ -18,6 +18,7 @@ import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 
+import { captureOpenOrigin, openCreatedPage } from "./createdPageOpen";
 import { homeTab } from "./layoutPersist";
 import { useWorkspaceLayout } from "./workspaceLayout";
 
@@ -30,8 +31,9 @@ function activeWorkspace(): { workspaceId: string; jwt: string } | null {
 export async function startNewPage(): Promise<void> {
   const target = activeWorkspace();
   if (!target) return;
+  const origin = captureOpenOrigin();
   const page = await usePageStore.getState().addPage(target.workspaceId, "Untitled", target.jwt, undefined, { visibility: "private" });
-  if (page) usePageStore.getState().openPage({ id: page._id, workspaceId: target.workspaceId, kind: "page", title: page.title });
+  if (page) openCreatedPage({ id: page._id, workspaceId: target.workspaceId, kind: "page", title: page.title }, origin);
 }
 
 export async function startNewFolder(): Promise<void> {

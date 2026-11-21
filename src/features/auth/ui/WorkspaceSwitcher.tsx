@@ -20,6 +20,7 @@ import { useClickOutside, useEscapeKey } from '@/shared/ui';
 import { createDatabasePageInPrivateWorkspace } from '@/entities/page/model/createDatabasePage';
 import { chatTab } from '@/widgets/workspace-grid/model/layoutPersist';
 import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
+import { captureOpenOrigin, openCreatedPage } from '@/widgets/workspace-grid/model/createdPageOpen';
 
 // Lazy + deep path (NOT the auth barrel): the account-switcher popover (~37KB)
 // only mounts on click, so it must not be stapled to the warm entry chunk.
@@ -56,7 +57,6 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
   const activeWorkspace = useUserStore(s => s.activeWorkspace());
   const workspaceName   = activeWorkspace?.name ?? session?.privateWorkspaces[0]?.name ?? 'My Workspace';
   const addPage         = usePageStore(s => s.addPage);
-  const openPage        = usePageStore(s => s.openPage);
   const renameWorkspace = useUserStore(s => s.renameWorkspace);
   const activeUserId    = useUserStore(s => s.activeUserId);
   const pendingInvites  = useWorkspaceInvitesStore(s => s.mine.length);
@@ -90,8 +90,9 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
   async function handleNewPage() {
     if (onNewPage) { onNewPage(); return; }
     if (!firstWsId) return;
+    const origin = captureOpenOrigin();
     const page = await addPage(firstWsId, 'Untitled', jwt);
-    if (page) openPage({ id: page._id, workspaceId: firstWsId, kind: 'page', title: page.title });
+    if (page) openCreatedPage({ id: page._id, workspaceId: firstWsId, kind: 'page', title: page.title }, origin);
   }
 
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);

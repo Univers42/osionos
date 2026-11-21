@@ -14,6 +14,7 @@ import { useAccountDevicesStore } from "@/store/settings/useAccountDevicesStore"
 import { useUserPreferencesStore } from "@/store/settings/useUserPreferencesStore";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
+import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { findSection } from "@/features/settings/model/sections";
 import type { ActionDefinition } from "@/entities/block/model/appActions";
@@ -80,9 +81,10 @@ export const APP_ACTIONS: Map<string, ActionDefinition> = new Map<string, Action
 				const jwt = user.activePageJwt() ?? "";
 				if (!workspace) return { status: "failed", message: "Open a workspace first" };
 				const title = typeof args.title === "string" ? args.title : "Untitled";
+				const origin = captureOpenOrigin();
 				const page = await usePageStore.getState().addPage(workspace._id, title, jwt, undefined, undefined);
 				if (!page) return { status: "failed", message: "Could not create the page" };
-				usePageStore.getState().openPage({ id: page._id, workspaceId: workspace._id, kind: "page", title: page.title });
+				openCreatedPage({ id: page._id, workspaceId: workspace._id, kind: "page", title: page.title }, origin);
 				return { status: "ok" };
 			},
 		},
