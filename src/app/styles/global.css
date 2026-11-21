@@ -700,6 +700,13 @@ body {
   background: var(--osio-code-selection);
 }
 
+/* A long word or URL wraps anywhere, so it also stops setting the text's min-content width.
+   `break-word` wraps it too, but a flex item keeps that whole word as its minimum: in a narrow
+   column the content beside a list marker or toggle arrow ran ~1000 px out of its block (#327). */
+.osio-inline-content {
+  overflow-wrap: anywhere;
+}
+
 /* Tailwind preflight makes every <img> a block, which stacks the images of a badge row
    one per line. Inline-content images flow like text, as on GitHub. Scoped to the text of
    a paragraph: image and media blocks are separate components and are not inside it. */
