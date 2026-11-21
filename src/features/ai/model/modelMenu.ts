@@ -65,6 +65,23 @@ export interface MenuModel {
   label: string;
   default?: boolean;
   reasoning?: boolean;
+  /** The service's quality order inside the pool; the client never re-ranks. */
+  rank?: number;
+  dataUse?: "no-train" | "may-train";
+}
+
+/**
+ * Whether the provider may train on prompts sent to this model.
+ * Caveat: a service that predates `dataUse` sends none, and then every model
+ * reads as may-train — hidden from fallbacks, never wrongly trusted (FA24).
+ */
+export function isMayTrain(model: { dataUse?: string }): boolean {
+  return model.dataUse !== "no-train";
+}
+
+/** The models a user may pick as a fallback: a may-train model is never one (FA23). */
+export function fallbackModels<T extends { dataUse?: string }>(models: readonly T[]): T[] {
+  return models.filter((model) => !isMayTrain(model));
 }
 
 /** A connection of the reader's own, with the models it offers. */
@@ -80,6 +97,8 @@ export interface ModelRow {
   label: string;
   family: ModelFamily;
   reasoning: boolean;
+  /** Shown as a label; the row stays pickable on purpose. */
+  mayTrain: boolean;
   selected: boolean;
   starred: boolean;
 }
@@ -230,6 +249,7 @@ export function buildModelMenu({ selection, platformModels, connections, starred
     label: model.label || model.id,
     family: familyOf(model.id),
     reasoning: model.reasoning === true,
+    mayTrain: isMayTrain(model),
     selected: selection.connectionId === connectionId && selection.model === model.id,
     starred: connectionId === PLATFORM_CONNECTION_ID && starred.includes(model.id),
   });

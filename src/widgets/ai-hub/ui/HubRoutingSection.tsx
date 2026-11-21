@@ -12,6 +12,7 @@ import {
   writeAiFallbacks,
   type AiFallbackChoice,
 } from "@/features/ai/model/aiSelection";
+import { fallbackModels } from "@/features/ai/model/modelMenu";
 import { Dropdown } from "@/shared/ui";
 import { Section, SettingRow } from "@/features/settings/ui/settingsKit";
 
@@ -80,7 +81,7 @@ export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, mod
                 width={180}
                 value={entry.connectionId}
                 options={connections.map((connection) => ({ value: connection.id, label: connection.label }))}
-                onChange={(id) => onChange(index, { connectionId: id, model: defaultModelId(models[id] ?? []) })}
+                onChange={(id) => onChange(index, { connectionId: id, model: defaultModelId(fallbackModels(models[id] ?? [])) })}
                 placeholder="Connection"
               />
               <Dropdown
@@ -88,7 +89,7 @@ export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, mod
                 variant="inline"
                 width={200}
                 value={entry.model}
-                options={(models[entry.connectionId] ?? []).map((model) => ({ value: model.id, label: model.label }))}
+                options={fallbackModels(models[entry.connectionId] ?? []).map((model) => ({ value: model.id, label: model.label }))}
                 onChange={(model) => onChange(index, { connectionId: entry.connectionId, model })}
                 placeholder="Model"
               />
@@ -166,12 +167,12 @@ export const HubRoutingSection: React.FC = () => {
     const put = (entry: AiFallbackChoice) => save(chain.map((one, at) => (at === index ? entry : one)));
     if (next.model) return put(next);
     void listModels(next.connectionId)
-      .then((list) => put({ ...next, model: defaultModelId(list) }))
+      .then((list) => put({ ...next, model: defaultModelId(fallbackModels(list)) }))
       .catch(() => undefined);
   };
   const onAdd = () => {
     const taken = new Set([primary, ...chain].map((entry) => `${entry.connectionId}/${entry.model}`));
-    const model = (models[PLATFORM_CONNECTION_ID] ?? []).find((one) => !taken.has(`${PLATFORM_CONNECTION_ID}/${one.id}`));
+    const model = fallbackModels(models[PLATFORM_CONNECTION_ID] ?? []).find((one) => !taken.has(`${PLATFORM_CONNECTION_ID}/${one.id}`));
     if (model) save([...chain, { connectionId: PLATFORM_CONNECTION_ID, model: model.id }]);
   };
   return (

@@ -47,14 +47,12 @@ import {
 /**
  * The model the service is asked for.
  *
- * "auto" means "the service's default", which the service picks when the
- * client does not choose. Every other name comes from the service's own list
- * (the picker reads it there), so it is sent as it is.
+ * An empty or "auto" choice is sent as the literal "auto": the service resolves
+ * it (FA11), the client never picks a model itself. Every other name comes from
+ * the service's own list, so it is sent as it is.
  */
-function serviceModel(model?: string): string | undefined {
-  const value = model?.trim();
-  if (!value || value === "auto") return undefined;
-  return value;
+function serviceModel(model?: string): string {
+  return model?.trim() || "auto";
 }
 
 /** The text of the last user turn — what a completion is asked about. */
@@ -86,7 +84,9 @@ async function ensureServerConversation(request: StreamInferenceRequest): Promis
 function runFallbacks(request: StreamInferenceRequest): AiFallbackChoice[] {
   const connectionId = request.connectionId ?? PLATFORM_CONNECTION_ID;
   if (connectionId === DEVICE_CONNECTION_ID) return [];
-  return readAiFallbacks(undefined, { connectionId, model: serviceModel(request.model) ?? "" });
+  // The chain is stored under the primary's own name; Auto is stored as "".
+  const primary = serviceModel(request.model);
+  return readAiFallbacks(undefined, { connectionId, model: primary === "auto" ? "" : primary });
 }
 
 /** The port the Assistant pane talks to when the AI service is configured. */

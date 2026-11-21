@@ -16,10 +16,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import "./support/memory-local-storage.ts";
+
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { setAiTransport } from "@/features/ai/api/aiClient";
+import { aiInferencePort } from "@/features/ai/model/aiInferencePort";
+import { ModelRowItem } from "@/widgets/chat-shell/ui/ModelMenuParts";
+
 import {
   AI_STARRED_STORAGE_KEY,
   MAX_RECOMMENDED,
   buildModelMenu,
+  fallbackModels,
   familyOf,
   generationOf,
   isAutoSelection,
@@ -166,4 +176,49 @@ test("Auto carries the check; the default model row in Recommended does not repe
   const other = view({ selection: { connectionId: "platform", model: "openai/gpt-5" } });
   assert.equal(other.autoSelected, false);
   assert.equal(other.recommended.find((row) => row.model === "openai/gpt-5")?.selected, true);
+});
+
+/* ------------------ free-model pool: Auto, the label, FA23/FA24 ------------------ */
+
+const MAY_TRAIN_LABEL = "May use prompts for training";
+
+async function sentModel(model: string | undefined): Promise<unknown> {
+  let body: Record<string, unknown> = {};
+  setAiTransport(async (_url, init) => {
+    body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return new Response("event: done\ndata: {}\n\n", { status: 200, headers: { "content-type": "text/event-stream" } });
+  });
+  await aiInferencePort.stream!(
+    { connectorId: "ai", model, messages: [], text: "hi", connectionId: "platform", serverConversationId: "conv-1" },
+    () => undefined,
+  );
+  return body.model;
+}
+
+test("auto selection sends model \"auto\"", async () => {
+  assert.equal(await sentModel("auto"), "auto");
+  assert.equal(await sentModel(undefined), "auto");
+  assert.equal(await sentModel("  "), "auto");
+  assert.equal(await sentModel("openai/gpt-5"), "openai/gpt-5");
+});
+
+test("may-train item carries the label", () => {
+  const menu = view({ platformModels: [model("a/free", { dataUse: "may-train" }), model("a/safe", { dataUse: "no-train" })] });
+  const rows = [...menu.recommended, ...menu.groups.flatMap((group) => group.rows), ...menu.older];
+  const html = (id: string) => renderToStaticMarkup(React.createElement(ModelRowItem, { row: rows.find((row) => row.model === id)!, onPick: () => undefined }));
+  assert.ok(html("a/free").includes(MAY_TRAIN_LABEL));
+  assert.ok(!html("a/safe").includes(MAY_TRAIN_LABEL));
+  assert.ok(html("a/free").includes("--osio-fg-muted"));
+});
+
+test("fallback picker omits may-train", () => {
+  const list = [model("a/free", { dataUse: "may-train", default: true }), model("a/safe", { dataUse: "no-train" })];
+  assert.deepEqual(fallbackModels(list).map((entry) => entry.id), ["a/safe"]);
+});
+
+test("missing dataUse treated as may-train", () => {
+  const list = [model("a/unknown"), model("a/safe", { dataUse: "no-train" })];
+  assert.deepEqual(fallbackModels(list).map((entry) => entry.id), ["a/safe"]);
+  const row = view({ platformModels: list }).groups.flatMap((group) => group.rows).concat(view({ platformModels: list }).recommended).find((r) => r.model === "a/unknown");
+  assert.equal(row?.mayTrain, true);
 });

@@ -46,6 +46,10 @@ export interface AiModel {
   outputMicroUsdPerMTok?: number;
   /** ISO time until which the model rests after repeated failures; absent when it does not. */
   cooldownUntil?: string;
+  /** The service's quality order inside the free pool. */
+  rank?: number;
+  /** Whether the provider may train on prompts; absent counts as may-train. */
+  dataUse?: "no-train" | "may-train";
 }
 
 /**

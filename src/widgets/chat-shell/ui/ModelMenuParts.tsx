@@ -54,6 +54,7 @@ export const ModelRowItem: React.FC<RowProps> = ({ row, onPick, onStar }) => (
       <span className="flex items-center gap-2">
         <span className="min-w-0 truncate">{row.label}</span>
         {row.reasoning ? <Badge tone="accent">Reasoning</Badge> : null}
+        {row.mayTrain ? <span className="shrink-0 text-xs text-[var(--osio-fg-muted)]">May use prompts for training</span> : null}
         {row.selected ? <CheckMark /> : null}
       </span>
     </MenuItem>
