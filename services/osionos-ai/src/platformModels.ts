@@ -19,7 +19,13 @@ export interface PlatformModelEntry {
 	vision?: boolean;
 	/** Whether the model reasons, so a run may ask for an effort. Absent is false. */
 	reasoning?: boolean;
+	/** Whether the upstream may train on prompts. Absent on a legacy entry: the pool applies may-train. */
+	dataUse?: DataUse;
 }
+
+/** What the upstream does with prompts; the pool defaults to the cautious may-train. */
+export type DataUse = 'no-train' | 'may-train';
+export const dataUseSchema = z.enum(['no-train', 'may-train']);
 
 const platformModelSchema = z.object({
 	id: z.string().min(1),
@@ -29,6 +35,7 @@ const platformModelSchema = z.object({
 	outputMicroUsdPerMTok: z.number().int().nonnegative(),
 	default: z.boolean().optional(),
 	reasoning: z.boolean().optional(),
+	dataUse: dataUseSchema.optional(),
 });
 
 /** The allowlist: at least one model, exactly one of them the default. */
