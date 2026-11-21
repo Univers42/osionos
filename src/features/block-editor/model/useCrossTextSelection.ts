@@ -5,6 +5,7 @@ import { getInlineEditorOffsetsForRange } from "@osionos/markdown-engine/dom";
 
 import { useBlockSelection } from "./blockSelectionStore";
 import { focusEditableBlock } from "./blockDomFocus";
+import { isBlankLeaf, lineBoxRects } from "./selectionLineBox";
 import { collapseCrossText, serializeCrossText, type CrossTextRange } from "./crossTextOps";
 import { useCrossTextSelection as useCrossTextStore } from "./crossTextSelectionStore";
 
@@ -178,8 +179,12 @@ export function useCrossTextSelection(options: UseCrossTextSelectionOptions): vo
           if (downward) partial.setEnd(lastFocus.point.node, lastFocus.point.offset);
           else partial.setStart(lastFocus.point.node, lastFocus.point.offset);
         }
-        for (const r of partial.getClientRects()) {
+        for (const r of lineBoxRects(partial, focusEntry.leaf)) {
           tint(box, r.left - rootRect.left, r.top - rootRect.top, r.width, r.height);
+        }
+        // A blank line at either end has no text rect: tint it like a covered row.
+        for (const entry of [leaves[anchorIdx], focusEntry]) {
+          if (isBlankLeaf(entry.leaf)) tint(box, entry.left, entry.top, entry.right - entry.left, entry.bottom - entry.top);
         }
       }
     };

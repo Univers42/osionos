@@ -20,6 +20,26 @@
 export type CaretAffinity = "first" | "last";
 
 /**
+ * The rect of a caret on an EMPTY line inside a text block (two soft breaks in a
+ * row): Chromium gives that collapsed range no client rect at all, and without
+ * this the caller fell back to the whole block's box, so the drawn caret and the
+ * edge-line test saw a block-tall caret instead of the line it is on. The line's
+ * own newline character, right after the caret, is laid out on that line, so its
+ * rect is the line's. Null when the caret is not before a newline.
+ * Caveat: only a newline in the same text node as the caret is read; a caret at
+ * the very end of a node whose next sibling holds the newline falls through to
+ * the element fallback, as before.
+ */
+function emptySoftLineRect(range: Range): DOMRect | null {
+  const { startContainer: node, startOffset: offset } = range;
+  if (node.nodeType !== Node.TEXT_NODE || (node as Text).data[offset] !== "\n") return null;
+  const probe = document.createRange();
+  probe.setStart(node, offset);
+  probe.setEnd(node, offset + 1);
+  return probe.getClientRects()[0] ?? null;
+}
+
+/**
  * The caret's client rect for the given wrap affinity. A collapsed range at a
  * soft-wrap boundary has TWO client rects (end of line N, start of line N+1):
  * ArrowUp asks for the FIRST (upper) rect, ArrowDown the LAST (lower) rect, so
@@ -33,6 +53,8 @@ export function caretRect(range: Range, affinity: CaretAffinity = "first"): DOMR
   }
   const rect = range.getBoundingClientRect();
   if (rect.width || rect.height || rect.top) return rect;
+  const emptyLine = emptySoftLineRect(range);
+  if (emptyLine) return emptyLine;
   // Element-boundary caret (an empty block, or offset 0 before the first text
   // node): the collapsed range has no client rects AND a degenerate bounding
   // rect. Common on a VIRTUALIZED page, where the range — but not its element —
