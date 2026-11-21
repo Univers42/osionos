@@ -26,6 +26,7 @@ import { config } from '../config.ts';
 import { readWebTaint } from '../web/settings.ts';
 import { newWebRun, webToolChars } from '../web/runWeb.ts';
 import { abortCode, pumpUpstream } from './streamPump.ts';
+import { firstPartBudgetMs } from './streamClock.ts';
 import { classifyRunFailure, errorFrame, storedError } from './upstreamError.ts';
 import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
 import { scheduleSummary } from '../summary/summarize.ts';
@@ -251,6 +252,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				// it cannot pay for becomes the answer.
 				budget: attempt.budget,
 				pool,
+				firstPartBudgetMs: firstPartBudgetMs(startedAt, clock.now()),
 				onToolCall: async ({ toolCallId, toolName, input }) => {
 					await emit('tool.called', { toolCallId, toolName, input });
 				},

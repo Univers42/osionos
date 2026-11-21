@@ -7,6 +7,7 @@ import { markOwnError } from './failover.ts';
 import { stepHasTools } from './loopBudget.ts';
 import type { LoopBudget, StepUsage } from './loopBudget.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
+import { createStreamClock, FIRST_PART_TIMEOUT_MS } from './streamClock.ts';
 
 /**
  * The pump of the upstream: the model's stream, turned into the events of a
@@ -118,6 +119,8 @@ export interface PumpInput {
 	onStepStart?: (step: { stepNumber: number; hasTools: boolean }) => Promise<void>;
 	/** A step ended, after its tool calls and its text (research C402, C407). */
 	onStepFinish?: (step: { stepNumber: number }) => Promise<void>;
+	/** How long the first content part may take; the failover chain passes what it has left (FA17). */
+	firstPartBudgetMs?: number;
 }
 
 export interface PumpOutcome {
@@ -164,7 +167,6 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 	let reasoning = '';
 	let usage: LanguageModelUsage | undefined;
 	let finishReason = 'stop';
-	let idleTimer: ReturnType<typeof setTimeout> | undefined;
 	let totalTimer: ReturnType<typeof setTimeout> | undefined;
 	// The step that ended: the text of the step that follows it is another
 	// paragraph, and not the end of the sentence before it.
@@ -209,12 +211,9 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 		: undefined;
 
 	const onTimeout = () => controller.abort(new UpstreamTimeout());
-	const touch = () => {
-		if (idleTimer) clearTimeout(idleTimer);
-		idleTimer = setTimeout(onTimeout, IDLE_TIMEOUT_MS);
-	};
+	const clock = createStreamClock({ onTimeout, firstPartMs: input.firstPartBudgetMs ?? FIRST_PART_TIMEOUT_MS, idleMs: IDLE_TIMEOUT_MS });
 	const clearTimers = () => {
-		if (idleTimer) clearTimeout(idleTimer);
+		clock.stop();
 		if (totalTimer) clearTimeout(totalTimer);
 	};
 
@@ -222,7 +221,6 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 		// Caveat: a research run that fails over starts the deadline again for
 		// the next model, so it may run up to 8 minutes per attempt.
 		totalTimer = setTimeout(onTimeout, limits.deadlineMs ?? TOTAL_TIMEOUT_MS);
-		touch();
 
 		const result = streamText({
 			model,
@@ -247,7 +245,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 		});
 
 		for await (const part of result.fullStream) {
-			touch();
+			clock.onPart(part.type);
 			if (part.type === 'text-delta') {
 				// The text of a step that follows another one begins on a
 				// line of its own: the two answers are two paragraphs.
