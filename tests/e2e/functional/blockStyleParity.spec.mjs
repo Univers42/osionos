@@ -65,11 +65,18 @@ async function editorShot(page) {
   return tree.screenshot({ animations: "disabled" });
 }
 
+// Each boot of the dev server costs ~1.4k module requests (6-15 s on a loaded CI box) against the
+// 60 s test budget, so the flag is set by an init script (it runs before the app reads it, on every
+// load) instead of a throwaway boot plus evaluate, and both surfaces share one boot per flag state.
+// Caveat: the read-only surface is mounted beside the live app rather than on a fresh page, so a
+// leak from the editor into the mounted frame would be shared by both flag states and not show here.
 async function shotsWithFlag(page, baseURL, flag) {
-  await page.evaluate(({ key, value }) => (value ? localStorage.setItem(key, value) : localStorage.removeItem(key)), { key: FLAG, value: flag });
+  await page.addInitScript(
+    ({ key, value }) => (value ? localStorage.setItem(key, value) : localStorage.removeItem(key)),
+    { key: FLAG, value: flag },
+  );
   await openFreshPage(page, baseURL);
   const editor = await editorShot(page);
-  await openFreshPage(page, baseURL);
   const readOnly = await readOnlyShot(page);
   return { editor, readOnly };
 }
@@ -82,7 +89,6 @@ function keep(name, png) {
 for (const theme of THEMES) {
   test(`blocks without style render the same with the layout flag on and off (${theme})`, async ({ page, baseURL }) => {
     await page.addInitScript((mode) => localStorage.setItem("osionos:theme-mode", mode), theme);
-    await page.goto(baseURL, { waitUntil: "domcontentloaded" });
     const off = await shotsWithFlag(page, baseURL, null);
     const on = await shotsWithFlag(page, baseURL, "1");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);

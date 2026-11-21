@@ -215,6 +215,14 @@ export default defineConfig(({ mode }) => {
     },
     optimizeDeps: {
       entries: ['index.html'],
+      // Dev only. Optimised together, `lucide-react` and `lucide-react/dynamicIconImports` share
+      // every icon module, so esbuild splits the barrel into ~1650 chunks and the first paint
+      // requests all of them (3307 requests, 1493 in flight; probe in issue #336, 2026-11-21):
+      // Chromium answers the overflow with ERR_INSUFFICIENT_RESOURCES, a module is lost and the
+      // shell never mounts. Served raw, the lazy icon map costs nothing until an icon is picked.
+      // Caveat: the raw icon files carry their own createLucideIcon copy, so an icon loaded
+      // lazily is not the same module as the barrel's (no identity check relies on that).
+      exclude: ['lucide-react/dynamicIconImports'],
     },
     server: {
       port: 3001,
