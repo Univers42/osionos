@@ -45,7 +45,7 @@ test.describe("settings developer panel", () => {
     await panel(page).getByRole("button", { name: "New token" }).click();
     const create = page.getByRole("button", { name: "Create token" });
     await expect(create).toBeDisabled();
-    await page.getByLabel("Name").fill("Deploy bot");
+    await page.getByRole("dialog").getByLabel("Name", { exact: true }).fill("Deploy bot");
     await expect(create).toBeDisabled();
     await page.getByRole("checkbox", { name: "Pages: read", exact: true }).check();
     await page.getByLabel("Expires on").fill("");

@@ -64,7 +64,7 @@ test.describe("settings authorized apps", () => {
     await openDeveloper(page, baseURL);
     await panel(page).getByRole("button", { name: "New token" }).click();
     await page.getByRole("button", { name: "osionos MCP (Claude Code)" }).click();
-    await expect(page.getByLabel("Name")).toHaveValue("Claude Code (MCP)");
+    await expect(page.getByRole("dialog").getByLabel("Name", { exact: true })).toHaveValue("Claude Code (MCP)");
     await expect(page.getByRole("dialog")).toContainText("archiving pages");
     await expect(page.getByRole("dialog")).toContainText("title, icon, content");
     expect(bridge.posts).toEqual([]);
