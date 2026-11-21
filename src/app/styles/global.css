@@ -700,6 +700,28 @@ body {
   background: var(--osio-code-selection);
 }
 
+/* The code toolbar sits in a block that can be squeezed to ~80 px (#335). It is its own size
+   container, so the buttons answer to the block's width, not the viewport's. Below 11rem the
+   secondary controls (line numbers, theme, the Copy label) are display:none, which also takes
+   them out of the tab order; below 7rem the brace icon, divider and chevron go too. Caveat: the
+   thresholds are measured against 12px icon buttons and the 2-3 letter language chip; a
+   longer language name, or a larger font, wraps the chip onto its own line first. */
+.osio-code-header {
+  container: osio-code-header / inline-size;
+  /* 6% of the block, held between 4 and 12 px: the old fixed 12 px left a 52 px block 28 px of room. */
+  padding-inline: clamp(0.25rem, 6%, 0.75rem);
+}
+@container osio-code-header (max-width: 11rem) {
+  .osio-code-secondary {
+    display: none;
+  }
+}
+@container osio-code-header (max-width: 7rem) {
+  .osio-code-tiny-hide {
+    display: none;
+  }
+}
+
 /* A long word or URL wraps anywhere, so it also stops setting the text's min-content width.
    `break-word` wraps it too, but a flex item keeps that whole word as its minimum: in a narrow
    column the content beside a list marker or toggle arrow ran ~1000 px out of its block (#327). */

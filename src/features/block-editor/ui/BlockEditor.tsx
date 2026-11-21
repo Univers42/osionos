@@ -321,20 +321,20 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
 
   const codeBlockHeader = useMemo(
     () => (
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
-        <div className="flex shrink-0 items-center gap-2">
-          <Braces size={16} aria-hidden className="text-[var(--osio-accent)]" />
-          <div ref={langPickerRef} className="relative">
+      <div className="osio-code-header flex flex-wrap items-center gap-x-2 gap-y-1 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Braces size={16} aria-hidden className="osio-code-tiny-hide text-[var(--osio-accent)]" />
+          <div ref={langPickerRef} className="relative min-w-0">
             <button
               type="button"
               onClick={() => setShowLangPicker((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={showLangPicker}
               title="Change language"
-              className="inline-flex items-center gap-1 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] py-1 pl-2 pr-1.5 font-mono text-2xs font-medium tracking-wide text-[var(--osio-code-fg)] transition-[background-color,transform] duration-(--osio-dur-fast) hover:bg-[var(--osio-code-btn-hover)] active:scale-95"
+              className="inline-flex max-w-full items-center gap-1 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] py-1 pl-2 pr-1.5 font-mono text-2xs font-medium tracking-wide text-[var(--osio-code-fg)] transition-[background-color,transform] duration-(--osio-dur-fast) hover:bg-[var(--osio-code-btn-hover)] active:scale-95"
             >
-              {block.language || "plaintext"}
-              <ChevronDown size={11} aria-hidden className="text-[var(--osio-code-fg-muted)]" />
+              <span className="min-w-0 truncate">{block.language || "plaintext"}</span>
+              <ChevronDown size={11} aria-hidden className="osio-code-tiny-hide shrink-0 text-[var(--osio-code-fg-muted)]" />
             </button>
             {showLangPicker && (
               <div className="absolute top-full left-0 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-osio-e4 z-[var(--osio-z-popover)] osio-code-card">
@@ -370,7 +370,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
             )}
           </div>
         </div>
-        <span aria-hidden className="h-4 w-px shrink-0 bg-[var(--osio-code-border)]" />
+        <span aria-hidden className="osio-code-tiny-hide h-4 w-px shrink-0 bg-[var(--osio-code-border)]" />
         <input
           value={block.fileName ?? ""}
           onChange={(event) => commitBlockUpdate(block.id, { fileName: event.target.value })}
@@ -379,15 +379,15 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           name="code-file-name"
           autoComplete="off"
           spellCheck={false}
-          className="min-w-16 flex-1 bg-transparent font-mono text-2xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
+          className="min-w-0 basis-16 flex-1 bg-transparent font-mono text-2xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
         />
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="flex min-w-0 items-center gap-0.5">
           <button
             type="button"
             title="Toggle line numbers"
             aria-pressed={codeShowLineNumbers}
             className={[
-              "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--osio-code-btn-hover)]",
+              "osio-code-secondary inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--osio-code-btn-hover)]",
               codeShowLineNumbers
                 ? "bg-[var(--osio-code-btn-active)] text-[var(--osio-code-fg)]"
                 : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
@@ -399,7 +399,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           <button
             type="button"
             title={block.codeTheme === "light" ? "Switch to dark" : "Switch to light"}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+            className="osio-code-secondary inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
             onClick={() => commitBlockUpdate(block.id, { codeTheme: block.codeTheme === "light" ? "dark" : "light" })}
           >
             {block.codeTheme === "light" ? <Moon size={12} /> : <Sun size={12} />}
@@ -427,7 +427,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
             ].join(" ")}
             onClick={handleCopyCode}
           >
-            {copiedCode ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+            {copiedCode ? <><Check size={12} /><span className="osio-code-secondary">Copied</span></> : <><Copy size={12} /><span className="osio-code-secondary">Copy</span></>}
           </button>
         </div>
       </div>
