@@ -6,7 +6,9 @@ import { APICallError, RetryError } from 'ai';
  * The decision is an ALLOWLIST (devil C249): only the failures that say "this
  * model is busy or down, and nothing was spent on the answer" move a run. A
  * 400 (our request is wrong), a 401/403 (the key), a data-policy refusal, a
- * timeout, a cancel and every error of our own code end the run as before.
+ * cancel and every error of our own code end the run as before. A TIMED-OUT
+ * attempt is moved by `failoverClassOf` (attempt.ts), not by `classifyFailure`:
+ * the latter alone does not move it (FA19).
  *
  * Caveat: the shape of the SDK's errors is read, not guaranteed. An upstream
  * that answers a quota with a 200 stream error, or a 5xx with a body the SDK

@@ -8,6 +8,7 @@ import { classifyFailure } from './failover.ts';
 import { rotateReservation } from './rotate.ts';
 import { quotaSignal, spendsSharedQuota } from './quota.ts';
 import type { PumpOutcome } from './streamPump.ts';
+import { isFirstPartTimeout } from './streamClock.ts';
 
 /**
  * The step of the chain: a failed attempt, and what the run does next.
@@ -85,6 +86,7 @@ export async function moveOn(input: MoveInput): Promise<MoveOutcome> {
 			userId: run.userId,
 			error: outcome.error,
 			attemptAborted: current.controller.signal.aborted,
+			firstPartTimeout: isFirstPartTimeout(current.controller.signal),
 		});
 	}
 	const nextAt = await nextIndex(input);

@@ -12,6 +12,33 @@
 
 /** The window for the first content part of a step. */
 export const FIRST_PART_TIMEOUT_MS = 90_000;
+
+/**
+ * The window in force: the constant, or the test's shorter one so a stall test
+ * does not wait 90 s. Read only under NODE_ENV=test; production has one value.
+ */
+export function firstPartWindowMs(): number {
+	const injected = Number(process.env.OSIONOS_AI_TEST_FIRST_PART_MS);
+	return process.env.NODE_ENV === 'test' && injected > 0 ? injected : FIRST_PART_TIMEOUT_MS;
+}
+
+/** Which clock ended the call: the wait for a first part, the idle window, or the whole call. */
+export type TimeoutPhase = 'first_part' | 'idle' | 'total';
+
+/** The abort of a timeout: the reason of the signal says so, and which clock. */
+export class UpstreamTimeout extends Error {
+	readonly phase: TimeoutPhase;
+	constructor(phase: TimeoutPhase = 'total') {
+		super('the upstream did not answer in time');
+		this.name = 'timeout';
+		this.phase = phase;
+	}
+}
+
+/** The signal aborted because no first part came in time (FA22). */
+export function isFirstPartTimeout(signal: AbortSignal): boolean {
+	return signal.aborted && signal.reason instanceof UpstreamTimeout && signal.reason.phase === 'first_part';
+}
 /** The whole failover chain waits at most this long for first parts (FA17). */
 export const CHAIN_FIRST_PART_BUDGET_MS = 150_000;
 
@@ -27,17 +54,17 @@ const REAL_TIMERS: Timers = { setTimeout: (fn, ms) => setTimeout(fn, ms), clearT
 
 /** What attempt n may wait for its first part: the window, or what the chain has left. */
 export function firstPartBudgetMs(chainStartedAt: number, now: number): number {
-	return Math.max(0, Math.min(FIRST_PART_TIMEOUT_MS, CHAIN_FIRST_PART_BUDGET_MS - (now - chainStartedAt)));
+	return Math.max(0, Math.min(firstPartWindowMs(), CHAIN_FIRST_PART_BUDGET_MS - (now - chainStartedAt)));
 }
 
-export function createStreamClock(opts: { onTimeout: () => void; firstPartMs: number; idleMs: number; timers?: Timers }) {
+export function createStreamClock(opts: { onTimeout: (phase: TimeoutPhase) => void; firstPartMs: number; idleMs: number; timers?: Timers }) {
 	const timers = opts.timers ?? REAL_TIMERS;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let contentSeen = false;
 	let awaitingFirst = true;
 	const arm = (ms: number) => {
 		timers.clearTimeout(timer);
-		timer = timers.setTimeout(opts.onTimeout, ms);
+		timer = timers.setTimeout(() => opts.onTimeout(awaitingFirst ? 'first_part' : 'idle'), ms);
 	};
 	arm(opts.firstPartMs);
 	return {
@@ -45,8 +72,8 @@ export function createStreamClock(opts: { onTimeout: () => void; firstPartMs: nu
 			if (type === 'start-step') {
 				// The first step keeps the window it already runs (it carries the
 				// chain's remaining budget); later steps get a full one (FA16).
-				if (contentSeen) arm(FIRST_PART_TIMEOUT_MS);
 				awaitingFirst = true;
+				if (contentSeen) arm(firstPartWindowMs());
 			} else if (CONTENT_PARTS.has(type)) {
 				contentSeen = true;
 				awaitingFirst = false;

@@ -7,7 +7,8 @@ import { markOwnError } from './failover.ts';
 import { stepHasTools } from './loopBudget.ts';
 import type { LoopBudget, StepUsage } from './loopBudget.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
-import { createStreamClock, FIRST_PART_TIMEOUT_MS } from './streamClock.ts';
+import { createStreamClock, firstPartWindowMs, UpstreamTimeout } from './streamClock.ts';
+import type { TimeoutPhase } from './streamClock.ts';
 
 /**
  * The pump of the upstream: the model's stream, turned into the events of a
@@ -27,13 +28,7 @@ export const IDLE_TIMEOUT_MS = 30_000;
 /** Two minutes for the whole call. */
 export const TOTAL_TIMEOUT_MS = 120_000;
 
-/** The abort of a timeout: the reason of the signal says so. */
-export class UpstreamTimeout extends Error {
-	constructor() {
-		super('the upstream did not answer in time');
-		this.name = 'timeout';
-	}
-}
+export { UpstreamTimeout };
 
 /**
  * Why the signal is aborted: a timeout, a cancellation, or nothing at all.
@@ -210,8 +205,8 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			}
 		: undefined;
 
-	const onTimeout = () => controller.abort(new UpstreamTimeout());
-	const clock = createStreamClock({ onTimeout, firstPartMs: input.firstPartBudgetMs ?? FIRST_PART_TIMEOUT_MS, idleMs: IDLE_TIMEOUT_MS });
+	const onTimeout = (phase: TimeoutPhase) => controller.abort(new UpstreamTimeout(phase));
+	const clock = createStreamClock({ onTimeout, firstPartMs: input.firstPartBudgetMs ?? firstPartWindowMs(), idleMs: IDLE_TIMEOUT_MS });
 	const clearTimers = () => {
 		clock.stop();
 		if (totalTimer) clearTimeout(totalTimer);
@@ -220,7 +215,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 	try {
 		// Caveat: a research run that fails over starts the deadline again for
 		// the next model, so it may run up to 8 minutes per attempt.
-		totalTimer = setTimeout(onTimeout, limits.deadlineMs ?? TOTAL_TIMEOUT_MS);
+		totalTimer = setTimeout(() => onTimeout('total'), limits.deadlineMs ?? TOTAL_TIMEOUT_MS);
 
 		const result = streamText({
 			model,

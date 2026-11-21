@@ -102,6 +102,8 @@ export interface FailureInput {
 	error: unknown;
 	/** The attempt was cancelled or ran out of its own clock: the model's health is not in question. */
 	attemptAborted: boolean;
+	/** The attempt ended because no first part came in time (FA22). */
+	firstPartTimeout?: boolean;
 	nowMs?: number;
 }
 
@@ -139,12 +141,34 @@ async function restAccount(redis: Redis, input: FailureInput, signal: QuotaSigna
 	return 'account';
 }
 
+const STALL_REST_SECONDS = 60;
+
+/**
+ * A platform model that stalled rests for THIS user only, so the user's next
+ * run does not wait 90 s on it again (FA22). Platform scope is not written.
+ *
+ * Caveat: a model that stalled once is skipped for 60 s for that user even if
+ * it recovered at once; it costs one lost route, never a failed run, because
+ * a chain whose every target rests keeps its order (skipResting).
+ */
+async function restStalled(redis: Redis, input: FailureInput, nowMs: number): Promise<RestScope> {
+	const { target, userId } = input;
+	if (!target.platformBudget) return null;
+	try {
+		await writeRest(redis, cooldownKey(`user:${userId}`, target.connectionId, target.modelId), STALL_REST_SECONDS, nowMs);
+		return 'user';
+	} catch {
+		return null;
+	}
+}
+
 /**
  * Rests the model of a failed attempt, when the failure says the MODEL is busy
  * or down (the same allowlist the failover uses, devil C256).
  */
 export async function recordFailure(redis: Redis, input: FailureInput): Promise<RestScope> {
 	const nowMs = input.nowMs ?? Date.now();
+	if (input.firstPartTimeout) return restStalled(redis, input, nowMs);
 	if (input.attemptAborted) return null;
 	const { target, userId } = input;
 	// Before the allowlist: a 402 moves no run, and it still closes the account.
