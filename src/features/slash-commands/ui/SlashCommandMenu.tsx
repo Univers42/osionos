@@ -32,6 +32,7 @@ import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore"
 import { usePageStore } from "@/store/usePageStore";
 import { useMySectionCommands } from "@/features/slash-commands/model/mySections";
 import { LAYOUT_MODE_GROUP_IDS } from "@/features/slash-commands/model/sectionSlashCommands";
+import { SLASH_HINT_CLASS } from "@/features/slash-commands/model/slashHintStyle";
 import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import type {
   SlashCommand,
@@ -248,7 +249,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                       aria-selected={isActive}
                       data-testid="slash-command-entry"
                       data-command-label={item.label}
-                      className="osio-menu-item h-[var(--osio-control-h-md)]"
+                      className="osio-menu-item group h-[var(--osio-control-h-md)]"
                       onMouseEnter={() => setActiveIdx(idx)}
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => handleCommandSelect(item)}
@@ -259,11 +260,11 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                       <span data-slash-label className="block min-w-0 flex-1 truncate">
                         {item.kind === "whiteboard" && arg ? `Create board “${arg}”` : item.label}
                         {isSuggested ? (
-                          <span className="text-[var(--osio-fg-subtle)]">{` · ${slashSectionLabel(item.section)}`}</span>
+                          <span className={SLASH_HINT_CLASS}>{` · ${slashSectionLabel(item.section)}`}</span>
                         ) : null}
                       </span>
                       {item.shortcut ? (
-                        <span className="ml-auto shrink-0 pl-2 text-xs text-[var(--osio-fg-subtle)]">{item.shortcut}</span>
+                        <span className={`ml-auto shrink-0 pl-2 text-xs ${SLASH_HINT_CLASS}`}>{item.shortcut}</span>
                       ) : null}
                     </button>
                   );
@@ -277,12 +278,12 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         <button
           type="button"
           data-testid="slash-command-close"
-          className="osio-menu-item h-[var(--osio-control-h-md)] shrink-0"
+          className="osio-menu-item group h-[var(--osio-control-h-md)] shrink-0"
           onMouseDown={(event) => event.preventDefault()}
           onClick={onClose}
         >
           <span className="min-w-0 flex-1 truncate">Close menu</span>
-          <span className="ml-auto shrink-0 pl-2 text-xs text-[var(--osio-fg-subtle)]">esc</span>
+          <span className={`ml-auto shrink-0 pl-2 text-xs ${SLASH_HINT_CLASS}`}>esc</span>
         </button>
       </div>
       {placement.preview ? <SlashCommandPreview command={ordered[effectiveActiveIdx]} style={placement.preview} /> : null}
