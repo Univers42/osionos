@@ -18,6 +18,7 @@ import {
   clearAndTypePageTitle,
   createNewWorkspacePage,
   explorerRow,
+  waitForUntitledPage,
 } from "../../browser/core/app.mjs";
 
 const railLibrary = (page) => page.getByRole("tab", { name: "Library", exact: true });
@@ -74,7 +75,7 @@ test.describe("the Library", () => {
     await parentRow.click({ button: "right" });
     await page.getByRole("menuitem", { name: "Add child page", exact: true }).click();
 
-    await expect(page.getByRole("textbox", { name: "Page title" })).toBeVisible();
+    await waitForUntitledPage(page);
     const child = `Library child ${Date.now()}`;
     await clearAndTypePageTitle(page, child);
 

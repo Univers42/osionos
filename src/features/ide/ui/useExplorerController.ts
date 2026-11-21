@@ -95,10 +95,6 @@ export function useExplorerController({ ops, onOpen, pageIdOf, onRowMenu, defaul
   // cancel/submit. Those actions bump the token so the armed restore is dropped;
   // otherwise focusRow would blur the just-mounted input and commit the edit.
   const restoreToken = React.useRef(0);
-  // useExplorerFocus focuses from an effect that only runs on a commit, and
-  // re-focusing the row that is already tabbableRel changes no state: bump a
-  // tick so that commit happens and the pending focus is applied.
-  const [, bumpRestore] = React.useState(0);
 
   const openMenu = (rel: string, row: ExplorerRow, at: { x: number; y: number }): void => {
     if (!onRowMenu) return;
@@ -117,7 +113,6 @@ export function useExplorerController({ ops, onOpen, pageIdOf, onRowMenu, defaul
         queueMicrotask(() => {
           if (restoreToken.current !== token) return;
           focusRow(rel);
-          bumpRestore((tick) => tick + 1);
         });
       },
     });

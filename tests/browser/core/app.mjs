@@ -14,6 +14,14 @@ import { Buffer } from "node:buffer";
 import process from "node:process";
 import { expect } from "@playwright/test";
 
+/** Waits for a just-created page to be open. A page is created asynchronously: waiting for any
+ *  "Page title" box passed at once on the page already open, and the create that resolved later
+ *  opened "Untitled" into whatever tab the test had moved to (#339).
+ *  Caveat: when the open page is already titled "Untitled" this passes at once, as before. */
+export async function waitForUntitledPage(page) {
+  await page.getByRole("heading", { level: 1, name: "Untitled", exact: true }).first().waitFor();
+}
+
 /** Create a new workspace page via whichever affordance the current UI offers
  *  (client-side — no reload, so in-memory app state survives). Waits for the
  *  primary "New page" button instead of an instant visibility probe — the
@@ -33,7 +41,7 @@ export async function createNewWorkspacePage(page) {
   const openedExplorer = !appeared && (await newPageButton.count()) === 0;
   if (openedExplorer) await explorerTab.click();
   await newPageButton.click();
-  await page.getByRole("textbox", { name: "Page title" }).waitFor();
+  await waitForUntitledPage(page);
   // Back to the rail the shell booted with: a 375px page beside the open panel is a sliver.
   if (openedExplorer) await explorerTab.click();
 }

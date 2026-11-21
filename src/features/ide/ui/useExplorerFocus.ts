@@ -33,9 +33,15 @@ export function useExplorerFocus(rowIndex: ReadonlyMap<string, number>, firstRel
     for (const element of items) if (element.dataset.rel === target) element.focus();
   });
 
+  // Every request commits, so it is applied now or dropped. Re-focusing the row that is
+  // already tabbable changed no state, so the request stayed armed until some later commit:
+  // a row's own onFocus re-armed it, and a keystroke in a page title re-rendering the tree
+  // pulled focus back to the row and lost the rest of the typing (#338).
+  const [, commitRequest] = React.useState(0);
   const focusRow = React.useCallback((rel: string): void => {
     setFocusedRel(rel);
     wantFocus.current = rel;
+    commitRequest((tick) => tick + 1);
   }, []);
 
   return { rootRef, tabbableRel, focusRow };
