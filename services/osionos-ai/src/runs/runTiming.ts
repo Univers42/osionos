@@ -29,6 +29,8 @@ export interface RunTimer {
 	endPreflight: () => void;
 	beginAttempt: () => void;
 	firstContent: () => void;
+	/** The provider stream is over: later work (persistence) is not stream time. Set once. */
+	endStream: () => void;
 	/** The attempt that just ended moved the run on: its time is failover time. */
 	failedOver: () => void;
 	timeAppend: <T>(append: () => Promise<T>) => Promise<T>;
@@ -43,6 +45,7 @@ export function createRunTimer(now: () => number = () => performance.now()): Run
 	let attemptStart: number | undefined;
 	let ttft: number | undefined;
 	let movedOn = false;
+	let streamEnd: number | undefined;
 	let failoverMs = 0;
 	let appendMs = 0;
 	let retrievalFailed = false;
@@ -57,9 +60,13 @@ export function createRunTimer(now: () => number = () => performance.now()): Run
 			attempts += 1;
 			attemptStart = at;
 			ttft = undefined;
+			streamEnd = undefined;
 		},
 		firstContent: () => {
 			if (attemptStart !== undefined) ttft ??= now() - attemptStart;
+		},
+		endStream: () => {
+			streamEnd ??= now();
 		},
 		failedOver: () => {
 			movedOn = true;
@@ -75,15 +82,21 @@ export function createRunTimer(now: () => number = () => performance.now()): Run
 		retrievalFailed: () => {
 			retrievalFailed = true;
 		},
-		snapshot: () => ({
-			preflight_ms: Math.round(preflightMs ?? 0),
-			...(ttft === undefined ? {} : { provider_ttft_ms: Math.round(ttft) }),
-			stream_ms: attemptStart === undefined ? 0 : Math.round(now() - attemptStart),
-			attempts,
-			failover_ms: Math.round(failoverMs),
-			append_ms_total: Math.round(appendMs),
-			retrieval_failed: retrievalFailed,
-		}),
+		snapshot: () => {
+			const at = now();
+			// An attempt that moved on with nobody after it (refused) is failover time.
+			const pending = movedOn && attemptStart !== undefined ? at - attemptStart : 0;
+			const streamMs = attemptStart === undefined || movedOn ? 0 : (streamEnd ?? at) - attemptStart;
+			return {
+				preflight_ms: Math.round(preflightMs ?? 0),
+				...(ttft === undefined ? {} : { provider_ttft_ms: Math.round(ttft) }),
+				stream_ms: Math.round(streamMs),
+				attempts,
+				failover_ms: Math.round(failoverMs + pending),
+				append_ms_total: Math.round(appendMs),
+				retrieval_failed: retrievalFailed,
+			};
+		},
 	};
 }
 
@@ -92,5 +105,8 @@ export function createRunTimer(now: () => number = () => performance.now()): Run
  * else: the model menu id, the scope, the outcome code and the integers.
  */
 export function logRunTiming(timing: RunTiming, run: { model: string; kind: 'platform' | 'user'; outcome: string }): void {
-	console.info(JSON.stringify({ event: 'run_timing', model: run.model, kind: run.kind, outcome: run.outcome, ...timing }));
+	// A user connection has no menu id, only the string the user typed (an org or
+	// fine-tune name): the kind says it, the model is not logged.
+	const model = run.kind === 'platform' ? run.model : 'user';
+	console.info(JSON.stringify({ event: 'run_timing', model, kind: run.kind, outcome: run.outcome, ...timing }));
 }

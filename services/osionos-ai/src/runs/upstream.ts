@@ -282,7 +282,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			const chainClosed = firstPartBudgetMs(startedAt, clock.now()) === 0;
 			const move = await moveOn({ db, redis, run: runState, steps, index, current, outcome, records, emit, chainClosed });
 			if (move.kind === 'stay') break;
-			if (move.kind === 'retry' || move.kind === 'moved') timer.failedOver();
+			timer.failedOver();
 			if (move.kind === 'retry') {
 				outcome = await callModel(current);
 				continue;
@@ -300,6 +300,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			current = move.attempt;
 			outcome = await callModel(current);
 		}
+		timer.endStream();
 		answer = outcome.answer;
 		reasoning = outcome.reasoning;
 		usage = outcome.usage;

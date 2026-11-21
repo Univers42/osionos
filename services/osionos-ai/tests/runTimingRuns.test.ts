@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { USER_A } from './harness.ts';
+import { USER_A, WORKSPACE_A } from './harness.ts';
 import { startKit, lastOf } from './failoverKit.ts';
 
 /**
@@ -27,15 +27,16 @@ function withoutTiming(usage: Usage | null): Record<string, unknown> {
 	return rest;
 }
 
-/** The stdout lines of `work`: the service logs in-process. */
+/** Every line the service logs during `work`, whichever console method it uses. */
 async function logged(work: () => Promise<void>): Promise<string[]> {
 	const lines: string[] = [];
-	const original = console.info;
-	console.info = (line: unknown) => { lines.push(String(line)); };
+	const methods = ['info', 'log', 'warn', 'error', 'debug'] as const;
+	const originals = methods.map((method) => console[method]);
+	for (const method of methods) console[method] = (...args: unknown[]) => { lines.push(args.map(String).join(' ')); };
 	try {
 		await work();
 	} finally {
-		console.info = original;
+		methods.forEach((method, index) => { console[method] = originals[index] as never; });
 	}
 	return lines;
 }
@@ -117,5 +118,45 @@ describe('AB3 run_timing event', () => {
 		const lines = await logged(async () => { await runToEnd({ model: 'mock-metered' }); });
 		const event = JSON.parse(lines.filter((line) => line.includes('"run_timing"'))[0]);
 		assert.equal(event.outcome, 'provider_unavailable');
+	});
+});
+
+describe('AB3 user connection and budget_exhausted', () => {
+	it('a user-connection run logs kind user and neither its model string, the user id nor the run id', async () => {
+		const own = await kit.call('/api/ai/connections', {
+			method: 'POST',
+			token: kit.tokenFor(USER_A, WORKSPACE_A),
+			body: { kind: 'api_key', provider: 'openrouter', apiKey: 'sk-test-0123456789abcdef' },
+		});
+		let runId = '';
+		const typed = 'ft:gpt-4o:acme-corp:support:abc123';
+		const lines = await logged(async () => {
+			({ runId } = await runToEnd({ connectionId: String(own.body?.id), model: typed }));
+		});
+		const events = lines.filter((line) => line.includes('"run_timing"'));
+		assert.equal(events.length, 1);
+		const event = JSON.parse(events[0]);
+		assert.equal(event.kind, 'user');
+		assert.equal(event.model, 'user');
+		const everything = lines.join('\n');
+		for (const secret of [typed, 'acme-corp', USER_A, runId, 'sk-test-0123456789abcdef']) {
+			assert.equal(everything.includes(secret), false, secret);
+		}
+	});
+
+	it('a budget_exhausted run keeps its attempts, gains timing, and logs the event', async () => {
+		failing.script('mock-metered', 503);
+		let runId = '';
+		const lines = await logged(async () => {
+			({ runId } = await runToEnd({ model: 'mock-metered', fallbacks: [{ model: 'mock-dear' }] }));
+		});
+		const row = await runRow(runId);
+		const usage = row.usage as Usage;
+		assert.equal(row.error, 'budget_exhausted');
+		assert.deepEqual(Object.keys(withoutTiming(usage)), ['attempts']);
+		assertTiming(usage.timing);
+		assert.equal(usage.timing?.attempts, 1);
+		const event = JSON.parse(lines.filter((line) => line.includes('"run_timing"'))[0]);
+		assert.equal(event.outcome, 'budget_exhausted');
 	});
 });

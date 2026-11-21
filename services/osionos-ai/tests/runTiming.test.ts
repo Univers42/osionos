@@ -60,6 +60,28 @@ describe('run timer', () => {
 		assert.equal(timing.stream_ms, 45);
 	});
 
+	it('AB1 endStream freezes stream_ms at the last provider part, before the persistence', () => {
+		const { timer, at } = drivenTimer();
+		timer.beginAttempt();
+		at(80);
+		timer.endStream();
+		at(500);
+		timer.endStream();
+		assert.equal(timer.snapshot().stream_ms, 80);
+	});
+
+	it('AB1 a last attempt that moved on with no next one (refused) is failover_ms, not stream_ms', () => {
+		const { timer, at } = drivenTimer();
+		timer.beginAttempt();
+		at(40);
+		timer.failedOver();
+		at(60);
+		const timing = timer.snapshot();
+		assert.equal(timing.stream_ms, 0);
+		assert.equal(timing.failover_ms, 60);
+		assert.equal(timing.attempts, 1);
+	});
+
 	it('AB1 append_ms_total sums the awaited appends, whether they resolve or throw', async () => {
 		const { timer, at } = drivenTimer();
 		await timer.timeAppend(async () => { at(7.4); });
@@ -105,5 +127,19 @@ describe('run_timing event', () => {
 			'preflight_ms', 'retrieval_failed', 'stream_ms',
 		]);
 		assert.equal(JSON.parse(lines[0]).event, 'run_timing');
+	});
+
+	it('AB3 a user connection logs the literal "user", never the model string the user typed', () => {
+		const lines: string[] = [];
+		const original = console.info;
+		console.info = (line: string) => { lines.push(line); };
+		try {
+			const { timer } = drivenTimer();
+			logRunTiming(timer.snapshot(), { model: 'ft:gpt-4o:acme-corp:abc', kind: 'user', outcome: 'succeeded' });
+		} finally {
+			console.info = original;
+		}
+		assert.equal(JSON.parse(lines[0]).model, 'user');
+		assert.equal(lines[0].includes('acme-corp'), false);
 	});
 });
