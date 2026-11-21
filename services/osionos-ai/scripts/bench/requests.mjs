@@ -17,7 +17,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chunkPage } from '../../src/indexer/chunker.ts';
 import { sourceBlock, SOURCE_INSTRUCTION } from '../../src/runs/sources.ts';
-import { readCorpus, readGolden, contentWords } from '../../eval/lib.mjs';
+import { readCorpus, readGolden } from '../../eval/lib.mjs';
+import { contentWords } from '../../eval/text.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SERVICE_DIR = path.resolve(HERE, '../..');
@@ -41,9 +42,10 @@ export const MAX_CHUNKS_PER_PAGE = 3;
  */
 export function readSystemPrompt() {
 	const source = readFileSync(path.join(SERVICE_DIR, 'src/runs/prompt.ts'), 'utf8');
-	const declaration = /export const SYSTEM_PROMPT = \[([\s\S]*?)\]\.join\('\\n'\);/.exec(source);
-	if (!declaration) throw new Error('SYSTEM_PROMPT not found in src/runs/prompt.ts');
-	const lines = [...declaration[1].matchAll(/^\s*'((?:[^'\\]|\\.)*)',?\s*$/gm)].map((match) => match[1]);
+	const declaration = /export const SYSTEM_PROMPT_LINES = \[([\s\S]*?)\] as const;/.exec(source);
+	if (!declaration) throw new Error('SYSTEM_PROMPT_LINES not found in src/runs/prompt.ts');
+	// The `? '...'` arm of the summary flag is skipped: the flag-off bytes are the default.
+	const lines = [...declaration[1].matchAll(/^\s*(?:: )?'((?:[^'\\]|\\.)*)',?\s*$/gm)].map((match) => match[1]);
 	if (lines.length === 0) throw new Error('SYSTEM_PROMPT has no lines');
 	return lines.join('\n');
 }

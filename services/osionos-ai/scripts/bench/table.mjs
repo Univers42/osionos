@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const RESULTS = path.join(HERE, 'results');
+const RESULTS = path.join(HERE, '../../spikes/gpu/results');
 
 const files = process.argv.slice(2);
 const filter = process.env.PREFIX || '';

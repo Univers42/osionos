@@ -13,7 +13,7 @@
 //   OUT         a file to write the JSON to
 
 import { writeFileSync } from 'node:fs';
-import { corpusChunks } from './requests.mjs';
+import { corpusChunks } from '../../scripts/bench/requests.mjs';
 import { readGolden } from '../../eval/lib.mjs';
 
 const TEI = (process.env.TEI_URL || 'http://127.0.0.1:4911').replace(/\/$/, '');

@@ -30,7 +30,7 @@
 //   OUT          a file to write the JSON to
 
 import { existsSync, writeFileSync } from 'node:fs';
-import { corpusChunks } from './requests.mjs';
+import { corpusChunks } from '../../scripts/bench/requests.mjs';
 import { readGolden } from '../../eval/lib.mjs';
 
 const BASE = (process.env.EMBED_URL || 'http://127.0.0.1:4911').replace(/\/$/, '');

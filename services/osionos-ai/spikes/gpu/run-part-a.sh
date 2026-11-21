@@ -76,11 +76,11 @@ run_bench() {
 		-e "RANDOMIZE_PREFIX=${RANDOMIZE_PREFIX:-0}" \
 		-e "OUT=/out/$label.json" \
 		"$@" \
-		node:22-bookworm-slim node spikes/gpu/llm-bench-gpu.mjs
+		node:22-bookworm-slim node scripts/bench/llm-bench-gpu.mjs
 	kill "$SAMPLER_PID" 2>/dev/null || true
 	wait "$SAMPLER_PID" 2>/dev/null || true
 	SAMPLER_PID=""
-	docker run --rm --network host -v "$SPIKE_DIR:/s" -v "$OUT_DIR:/out" -w /out node:22-bookworm-slim \
+	docker run --rm --network host -v "$SERVICE_DIR/scripts/bench:/s" -v "$OUT_DIR:/out" -w /out node:22-bookworm-slim \
 		node /s/summarize.mjs "/out/$label.json" "/out/$label.sample" "$label" "/out/$label.loadavg" >> "$JSONL"
 	rm -f "$stem.sample" "$stem.loadavg"
 }

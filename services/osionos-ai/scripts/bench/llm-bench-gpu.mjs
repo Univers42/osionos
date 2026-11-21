@@ -18,6 +18,15 @@
 // configuration, the same arrival process, the same seed.
 //
 //   node llm-bench-gpu.mjs > one-run.json
+//   node llm-bench-gpu.mjs --base-url https://host/v1 --model ID --n 20 --auth-file H
+//
+// Flags (bench-args.mjs): --base-url, --model, --n, --auth-file. --n sends exactly
+// N requests (sequential, or Poisson when LAMBDA is set) instead of a DURATION window.
+// The first content part (content, reasoning or tool call; R20) is reported next to
+// the first content token, with the success rate and the runs that streamed reasoning.
+//
+// Caveat: on a shared GPU or a remote free tier the numbers move with the
+// neighbours, and a small n makes p95 the slowest run. Read n beside them.
 //
 // Env:
 //   LLM_URL      the base url of the llama.cpp server (default http://127.0.0.1:18080)
@@ -33,8 +42,14 @@
 
 import { unlinkSync, writeFileSync } from 'node:fs';
 import { buildRequests } from './requests.mjs';
+import { parseArgs } from './bench-args.mjs';
+import { sseObjects } from './sse.mjs';
+import { readMetrics } from './server-metrics.mjs';
+import { fmt, mean, mulberry32, partKind, pct } from './stream-stats.mjs';
 
-const BASE = (process.env.LLM_URL || 'http://127.0.0.1:18080').replace(/\/$/, '');
+const ARGS = parseArgs(process.argv.slice(2), process.env);
+const { api: API, root: BASE, n: N } = ARGS;
+const metrics = () => (ARGS.remote ? Promise.resolve({}) : readMetrics(BASE));
 const LAMBDA = Number(process.env.LAMBDA || 1);
 const DURATION = Number(process.env.DURATION || 60);
 const MAX_TOKENS = Number(process.env.MAX_TOKENS || 300);
@@ -43,69 +58,16 @@ const RANDOMIZE = process.env.RANDOMIZE_PREFIX === '1';
 const LABEL = process.env.LABEL || 'run';
 const SEED = Number(process.env.SEED || 20261021);
 
-// ---------------------------------------------------------------- helpers
-function mulberry32(a) {
-	return function () {
-		a |= 0;
-		a = (a + 0x6d2b79f5) | 0;
-		a = Math.imul(a ^ (a >>> 15), 1 | a);
-		a = (a + Math.imul(a ^ (a >>> 7), 61 | a)) ^ a;
-		return ((a ^ (a >>> 14)) >>> 0) / 4294967296;
-	};
-}
 const rng = mulberry32(SEED);
-
-/** The percentile of a sorted list, nearest rank (the convention of P0a/P0c). */
-function pct(sorted, p) {
-	if (sorted.length === 0) return NaN;
-	const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
-	return sorted[index];
-}
-const fmt = (n, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : 'n/a');
-const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
-
-async function* sseObjects(res) {
-	const reader = res.body.getReader();
-	const decoder = new TextDecoder();
-	let buffer = '';
-	try {
-		for (;;) {
-			const { value, done } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
-			let index;
-			while ((index = buffer.search(/\r?\n\r?\n/)) !== -1) {
-				const block = buffer.slice(0, index);
-				buffer = buffer.slice(index + (buffer[index] === '\r' ? 4 : 2));
-				if (/^event:\s*error\s*$/m.test(block)) { yield { error: block }; continue; }
-				for (const line of block.split('\n')) {
-					const text = line.trim();
-					if (!text.startsWith('data:')) continue;
-					const payload = text.slice(5).trim();
-					if (payload === '[DONE]') { yield { done: true }; continue; }
-					try {
-						const parsed = JSON.parse(payload);
-						yield parsed;
-					} catch {
-						/* keepalive */
-					}
-				}
-			}
-		}
-	} finally {
-		await reader.cancel().catch(() => undefined);
-		reader.releaseLock();
-	}
-}
 
 /** One streamed chat completion, timed. */
 async function runOne(body) {
 	const started = performance.now();
 	let res;
 	try {
-		res = await fetch(`${BASE}/v1/chat/completions`, {
+		res = await fetch(`${API}/chat/completions`, {
 			method: 'POST',
-			headers: { 'content-type': 'application/json' },
+			headers: { 'content-type': 'application/json', ...ARGS.headers },
 			body: JSON.stringify(body),
 			signal: AbortSignal.timeout(Number(process.env.REQUEST_TIMEOUT_MS || 180000)),
 		});
@@ -117,6 +79,8 @@ async function runOne(body) {
 		return { error: `http_${res.status}: ${text.slice(0, 300)}` };
 	}
 	let firstAt = null;
+	let firstPartAt = null;
+	let sawReasoning = false;
 	let lastAt = null;
 	let contentChunks = 0;
 	let contentChars = 0;
@@ -135,6 +99,9 @@ async function runOne(body) {
 			const choice = object.choices?.[0];
 			if (!choice) continue;
 			if (choice.finish_reason) { finishReason = choice.finish_reason; completed = true; }
+			const kind = partKind(choice.delta);
+			if (kind !== null && firstPartAt === null) firstPartAt = now;
+			if (kind === 'reasoning') sawReasoning = true;
 			const delta = choice.delta?.content;
 			if (typeof delta === 'string' && delta.length > 0) {
 				if (firstAt === null) firstAt = now;
@@ -153,6 +120,8 @@ async function runOne(body) {
 	for (let index = 1; index < contentTimes.length; index += 1) itl.push(contentTimes[index] - contentTimes[index - 1]);
 	return {
 		ttftMs: firstAt === null ? NaN : firstAt - started,
+		firstPartMs: firstPartAt === null ? NaN : firstPartAt - started,
+		sawReasoning,
 		totalMs: ended - started,
 		itlMs: itl,
 		contentChunks,
@@ -163,31 +132,10 @@ async function runOne(body) {
 	};
 }
 
-/** The metrics of the server, as a flat object of numbers. */
-async function metrics() {
-	try {
-		const res = await fetch(`${BASE}/metrics`);
-		if (!res.ok) return {};
-		const text = await res.text();
-		const out = {};
-		for (const line of text.split('\n')) {
-			if (!line.startsWith('llamacpp:')) continue;
-			const space = line.indexOf(' ');
-			if (space === -1) continue;
-			const value = Number(line.slice(space + 1));
-			if (Number.isFinite(value)) out[line.slice(0, space)] = value;
-		}
-		return out;
-	} catch {
-		return {};
-	}
-}
-
 // ---------------------------------------------------------------- start
-const models = await (await fetch(`${BASE}/v1/models`)).json();
-const MODEL = process.env.MODEL || models.data?.[0]?.id;
+const MODEL = ARGS.model || (await (await fetch(`${API}/models`, { headers: ARGS.headers })).json()).data?.[0]?.id;
 if (!MODEL) {
-	console.error(`no model at ${BASE}/v1/models`);
+	console.error(`no model at ${API}/models`);
 	process.exit(1);
 }
 
@@ -206,7 +154,7 @@ const bodyOf = (request) => ({
 
 // The warm-up: two requests, discarded. The service is always running, so
 // the model is loaded and the prompt cache is warm before the window opens.
-for (let index = 0; index < 2; index += 1) {
+for (let index = 0; index < ARGS.warmups; index += 1) {
 	const warm = await runOne(bodyOf(requests[0]));
 	if (warm.error) {
 		console.error(`warm-up failed: ${warm.error}`);
@@ -244,9 +192,10 @@ let sent = 0;
 const inflight = [];
 while (true) {
 	const elapsed = (performance.now() - started) / 1000;
-	if (elapsed >= DURATION) break;
+	if (N === null ? elapsed >= DURATION : sent >= N) break;
+	const sequential = N !== null && !ARGS.lambdaGiven;
 	if (nextAt === 0) nextAt = elapsed;
-	const wait = nextAt - elapsed;
+	const wait = sequential ? 0 : nextAt - elapsed;
 	if (wait > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(wait, 100) * 1000));
 	nextAt += -Math.log(1 - rng()) / LAMBDA;
 	const request = requests[index % requests.length];
@@ -257,6 +206,7 @@ while (true) {
 			results.push({ id: request.id, ...result });
 		}),
 	);
+	if (sequential) await inflight[inflight.length - 1];
 }
 const windowEnd = performance.now();
 if (process.env.READY_FILE) unlinkSync(process.env.READY_FILE);
@@ -278,12 +228,13 @@ polling = false;
 await poller;
 // ---------------------------------------------------------------- summary
 const ok = results.filter((r) => !r.error);
+const firstParts = ok.map((r) => r.firstPartMs).filter(Number.isFinite).sort((a, b) => a - b);
 const ttfts = ok.map((r) => r.ttftMs).filter(Number.isFinite).sort((a, b) => a - b);
 const e2e = ok.map((r) => r.totalMs).filter(Number.isFinite).sort((a, b) => a - b);
 const itls = ok.flatMap((r) => r.itlMs).sort((a, b) => a - b);
 const promptN = ok.map((r) => r.timings?.prompt_n).filter((v) => Number.isFinite(v));
 const cacheN = ok.map((r) => r.timings?.cache_n).filter((v) => Number.isFinite(v));
-const predictedN = ok.map((r) => r.timings?.predicted_n).filter((v) => Number.isFinite(v));
+const predictedN = ok.map((r) => r.timings?.predicted_n ?? r.usage?.completion_tokens).filter((v) => Number.isFinite(v));
 const after = await metrics();
 
 const report = {
@@ -301,6 +252,11 @@ const report = {
 	ok: ok.length,
 	backlog: unfinished,
 	errors: results.filter((r) => r.error).map((r) => r.error),
+	n: sent,
+	successRate: sent === 0 ? NaN : ok.length / sent,
+	reasoningRuns: ok.filter((r) => r.sawReasoning).length,
+	firstPartP50: pct(firstParts, 50),
+	firstPartP95: pct(firstParts, 95),
 	ttftP50: pct(ttfts, 50),
 	ttftP95: pct(ttfts, 95),
 	itlP50: pct(itls, 50),
@@ -331,7 +287,7 @@ const text = JSON.stringify(report, null, 2);
 if (process.env.OUT) {
 	writeFileSync(process.env.OUT, `${text}\n`);
 	console.log(
-		`${LABEL} lambda=${LAMBDA} n=${report.ok} ttft p50=${fmt(report.ttftP50)} p95=${fmt(report.ttftP95)} ` +
+		`${LABEL} lambda=${LAMBDA} n=${report.ok}/${sent} success=${fmt(report.successRate)} first-part p50=${fmt(report.firstPartP50)} p95=${fmt(report.firstPartP95)} reasoning=${report.reasoningRuns} ttft p50=${fmt(report.ttftP50)} p95=${fmt(report.ttftP95)} ` +
 			`itl p50=${fmt(report.itlP50)} p95=${fmt(report.itlP95)} e2e p50=${fmt(report.e2eP50)} p95=${fmt(report.e2eP95)} ` +
 			`agg=${fmt(report.aggregateTokPerS)} tok/s cache=${report.cacheNMean}/${fmt(report.promptNMean)} ` +
 			`deferredPeak=${report.peakDeferred} errors=${report.errors.length}`,

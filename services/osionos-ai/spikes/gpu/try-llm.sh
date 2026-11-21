@@ -34,7 +34,7 @@ echo "vram before=$BEFORE after=$AFTER delta=$((AFTER - BEFORE))"
 # one request, with the prompt of the service
 docker run --rm --network host -v "$SERVICE_DIR:/s" -w /s node:22-bookworm-slim \
 	node --input-type=module -e "
-import { buildRequests } from './spikes/gpu/requests.mjs';
+import { buildRequests } from './scripts/bench/requests.mjs';
 const CONC = Number(process.env.CONC || 1);
 const { requests } = buildRequests({ count: Math.max(CONC, 4) });
 const one = async (r) => {

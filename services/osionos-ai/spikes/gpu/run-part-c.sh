@@ -125,7 +125,7 @@ docker run --rm --name "$LLM_CLIENT" --network host \
 	-v "$SERVICE_DIR:/s" -v "$OUT_DIR:/out" -w /s \
 	-e "LLM_URL=http://127.0.0.1:$LLM_PORT" -e "LAMBDA=$LAMBDA" -e "DURATION=$DURATION" \
 	-e "READY_FILE=/out/$sync_name/llm-ready" -e "LABEL=part-c-llm-only" -e "DRAIN_MS=45000" -e "OUT=/out/part-c-llm-only.json" \
-	node:22-bookworm-slim node spikes/gpu/llm-bench-gpu.mjs &
+	node:22-bookworm-slim node scripts/bench/llm-bench-gpu.mjs &
 llm=$!
 wait_for_signal "$sync_dir/llm-ready" "$llm"
 docker run --rm --name "$EMBED_CLIENT" --network host \
@@ -158,7 +158,7 @@ docker run --rm --name "$LLM_CLIENT" --network host \
 	-v "$SERVICE_DIR:/s" -v "$OUT_DIR:/out" -w /s \
 	-e "LLM_URL=http://127.0.0.1:$LLM_PORT" -e "LAMBDA=$LAMBDA" -e "DURATION=$DURATION" \
 	-e "LABEL=part-c-llm-under-backfill" -e "DRAIN_MS=45000" -e "OUT=/out/part-c-llm-under-backfill.json" \
-	node:22-bookworm-slim node spikes/gpu/llm-bench-gpu.mjs &
+	node:22-bookworm-slim node scripts/bench/llm-bench-gpu.mjs &
 llm=$!
 while kill -0 "$llm" 2>/dev/null; do
 	if ! kill -0 "$backfill" 2>/dev/null; then
@@ -182,7 +182,7 @@ kill "$sampler" 2>/dev/null || true
 wait "$sampler" 2>/dev/null || true
 sampler=""
 for name in part-c-llm-only part-c-llm-under-backfill; do
-	docker run --rm --network host -v "$SPIKE_DIR:/s" -v "$OUT_DIR:/out" -w /out node:22-bookworm-slim \
+	docker run --rm --network host -v "$SERVICE_DIR/scripts/bench:/s" -v "$OUT_DIR:/out" -w /out node:22-bookworm-slim \
 		node /s/summarize.mjs "/out/$name.json" "/out/part-c.sample" "$name" >> "$JSONL"
 done
 echo "[part-c] the results are in $JSONL"
