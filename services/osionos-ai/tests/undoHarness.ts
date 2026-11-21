@@ -14,7 +14,9 @@ import type { Json } from './builderHarness.ts';
  */
 
 // Set before builderHarness is imported: the budget and the daily cap are read at load.
-process.env.OSIONOS_AI_BUILD_BUDGET_MS = '500';
+// The budget is far above any pass here, so no held POST or PATCH carries an abort
+// timer shorter than the bridge's own; a partial build comes from buildPartial().
+process.env.OSIONOS_AI_BUILD_BUDGET_MS = '30000';
 // One build a day: the tests flush the day bucket before each case, and the
 // over-limit case is two passes on purpose.
 process.env.OSIONOS_AI_BUILDS_PER_DAY = '1';
@@ -146,9 +148,12 @@ export function holdPost(title: string): { reached: Promise<void>; release: () =
 /**
  * A build left 'partial' with no clock involved: the POST of `notes` (the child
  * of `home`) answers 500 once, so it stays pending under a built parent. The
- * day bucket the build spent is flushed, so the next resume may run.
+ * day bucket the build spent is flushed, so the next resume may run, unless
+ * the case is about that bucket (`keepDayBucket`).
  */
-export async function buildPartial(): Promise<{ approvalId: string; ids: Record<string, string> }> {
+export async function buildPartial(
+	{ keepDayBucket = false } = {},
+): Promise<{ approvalId: string; ids: Record<string, string> }> {
 	bridge.onPost = ({ body }) => {
 		if ((body as { title?: unknown } | null)?.title === 'Notes') throw new Error('refused once');
 	};
@@ -157,7 +162,7 @@ export async function buildPartial(): Promise<{ approvalId: string; ids: Record<
 	const row = await app.db.query('select status from public.ai_approvals where id = $1', [built.approvalId]);
 	assert.equal(row.rows[0].status, 'partial', 'the build is partial');
 	await seedBuiltPages(built.approvalId);
-	await flushLimits();
+	if (!keepDayBucket) await flushLimits();
 	bridge.reset();
 	return built;
 }

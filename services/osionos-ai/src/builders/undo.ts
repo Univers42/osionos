@@ -83,17 +83,17 @@ export interface UndoBuildInput {
 
 type ItemOutcome = 'undone' | 'kept' | 'failed' | 'skipped';
 
-async function archivePage(sessionToken: string, pageId: string, timeoutMs: number): Promise<BridgeAnswer> {
+async function archivePage(sessionToken: string, pageId: string): Promise<BridgeAnswer> {
 	const url = config.bridgeUrl;
 	if (!url) return { ok: false, status: 0, body: '' };
-	return bridgeWrite({ url, token: sessionToken, write: archiveWrite(pageId), timeoutMs });
+	return bridgeWrite({ url, token: sessionToken, write: archiveWrite(pageId), timeoutMs: BRIDGE_TIMEOUT_MS });
 }
 
 /**
  * Undo one built page. The item is claimed with a conditional UPDATE before any
  * bridge call, so a race archives each page once; a claim that loses is skipped.
  */
-async function undoItem(input: UndoBuildInput, row: PlanItemRow, timeoutMs: number): Promise<ItemOutcome> {
+async function undoItem(input: UndoBuildInput, row: PlanItemRow): Promise<ItemOutcome> {
 	const { db, approval } = input;
 	const claim = await claimItemForUndo(db, approval.id, row.item_key);
 	if (!claim.claimed) return 'skipped';
@@ -108,7 +108,7 @@ async function undoItem(input: UndoBuildInput, row: PlanItemRow, timeoutMs: numb
 		await releaseItem(db, approval.id, row.item_key, pageId, KEPT_FOREIGN_CHILDREN);
 		return 'kept';
 	}
-	const answer = await archivePage(input.sessionToken, pageId, timeoutMs);
+	const answer = await archivePage(input.sessionToken, pageId);
 	if (answer.ok) return 'undone';
 	await releaseItem(db, approval.id, row.item_key, pageId, refusalMessage(answer));
 	return 'failed';
@@ -119,9 +119,15 @@ async function undoItem(input: UndoBuildInput, row: PlanItemRow, timeoutMs: numb
  * pass budget (groot ADR 0071, Q6). The caller has already checked that the
  * approval is a built plan of the caller.
  *
- * Caveat: the budget is checked between items and caps each PATCH, but not the
- * database statements of an item (db.ts bounds those), so a pass can overrun it
- * by one item's worth of database waits.
+ * An item starts only with a full bridge timeout left, and its PATCH always gets
+ * that full timeout. Undo has no lost-answer probe: a PATCH aborted early can
+ * archive the page while its item goes back to 'done', and a resume would then
+ * nest a live child under it (osionos#333 review, I1).
+ *
+ * Caveat: a bridge that answers after the full 8 s still leaves an archived page
+ * 'done'. The budget does not count the database statements of an item (db.ts
+ * bounds those), so a pass can overrun it by one item's database waits. A budget
+ * under BRIDGE_TIMEOUT_MS undoes nothing and reports every page as remaining.
  */
 export async function undoBuild(input: UndoBuildInput): Promise<UndoBuildResult> {
 	const { db, approval } = input;
@@ -132,12 +138,11 @@ export async function undoBuild(input: UndoBuildInput): Promise<UndoBuildResult>
 	const keptDatabases = await countDoneDatabases(db, approval.id);
 	const tally = { undone: 0, kept: 0, failed: 0, remaining: 0 };
 	for (const [index, row] of pages.entries()) {
-		const left = budgetMs - (now() - started);
-		if (left <= 0) {
+		if (budgetMs - (now() - started) < BRIDGE_TIMEOUT_MS) {
 			tally.remaining = pages.length - index;
 			break;
 		}
-		const outcome = await undoItem(input, row, Math.min(BRIDGE_TIMEOUT_MS, left));
+		const outcome = await undoItem(input, row);
 		if (outcome !== 'skipped') tally[outcome]++;
 	}
 	await recordUndone(db, approval.id, tally.undone);

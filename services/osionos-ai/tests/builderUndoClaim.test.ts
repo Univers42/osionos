@@ -6,6 +6,7 @@ import {
 } from './undoHarness.ts';
 
 const { sweepApprovals, getOwnedApproval, EXECUTING_TIMEOUT_MS } = await import('../src/approvals/repo.ts');
+const { BRIDGE_TIMEOUT_MS } = await import('../src/approvals/bridge.ts');
 const { undoBuild } = await import('../src/builders/undo.ts');
 
 /**
@@ -65,21 +66,31 @@ describe('builder undo claim and budget (osionos#333)', () => {
 		assert.equal(await approvalStatus(approvalId), 'unknown');
 	});
 
+	it('Q4 a second undo of a partial approval is 409 nothing_to_undo and hands the row back', async () => {
+		const { approvalId } = await buildPartial();
+		assert.equal((await undo(approvalId)).status, 200);
+		bridge.reset();
+
+		const second = await undo(approvalId);
+		assert.equal(second.status, 409);
+		assert.equal((second.body as { code?: string }).code, 'nothing_to_undo');
+		assert.equal(await approvalStatus(approvalId), 'partial');
+		assert.deepEqual(patchedIds(), []);
+	});
+
 	it('Q6 the budget stops an undo between items, and a second undo finishes the rest', async () => {
 		const { approvalId } = await buildPlan();
 		await seedBuiltPages(approvalId);
 		bridge.reset();
-		// The clock moves only when a PATCH lands: one item fits in the budget.
+		// Each landed PATCH moves the clock 1 ms: the first item starts with exactly
+		// one full PATCH timeout left, the second with 1 ms less, so it waits (I1).
 		let clock = 0;
 		const archive = bridge.onPatch!;
 		bridge.onPatch = async (call) => {
 			await archive(call);
-			clock += 1_000;
+			clock += 1;
 		};
-		const approval = await getOwnedApproval(app.db, { id: approvalId, ownerId: USER_A });
-		const first = await undoBuild({
-			db: app.db, sessionToken: tokenFor(USER_A, WORKSPACE_A), approval: approval!, budgetMs: 1_000, now: () => clock,
-		});
+		const first = await undoWithClock(approvalId, BRIDGE_TIMEOUT_MS, () => clock);
 		assert.deepEqual(first, { undone: 1, kept: 0, keptDatabases: 1, failed: 0, remaining: 2 });
 		const reached = (await allItems(app.db, approvalId)).filter((item) => item.status === 'undone');
 		assert.deepEqual(reached.map((item) => item.item_key), ['about']);
@@ -89,4 +100,19 @@ describe('builder undo claim and budget (osionos#333)', () => {
 		assert.equal((second.body as { undone?: number }).undone, 2);
 		assert.equal((second.body as { remaining?: number }).remaining, 0);
 	});
+
+	it('I1 an undo with less than one full PATCH timeout left starts no item', async () => {
+		const { approvalId } = await buildPlan();
+		await seedBuiltPages(approvalId);
+		bridge.reset();
+		const result = await undoWithClock(approvalId, BRIDGE_TIMEOUT_MS - 1, () => 0);
+		assert.deepEqual(result, { undone: 0, kept: 0, keptDatabases: 1, failed: 0, remaining: 3 });
+		assert.deepEqual(patchedIds(), [], 'a PATCH is never sent with a shortened timeout');
+	});
 });
+
+/** One undo pass of user A's approval, on a budget and a clock the test owns. */
+async function undoWithClock(approvalId: string, budgetMs: number, now: () => number) {
+	const approval = await getOwnedApproval(app.db, { id: approvalId, ownerId: USER_A });
+	return undoBuild({ db: app.db, sessionToken: tokenFor(USER_A, WORKSPACE_A), approval: approval!, budgetMs, now });
+}

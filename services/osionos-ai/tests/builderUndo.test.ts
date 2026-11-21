@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, describe, it } from 'node:test';
 import {
-	USER_A, USER_B, WORKSPACE_A, allItems, app, ask, asked, bridge, buildPlan, call, closeBuilderHarness,
+	USER_A, USER_B, WORKSPACE_A, allItems, app, ask, asked, bridge, buildPartial, buildPlan, closeBuilderHarness,
 	decide, installUndoHooks, patchedIds, resume, seedBuiltPages, tokenFor, undo, undoPlan,
 } from './undoHarness.ts';
 
@@ -180,13 +180,10 @@ describe('builder undo and limits', () => {
 
 	it('C161 the next approve and the resume are 429 and leave the approval where it was', async () => {
 		// The first pass fills the day's bucket and leaves the plan partial.
-		bridge.delayMs = 300;
-		const first = await buildPlan();
+		const first = await buildPartial({ keepDayBucket: true });
 		const partial = await app.db.query('select status from public.ai_approvals where id = $1', [first.approvalId]);
 		assert.equal(partial.rows[0].status, 'partial');
 
-		bridge.delayMs = 0;
-		bridge.reset();
 		const nextEvents = await ask(undoPlan());
 		const next = asked(nextEvents)[0].data as { approvalId: string };
 		const refused = await decide(next.approvalId);
