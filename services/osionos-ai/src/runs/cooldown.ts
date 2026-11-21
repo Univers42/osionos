@@ -254,13 +254,15 @@ export async function orderByRest<T extends { target: ResolvedTarget }>(
 	redis: Redis,
 	userId: string,
 	steps: readonly T[],
+	restFiltered = false,
 ): Promise<T[]> {
-	const until = await restingUntil(
+	// restFiltered: the Auto chain was built from the same MGET, so only the account check remains.
+	const until = restFiltered ? [] : await restingUntil(
 		redis,
 		userId,
 		steps.map(({ target }) => ({ connectionId: target.connectionId, model: target.modelId, platform: target.platformBudget })),
 	);
-	const ordered = skipResting(steps, until.map((end) => end !== undefined));
+	const ordered = restFiltered ? [...steps] : skipResting(steps, until.map((end) => end !== undefined));
 	if ((await accountRestSeconds(redis)) === undefined) return ordered;
 	const open = ordered.filter(({ target }) => !spendsSharedQuota(target));
 	return open.length > 0 ? open : ordered;

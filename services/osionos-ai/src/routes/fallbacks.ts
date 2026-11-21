@@ -9,6 +9,8 @@ import type { RouteContext } from './types.ts';
  * off-list model, empty model) refuses the whole run with ONE answer, so the
  * response never tells which entry or why (devil C254, C255). A platform
  * entry never falls to the default model: its name must be non-blank.
+ * A platform entry labelled may-train is refused with its own code,
+ * `fallback_may_train` (FA23): that label is public, so it leaks nothing.
  */
 export async function resolveFallbacks(
 	ctx: RouteContext,

@@ -19,10 +19,10 @@ export function autoChain(
 	resting: (menuId: string) => boolean,
 	size = 3,
 ): CatalogEntry[] {
-	// Array#sort is stable: unranked entries keep their list order.
+	// Ties go to the catalog default (R13: a legacy-only config is all unranked), then list order (Array#sort is stable).
 	const usable = catalog.entries
 		.filter((entry) => entry.dataUse === 'no-train' && !resting(entry.menuId))
-		.sort((a, b) => a.rank - b.rank);
+		.sort((a, b) => a.rank - b.rank || Number(b.menuId === catalog.defaultId) - Number(a.menuId === catalog.defaultId));
 	const chain: CatalogEntry[] = [];
 	const seen = new Set<string>();
 	for (const entry of usable) {
@@ -51,4 +51,24 @@ export async function autoChainFor(redis: Redis, userId: string, catalog: Platfo
 	);
 	const resting = new Set(catalog.entries.filter((_, index) => until[index] !== undefined).map((entry) => entry.menuId));
 	return autoChain(catalog, (menuId) => resting.has(menuId));
+}
+
+/**
+ * The body of a run with Auto applied (FA11): when the request names no usable
+ * platform model and carries no fallbacks of its own, the chain's head becomes
+ * the model and the rest the fallbacks. `restFiltered` tells the runner the
+ * chain already skipped what rests, so it does not read the rests again. An
+ * empty chain returns the body untouched and the run answers as before.
+ */
+export async function withAuto<T extends { connectionId?: string; model?: string; fallbacks?: unknown }>(
+	redis: Redis,
+	userId: string,
+	catalog: PlatformCatalog,
+	parsed: T,
+): Promise<{ body: T; restFiltered: boolean }> {
+	if (parsed.fallbacks || !wantsAuto(catalog, parsed.connectionId, parsed.model)) return { body: parsed, restFiltered: false };
+	const chain = await autoChainFor(redis, userId, catalog);
+	if (chain.length === 0) return { body: parsed, restFiltered: false };
+	const fallbacks = chain.slice(1).map((entry) => ({ model: entry.menuId }));
+	return { body: { ...parsed, model: chain[0].menuId, fallbacks }, restFiltered: true };
 }

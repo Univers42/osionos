@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { startKit } from './failoverKit.ts';
-import { METERED, PLATFORM, REASONER, VISION } from './harness.ts';
+import { METERED, PLATFORM, REASONER, USER_A, VISION, WORKSPACE_A } from './harness.ts';
 import type { CatalogEntry, PlatformCatalog } from '../src/gateway/catalog.ts';
 
 /**
@@ -18,6 +18,7 @@ const kit = await startKit({
 });
 const { app, failing, bridge, mock, runToEnd, post, clean, tokenFor, createConversation } = kit;
 const { autoChain } = await import('../src/runs/auto.ts');
+const { cooldownKey } = await import('../src/runs/cooldown.ts');
 
 after(async () => {
 	await app.close();
@@ -55,6 +56,12 @@ describe('autoChain', () => {
 		const catalog = catalogOf(entry('a', 'a', 1), entry('b', 'a', 2), entry('c', 'a', 3));
 		assert.deepEqual(ids(autoChain(catalog, (id) => id === 'a')), ['b', 'c']);
 		assert.deepEqual(autoChain(catalog, () => true), []);
+	});
+
+	it('a tie goes to the catalog default, not the first listed (R13)', () => {
+		const unranked = (id: string) => entry(id, 'legacy', Number.MAX_SAFE_INTEGER);
+		const catalog = { ...catalogOf(unranked('x'), unranked('y'), unranked('d')), defaultId: 'd' };
+		assert.deepEqual(ids(autoChain(catalog, never)), ['d', 'x', 'y']);
 	});
 
 	it('unranked entries sort last, in list order', () => {
@@ -108,9 +115,42 @@ describe('Auto on the run route', () => {
 		const conversationId = await createConversation();
 		const response = await post({
 			runId: crypto.randomUUID(), conversationId, text: 'hi', model: 'mock-model', fallbacks: [{ model: 'mock-reasoner' }],
-		}, tokenFor('11111111-1111-4111-8111-111111111111', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'));
+		}, tokenFor(USER_A, WORKSPACE_A));
 		assert.equal(response.status, 400);
 		assert.equal(((await response.json()) as { code: string }).code, 'fallback_may_train');
 		assert.deepEqual(failing.requests, []);
+	});
+
+	it('an Auto run reads the rests once, like a run with a model', async () => {
+		await clean();
+		const calls: number[] = [];
+		const original = app.redis.mget.bind(app.redis);
+		(app.redis as { mget: unknown }).mget = (...args: unknown[]) => { calls.push(1); return (original as (...a: unknown[]) => unknown)(...args); };
+		try {
+			await runToEnd({});
+			const auto = calls.length;
+			calls.length = 0;
+			await runToEnd({ model: 'mock-metered', fallbacks: [{ model: 'mock-vision' }] });
+			assert.equal(auto, calls.length);
+			assert.equal(auto, 1);
+		} finally {
+			(app.redis as { mget: unknown }).mget = original;
+		}
+	});
+
+	it('an empty chain (every entry resting) answers as before', async () => {
+		await clean();
+		const until = String(Date.now() + 60_000);
+		// Every no-train entry of the harness catalog; a may-train one is never in the chain.
+		for (const id of ['mock-metered', 'mock-vision', 'mock-platform', 'mock-model', 'mock-dear', 'mock/first:free', 'mock/second:free']) {
+			await app.redis.set(cooldownKey(`user:${USER_A}`, 'platform', id), until, 'EX', 60);
+		}
+		await runToEnd({});
+		assert.deepEqual(failing.requests, ['mock-model']);
+		const conversationId = await createConversation();
+		const response = await post({ runId: crypto.randomUUID(), conversationId, text: 'hi', model: 'no-such-model' }, tokenFor(USER_A, WORKSPACE_A));
+		assert.equal(response.status, 400);
+		assert.equal(((await response.json()) as { code: string }).code, 'model_not_allowed');
+		await clean();
 	});
 });

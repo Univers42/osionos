@@ -132,6 +132,8 @@ export interface StartRunInput {
 	effort?: Effort;
 	/** The models the run moves to, in order, when the target fails before it said anything. */
 	fallbacks?: readonly ResolvedTarget[];
+	/** The chain already skipped what rests (Auto): the rests are not read a second time. */
+	restFiltered?: boolean;
 	/**
 	 * A thread run (C429): `text` is the trigger message, the one turn the
 	 * transcript keeps (C442); the model reads the channel window instead, with
@@ -402,7 +404,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const ordered = await orderByRest(redis, ownerId, [
 		{ target, amount: reservationOf(target, estimateInputs, images.length) },
 		...chainSteps(input.fallbacks ?? [], estimateInputs, images.length),
-	]);
+	], input.restFiltered === true);
 	const [first, ...fallbacks] = ordered;
 	target = first.target;
 	const amount = first.amount;
