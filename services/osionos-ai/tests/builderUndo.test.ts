@@ -105,16 +105,39 @@ function patchedIds(): string[] {
 		.map((call) => decodeURIComponent(call.path.slice('/api/pages/'.length)));
 }
 
+/**
+ * Park the PATCH of one page inside the mock until `release()`; with `fail` the
+ * parked write then errors, as a bridge that lost the race would.
+ */
+function holdPatch(pageId: string, options: { fail?: boolean } = {}): { reached: Promise<void>; release: () => void } {
+	const inner = bridge.onPatch!;
+	let release!: () => void;
+	let reached!: () => void;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	const reachedPromise = new Promise<void>((resolve) => (reached = resolve));
+	bridge.onPatch = async (call) => {
+		if (decodeURIComponent(call.path.slice('/api/pages/'.length)) !== pageId) return inner(call);
+		reached();
+		await gate;
+		if (options.fail) throw new Error('lost the race');
+		return inner(call);
+	};
+	return { reached: reachedPromise, release };
+}
+
 describe('builder undo and limits', () => {
+	let defaultPatchHook: typeof bridge.onPatch;
 	before(async () => {
 		bridge.onPatch = async ({ path, body }) => {
 			const id = decodeURIComponent(path.slice('/api/pages/'.length));
 			const archivedAt = (body as { archivedAt?: string } | null)?.archivedAt ?? new Date().toISOString();
 			await app.db.query('update public.osionos_pages set archived_at = $2 where id = $1::uuid', [id, archivedAt]);
 		};
+		defaultPatchHook = bridge.onPatch;
 	});
 
 	beforeEach(async () => {
+		bridge.onPatch = defaultPatchHook;
 		await app.db.query('delete from public.ai_plan_items');
 		await app.db.query('delete from public.ai_approvals');
 		await app.db.query('delete from public.osionos_pages where workspace_id = $1', [WORKSPACE_A]);
@@ -241,12 +264,18 @@ describe('builder undo and limits', () => {
 	});
 
 	it('C159 two concurrent undos archive each page exactly once', async () => {
-		const { approvalId } = await buildPlan();
+		const { approvalId, ids } = await buildPlan();
 		await seedBuiltPages(approvalId);
 		bridge.reset();
 
-		const [one, two] = await Promise.all([undo(approvalId), undo(approvalId)]);
-		assert.ok([one.status, two.status].every((status) => status === 200 || status === 409));
+		// Undo A is parked inside the child's PATCH; undo B runs to the end meanwhile.
+		const held = holdPatch(ids.notes!);
+		const first = undo(approvalId);
+		await held.reached;
+		const second = await undo(approvalId);
+		held.release();
+		const one = await first;
+		assert.ok([one.status, second.status].every((status) => status === 200 || status === 409));
 
 		const patched = patchedIds();
 		const unique = new Set(patched);
@@ -254,6 +283,57 @@ describe('builder undo and limits', () => {
 		for (const id of unique) {
 			assert.equal(patched.filter((candidate) => candidate === id).length, 1, `${id} is PATCHed once`);
 		}
+	});
+
+	it('C159 a user page under a built child keeps the child and the parent', async () => {
+		const { approvalId, ids } = await buildPlan();
+		await seedBuiltPages(approvalId);
+		const grandchild = randomUUID();
+		await app.db.query(
+			`insert into public.osionos_pages (id, workspace_id, parent_page_id, title) values ($1, $2, $3, 'G')`,
+			[grandchild, WORKSPACE_A, ids.notes],
+		);
+		bridge.reset();
+
+		const answer = await undo(approvalId);
+		assert.equal(answer.status, 200);
+		const patched = patchedIds();
+		assert.deepEqual(new Set(patched), new Set([ids.about!]), 'only the childless page is archived');
+		const items = await allItems(app.db, approvalId);
+		assert.equal(items.find((item) => item.item_key === 'notes')!.status, 'done');
+		assert.equal(items.find((item) => item.item_key === 'home')!.status, 'done');
+		const row = await app.db.query('select archived_at from public.osionos_pages where id = $1', [grandchild]);
+		assert.equal(row.rows[0].archived_at, null, 'the user page is never archived');
+	});
+
+	it('C159 a child whose held PATCH fails after its parent was archived stays done', async () => {
+		const { approvalId, ids } = await buildPlan();
+		await seedBuiltPages(approvalId);
+		bridge.reset();
+
+		// The mock models the bridge cascade: archiving a page stamps its live children.
+		const held = holdPatch(ids.notes!, { fail: true });
+		const parentHook = bridge.onPatch!;
+		bridge.onPatch = async (call) => {
+			await parentHook(call);
+			await app.db.query(
+				'update public.osionos_pages set archived_at = now() where parent_page_id = $1::uuid and archived_at is null',
+				[decodeURIComponent(call.path.slice('/api/pages/'.length))],
+			);
+		};
+		const first = undo(approvalId);
+		await held.reached;
+		await undo(approvalId);
+		held.release();
+		assert.equal((await first).status, 200);
+
+		const items = await allItems(app.db, approvalId);
+		const notes = items.find((item) => item.item_key === 'notes')!;
+		assert.equal(notes.status, 'done');
+		assert.equal(notes.error, 'the bridge refused the write (500)');
+		assert.equal(items.find((item) => item.item_key === 'home')!.status, 'undone');
+		const row = await app.db.query('select archived_at from public.osionos_pages where id = $1', [ids.notes]);
+		assert.notEqual(row.rows[0].archived_at, null, 'the cascade from the parent archived the child');
 	});
 
 	it('C159 a bridge refusal puts that item back to done and counts it failed', async () => {

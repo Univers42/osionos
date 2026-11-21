@@ -35,13 +35,26 @@ export interface UndoBuildResult {
 /** The sentence an item carries when the cascade would touch pages the plan did not build. */
 export const KEPT_FOREIGN_CHILDREN = 'kept: it holds pages that this plan did not build';
 
-/** The live children of a page: the rows the bridge's cascade would archive with it. */
-async function liveChildCount(db: Pool, pageId: string): Promise<number> {
+/**
+ * The live children of a page that the bridge's cascade would take and this
+ * plan did not already claim.
+ *
+ * A child this approval has claimed ('undone') is mid-archive in a concurrent
+ * undo: its PATCH has not landed, but it is plan-built and about to go. Only
+ * 'undone' qualifies: a child released 'done' was kept because it holds a
+ * user's page, and excluding it would cascade-archive that page. One statement,
+ * so the claim and the count cannot interleave with another undo's claim.
+ */
+async function liveChildCount(db: Pool, approvalId: string, pageId: string): Promise<number> {
 	const result = await db.query<{ count: number }>(
 		`select count(*)::int as count
-		   from public.osionos_pages
-		  where parent_page_id = $1::uuid and archived_at is null`,
-		[pageId],
+		   from public.osionos_pages p
+		  where p.parent_page_id = $1::uuid and p.archived_at is null
+		    and not exists (
+		      select 1 from public.ai_plan_items i
+		       where i.approval_id = $2 and i.status = 'undone'
+		         and i.created_id::text = p.id::text)`,
+		[pageId, approvalId],
 	);
 	return Number(result.rows[0]?.count ?? 0);
 }
@@ -89,7 +102,7 @@ export async function undoBuild(input: {
 
 		// The bridge's archive cascades. A live child the plan did not build is
 		// the user's own page: archiving this page would take it too.
-		const children = await liveChildCount(db, pageId);
+		const children = await liveChildCount(db, approval.id, pageId);
 		if (children > 0) {
 			await releaseItem(db, approval.id, row.item_key, pageId, KEPT_FOREIGN_CHILDREN);
 			kept++;
