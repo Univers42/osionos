@@ -254,9 +254,9 @@ export function focusEditableBlock(
       return;
     }
 
-    editable.focus();
-    // Instant (not smooth) keeps cursor navigation snappy like a code editor —
-    // a smooth-scroll animation on every Arrow/focus made movement feel laggy.
+    // Chrome's focus() centres an off-screen target: each Enter past the bottom
+    // edge jumped the page 322 px, caret mid-screen (#329). nearest = one line.
+    editable.focus({ preventScroll: true });
     editable.scrollIntoView({ block: "nearest", behavior: "auto" });
     placeCaret(editable, placement);
 
