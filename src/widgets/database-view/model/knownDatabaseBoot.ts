@@ -10,9 +10,9 @@ import { useKnownDatabaseStateStore } from "./knownDatabaseStore";
 import { flushKnownDatabaseStatePersist, reportKeptState } from "./knownDatabaseWrite";
 
 /** K2: one durable copy per tab, opened when the facade is first evaluated;
- *  a no-op without a window (tests, prerender). */
+ *  a no-op without a window (tests, prerender) or when already open. */
 export function openKnownDatabasePersistence(): void {
-  if (globalThis.window === undefined) return;
+  if (globalThis.window === undefined || getKnownDatabasePersistence()) return;
   setKnownDatabasePersistence(createKnownDatabasePersistence({
     durable: openKnownDatabaseDurableCopy(() => serializeKnownDatabaseState(seedSnapshot(), new Set())),
     load: restoreStoredState,
