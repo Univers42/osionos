@@ -32,6 +32,7 @@ import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore"
 import { usePageStore } from "@/store/usePageStore";
 import { useMySectionCommands } from "@/features/slash-commands/model/mySections";
 import { LAYOUT_MODE_GROUP_IDS } from "@/features/slash-commands/model/sectionSlashCommands";
+import { useHeldMenuHeight } from "@/features/slash-commands/model/useHeldMenuHeight";
 import { SLASH_HINT_CLASS } from "@/features/slash-commands/model/slashHintStyle";
 import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import type {
@@ -191,6 +192,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   }, [position.x, position.y, position.top]);
 
   useWholeRowScroll(listRef, ordered);
+  useHeldMenuHeight(ref);
 
   if (typeof document === "undefined") return null;
 
