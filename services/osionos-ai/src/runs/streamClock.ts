@@ -44,6 +44,11 @@ export const CHAIN_FIRST_PART_BUDGET_MS = 150_000;
 
 const CONTENT_PARTS = new Set(['text-delta', 'reasoning-delta', 'tool-input-start', 'tool-call']);
 
+/** Whether a stream part is content (FA15): the parts that end the wait for a first part. */
+export function isContentPart(type: string): boolean {
+	return CONTENT_PARTS.has(type);
+}
+
 export interface Timers {
 	setTimeout: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
 	clearTimeout: (id: ReturnType<typeof setTimeout> | undefined) => void;

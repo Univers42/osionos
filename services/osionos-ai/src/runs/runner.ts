@@ -8,6 +8,8 @@ import { appendUserTurn, deleteMessagesFromRun, hasMessagesOfRun, touchConversat
 import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
+import { createRunTimer } from './runTiming.ts';
+import type { RunTimer } from './runTiming.ts';
 import { loadMcpTools, mcpToolChars } from '../mcpClient/runTools.ts';
 import { webOnForRun, webToolChars } from '../web/runWeb.ts';
 import { RESEARCH_LIMITS } from '../tools/limits.ts';
@@ -184,6 +186,7 @@ async function findSources(
 	db: Pool,
 	input: StartRunInput,
 	text: string,
+	timer: RunTimer,
 ): Promise<{ sources: RetrievedChunk[]; abstained: boolean }> {
 	const packs = input.agent?.knowledge ?? [];
 	const pages = input.searchWorkspace === true;
@@ -200,6 +203,7 @@ async function findSources(
 	} catch (error) {
 		const code = error instanceof Error ? error.message : 'retrieval_failed';
 		console.warn(JSON.stringify({ event: 'retrieval_failed', code }));
+		timer.retrievalFailed();
 		return { sources: [], abstained: false };
 	}
 }
@@ -213,6 +217,7 @@ async function findSources(
  */
 export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const { db, redis, runId, conversationId, ownerId, text } = input;
+	const timer = createRunTimer();
 	let target = input.target;
 	// FA26: a primary that may train sends no workspace data; the gate skips every workspace load below.
 	const mayTrain = isMayTrain(input.target);
@@ -326,7 +331,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// the question. They are read before the money moves too: they are part of
 	// the prompt. A retrieval that fails is not a failure of the run: the run
 	// goes on without sources, and the failure is logged once.
-	const { sources, abstained } = mayTrain ? { sources: [], abstained: false } : await findSources(db, input, text);
+	const { sources, abstained } = mayTrain ? { sources: [], abstained: false } : await findSources(db, input, text, timer);
 	// The skills index of THIS run: the agent's built-ins and the workspace's
 	// skills, built once so the reservation counts the prompt the call sends.
 	const skillIndex = buildSkillIndex(
@@ -453,6 +458,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			conversationId,
 			ownerId,
 			text,
+			timer,
 			target,
 			...(input.effort ? { effort: input.effort } : {}),
 			emit: input.emit,

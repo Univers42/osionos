@@ -1,3 +1,4 @@
+import type { RunTimer } from './runTiming.ts';
 import type { McpToolEntry } from '../mcpClient/runTools.ts';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
@@ -64,6 +65,8 @@ export interface UpstreamRunInput {
 	fallbacks?: readonly ChainStep[];
 	/** The primary the run skipped because it rests: the client is told who answered instead. */
 	restedFrom?: string;
+	/** The phase marks of the run, started by `startRun` (AB1). A direct caller gets a timer of its own. */
+	timer?: RunTimer;
 	history: HistoryMessage[];
 	pages: readonly PageContext[];
 	/** The sources of the answer: the chunks the retrieval found. */

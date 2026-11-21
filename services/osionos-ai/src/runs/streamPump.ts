@@ -7,7 +7,7 @@ import { markOwnError } from './failover.ts';
 import { stepHasTools } from './loopBudget.ts';
 import type { LoopBudget, StepUsage } from './loopBudget.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
-import { createStreamClock, firstPartWindowMs, UpstreamTimeout } from './streamClock.ts';
+import { createStreamClock, firstPartWindowMs, isContentPart, UpstreamTimeout } from './streamClock.ts';
 import type { TimeoutPhase } from './streamClock.ts';
 
 /**
@@ -116,6 +116,8 @@ export interface PumpInput {
 	onStepFinish?: (step: { stepNumber: number }) => Promise<void>;
 	/** How long the first content part may take; the failover chain passes what it has left (FA17). */
 	firstPartBudgetMs?: number;
+	/** Called on every content part (FA15); the caller keeps the first. */
+	onFirstContent?: () => void;
 }
 
 export interface PumpOutcome {
@@ -241,6 +243,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 
 		for await (const part of result.fullStream) {
 			clock.onPart(part.type);
+			if (isContentPart(part.type)) input.onFirstContent?.();
 			if (part.type === 'text-delta') {
 				// The text of a step that follows another one begins on a
 				// line of its own: the two answers are two paragraphs.

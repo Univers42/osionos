@@ -10,7 +10,8 @@ import * as runStore from './runStore.ts';
 import { buildUserTurn, fileChars, historyChars, historyMessages, memoryChars, quotedPageChars } from './prompt.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
 import { promptCharCount } from './estimate.ts';
-import { attemptsUsage, providerOptionsFor, startAttempt } from './attempt.ts';
+import { attemptsUsage, kindOf, providerOptionsFor, startAttempt } from './attempt.ts';
+import { createRunTimer, logRunTiming } from './runTiming.ts';
 import type { Attempt, AttemptRecord } from './attempt.ts';
 import { moveOn } from './moveOn.ts';
 import { classifyFailure } from './failover.ts';
@@ -81,12 +82,14 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const system = input.thread ? THREAD_SYSTEM_PROMPT : systemPromptFor(agent, input.skillIndex);
 
 	// The cancel controller is the run's; each attempt follows it.
+	const timer = input.timer ?? createRunTimer();
+	timer.endPreflight();
 	const runController = new AbortController();
 	runStore.trackRun(runId, runController);
 
 	/** The event, in the stream and in the live response. */
 	const emit = async (type: string, data: unknown): Promise<void> => {
-		const id = await runStore.append(redis, runId, type, data);
+		const id = await timer.timeAppend(() => runStore.append(redis, runId, type, data));
 		input.emit({ id, type, data });
 	};
 
@@ -239,6 +242,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			research = createResearchSession({ emit, counters: () => web?.counters, maxSteps: limits.maxSteps, startedAt });
 		}
 		const callModel = async (attempt: Attempt) => {
+			timer.beginAttempt();
 			const providerOptions = providerOptionsFor(attempt.target, images.length, input.effort);
 			const pumped = await pumpUpstream({
 				model: attempt.target.model,
@@ -253,6 +257,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				budget: attempt.budget,
 				pool,
 				firstPartBudgetMs: firstPartBudgetMs(startedAt, clock.now()),
+				onFirstContent: timer.firstContent,
 				onToolCall: async ({ toolCallId, toolName, input }) => {
 					await emit('tool.called', { toolCallId, toolName, input });
 				},
@@ -277,6 +282,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			const chainClosed = firstPartBudgetMs(startedAt, clock.now()) === 0;
 			const move = await moveOn({ db, redis, run: runState, steps, index, current, outcome, records, emit, chainClosed });
 			if (move.kind === 'stay') break;
+			if (move.kind === 'retry' || move.kind === 'moved') timer.failedOver();
 			if (move.kind === 'retry') {
 				outcome = await callModel(current);
 				continue;
@@ -284,7 +290,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			if (move.kind === 'refused') {
 				// The old money is back and the row holds none: only the end is left.
 				research?.end('budget_exhausted', false);
-				await markRun(db, runId, 'failed', 'budget_exhausted', attemptsUsage(records));
+				const timing = timer.snapshot();
+				await markRun(db, runId, 'failed', 'budget_exhausted', { ...attemptsUsage(records), timing });
+				logRunTiming(timing, { model: current.target.modelId, kind: kindOf(current.target), outcome: 'budget_exhausted' });
 				await emit('error', { code: 'budget_exhausted' });
 				return;
 			}
@@ -345,12 +353,16 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// 'succeeded': a run the bridge sees succeeded always has its answer.
 		if (input.thread && assistant) await setRunAnswer(db, runId, assistant.id);
 
+		// AB2: `timing` rides the one write that carries `attempts`.
+		const timing = timer.snapshot();
 		const changed = await markRun(db, runId, 'succeeded', null, {
 			inputTokens,
 			outputTokens,
 			costMicroUsd: cost,
 			...attemptsUsage(records, { target: current.target, outcome: 'succeeded', billed: cost }),
+			timing,
 		}, finishReason);
+		logRunTiming(timing, { model: current.target.modelId, kind: kindOf(current.target), outcome: 'succeeded' });
 		if (changed) {
 			// The settlement gives back everything the run holds: the
 			// reservation up front and the extensions of the loop.
@@ -387,7 +399,12 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// success path does the same.
 		research?.end(code, current.budget.deadlineHit === true);
 		const runStatus: RunStatus = code === 'cancelled' || code === 'access_revoked' ? 'cancelled' : 'failed';
-		const changed = await markRun(db, runId, runStatus, storedError(failed), attemptsUsage(records, { target: current.target, outcome: code, billed: cost }));
+		const timing = timer.snapshot();
+		const changed = await markRun(db, runId, runStatus, storedError(failed), {
+			...attemptsUsage(records, { target: current.target, outcome: code, billed: cost }),
+			timing,
+		});
+		logRunTiming(timing, { model: current.target.modelId, kind: kindOf(current.target), outcome: code });
 		await emit('error', errorFrame(failed));
 		if (changed) {
 			await settleTarget(db, current.target, { userId: ownerId, day, reserved: current.budget.reserved, actual: cost });
