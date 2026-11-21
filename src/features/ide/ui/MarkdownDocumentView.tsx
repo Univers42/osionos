@@ -18,7 +18,7 @@ import { PREVIEW_PARSE_BUDGET_MS, type PreviewState } from "../model/previewPars
 import "./markdownDocument.css";
 
 const NOTICE = {
-  tooLarge: `The preview shows files up to ${PREVIEW_MAX_CHARS / (1 << 20)} MiB.`,
+  tooLarge: `The preview shows files up to ${PREVIEW_MAX_CHARS / (1 << 20)} MiB. The Code view still edits it.`,
   tooDeep: "This file is too deeply nested to preview.",
   tooSlow: `This file takes more than ${PREVIEW_PARSE_BUDGET_MS / 1000} s to preview. The Code view still edits it.`,
   unavailable: "Preview unavailable. Reopen the preview to try again.",

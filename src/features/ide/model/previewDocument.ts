@@ -113,16 +113,23 @@ export function parsePageBody(body: string): PageBlocks {
   return parseMarkdownToBlocks(body, { keepEmptyParagraphs: true, containerAttributes: true });
 }
 
+/** A parser crash must not eat a hand-edited file: one paragraph holds the body. */
+export function bodyAsParagraph(body: string): PageBlocks {
+  return [{ id: crypto.randomUUID(), type: "paragraph", content: body }];
+}
+
 /**
- * Caveat: the engine throwing here ends as tooDeep, where fileToPage on the main thread
- * would have shown the body as one paragraph; the engine is not known to throw.
+ * `parse` is injectable so a test can make the engine throw. A throw falls back to the body as
+ * one paragraph, as fileToPage always did. Caveat: that paragraph shows the raw text, not a
+ * rendering of it, and the engine is not known to throw; tooDeep stays for answerPreviewRequest's
+ * failed structured clone only.
  */
-export function parsePagePreview(body: string): PreviewDocument {
+export function parsePagePreview(body: string, parse: (body: string) => PageBlocks = parsePageBody): PreviewDocument {
   if (body.length > PREVIEW_MAX_CHARS) return { ok: false, reason: "tooLarge" };
   try {
-    return { ok: true, pageBlocks: parsePageBody(body) };
+    return { ok: true, pageBlocks: parse(body) };
   } catch {
-    return { ok: false, reason: "tooDeep" };
+    return { ok: true, pageBlocks: bodyAsParagraph(body) };
   }
 }
 

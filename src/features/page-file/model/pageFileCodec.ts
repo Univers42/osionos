@@ -14,7 +14,7 @@ import type { Block } from "@/entities/block";
 import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import type { PageEntry } from "@/entities/page";
 import { codeBlockOf } from "@/features/ide/model/codeFile";
-import { parsePageBody, type PageBlocks } from "@/features/ide/model/previewDocument";
+import { bodyAsParagraph, parsePageBody, type PageBlocks } from "@/features/ide/model/previewDocument";
 import { serializeBlocksToMarkdown } from "@/services/page-actions/pageMarkdownSerialize";
 import { reconcileBlocks } from "@/features/raw-mode/model/reconcileBlocks";
 
@@ -149,7 +149,7 @@ function parseBody(body: string): Block[] {
   try {
     return sanitizeLinkBlockFields(parsePageBody(body));
   } catch {
-    return [{ id: crypto.randomUUID(), type: "paragraph", content: body }];
+    return bodyAsParagraph(body);
   }
 }
 
