@@ -55,7 +55,9 @@ async function nextIndex(input: MoveInput): Promise<number> {
  * after anything was emitted (a tool would run twice), not on a limit, a timeout
  * or a cancel, and not while the account rests.
  */
-async function retriesOnce({ steps, records, current, outcome, run, redis }: MoveInput): Promise<boolean> {
+async function retriesOnce(input: MoveInput): Promise<boolean> {
+	if (input.chainClosed) return false;
+	const { steps, records, current, outcome, run, redis } = input;
 	if (steps.length !== 1 || records.length > 0 || outcome.emitted) return false;
 	if (run.signal.aborted || current.controller.signal.aborted) return false;
 	const reason = classifyFailure(outcome.error)?.reason;

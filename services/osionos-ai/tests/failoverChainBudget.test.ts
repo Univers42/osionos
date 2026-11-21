@@ -45,4 +45,22 @@ describe('the chain budget closes the chain', () => {
 			clock.now = realNow;
 		}
 	});
+
+	it('a one-route run with the budget gone is not retried', async () => {
+		await clean();
+		const realNow = clock.now;
+		clock.now = () => realNow() + 200_000 * failing.requests.length;
+		try {
+			failing.always('mock-metered', 503);
+			const { runId } = await runToEnd({ model: 'mock-metered' });
+			assert.deepEqual(failing.requests, ['mock-metered']);
+			assert.equal((await runRow(runId)).status, 'failed');
+			const { user, platform } = await settledLedger();
+			// The one failed attempt is booked at its estimate (as any failed one-route run is); nothing stays reserved.
+			assert.equal(user.reserved + platform.reserved, 0);
+			assert.equal(user.spent, platform.spent);
+		} finally {
+			clock.now = realNow;
+		}
+	});
 });
