@@ -95,6 +95,9 @@ export async function loadTasks(): Promise<IdeTask[]> {
 
 /** Open tasks.json — creating it from the template on first use. */
 export async function openOrCreateTasksFile(): Promise<void> {
+  // Lazy like the rest of this module; the origin is taken as soon as it loads.
+  const { captureOpenOrigin, openCreatedPage } = await import("@/widgets/workspace-grid/model/createdPageOpen");
+  const origin = captureOpenOrigin();
   const { workspaceId, jwt, store } = await workspaceContext();
   if (!workspaceId) return;
   const { pageStoreFacade } = await import("./pageStoreFacade");
@@ -109,7 +112,7 @@ export async function openOrCreateTasksFile(): Promise<void> {
     surface: "code",
     content: [createCodeFileBlock(TASKS_FILE, TASKS_TEMPLATE)],
   });
-  if (page) store.openPage({ id: page._id, workspaceId, kind: "page", title: TASKS_FILE });
+  if (page) openCreatedPage({ id: page._id, workspaceId, kind: "page", title: TASKS_FILE }, origin);
 }
 
 /** Run the group's default task; none configured → open the config file. */

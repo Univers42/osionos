@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 import { filterFromText, pinAnchor } from "@/features/slash-commands/model/slashQueryText";
 import React, {
   useEffect,
@@ -2043,6 +2044,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       if (!privateWorkspaceId) return null;
 
       const jwt = session?.accessToken ?? "";
+      const origin = captureOpenOrigin(options?.open === true);
       const page = await usePageStore
         .getState()
         .addPage(privateWorkspaceId, title, jwt, undefined, {
@@ -2056,13 +2058,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       if (page && options?.open) {
         globalThis.setTimeout(() => {
-          usePageStore.getState().openPage({
-            id: page._id,
-            workspaceId: privateWorkspaceId,
-            kind: "page",
-            title: page.title,
-            icon: page.icon,
-          });
+          openCreatedPage({ id: page._id, workspaceId: privateWorkspaceId, kind: "page", title: page.title, icon: page.icon }, origin);
         }, 0);
       }
 

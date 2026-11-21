@@ -25,6 +25,7 @@ import { whiteboardAppUrl } from "@/shared/config/appUrls";
 import { consoleTab, homeTab, trashTab, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 import { hasLocalTerminal } from "@/features/ide/model/localPty";
 import { openMachineFolder } from "@/widgets/activity-rail/model/panelFocus";
 import { usePalette } from "./usePalette";
@@ -81,10 +82,11 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
     const jwt = user.activePageJwt() ?? "";
     if (!workspace) return;
     const options = surface ? { surface } : undefined;
+    const origin = captureOpenOrigin(!surface);
     void usePageStore.getState().addPage(workspace._id, title, jwt, undefined, options).then((page) => {
       if (!page) return;
       if (surface) useToastStore.getState().push({ kind: "success", title: "Folder created" });
-      else usePageStore.getState().openPage({ id: page._id, workspaceId: workspace._id, kind: "page", title: page.title });
+      else openCreatedPage({ id: page._id, workspaceId: workspace._id, kind: "page", title: page.title }, origin);
     });
   };
 

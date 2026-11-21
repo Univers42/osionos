@@ -24,6 +24,7 @@ import { formatEditedAgo, type PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { selectChildPageIds } from "@/store/childPages";
+import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 
 interface WikiPagesProps {
   pageId: string;
@@ -81,8 +82,9 @@ export const WikiPages: React.FC<WikiPagesProps> = ({ pageId, workspaceId, locke
   }, []);
 
   const addWikiPage = async () => {
+    const origin = captureOpenOrigin();
     const page = await usePageStore.getState().addPage(workspaceId, "Untitled", jwt, pageId);
-    if (page) openEntry(page);
+    if (page) openCreatedPage({ id: page._id, workspaceId: page.workspaceId, kind: "page", title: page.title }, origin);
   };
 
   return (

@@ -26,6 +26,7 @@ import { isValidMove } from "@/store/pageStore.helpers";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import { usePageStore } from "@/store/usePageStore";
 import { liveDatabaseTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { LIBRARY_KIND_KEY, LIBRARY_KINDS, libraryChildren, readableLibraryPages, type LibraryKind } from "./libraryDatabaseModel";
 import { libraryViewerCanCurate } from "./libraryDatabaseState";
@@ -48,13 +49,14 @@ export async function createLibraryPage(parentId?: string, kind?: LibraryKind): 
   const pages = usePageStore.getState();
   const workspaceId = (parentId ? pages.pageById(parentId)?.workspaceId : undefined) ?? users.activeWorkspace()?._id;
   if (!workspaceId) return;
+  const origin = captureOpenOrigin();
   const page = await pages.addPage(workspaceId, "Untitled", users.activePageJwt() ?? "", parentId, { visibility: "private" });
   if (!page) return;
   if (kind) {
     const kindProperty = { key: LIBRARY_KIND_KEY, label: "Kind", type: "select" as const, value: kind, options: [...LIBRARY_KINDS] };
     pages.patchPage(page._id, { properties: [...(page.properties ?? []), kindProperty] });
   }
-  pages.openPage({ id: page._id, workspaceId, kind: "page", title: page.title });
+  openCreatedPage({ id: page._id, workspaceId, kind: "page", title: page.title }, origin);
 }
 
 function refuseMove(description: string): never {

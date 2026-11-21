@@ -14,6 +14,7 @@ import { codeBlockOf, createCodeFileBlock } from "@/features/ide/model/codeFile"
 import { openCodeEditor } from "@/features/ide/model/openCodeEditors";
 import { getActivePageJwt } from "@/shared/api/client";
 import { usePageStore } from "@/store/usePageStore";
+import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 
 import { ENV_FILE_TITLE, findEnvPage } from "./envFile";
 import { addVariableToSource } from "./envFileEdit";
@@ -59,9 +60,10 @@ function ensureEnvFile(workspaceId: string, parentPageId: string | undefined, in
  * applies to that page's subtree, creating it with a starter set when it is missing.
  */
 export async function openEnvFile(workspaceId: string, parentPageId?: string): Promise<boolean> {
+  const origin = captureOpenOrigin();
   const pageId = await ensureEnvFile(workspaceId, parentPageId, STARTER);
   if (!pageId) return false;
-  usePageStore.getState().openPage({ id: pageId, workspaceId, kind: "page", title: ENV_FILE_TITLE });
+  openCreatedPage({ id: pageId, workspaceId, kind: "page", title: ENV_FILE_TITLE }, origin);
   return true;
 }
 

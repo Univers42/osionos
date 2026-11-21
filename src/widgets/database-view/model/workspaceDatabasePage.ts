@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 import type { Block } from "@/entities/block";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
@@ -41,8 +42,9 @@ export async function ensureWorkspaceGalleryPage(): Promise<void> {
     return;
   }
   const jwt = useUserStore.getState().activeSession()?.accessToken ?? "";
+  const origin = captureOpenOrigin();
   const page = await store.addDatabasePage(workspaceId, WS_GALLERY_PAGE_TITLE, jwt, WS_FILES_DB_ID);
   if (page) {
-    store.openPage({ id: page._id, workspaceId, kind: "database", title: page.title, databaseId: WS_FILES_DB_ID });
+    openCreatedPage({ id: page._id, workspaceId, kind: "database", title: page.title, databaseId: WS_FILES_DB_ID }, origin);
   }
 }
