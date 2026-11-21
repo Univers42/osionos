@@ -36,7 +36,7 @@ export const wikiMilestonesSchema: DatabaseSchema = {
       id: "ms-status", name: "Status", type: "status",
       options: [
         { id: "mss-planned", value: "Planned", color: "bg-surface-muted text-ink-strong" },
-        { id: "mss-flight", value: "In Flight", color: "bg-accent-subtle text-accent-text-bold" },
+        { id: "mss-flight", value: "In Flight", color: "bg-accent-muted text-accent-text-bold" },
         { id: "mss-risk", value: "At Risk", color: "bg-danger-surface-medium text-danger-text-tag" },
         { id: "mss-shipped", value: "Shipped", color: "bg-success-surface-medium text-success-text-tag" },
       ],
@@ -44,7 +44,7 @@ export const wikiMilestonesSchema: DatabaseSchema = {
     "ms-quarter": {
       id: "ms-quarter", name: "Quarter", type: "select",
       options: [
-        { id: "msq-q1", value: "Q1", color: "bg-accent-subtle text-accent-text-bold" },
+        { id: "msq-q1", value: "Q1", color: "bg-accent-muted text-accent-text-bold" },
         { id: "msq-q2", value: "Q2", color: "bg-success-surface-medium text-success-text-tag" },
         { id: "msq-q3", value: "Q3", color: "bg-warning-surface-medium text-warning-text-tag" },
         { id: "msq-q4", value: "Q4", color: "bg-surface-muted text-ink-strong" },
@@ -94,7 +94,7 @@ export const wikiFilesSchema: DatabaseSchema = {
       id: "wf-source", name: "Source", type: "select",
       options: [
         { id: "wfs-note", value: "Note", color: "bg-warning-surface-medium text-warning-text-tag" },
-        { id: "wfs-doc", value: "Document", color: "bg-accent-subtle text-accent-text-bold" },
+        { id: "wfs-doc", value: "Document", color: "bg-accent-muted text-accent-text-bold" },
         { id: "wfs-image", value: "Image", color: "bg-success-surface-medium text-success-text-tag" },
         { id: "wfs-dataset", value: "Dataset", color: "bg-surface-muted text-ink-strong" },
         { id: "wfs-upload", value: "Upload", color: "bg-danger-surface-medium text-danger-text-tag" },
@@ -107,7 +107,7 @@ export const wikiFilesSchema: DatabaseSchema = {
     "wf-tags": {
       id: "wf-tags", name: "Tags", type: "multi_select",
       options: [
-        { id: "wft-spec", value: "spec", color: "bg-accent-subtle text-accent-text-bold" },
+        { id: "wft-spec", value: "spec", color: "bg-accent-muted text-accent-text-bold" },
         { id: "wft-research", value: "research", color: "bg-warning-surface-medium text-warning-text-tag" },
         { id: "wft-design", value: "design", color: "bg-success-surface-medium text-success-text-tag" },
         { id: "wft-meeting", value: "meeting", color: "bg-surface-muted text-ink-strong" },

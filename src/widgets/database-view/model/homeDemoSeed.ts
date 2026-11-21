@@ -49,7 +49,7 @@ const eventsSchema: DatabaseSchema = {
     "ev-status": {
       id: "ev-status", name: "Status", type: "status",
       options: [
-        { id: "evs-upcoming", value: "Upcoming", color: "bg-accent-subtle text-accent-text-bold" },
+        { id: "evs-upcoming", value: "Upcoming", color: "bg-accent-muted text-accent-text-bold" },
         { id: "evs-today", value: "Today", color: "bg-success-surface-medium text-success-text-tag" },
         { id: "evs-past", value: "Past", color: "bg-surface-muted text-ink-strong" },
       ],
@@ -57,7 +57,7 @@ const eventsSchema: DatabaseSchema = {
     "ev-category": {
       id: "ev-category", name: "Category", type: "select",
       options: [
-        { id: "evc-meeting", value: "Meeting", color: "bg-accent-subtle text-accent-text-bold" },
+        { id: "evc-meeting", value: "Meeting", color: "bg-accent-muted text-accent-text-bold" },
         { id: "evc-workshop", value: "Workshop", color: "bg-warning-surface-medium text-warning-text-tag" },
         { id: "evc-social", value: "Social", color: "bg-success-surface-medium text-success-text-tag" },
         { id: "evc-release", value: "Release", color: "bg-danger-surface-medium text-danger-text-tag" },
@@ -80,7 +80,7 @@ const learnSchema: DatabaseSchema = {
     "ln-category": {
       id: "ln-category", name: "Category", type: "select",
       options: [
-        { id: "lnc-start", value: "Getting started", color: "bg-accent-subtle text-accent-text-bold" },
+        { id: "lnc-start", value: "Getting started", color: "bg-accent-muted text-accent-text-bold" },
         { id: "lnc-tips", value: "Tips", color: "bg-success-surface-medium text-success-text-tag" },
         { id: "lnc-shortcuts", value: "Shortcuts", color: "bg-warning-surface-medium text-warning-text-tag" },
       ],

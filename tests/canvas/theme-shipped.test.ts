@@ -54,6 +54,7 @@ const themeSets = (colors: Record<string, string>, token: string) => colors[toke
 // palette; a pair whose two ends it sets neither of belongs to the base, which tokens-palettes.test.ts holds.
 function pairColours(theme: ThemeDoc, fg: string, bg: string): [string, string] | null {
   const colors = theme.colors ?? {};
+  // Neither end is the theme's own: the base palette's pair, already held by tokens-palettes.test.ts.
   if (themeSets(colors, fg) === undefined && themeSets(colors, bg) === undefined) return null;
   const base = resolvedTokens(PALETTES[0], theme.base);
   return [themeSets(colors, fg) ?? base[`--osio-${fg}`], themeSets(colors, bg) ?? base[`--osio-${bg}`]];
@@ -69,7 +70,7 @@ for (const { name, raw } of themes) {
     assert.ok(total >= 20, `${total} keys`);
     for (const [fg, bg] of CONTRAST_PAIRS) {
       const resolved = pairColours(raw, fg, bg);
-      if (!resolved) continue;
+      if (!resolved) continue; // base palette pair: tokens-palettes.test.ts holds it
       const front = parseHexColor(resolved[0]);
       const back = parseHexColor(resolved[1]);
       assert.ok(front && back, `${fg} and ${bg} are set in hex`);
