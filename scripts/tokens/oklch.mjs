@@ -124,3 +124,10 @@ export function contrastRatio(hexA, hexB) {
   const b = relativeLuminance(hexB);
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
+
+/** `base` with `pct` percent of `toward` mixed in, per sRGB channel: what CSS `color-mix(in srgb, base, toward pct%)` paints. */
+export function mixHex(base, toward, pct) {
+  const [from, to] = [hexToRgb(base), hexToRgb(toward)];
+  const channel = (key) => from[key] + (to[key] - from[key]) * (pct / 100);
+  return rgbToHex({ r: channel("r"), g: channel("g"), b: channel("b") });
+}

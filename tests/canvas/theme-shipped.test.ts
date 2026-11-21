@@ -12,15 +12,19 @@
 
 // The themes osionos ships are examples people copy, so each one must be
 // valid against the catalog and readable: every text pair the contrast check
-// watches is AA (4.5:1) or better, computed from the theme's own hex values.
+// watches is AA (4.5:1) or better, computed from the theme's own hex values,
+// and success and warning keep the hue people read them by.
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-import { CONTRAST_PAIRS, contrastRatio, parseHexColor } from "../../src/shared/config/themeContrast.ts";
+import { CODE_CONTRAST_PAIRS, CONTRAST_PAIRS, contrastRatio, parseHexColor } from "../../src/shared/config/themeContrast.ts";
+import { resolvedTokens } from "../../scripts/tokens/aliases.mjs";
+import { PALETTES } from "../../scripts/tokens/palettes.mjs";
 import { parseThemeDoc, type ThemeDoc } from "../../src/shared/config/themeDoc.ts";
 import { SHIPPED_THEMES, isShippedThemeName } from "../../src/shared/config/themes/index.ts";
+import { AMBER_HUE, GREEN_HUE, hueOfHex, withinHue } from "./hue-ranges.ts";
 
 const DIR = new URL("../../src/shared/config/themes/", import.meta.url);
 const files = readdirSync(DIR).filter((name) => name.endsWith(".json"));
@@ -41,6 +45,20 @@ test("osionos ships every theme file, and nothing else", () => {
   assert.equal(isShippedThemeName("My theme"), false);
 });
 
+// A theme that does not set the Update button's colours gets the accent's (aliases.mjs, held by tokens-palettes.test.ts).
+const INHERITED_FROM_ACCENT: Record<string, string> = { update: "accent", "update-hover": "accent-hover", "update-fg": "accent-fg" };
+const themeSets = (colors: Record<string, string>, token: string) => colors[token] ?? colors[INHERITED_FROM_ACCENT[token]];
+
+// The older hand-made themes set only part of the status colours and inherit the rest from their base
+// palette. A pair is checked on the theme's own values, filling the end it did not set from the base
+// palette; a pair whose two ends it sets neither of belongs to the base, which tokens-palettes.test.ts holds.
+function pairColours(theme: ThemeDoc, fg: string, bg: string): [string, string] | null {
+  const colors = theme.colors ?? {};
+  if (themeSets(colors, fg) === undefined && themeSets(colors, bg) === undefined) return null;
+  const base = resolvedTokens(PALETTES[0], theme.base);
+  return [themeSets(colors, fg) ?? base[`--osio-${fg}`], themeSets(colors, bg) ?? base[`--osio-${bg}`]];
+}
+
 for (const { name, raw } of themes) {
   test(`${name} is a valid theme with every checked pair at AA or better`, () => {
     const { doc, issues } = parseThemeDoc(raw);
@@ -50,8 +68,10 @@ for (const { name, raw } of themes) {
     const total = Object.keys(colors).length + Object.keys(doc?.layout ?? {}).length + Object.keys(doc?.fonts ?? {}).length;
     assert.ok(total >= 20, `${total} keys`);
     for (const [fg, bg] of CONTRAST_PAIRS) {
-      const front = parseHexColor(colors[fg] ?? "");
-      const back = parseHexColor(colors[bg] ?? "");
+      const resolved = pairColours(raw, fg, bg);
+      if (!resolved) continue;
+      const front = parseHexColor(resolved[0]);
+      const back = parseHexColor(resolved[1]);
       assert.ok(front && back, `${fg} and ${bg} are set in hex`);
       const ratio = contrastRatio(front, back);
       assert.ok(ratio >= 4.5, `${fg} on ${bg} is ${ratio.toFixed(2)}`);
@@ -67,3 +87,25 @@ test("each theme shows off the part of the format it is named for", () => {
   const paper = byName.get("Studio Paper")?.fonts ?? {};
   assert.ok(paper["font-family-serif"] || paper["font-family-sans"]);
 });
+
+for (const { name, raw } of themes) {
+  test(`${name}: code text is AA wherever the theme sets both colours`, () => {
+    const colors = raw.colors ?? {};
+    for (const [fg, bg] of CODE_CONTRAST_PAIRS) {
+      const [front, back] = [parseHexColor(colors[fg] ?? ""), parseHexColor(colors[bg] ?? "")];
+      if (!front || !back) continue;
+      assert.ok(contrastRatio(front, back) >= 4.5, `${fg} on ${bg} is ${contrastRatio(front, back).toFixed(2)}`);
+    }
+  });
+}
+
+for (const { name, raw } of themes) {
+  test(`${name}: success reads green and warning reads amber`, () => {
+    const colors = raw.colors ?? {};
+    for (const [token, range] of [["success", GREEN_HUE], ["warning", AMBER_HUE]] as const) {
+      if (colors[token] === undefined) continue;
+      const hue = hueOfHex(colors[token]);
+      assert.ok(withinHue(hue, range), `${token} ${colors[token]} has hue ${hue?.toFixed(0)}, wanted ${range[0]}-${range[1]}`);
+    }
+  });
+}

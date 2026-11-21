@@ -13,6 +13,7 @@ import { contrastRatio } from "../../scripts/tokens/oklch.mjs";
 import { modeTokens } from "../../scripts/tokens/ramps.mjs";
 import { GENERATED_STYLESHEET, renderStylesheet } from "../../scripts/tokens/stylesheet.mjs";
 import { malformedTokens } from "../../scripts/tokens/validity.mjs";
+import { AMBER_HUE, GREEN_HUE, hueOfHex, withinHue } from "./hue-ranges.ts";
 import { readAppFile } from "./tokens-css.ts";
 
 const LITERAL_COLOUR = /^(#[0-9A-F]{6}|rgba\(\d+, \d+, \d+, (0|1|0\.\d+)\))$/;
@@ -144,6 +145,16 @@ for (const palette of PALETTES) {
       const step = contrastRatio(tokens["--osio-fg-muted"], tokens["--osio-fg-subtle"]);
       assert.ok(step >= MIN_TEXT_TIER_STEP, `muted and subtle differ by only ${step.toFixed(3)}`);
       assert.ok(contrastRatio(tokens["--osio-fg-muted"], surface) > contrastRatio(tokens["--osio-fg-subtle"], surface));
+    });
+  }
+}
+
+for (const palette of PALETTES) {
+  for (const mode of MODES) {
+    test(`palette "${palette.id}" ${mode}: success reads green and warning reads amber`, () => {
+      const tokens = resolvedTokens(palette, mode);
+      assert.ok(withinHue(hueOfHex(tokens["--osio-success"]), GREEN_HUE), `success ${tokens["--osio-success"]}`);
+      assert.ok(withinHue(hueOfHex(tokens["--osio-warning"]), AMBER_HUE), `warning ${tokens["--osio-warning"]}`);
     });
   }
 }
