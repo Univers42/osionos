@@ -101,4 +101,26 @@ describe('a may-train run carries no workspace data', () => {
 		assert.ok(JSON.stringify(body).includes(PAGE_SECRET));
 		assert.ok((body.tools ?? []).some((tool) => tool.function.name === 'read_page'));
 	});
+
+	it('sends no open-page or tab title, and no workspace name', async () => {
+		await app.db.query(
+			`insert into public.osionos_workspaces (id, owner_id, name) values ($1, $2, 'WS-NAME-SECRET')
+			 on conflict (id) do update set name = excluded.name`,
+			[WORKSPACE_A, USER_A],
+		);
+		const view = {
+			route: '/p', layout: 'single', panel: 'files',
+			activePage: { id: randomUUID(), title: 'ACTIVE-TITLE-SECRET' },
+			tabs: [{ title: 'TAB-TITLE-SECRET', kind: 'page' }],
+		};
+		await finished(await post(await createConversation(), MAY_TRAIN, { context: { view, account: true } }));
+		const sent = JSON.stringify(upstream.bodiesFor(MAY_TRAIN).at(-1));
+		for (const secret of ['ACTIVE-TITLE-SECRET', 'TAB-TITLE-SECRET', 'WS-NAME-SECRET']) {
+			assert.equal(sent.includes(secret), false, secret);
+		}
+		assert.ok(sent.includes('panel='), 'the view block itself is still sent');
+		assert.ok(sent.includes('<account'), 'the account block itself is still sent');
+		await finished(await post(await createConversation(), NO_TRAIN, { context: { view, account: true } }));
+		assert.ok(JSON.stringify(upstream.bodiesFor(NO_TRAIN).at(-1)).includes('WS-NAME-SECRET'), 'no-train keeps it');
+	});
 });

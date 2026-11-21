@@ -42,7 +42,7 @@ import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.t
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import { loadAttachments } from './attachments.ts';
-import { isMayTrain } from './privacyGate.ts';
+import { accountWithoutWorkspace, isMayTrain, viewWithoutPages } from './privacyGate.ts';
 import { fitFiles } from '../files/excerpt.ts';
 import type { FittedFile } from '../files/excerpt.ts';
 import { THREAD_SYSTEM_PROMPT } from '../threads/context.ts';
@@ -358,7 +358,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	let workspaceBlockText: string | undefined;
 	if (input.account === true && input.user) {
 		const runWorkspaceId = input.workspaceId ?? input.user.workspaceId;
-		const accountCtx = await loadAccountContext(db, input.user, runWorkspaceId);
+		const loadedAccount = await loadAccountContext(db, input.user, runWorkspaceId);
+		const accountCtx = mayTrain ? accountWithoutWorkspace(loadedAccount) : loadedAccount;
 		accountBlockText = accountBlock(accountCtx, new Date());
 		const overview = mayTrain ? null : await loadWorkspaceOverview(db, input.user, runWorkspaceId);
 		if (overview) workspaceBlockText = workspaceBlock(overview, accountCtx.workspaceName);
@@ -366,7 +367,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// The view block, when the client reports one.
 	let viewBlockText: string | undefined;
 	if (input.view) {
-		viewBlockText = viewBlock(input.view);
+		viewBlockText = viewBlock(mayTrain ? viewWithoutPages(input.view) : input.view);
 	}
 	// C265 / C287: the MCP tools of the caller are loaded once, here, so the
 	// reservation counts their definitions and the run offers the same list.

@@ -1,5 +1,7 @@
 import type { ModelMessage, ToolSet } from 'ai';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
+import type { AccountContext } from './account.ts';
+import type { RunView } from './prompt.ts';
 
 /**
  * FA26: a run on a may-train target sends no page context, workspace
@@ -58,4 +60,15 @@ export function webToolsOnly(tools: ToolSet | undefined): ToolSet | undefined {
 	if (!tools) return undefined;
 	const kept = Object.entries(tools).filter(([name]) => name.startsWith('web_'));
 	return kept.length > 0 ? Object.fromEntries(kept) : undefined;
+}
+
+/** R15: the open pages and tabs are private titles; route, layout and panel stay. */
+export function viewWithoutPages(view: RunView): RunView {
+	const { activePage: _activePage, tabs: _tabs, ...rest } = view;
+	return rest;
+}
+
+/** R15: the workspace name is workspace data; the rest of the account stays. */
+export function accountWithoutWorkspace(account: AccountContext): AccountContext {
+	return { ...account, workspaceName: null };
 }
