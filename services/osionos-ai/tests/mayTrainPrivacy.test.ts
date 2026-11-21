@@ -12,7 +12,7 @@ import { SseStream, collect } from './sse.ts';
 const upstream = await startFailingUpstream();
 const MAY_TRAIN = FREE_TIER_FIRST.id;
 const NO_TRAIN = FREE.id;
-const { app, mock, base, tokenFor, createConversation } = await startHarness({
+const { app, mock, base, tokenFor, createConversation, postComplete } = await startHarness({
 	upstreamBaseUrl: upstream.baseUrl,
 	openRouterModels: [{ id: MAY_TRAIN, dataUse: 'may-train' }],
 });
@@ -25,6 +25,8 @@ after(async () => {
 before(() => upstream.reset());
 
 const PAGE_SECRET = 'PAGE-SECRET-TEXT-4711';
+/** A no-train answer that paraphrased the page: no tag, no mark, nothing a scrubber can find. */
+const PROSE_SUMMARY = 'The Q3 plan targets Acme Corp at a 40M valuation; the board signs on 12 Dec.';
 
 /** An earlier turn that cited a page: its stored answer carries the quoted source and a mark. */
 async function citedConversation(): Promise<string> {
@@ -37,6 +39,8 @@ async function citedConversation(): Promise<string> {
 	const rows: [string, string][] = [
 		['user', 'what does the plan say?'],
 		['assistant', `<source n="1" page="p" title="Plan">${PAGE_SECRET}</source> The plan says go [1].`],
+		['user', 'summarise it'],
+		['assistant', PROSE_SUMMARY],
 	];
 	for (const [role, text] of rows) {
 		await app.db.query(
@@ -76,16 +80,26 @@ describe('a may-train run carries no workspace data', () => {
 		assert.equal(upstream.countFor(MAY_TRAIN), 0);
 	});
 
-	it('strips the quoted page and its citation mark from replayed turns', async () => {
+	it('R37: replays no earlier answer, only the user turns: a no-train summary of a page stays out', async () => {
 		await finished(await post(await citedConversation(), MAY_TRAIN));
 		// The system prompt names the <source> tag; only the replayed turns are read.
 		const sent = (upstream.bodiesFor(MAY_TRAIN)[0] as { messages: { role: string }[] }).messages;
-		const raw = JSON.stringify(sent.filter((message) => message.role !== 'system').slice(0, -1));
-		assert.ok(raw.includes('what does the plan say?'), 'the replayed turns are in the body');
+		const replayed = sent.filter((message) => message.role !== 'system').slice(0, -1);
+		const raw = JSON.stringify(replayed);
+		assert.ok(raw.includes('what does the plan say?'), 'the user turn is replayed');
+		assert.deepEqual(replayed.map((message) => message.role), ['user', 'user']);
 		assert.equal(raw.includes(PAGE_SECRET), false);
-		assert.equal(raw.includes('<source'), false);
-		assert.equal(raw.includes('[1]'), false);
-		assert.ok(raw.includes('The plan says go'), 'the rest of the answer is kept');
+		assert.equal(raw.includes(PROSE_SUMMARY), false, 'a plain-prose summary of the page is not replayed');
+	});
+
+	it('refuses an inline completion on a may-train model: 400 may_train_context, no upstream call', async () => {
+		const calls = upstream.countFor(MAY_TRAIN);
+		const response = await postComplete({
+			runId: randomUUID(), command: 'summarize', input: { text: PAGE_SECRET }, model: MAY_TRAIN,
+		});
+		assert.equal(response.status, 400);
+		assert.equal(((await response.json()) as { code: string }).code, 'may_train_context');
+		assert.equal(upstream.countFor(MAY_TRAIN), calls);
 	});
 
 	it('exposes no page tools', async () => {

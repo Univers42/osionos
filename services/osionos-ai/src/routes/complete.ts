@@ -10,6 +10,7 @@ import type { Command } from '../commands/builtins.ts';
 import { estimateMicroUsd, promptCharCount } from '../runs/estimate.ts';
 import { today } from '../runs/runner.ts';
 import { quotaClosedSeconds, recordFailure } from '../runs/cooldown.ts';
+import { isMayTrain } from '../runs/privacyGate.ts';
 import { abortCode, pumpUpstream } from '../runs/streamPump.ts';
 import { classifyRunFailure, errorFrame } from '../runs/upstreamError.ts';
 import { usageForSettlement } from '../gateway/usage.ts';
@@ -75,6 +76,12 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 	if (resolved.kind === 'refused') {
 		sendError(ctx.response, resolved.status, resolved.code);
 		return resolved.status;
+	}
+	// FA26: the input of a completion is the page's own text, so a may-train
+	// target is refused outright, with the run route's code.
+	if (isMayTrain(resolved.target)) {
+		sendError(ctx.response, 400, 'may_train_context');
+		return 400;
 	}
 	const target = resolved.target;
 	const turn = completionTurn(command, body.input.text);

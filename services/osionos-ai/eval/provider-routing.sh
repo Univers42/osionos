@@ -101,7 +101,7 @@ docker run -d --name "$AI_CONTAINER" --network "$NETWORK" --network-alias ai \
 	-e OSIONOS_AI_DEV_ENDPOINT_HOSTS=mocks \
 	-e OSIONOS_AI_CATALOG_URL="http://127.0.0.1:1/api.json" \
 	-e OSIONOS_AI_KEK="$KEK" -e OSIONOS_AI_KEK_ID=k1 \
-	-e OSIONOS_AI_PLATFORM_MODELS='[{"id":"mock-model","label":"Mock model","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true}]' \
+	-e OSIONOS_AI_PLATFORM_MODELS='[{"id":"mock-model","label":"Mock model","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true,"dataUse":"no-train"}]' \
 	-e OSIONOS_AI_MAX_OUTPUT_TOKENS=4096 \
 	-e OSIONOS_AI_USER_DAILY_MICROUSD=200000 \
 	-e OSIONOS_AI_PLATFORM_DAILY_MICROUSD=20000000 \

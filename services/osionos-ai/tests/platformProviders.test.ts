@@ -19,7 +19,7 @@ const provider = (id: string, extra: object = {}) => ({
 	models: [model(`${id}-m`)],
 	...extra,
 });
-const decode = (value: unknown, opts = noDev) => decodePlatformProviders(JSON.stringify(value), opts);
+const decode = (value: unknown, opts: Parameters<typeof decodePlatformProviders>[1] = noDev) => decodePlatformProviders(JSON.stringify(value), opts);
 
 test('unset, empty and blank decode to an empty pool', () => {
 	for (const raw of [undefined, '', '  \n']) assert.deepEqual(decodePlatformProviders(raw, noDev), []);
@@ -91,4 +91,43 @@ test('legacy platform models decode unchanged, without a dataUse key', () => {
 test('legacy platform models keep an explicit dataUse', () => {
 	const legacy = [{ id: 'a', label: 'A', inputMicroUsdPerMTok: 1, outputMicroUsdPerMTok: 2, default: true, dataUse: 'no-train' }];
 	assert.equal(decodePlatformModels(JSON.stringify(legacy))?.[0].dataUse, 'no-train');
+});
+
+const dropped = (providers: unknown[], publicMode: boolean) => {
+	const lines: string[] = [];
+	const out = decode(providers, { devHosts: [], publicMode, log: (line: string) => lines.push(line) });
+	return { ids: out?.map((entry) => entry.id), lines };
+};
+
+test('the reserved id legacy is dropped with an id-only log, the rest kept (S LOW 3)', () => {
+	const { ids, lines } = dropped([provider('legacy', { apiKeyEnv: 'OSIONOS_AI_KEY_LEG' }), provider('kept')], false);
+	assert.deepEqual(ids, ['kept']);
+	assert.equal(lines.length, 1);
+	assert.ok(lines[0].includes('legacy'));
+	assert.ok(!lines[0].includes('OSIONOS_AI_KEY_LEG') && !lines[0].includes('example.com'));
+});
+
+const INTERNAL_HOSTS: Record<string, string[]> = {
+	'single label': ['https://osionos-ai-llm/v1', 'https://osionos-ai-llm:8080/v1'],
+	localhost: ['https://localhost/v1', 'https://LOCALHOST:8443/v1'],
+	'loopback IP': ['https://127.0.0.1/v1', 'https://[::1]/v1'],
+	'private IP': ['https://10.0.0.5/v1', 'https://192.168.1.2/v1', 'https://172.16.0.1/v1'],
+	'link-local IP': ['https://169.254.169.254/v1', 'https://[fe80::1]/v1'],
+	'unique-local IP': ['https://[fd00::1]/v1'],
+};
+
+for (const [label, urls] of Object.entries(INTERNAL_HOSTS)) {
+	test(`public mode drops a provider on a ${label} host, id-only log (S LOW 2)`, () => {
+		for (const baseUrl of urls) {
+			const { ids, lines } = dropped([provider('inside', { baseUrl }), provider('kept')], true);
+			assert.deepEqual(ids, ['kept'], baseUrl);
+			assert.equal(lines.length, 1, baseUrl);
+			assert.ok(lines[0].includes('inside') && !lines[0].includes(new URL(baseUrl).hostname), lines[0]);
+		}
+	});
+}
+
+test('off public mode an internal host stays; in it a public host stays', () => {
+	assert.deepEqual(dropped([provider('inside', { baseUrl: 'https://osionos-ai-llm/v1' })], false).ids, ['inside']);
+	assert.deepEqual(dropped([provider('pub', { baseUrl: 'https://8.8.8.8/v1' }), provider('named')], true).ids, ['pub', 'named']);
 });

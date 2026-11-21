@@ -156,14 +156,15 @@ describe('osionos-ai connections', () => {
 		mock.setOptions({ modelsStatus: 200 });
 	});
 
+	// The user's own key is no-train for the server (resolve.ts), so the menu says so too.
 	it('the models of a connection are the list of its provider', async () => {
 		const created = await createConnection({ kind: 'api_key', provider: 'openrouter', apiKey: KEY });
 		const answer = await call(`/api/ai/models?connectionId=${String(created?.id)}`, { token: tokenFor(USER_A, WORKSPACE_A) });
 		assert.equal(answer.status, 200);
 		const models = answer.body?.models as { id: string; label: string; default: boolean }[];
 		assert.deepEqual(models, [
-			{ id: 'mock-model', label: 'mock-model', default: true, vision: false, reasoning: false },
-			{ id: 'mock-small', label: 'mock-small', default: false, vision: false, reasoning: false },
+			{ id: 'mock-model', label: 'mock-model', default: true, vision: false, reasoning: false, dataUse: 'no-train' },
+			{ id: 'mock-small', label: 'mock-small', default: false, vision: false, reasoning: false, dataUse: 'no-train' },
 		]);
 		// The list is cached under the id of the connection, for ten minutes.
 		const key = `ai:models:${String(created?.id)}`;

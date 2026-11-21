@@ -55,18 +55,18 @@ export async function autoChainFor(redis: Redis, userId: string, catalog: Platfo
 
 /**
  * The body of a run with Auto applied (FA11): when the request names no usable
- * platform model and carries no fallbacks of its own, the chain's head becomes
+ * platform model and carries no fallbacks of its own (an empty list is none), the chain's head becomes
  * the model and the rest the fallbacks. `restFiltered` tells the runner the
  * chain already skipped what rests, so it does not read the rests again. An
  * empty chain returns the body untouched and the run answers as before.
  */
-export async function withAuto<T extends { connectionId?: string; model?: string; fallbacks?: unknown }>(
+export async function withAuto<T extends { connectionId?: string; model?: string; fallbacks?: readonly unknown[] }>(
 	redis: Redis,
 	userId: string,
 	catalog: PlatformCatalog,
 	parsed: T,
 ): Promise<{ body: T; restFiltered: boolean }> {
-	if (parsed.fallbacks || !wantsAuto(catalog, parsed.connectionId, parsed.model)) return { body: parsed, restFiltered: false };
+	if (parsed.fallbacks?.length || !wantsAuto(catalog, parsed.connectionId, parsed.model)) return { body: parsed, restFiltered: false };
 	const chain = await autoChainFor(redis, userId, catalog);
 	if (chain.length === 0) return { body: parsed, restFiltered: false };
 	const fallbacks = chain.slice(1).map((entry) => ({ model: entry.menuId }));

@@ -110,6 +110,12 @@ describe('Auto on the run route', () => {
 		assert.deepEqual(failing.requests, ['mock-model', 'mock-platform']);
 	});
 
+	it('an empty fallbacks list keeps Auto', async () => {
+		await clean();
+		await runToEnd({ fallbacks: [] });
+		assert.deepEqual(failing.requests, ['mock-metered']);
+	});
+
 	it('may-train fallback -> 400 fallback_may_train', async () => {
 		await clean();
 		const conversationId = await createConversation();

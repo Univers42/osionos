@@ -101,11 +101,6 @@ export function platformMenu(): readonly CatalogEntry[] {
 	return config.catalog.entries;
 }
 
-/** The default model of the allowlist: the one a run gets when it asks for none. */
-export function defaultModel(): PlatformModelEntry | null {
-	return config.platformModels.find((model) => model.default) ?? null;
-}
-
 /**
  * The catalog entry a request asks for, or null when it asks for a model the
  * platform does not serve. An empty request means the default model.

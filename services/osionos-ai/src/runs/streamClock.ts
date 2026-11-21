@@ -52,7 +52,13 @@ export interface Timers {
 
 const REAL_TIMERS: Timers = { setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id), now: () => Date.now() };
 
-/** What attempt n may wait for its first part: the window, or what the chain has left. */
+/**
+ * What attempt n may wait for its first part: the window, or what the chain has left.
+ *
+ * Caveat: the window counts from the request, so a provider's queue time before
+ * the first part spends it too; a slow-to-admit provider times out as if it
+ * stalled, and the chain fails over earlier than its model's speed warrants.
+ */
 export function firstPartBudgetMs(chainStartedAt: number, now: number): number {
 	return Math.max(0, Math.min(firstPartWindowMs(), CHAIN_FIRST_PART_BUDGET_MS - (now - chainStartedAt)));
 }

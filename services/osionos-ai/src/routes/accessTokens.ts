@@ -5,7 +5,7 @@ import { readJson, sendError, sendJson, sendNoContent } from '../http.ts';
 import { checkPatRateLimit } from '../rateLimit.ts';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import { createToken, listTokens, revokeToken } from '../pat/repo.ts';
-import type { TokenRow } from '../pat/repo.ts';
+import type { NewToken, TokenRow } from '../pat/repo.ts';
 import { hashToken, last4, mintToken } from '../pat/token.ts';
 import { isFreshSession, requireUser, UUID } from './support.ts';
 import type { RouteContext } from './types.ts';
@@ -83,6 +83,49 @@ async function handleListTokens(ctx: RouteContext, user: AuthUser): Promise<numb
 	return status;
 }
 
+/** A refused mint: the status and the error code the browser reads. */
+interface Refusal {
+	status: number;
+	code: string;
+}
+
+function sendRefusal(ctx: RouteContext, refusal: Refusal): number {
+	sendError(ctx.response, refusal.status, refusal.code);
+	return refusal.status;
+}
+
+/** Why this caller may not mint right now, or null. */
+async function callerRefusal(ctx: RouteContext, user: AuthUser): Promise<Refusal | null> {
+	// A mint needs a fresh human (C113). A session that has been open for
+	// hours is not one.
+	if (!isFreshSession(user, MINT_WINDOW_MS)) return { status: 403, code: 'reauth_required' };
+	const rate = await checkPatRateLimit(ctx.deps.redis, user.userId, MINTS_PER_MINUTE);
+	return rate.allowed ? null : { status: 429, code: 'rate_limited' };
+}
+
+/** Why the asked scope may not be minted, or null. */
+async function scopeRefusal(ctx: RouteContext, user: AuthUser, scopes: string[], workspaceIds: string[]): Promise<Refusal | null> {
+	// Public mode mints read-only tokens until a live approve-and-deny e2e of an
+	// MCP proposal exists (FB8).
+	if (config.publicMode && scopes.includes('write_approval')) return { status: 400, code: 'scope_not_allowed' };
+	// The workspaces of the caller, LIVE (C115): a membership that ended
+	// ends the scope of the token at once.
+	const live = await liveMemberWorkspaces(ctx.deps.db, user);
+	return workspaceIds.some((id) => !live.includes(id)) ? { status: 403, code: 'workspace_forbidden' } : null;
+}
+
+/** The id of the new token row, or null when the user is at the cap. */
+async function insertToken(ctx: RouteContext, token: NewToken): Promise<string | null> {
+	try {
+		return await createToken(ctx.deps.db, token);
+	} catch (error) {
+		// Twenty live tokens is the cap of the database: the mint is refused
+		// with 429, and the user revokes one to make room.
+		if (isTooManyTokens(error)) return null;
+		throw error;
+	}
+}
+
 /**
  * POST /api/ai/access-tokens
  *
@@ -90,70 +133,24 @@ async function handleListTokens(ctx: RouteContext, user: AuthUser): Promise<numb
  * logged, and the list never carries it (C112).
  */
 async function handleCreateToken(ctx: RouteContext, user: AuthUser): Promise<number> {
-	// A mint needs a fresh human (C113). A session that has been open for
-	// hours is not one.
-	if (!isFreshSession(user, MINT_WINDOW_MS)) {
-		sendError(ctx.response, 403, 'reauth_required');
-		return 403;
-	}
-	const rate = await checkPatRateLimit(ctx.deps.redis, user.userId, MINTS_PER_MINUTE);
-	if (!rate.allowed) {
-		sendError(ctx.response, 429, 'rate_limited');
-		return 429;
-	}
+	const callerRefused = await callerRefusal(ctx, user);
+	if (callerRefused) return sendRefusal(ctx, callerRefused);
 	const body = await readJson(ctx.request, createSchema);
 	const scopes = [...new Set(body.scopes)];
 	const workspaceIds = [...new Set(body.workspaceIds)];
-	// Public mode mints read-only tokens until a live approve-and-deny e2e of an
-	// MCP proposal exists (FB8).
-	if (config.publicMode && scopes.includes('write_approval')) {
-		sendError(ctx.response, 400, 'scope_not_allowed');
-		return 400;
-	}
-	// The workspaces of the caller, LIVE (C115): a membership that ended
-	// ends the scope of the token at once.
-	const live = await liveMemberWorkspaces(ctx.deps.db, user);
-	if (workspaceIds.some((id) => !live.includes(id))) {
-		sendError(ctx.response, 403, 'workspace_forbidden');
-		return 403;
-	}
+	const scopeRefused = await scopeRefusal(ctx, user, scopes, workspaceIds);
+	if (scopeRefused) return sendRefusal(ctx, scopeRefused);
 	const name = body.name.trim();
 	const token = mintToken();
 	const expiresAt = new Date(Date.now() + body.expiresInDays * DAY_MS);
-	let id: string;
-	try {
-		id = await createToken(ctx.deps.db, {
-			userId: user.userId,
-			name,
-			tokenSha256: hashToken(token),
-			last4: last4(token),
-			scopes,
-			workspaceIds,
-			expiresAt,
-		});
-	} catch (error) {
-		// Twenty live tokens is the cap of the database: the mint is refused
-		// with 429, and the user revokes one to make room.
-		if (isTooManyTokens(error)) {
-			sendError(ctx.response, 429, 'too_many_tokens');
-			return 429;
-		}
-		throw error;
-	}
+	const row = { userId: user.userId, name, tokenSha256: hashToken(token), last4: last4(token), scopes, workspaceIds, expiresAt };
+	const id = await insertToken(ctx, row);
+	if (id === null) return sendRefusal(ctx, { status: 429, code: 'too_many_tokens' });
 	// The log carries the id of the token: never the token, never its hash
 	// (C112).
 	console.info(JSON.stringify({ event: 'access_token_created', tokenId: id }));
-	const status = 201;
-	sendJson(ctx.response, status, {
-		id,
-		token,
-		name,
-		last4: last4(token),
-		scopes,
-		workspaceIds,
-		expiresAt: expiresAt.toISOString(),
-	});
-	return status;
+	sendJson(ctx.response, 201, { id, token, name, last4: last4(token), scopes, workspaceIds, expiresAt: expiresAt.toISOString() });
+	return 201;
 }
 
 /** GET and POST /api/ai/access-tokens */

@@ -32,7 +32,7 @@ import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
 import { scheduleSummary } from '../summary/summarize.ts';
 import { THREAD_SYSTEM_PROMPT, ThreadAccessLost } from '../threads/context.ts';
 import { setRunAnswer } from './repo.ts';
-import { stripWorkspaceContext, webToolsOnly } from './privacyGate.ts';
+import { userTurnsOnly, webToolsOnly } from './privacyGate.ts';
 
 /**
  * The upstream of a run: the model call, the events, the settlement.
@@ -231,7 +231,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			...images.map((image) => ({ type: 'image' as const, image: image.data, mediaType: image.mediaType })),
 		];
 		const messages: ModelMessage[] = [
-			...(input.mayTrain ? stripWorkspaceContext(historyMessages(history)) : historyMessages(history)),
+			...(input.mayTrain ? userTurnsOnly(historyMessages(history)) : historyMessages(history)),
 			{ role: 'user', content: userContent } as ModelMessage,
 		];
 

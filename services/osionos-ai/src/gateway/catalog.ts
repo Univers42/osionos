@@ -55,11 +55,11 @@ function legacyEntries(legacy: readonly PlatformModelEntry[], baseUrl: string): 
 	}));
 }
 
-/** A provider whose key env is named but unset, empty or whitespace-only is dropped; the log carries ids and names only (FA6). */
+/** A provider whose key env is named but unset, empty or whitespace-only is dropped; the log carries the provider id only (FA6, M14). */
 function liveProviders(providers: readonly PlatformProvider[], env: CatalogEnv): PlatformProvider[] {
 	return providers.filter((provider) => {
 		if (provider.apiKeyEnv === undefined || (env.keyOf(provider.apiKeyEnv) ?? '').trim() !== '') return true;
-		env.log(`[osionos-ai] provider ${provider.id} dropped: ${provider.apiKeyEnv} is unset`);
+		env.log(`[osionos-ai] provider ${provider.id} dropped: its key is unset`);
 		return false;
 	});
 }

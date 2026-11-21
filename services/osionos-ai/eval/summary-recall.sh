@@ -56,7 +56,7 @@ docker run --rm --network "$NETWORK" \
 	-e OSIONOS_AI_REDIS_URL=redis://127.0.0.1:1 \
 	-e OSIONOS_AI_UPSTREAM_BASE_URL=http://127.0.0.1:1 \
 	-e OSIONOS_APP_SESSION_SECRET=unused-by-the-eval \
-	-e OSIONOS_AI_PLATFORM_MODELS='[{"id":"placeholder","label":"Placeholder","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true}]' \
+	-e OSIONOS_AI_PLATFORM_MODELS='[{"id":"placeholder","label":"Placeholder","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true,"dataUse":"no-train"}]' \
 	-e AI_EVAL_THREADS="${AI_EVAL_THREADS:-20}" -e AI_EVAL_CONCURRENCY="$CONCURRENCY" \
 	-e AI_EVAL_DEBUG="${AI_EVAL_DEBUG:-}" \
 	-e AI_EVAL_RESULTS_FILE="${AI_EVAL_RESULTS_FILE:-RESULTS-summary.md}" \

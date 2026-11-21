@@ -182,8 +182,9 @@ describe('osionos-ai catalog', () => {
 				contextWindow: 128000,
 				inputMicroUsdPerMTok: 3_000_000,
 				outputMicroUsdPerMTok: 15_000_000,
+				dataUse: 'no-train',
 			},
-			{ id: 'mock-free', label: 'Mock Free', default: false, vision: false, reasoning: false, contextWindow: 8192 },
+			{ id: 'mock-free', label: 'Mock Free', default: false, vision: false, reasoning: false, contextWindow: 8192, dataUse: 'no-train' },
 		]);
 	});
 

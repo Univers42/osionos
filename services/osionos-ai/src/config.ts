@@ -314,9 +314,10 @@ function parseCatalog(
 	legacy: readonly PlatformModelEntry[],
 	opts: { rawProviders: string | undefined; legacyBaseUrl: string; publicMode: boolean; devHosts: readonly string[] },
 ): PlatformCatalog {
-	const providers = decodePlatformProviders(opts.rawProviders, { devHosts: opts.devHosts })
+	const log = (line: string) => console.warn(line);
+	const providers = decodePlatformProviders(opts.rawProviders, { devHosts: opts.devHosts, publicMode: opts.publicMode, log })
 		?? refuse('OSIONOS_AI_PLATFORM_PROVIDERS');
-	const env = { publicMode: opts.publicMode, keyOf: (name: string) => process.env[name], log: (line: string) => console.warn(line) };
+	const env = { publicMode: opts.publicMode, keyOf: (name: string) => process.env[name], log };
 	const built = buildCatalog(legacy, providers, env, opts.legacyBaseUrl);
 	return 'refused' in built ? refuse(built.refused) : built;
 }
@@ -586,7 +587,8 @@ export const config: AiServiceConfig = Object.freeze({
 	threadAnswersEnabled: parsed.data.OSIONOS_AI_THREAD_ANSWERS === 'on',
 	searxngUrl: parsed.data.OSIONOS_AI_SEARXNG_URL?.replace(/\/+$/, ''),
 	webContactUrl: parsed.data.OSIONOS_AI_WEB_CONTACT_URL,
-	mcpAllowedHosts: Object.freeze(['localhost', '127.0.0.1', ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),
+	// S LOW 1: public mode trusts no implicit host; the operator names every one.
+	mcpAllowedHosts: Object.freeze([...(publicMode ? [] : ['localhost', '127.0.0.1']), ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),
 	mcpAllowedOrigins: Object.freeze(commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_ORIGINS)),
 	mcpPendingPerToken: parsed.data.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
 	mcpWritesPerMinute: parsed.data.OSIONOS_AI_MCP_WRITES_PER_MINUTE,

@@ -7,7 +7,7 @@ import type { RunView } from './prompt.ts';
  * FA26: a run on a may-train target sends no page context, workspace
  * retrieval, attachments or memories, in this turn or in replayed turns.
  * The route refuses what the body carries; the runner skips what it would
- * load; the replayed turns are scrubbed here.
+ * load; only the user's own turns are replayed (R37).
  */
 
 /** The fields of the run body the gate reads. */
@@ -35,24 +35,13 @@ export function mayTrainRefusal(body: GatedBody, target: Pick<ResolvedTarget, 'd
 	return carries ? 'may_train_context' : null;
 }
 
-const BLOCK_TAGS = 'page|source|file|memories|memory|workspace|view|account|conversation_summary|skills|skill';
-const BLOCK = new RegExp(`<(${BLOCK_TAGS})\\b[^>]*?(?:/>|>[\\s\\S]*?</\\1>)`, 'g');
-const CITATION_MARK = /\s?\[\d{1,3}\]/g;
-
 /**
- * Replayed turns without the quoted blocks and the `[n]` citation marks.
- *
- * Caveat: it is pattern-based. It misses workspace content an earlier answer
- * paraphrased in plain prose, and it also removes a legitimate `[1]` (an
- * array index in code). Under-removal is the dangerous direction; the sure
- * route is a fresh conversation.
+ * R37: the replayed turns of a may-train run are the user's own typed turns.
+ * An earlier answer may paraphrase private pages in plain prose, which no
+ * pattern can tell from any other prose, so no answer is replayed.
  */
-export function stripWorkspaceContext(messages: ModelMessage[]): ModelMessage[] {
-	return messages.map((message) =>
-		typeof message.content === 'string'
-			? ({ ...message, content: message.content.replace(BLOCK, '').replace(CITATION_MARK, '').trim() } as ModelMessage)
-			: message,
-	);
+export function userTurnsOnly(messages: ModelMessage[]): ModelMessage[] {
+	return messages.filter((message) => message.role === 'user');
 }
 
 /** The tools a may-train run keeps: the web ones, which read no workspace. */

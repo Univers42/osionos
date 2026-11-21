@@ -21,7 +21,7 @@ import "./support/memory-local-storage.ts";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { setAiTransport } from "@/features/ai/api/aiClient";
+import { listModels, setAiTransport } from "@/features/ai/api/aiClient";
 import { aiInferencePort } from "@/features/ai/model/aiInferencePort";
 import { ModelRowItem } from "@/widgets/chat-shell/ui/ModelMenuParts";
 
@@ -221,4 +221,14 @@ test("missing dataUse treated as may-train", () => {
   assert.deepEqual(fallbackModels(list).map((entry) => entry.id), ["a/safe"]);
   const row = view({ platformModels: list }).groups.flatMap((group) => group.rows).concat(view({ platformModels: list }).recommended).find((r) => r.model === "a/unknown");
   assert.equal(row?.mayTrain, true);
+});
+
+test("a bring-your-own connection row is not may-train and is a fallback (server tags it no-train)", async () => {
+  // The service's answer for the user's own connection (routes/models.ts modelsOf).
+  setAiTransport(async () => Response.json({ models: [{ id: "claude-x", label: "Claude X", default: true, reasoning: false, dataUse: "no-train" }] }));
+  const mine = await listModels("conn-1");
+  const menu = view({ connections: [{ id: "conn-1", label: "My Anthropic", models: mine }] });
+  const row = menu.connections.flatMap((connection) => connection.models).find((entry) => entry.model === "claude-x");
+  assert.equal(row?.mayTrain, false);
+  assert.deepEqual(fallbackModels(mine).map((entry) => entry.id), ["claude-x"]);
 });

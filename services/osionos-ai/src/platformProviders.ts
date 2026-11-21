@@ -1,4 +1,6 @@
+import { isIP } from 'node:net';
 import { z } from 'zod';
+import { isBlockedAddress } from './connections/blockedAddress.ts';
 import { type DataUse, type PlatformModelEntry, dataUseSchema, platformModelSchema } from './platformModels.ts';
 
 export type { DataUse };
@@ -50,6 +52,32 @@ function isAllowedBaseUrl(baseUrl: string, devHosts: readonly string[]): boolean
 	}
 }
 
+/** The provider id buildCatalog gives the legacy list's own entries (S LOW 3). */
+const RESERVED_ID = 'legacy';
+
+/**
+ * Whether a baseUrl's host is internal: a single label (a compose service
+ * name), localhost, or an IP literal in a blocked range (FC7).
+ *
+ * Caveat: it reads the host as written. A DNS name that resolves to a private
+ * address passes, and it over-drops any blocked literal (CGNAT 100.64/10, the
+ * documentation ranges); the deployment's network policy is the boundary for
+ * names, and an operator names a public provider by its public DNS name.
+ */
+function isInternalHost(baseUrl: string): boolean {
+	const written = new URL(baseUrl).hostname.toLowerCase();
+	const host = written.startsWith('[') ? written.slice(1, -1) : written;
+	if (isIP(host) !== 0) return isBlockedAddress(host);
+	return host === 'localhost' || host.endsWith('.localhost') || !host.includes('.');
+}
+
+/** Why a valid provider is still dropped, or null when it is kept. */
+function dropReason(provider: { id: string; baseUrl: string }, publicMode: boolean): string | null {
+	if (provider.id === RESERVED_ID) return 'its id is reserved';
+	if (publicMode && isInternalHost(provider.baseUrl)) return 'its baseUrl host is internal in public mode';
+	return null;
+}
+
 function toPoolModel(model: z.infer<typeof poolModelSchema>): PoolModel {
 	return {
 		...model,
@@ -62,11 +90,12 @@ function toPoolModel(model: z.infer<typeof poolModelSchema>): PoolModel {
 /**
  * The pooled providers decoded from OSIONOS_AI_PLATFORM_PROVIDERS: `[]` when the
  * value is unset (no pool), `null` when it is broken so the caller refuses to boot
- * rather than run a half-trusted pool.
+ * rather than run a half-trusted pool. A valid provider that takes the reserved
+ * id, or an internal host in public mode, is dropped with a log line instead.
  */
 export function decodePlatformProviders(
 	raw: string | undefined,
-	opts: { devHosts: readonly string[] },
+	opts: { devHosts: readonly string[]; publicMode?: boolean; log?: (line: string) => void },
 ): PlatformProvider[] | null {
 	if (raw === undefined || raw.trim() === '') return [];
 	let decoded: unknown;
@@ -78,5 +107,11 @@ export function decodePlatformProviders(
 	const result = providersSchema.safeParse(decoded);
 	if (!result.success) return null;
 	if (!result.data.every((provider) => isAllowedBaseUrl(provider.baseUrl, opts.devHosts))) return null;
-	return result.data.map((provider) => ({ ...provider, models: provider.models.map(toPoolModel) }));
+	// The log names the id only: the URL and the key variable stay out (FA6).
+	const kept = result.data.filter((provider) => {
+		const reason = dropReason(provider, opts.publicMode === true);
+		if (reason) opts.log?.(`[osionos-ai] provider ${provider.id} dropped: ${reason}`);
+		return reason === null;
+	});
+	return kept.map((provider) => ({ ...provider, models: provider.models.map(toPoolModel) }));
 }

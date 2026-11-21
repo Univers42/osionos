@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
+import { describeError } from '../jobs/queue.ts';
 import { apiCallOf, classifyFailure } from './failover.ts';
 import { isFreeTierModel, quotaSignal, spendsSharedQuota } from './quota.ts';
 import type { QuotaSignal } from './quota.ts';
@@ -157,7 +158,9 @@ async function restStalled(redis: Redis, input: FailureInput, nowMs: number): Pr
 	try {
 		await writeRest(redis, cooldownKey(`user:${userId}`, target.connectionId, target.modelId), STALL_REST_SECONDS, nowMs);
 		return 'user';
-	} catch {
+	} catch (error) {
+		// M11: the run goes on unrested; the log names the model, never the user.
+		console.warn(JSON.stringify({ event: 'stall_rest_failed', model: target.modelId, error: describeError(error) }));
 		return null;
 	}
 }

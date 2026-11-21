@@ -87,6 +87,7 @@ test('provider with unset or empty key dropped, log names id only (FA6)', () => 
 	assert.equal(lines.length, 2);
 	assert.ok(lines[0].includes('unset') && lines[1].includes('empty'));
 	assert.ok(!lines.join('\n').includes(secret));
+	assert.ok(!/OSIONOS_AI_KEY_/.test(lines.join('\n')), 'the drop log names the provider id, not its key variable (M14)');
 });
 
 test('public mode: a non-zero price refuses, off it builds (FA8)', () => {

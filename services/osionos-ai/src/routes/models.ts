@@ -57,6 +57,8 @@ async function withRest(
  * A provider of the catalog has its models in the catalog: the list comes with
  * the prices and the context window, and it does not cost a call. An endpoint
  * of the user is a box we know nothing about: its own list is asked for.
+ * Every model is no-train: the user's own key is private to the server too
+ * (resolve.ts), so the menu must not label it may-train.
  */
 async function modelsOf(redis: Redis, row: ConnectionRow): Promise<ListedModel[]> {
 	if (row.kind !== 'endpoint') {
@@ -68,6 +70,7 @@ async function modelsOf(redis: Redis, row: ConnectionRow): Promise<ListedModel[]
 				default: index === 0,
 				vision: model.vision === true,
 				reasoning: model.reasoning === true,
+				dataUse: 'no-train' as const,
 				...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
 				...(model.inputMicroUsdPerMTok === undefined ? {} : { inputMicroUsdPerMTok: model.inputMicroUsdPerMTok }),
 				...(model.outputMicroUsdPerMTok === undefined ? {} : { outputMicroUsdPerMTok: model.outputMicroUsdPerMTok }),
@@ -75,7 +78,7 @@ async function modelsOf(redis: Redis, row: ConnectionRow): Promise<ListedModel[]
 		}
 	}
 	const listed = await connectionModels(redis, row, connectionSecret(row));
-	return listed.map((model) => ({ ...model, reasoning: false }));
+	return listed.map((model) => ({ ...model, reasoning: false, dataUse: 'no-train' as const }));
 }
 
 /** GET /api/ai/models */
