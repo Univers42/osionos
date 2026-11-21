@@ -42,7 +42,6 @@ import {
   isIndentable,
   isParentable,
   backspaceConvertsToParagraph,
-  continuesSameType,
   isHeadingBlock,
   acceptsHeadingLevel,
   isListBlock,
@@ -81,6 +80,14 @@ import {
 import { matchInternalCopy } from "./blockClipboard";
 import { useBlockContextMenu } from "./useBlockContextMenu";
 import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
+import {
+  continuationOf,
+  indentedListItem,
+  isAlphaListShortcut,
+  outdentedListItem,
+  withBlockType,
+  type ListStyle,
+} from "@/entities/block/model/listStyle";
 import { insertPastedLink, isPasteMenuBlock } from "./pasteLinkMenu";
 import { insertPastedImage, pastedImageFile, pastedImageSource } from "./pasteImage";
 import { useLinkSnapshotAttach } from "./useLinkSnapshotAttach";
@@ -113,6 +120,8 @@ type NormalizedEditorSource =
   | { kind: "cell"; pageId: string; layoutBlockId: string; cellId: string };
 
 const HEADING_SHORTCUT_RE = /^#{1,6}$/;
+// "a." + Space builds the same conversion "1." + Space does, so undo matches (#328 AL3).
+const ALPHA_LIST_DETECTION = { type: "numbered_list", content: "a. ", remainingContent: "" } as const;
 const EMPTY_BLOCKS: Block[] = [];
 
 const fallbackBlocksByCell = new WeakMap<LayoutCell, {
@@ -614,7 +623,7 @@ function indentBlockInEditorTree(blocks: Block[], blockId: string): Block[] {
         const [moved] = list.splice(index, 1);
         const previous = list[index - 1];
         previous.children = previous.children ?? [];
-        previous.children.push(moved);
+        previous.children.push(indentedListItem(moved));
         return true;
       }
       if (list[index].children && indent(list[index].children!)) return true;
@@ -634,7 +643,7 @@ function outdentBlockInEditorTree(blocks: Block[], blockId: string): Block[] {
       if (list[index].id === blockId) {
         if (!parentList || parentIndex < 0) return true;
         const [moved] = list.splice(index, 1);
-        parentList.splice(parentIndex + 1, 0, moved);
+        parentList.splice(parentIndex + 1, 0, outdentedListItem(moved, parentList[parentIndex]));
         return true;
       }
       if (list[index].children && outdent(list[index].children!, list, index)) return true;
@@ -770,10 +779,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const changeBlockType = useCallback(
     (_pid: string, blockId: string, newType: Block["type"]) => {
       flushPendingBlockDraft(blockId, "shortcut");
-      updatePageContent(pageId, updateBlockInEditorTree(contentRef.current, blockId, (block) => ({
-        ...block,
-        type: newType,
-      })));
+      updatePageContent(pageId, updateBlockInEditorTree(contentRef.current, blockId, (block) => withBlockType(block, newType)));
     },
     [flushPendingBlockDraft, pageId, updatePageContent],
   );
@@ -1057,7 +1063,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   );
 
   const applyMarkdownDetection = useCallback(
-    (blockId: string, detection: ReturnType<typeof detectBlockType>): void => {
+    (blockId: string, detection: ReturnType<typeof detectBlockType>, listStyle?: ListStyle): void => {
       if (!detection) return;
 
       // Inside a callout/quote, a markdown shortcut typed on the TITLE line NESTS the
@@ -1098,6 +1104,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
           ? { language: detection.language ?? "plaintext" }
           : { language: undefined }),
         ...(detection.type === "toggle" ? { collapsed: false } : {}),
+        ...(listStyle ? { listStyle } : {}),
         headingLevel: detection.headingLevel,
       });
       // The store now says `remainingContent`, but the live node still shows the
@@ -1204,14 +1211,16 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       // Live DOM text so the shortcut sees the just-typed prefix immediately
       // (e.g. compact "###>" -> toggle heading) instead of stale committed text.
       const liveText = (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
-      const detection = detectBlockType(`${liveText} `);
+      // The engine keeps CommonMark's digits-only list rule (#328 AL1); "a." is ours.
+      const alpha = isAlphaListShortcut(block.type, liveText);
+      const detection = alpha ? ALPHA_LIST_DETECTION : detectBlockType(`${liveText} `);
       if (!detection) return false;
 
       e.preventDefault();
       // No focusBlock() here: applyMarkdownDetection already owns the caret, and a
       // second async focus() would re-place it at offset 0 after the user's next
       // keystrokes ("eadingH"). refocusBlockIfLost covers the remount case.
-      applyMarkdownDetection(blockId, detection);
+      applyMarkdownDetection(blockId, detection, alpha ? "lower-alpha" : undefined);
       return true;
     },
     [applyMarkdownDetection],
@@ -1897,8 +1906,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         flushPendingBlockDraft(blockId, "structural");
         const head = sliceInlineSource(source, 0, caret);
         const tail = sliceInlineSource(source, caret);
-        const nextType = continuesSameType(block.type) ? block.type : "paragraph";
-        const tailBlock: Block = { id: crypto.randomUUID(), type: nextType, content: tail };
+        const tailBlock = continuationOf(block, tail);
         updateBlock(pageId, blockId, { content: head });
         insertBlock(pageId, blockId, tailBlock);
         focusBlock(tailBlock.id);
@@ -1910,10 +1918,10 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   );
 
   const handleEnterAction = useCallback(
-    (e: React.KeyboardEvent, blockId: string, blockType: Block["type"]) => {
+    (e: React.KeyboardEvent, blockId: string, block: Block) => {
       if (e.key !== "Enter" || e.shiftKey) return false;
       flushPendingBlockDraft(blockId, "structural");
-      handleEnterKey(e, blockId, blockType, slashMenu, pageId, insertBlock, focusBlock);
+      handleEnterKey(e, blockId, block, slashMenu, pageId, insertBlock, focusBlock);
       return true;
     },
     [flushPendingBlockDraft, slashMenu, pageId, insertBlock, focusBlock],
@@ -1986,7 +1994,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       if (handled) return;
       if (handleEnterSplit(e, blockId, nextBlock)) return;
-      if (handleEnterAction(e, blockId, nextBlock.type)) return;
+      if (handleEnterAction(e, blockId, nextBlock)) return;
       if (handleStartBackspaceOutdent(e, blockId, nextBlock, parentBlockId, isEmpty)) return;
       if (handleStartBackspaceMerge(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty)) return;
       if (handleEmptyBackspace(e, blockId, nextBlock, nextBlockIdx, nextContent, parentBlockId, isEmptyForDeletion)) return;

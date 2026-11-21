@@ -13,6 +13,7 @@
 import type { ReactNode } from "react";
 import type { Block, BlockType } from "@/entities/block";
 import type { BlockEdges } from "./menuBesideBlock";
+import { withBlockType } from "@/entities/block/model/listStyle";
 
 export interface BlockContextMenuState {
   blockId: string;
@@ -198,10 +199,7 @@ export function moveBlockInTree(
 }
 
 function normalizeBlockForType(block: Block, nextType: BlockType): Block {
-  const base: Block = {
-    ...block,
-    type: nextType,
-  };
+  const base = withBlockType(block, nextType);
 
   switch (nextType) {
     case "to_do":
@@ -265,7 +263,7 @@ export function changeBlockToToggleHeadingInTree(
   const transform = (list: Block[]): Block[] =>
     list.map((block) => ({
       ...(block.id === blockId
-        ? { ...block, type: "toggle" as BlockType, headingLevel }
+        ? { ...withBlockType(block, "toggle"), headingLevel }
         : block),
       children: block.children ? transform(block.children) : undefined,
     }));

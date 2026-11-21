@@ -68,6 +68,7 @@ import { requestLinkDialog } from "../model/linkDialogRequests";
 import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities/block/model/blockTreeUtils";
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
+import { childNumberedDepth, numberedRunIndexes } from "@/entities/block/model/listStyle";
 import { startPointerBlockDrag } from "./pointerBlockDrag";
 import { usePageContextMenu } from "../model/usePageContextMenu";
 import { clampViewportMenuPosition } from "@/shared/ui";
@@ -1147,11 +1148,10 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 		const listRef = useRef<HTMLUListElement | null>(null);
 		const [scrollMargin, setScrollMargin] = useState(0);
 		const renderItems = useMemo(() => {
-			let numberedCounter = 0;
-			return blocks.map((block) => {
-				const numberedIndex = block.type === "numbered_list" ? ++numberedCounter : 0;
-				if (block.type !== "numbered_list") numberedCounter = 0;
-				const nextNumberedDepth = block.type === "numbered_list" ? numberedDepth + 1 : numberedDepth;
+			const runIndexes = numberedRunIndexes(blocks);
+			return blocks.map((block, position) => {
+				const numberedIndex = runIndexes[position];
+				const nextNumberedDepth = childNumberedDepth(block, numberedDepth);
 				const nextBulletDepth = block.type === "bulleted_list" ? bulletDepth + 1 : bulletDepth;
 				const isHighlighted = isHighlightedBranch || (highlightedRootBlockId !== null && block.id === highlightedRootBlockId);
 
@@ -1168,6 +1168,9 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 			if (caret === null || indexes.includes(caret)) return indexes;
 			return [...indexes, caret].sort((a, b) => a - b);
 		}, [renderItems]);
+		// TanStack Virtual returns non-memoizable functions (sanctioned: see PageBlocksRenderer).
+		// The old counter's closure reassignment hid this from the compiler until #328.
+		// eslint-disable-next-line react-hooks/incompatible-library
 		const virtualizer = useVirtualizer({
 			count: shouldVirtualize ? renderItems.length : 0,
 			// Observed from mount for the root list, so the render that crosses the threshold
@@ -1794,6 +1797,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	}, [block.id, sourceKey]);
 
 	const layoutModes = useLayoutModes();
+	const childDepth = childNumberedDepth(block, numberedDepth);
 	const renderChildren = useCallback(() => {
 		if (!block.children?.length) return null;
 
@@ -1877,7 +1881,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 				pageId={pageId}
 				parentBlockType={block.type}
 				parentBlockId={block.id}
-				numberedDepth={block.type === "numbered_list" ? numberedDepth + 1 : numberedDepth}
+				numberedDepth={childDepth}
 				bulletDepth={block.type === "bulleted_list" ? bulletDepth + 1 : bulletDepth}
 				highlightedRootBlockId={isHighlighted ? block.id : null}
 				selectedBlockIds={selectedBlockIds}
@@ -1903,7 +1907,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 				renderBlockEditor={renderBlockEditor}
 			/>
 		);
-	}, [block.children, block.id, block.style, block.type, bulletDepth, draggedBlockId, focusBlock, isHighlighted, layoutModes, moveBlock, moveBlockAcrossTree, numberedDepth, onBeforeStructuralEdit, onChange, onContextMenu, onDeleteBlock, onKeyDown, onPaste, onRequestSlashMenu, onUpdateBlock, pageId, registerRef, renderBlockEditor, rootBlocks, selectedBlockIds, setDraggedBlockId, source, sourceKey, updateContent]);
+	}, [block.children, block.id, block.style, block.type, bulletDepth, childDepth, draggedBlockId, focusBlock, isHighlighted, layoutModes, moveBlock, moveBlockAcrossTree, numberedDepth, onBeforeStructuralEdit, onChange, onContextMenu, onDeleteBlock, onKeyDown, onPaste, onRequestSlashMenu, onUpdateBlock, pageId, registerRef, renderBlockEditor, rootBlocks, selectedBlockIds, setDraggedBlockId, source, sourceKey, updateContent]);
 
 	return (
 		<div data-block-id={block.id} data-block-type={block.type} data-page-id={pageId} ref={refCb} onKeyDown={handleVoidNavKey} className={`${getBlockSurfaceClass(block) || "-mx-1 rounded-md px-1"} focus:outline-none focus:ring-1 focus:ring-[var(--osio-accent)]`} style={getBlockSurfaceStyle(block)} {...wrapperStyleAttributes(block, layoutModes)}>

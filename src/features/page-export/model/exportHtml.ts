@@ -20,6 +20,7 @@ import { escapeHtml } from "./htmlEscape";
 import { inlineTagsToHtml } from "./inlineDialect";
 import { LINK_EXPORT_TYPES, linkBlockHtml } from "./linkBlockExport";
 import type { ExportOptions, ExportTheme } from "./exportTypes";
+import { listStyleOf } from "@/entities/block/model/listStyle";
 
 const MEDIA_TYPES = new Set(["image", "video", "audio", "file"]);
 
@@ -65,6 +66,12 @@ function mediaHtml(block: Block, excludeFiles: boolean): string {
   return `<p><a href="${escapeHtml(src)}">${escapeHtml(block.type)}</a></p>`;
 }
 
+// A style change splits the <ol>, so the browser restarts the count as the editor does.
+function listOpenTag(block: Block): string {
+  if (block.type === "bulleted_list") return "<ul>";
+  return listStyleOf(block) ? '<ol type="a">' : "<ol>";
+}
+
 export function renderBlocksHtml(
   blocks: Block[],
   options: Pick<ExportOptions, "content">,
@@ -72,9 +79,9 @@ export function renderBlocksHtml(
 ): string {
   const excludeFiles = options.content === "no_files";
   const parts: string[] = [];
-  let list: { tag: "ul" | "ol"; items: string[] } | null = null;
+  let list: { open: string; tag: "ul" | "ol"; items: string[] } | null = null;
   const flushList = () => {
-    if (list) parts.push(`<${list.tag}>${list.items.join("")}</${list.tag}>`);
+    if (list) parts.push(`${list.open}${list.items.join("")}</${list.tag}>`);
     list = null;
   };
   const children = (block: Block) =>
@@ -86,7 +93,8 @@ export function renderBlocksHtml(
     const isNumbered = block.type === "numbered_list";
     if (isBullet || isNumbered) {
       const tag = isBullet ? "ul" : "ol";
-      if (!list || list.tag !== tag) { flushList(); list = { tag, items: [] }; }
+      const open = listOpenTag(block);
+      if (!list || list.open !== open) { flushList(); list = { open, tag, items: [] }; }
       list.items.push(`<li>${inline}${children(block)}</li>`);
       continue;
     }

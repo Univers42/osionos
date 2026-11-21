@@ -13,6 +13,7 @@
 import { noticingWriter } from '@/shared/lib/storage-full/noticingWrite';
 import type { Block, BlockType } from "@/entities/block";
 import { hasBlockStyle } from "@/entities/block/model/blockStyle";
+import { withBlockType } from "@/entities/block/model/listStyle";
 import type { SeedPage } from "../data/seedPages";
 import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
 import { readCoverFields } from "@/entities/page/model/coverFields";
@@ -886,10 +887,7 @@ export function applyBlockTypeChange(
 ): (page: PageEntry) => PageEntry {
   return (page) => ({
     ...page,
-    content: updateBlockInTree(page.content ?? [], blockId, (block) => ({
-      ...block,
-      type: newType,
-    })),
+    content: updateBlockInTree(page.content ?? [], blockId, (block) => withBlockType(block, newType)),
   });
 }
 

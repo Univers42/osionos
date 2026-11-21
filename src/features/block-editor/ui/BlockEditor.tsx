@@ -41,7 +41,8 @@ import {
 
 import { usePageStore } from "@/store/usePageStore";
 import { MermaidDiagram, CodeSyntaxHighlight, IconValueView } from "@/shared/ui";
-import { getNumberedMarker, getBulletMarker } from "@/entities/block/model/listMarkers";
+import { getBulletMarker } from "@/entities/block/model/listMarkers";
+import { numberedMarker } from "@/entities/block/model/listStyle";
 import { MediaBlockEditor } from "./MediaBlockEditor";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
@@ -645,7 +646,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
         <div className="group relative flex items-start gap-2">
           {listMarker(
             <span data-list-marker="" className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
-              {getNumberedMarker(numberedIndex, numberedDepth)}
+              {numberedMarker(block, numberedIndex, numberedDepth)}
             </span>,
           )}
           <div className="flex-1">

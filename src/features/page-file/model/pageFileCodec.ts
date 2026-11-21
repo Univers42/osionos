@@ -52,6 +52,7 @@ import {
  *     tableConfig (markdown keeps only the column alignments)
  *     conflictOf (the merge's marker: the block a conflict copy belongs to)
  *     embed on a video/audio/file block (its tag cannot hold it; see SCOPED_BLOCK_KEYS)
+ *     listStyle on a numbered_list (Markdown writes every item as "1. "; scoped key)
      buttonProgram (a button's steps: Markdown cannot carry a program; the overlay check is a plain object, the parser is the real gate)
  *     visibleWhen (a block's show/hide formula: Markdown cannot carry it)
  *
@@ -70,12 +71,12 @@ export const MARKDOWN_KEYS: readonly string[] = Object.freeze([
 ]);
 
 /**
- * Extra keys Markdown does NOT carry, so they ride the overlay. Derived, not
- * typed out: a key added to `EXTRA_BLOCK_KEYS` is picked up here at once and the
+ * Extra and scoped keys Markdown does NOT carry, so they ride the overlay. Derived,
+ * not typed out: a key added to `EXTRA_BLOCK_KEYS` is picked up here at once and the
  * Block-field self-check then forces someone to classify it.
  */
 export const OVERLAY_KEYS: readonly string[] = Object.freeze(
-  Object.keys(EXTRA_BLOCK_KEYS).filter((key) => !MARKDOWN_KEYS.includes(key)),
+  [...Object.keys(EXTRA_BLOCK_KEYS), ...SCOPED_OVERLAY_KEYS].filter((key) => !MARKDOWN_KEYS.includes(key)),
 );
 
 /**
@@ -107,7 +108,7 @@ export function pageToFile(page: PageEntry): string {
   const content = page.content ?? [];
   if (content.length === 0) return joinFrontMatter({ ...meta }, "");
   return joinFrontMatter(
-    { ...meta, blocks: collectOverlay(content, [...OVERLAY_KEYS, ...SCOPED_OVERLAY_KEYS]) },
+    { ...meta, blocks: collectOverlay(content, [...new Set([...OVERLAY_KEYS, ...SCOPED_OVERLAY_KEYS])]) },
     serializeBlocksToMarkdown(content, { keepEmptyParagraphs: true }),
   );
 }

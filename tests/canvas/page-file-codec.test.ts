@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { PageEntry } from "../../src/entities/page/model/types.ts";
-import { EXTRA_BLOCK_KEYS } from "../../src/features/page-file/model/blockOverlay.ts";
+import { EXTRA_BLOCK_KEYS, SCOPED_OVERLAY_KEYS } from "../../src/features/page-file/model/blockOverlay.ts";
 import {
   KNOWN_LOSSY_KEYS,
   MARKDOWN_KEYS,
@@ -176,10 +176,10 @@ test("every OVERLAY key survives the file on its own block", () => {
   }
 });
 
-test("OVERLAY_KEYS is exactly the extra keys Markdown does not carry", () => {
-  const expected = Object.keys(EXTRA_BLOCK_KEYS).filter((k) => !MARKDOWN_KEYS.includes(k)).sort();
+test("OVERLAY_KEYS is exactly the extra and scoped keys Markdown does not carry", () => {
+  const expected = [...Object.keys(EXTRA_BLOCK_KEYS), ...SCOPED_OVERLAY_KEYS].filter((k) => !MARKDOWN_KEYS.includes(k)).sort();
   assert.deepEqual([...OVERLAY_KEYS].sort(), expected);
-  for (const key of ["dueAt", "collapsed", "codeTheme", "fileName", "headingLevel", "tableConfig"]) {
+  for (const key of ["dueAt", "collapsed", "codeTheme", "fileName", "headingLevel", "tableConfig", "listStyle"]) {
     assert.ok(OVERLAY_KEYS.includes(key), `${key} rides the overlay`);
   }
   for (const key of ["color", "viewId", "recordLimit", "layoutConfig"]) {

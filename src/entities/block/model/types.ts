@@ -168,6 +168,7 @@ export interface Block {
   backgroundColor?: string; /** Optional block background color */
   style?: BlockStyle;		/** Typed style overrides (SB-1a); wins over flat fields */
   headingLevel?: 1 | 2 | 3 | 4 | 5 | 6; /** Optional heading style inside composed blocks */
+  listStyle?: "lower-alpha"; /** numbered_list only: a. b. c. markers; absent = decimal ("decimal" is never written) */
   widthRatio?: number;      /** Relative width for column blocks */
   collapsed?: boolean;		/** Whether a toggle is collapsed */
   asset?: string;           /** Serialized ui-collection asset value for media blocks */

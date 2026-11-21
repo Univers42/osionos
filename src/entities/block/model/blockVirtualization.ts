@@ -14,6 +14,7 @@ import type { Block, BlockType } from "@/entities/block";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
 
 import { BOOKMARK_BLOCK_ESTIMATED_HEIGHT, EMBED_BLOCK_ESTIMATED_HEIGHT } from "./linkBlocks";
+import { numberedRunIndexes } from "./listStyle";
 
 export const ROOT_BLOCK_VIRTUALIZATION_THRESHOLD = 60;
 export const ROOT_BLOCK_VIRTUALIZATION_OVERSCAN = 12;
@@ -62,20 +63,11 @@ export interface RootBlockRenderMeta {
 }
 
 export function createRootBlockRenderMeta(blocks: Block[]): RootBlockRenderMeta[] {
-  let numberedIndex = 0;
-
-  return blocks.map((block, index) => {
-    if (block.type === "numbered_list") {
-      numberedIndex += 1;
-    } else {
-      numberedIndex = 0;
-    }
-
-    return {
-      block,
-      effectiveIndex: block.type === "numbered_list" ? numberedIndex - 1 : index,
-    };
-  });
+  const runIndexes = numberedRunIndexes(blocks);
+  return blocks.map((block, index) => ({
+    block,
+    effectiveIndex: block.type === "numbered_list" ? runIndexes[index] - 1 : index,
+  }));
 }
 
 export function estimateBlockHeight(block: Block | undefined): number {

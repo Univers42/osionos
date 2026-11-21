@@ -13,7 +13,8 @@
 import React, { lazy, Suspense, useState, useMemo } from "react";
 import { EquationView } from "@/shared/ui";
 import type { Block } from '@/entities/block';
-import { getNumberedMarker, getBulletMarker } from '@/entities/block/model/listMarkers';
+import { getBulletMarker } from '@/entities/block/model/listMarkers';
+import { childNumberedDepth, numberedMarker, numberedRunIndexes } from '@/entities/block/model/listStyle';
 import { getToggleHeadingClass } from '@/entities/block/model/toggleHeading';
 import { ChevronRight } from "lucide-react";
 import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
@@ -161,7 +162,9 @@ function renderNestedChildren(block: Block, bulletDepth: number, numberedDepth: 
   }
 
   const nextBulletDepth = block.type === "bulleted_list" ? bulletDepth + 1 : bulletDepth;
-  const nextNumberedDepth = block.type === "numbered_list" ? numberedDepth + 1 : numberedDepth;
+  const nextNumberedDepth = childNumberedDepth(block, numberedDepth);
+  // Same run counter as the editor, so a nested style change restarts the count.
+  const runIndexes = numberedRunIndexes(block.children);
 
   return (
     <div className={getNestedChildrenClassName(block.type)}>
@@ -169,7 +172,7 @@ function renderNestedChildren(block: Block, bulletDepth: number, numberedDepth: 
         <ReadOnlyBlock
           key={child.id}
           block={child}
-          index={index}
+          index={child.type === "numbered_list" ? runIndexes[index] - 1 : index}
           bulletDepth={nextBulletDepth}
           numberedDepth={nextNumberedDepth}
         />
@@ -317,7 +320,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         <>
           <div className="flex items-start gap-2">
             <span className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
-              {getNumberedMarker(index + 1, numberedDepth)}
+              {numberedMarker(block, index + 1, numberedDepth)}
             </span>
             <span className={`text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1 ${tint}`} style={surface}>
               <InlineMarkdown content={block.content} />

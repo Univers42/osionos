@@ -19,6 +19,7 @@ import type { ExportDatabase, ExportOptions } from "./exportTypes";
 import { isDatabaseBlock } from "./databaseExportSource";
 import { stripInlineTags } from "./inlineDialect";
 import { LINK_EXPORT_TYPES, linkBlockPlainText } from "./linkBlockExport";
+import { numberedMarker, numberedRunIndexes } from "@/entities/block/model/listStyle";
 
 export interface PdfLine {
   text: string;
@@ -57,12 +58,11 @@ export function flattenBlocksToPdfLines(
 ): PdfLine[] {
   const excludeFiles = options.content === "no_files";
   const lines: PdfLine[] = [];
-  let numbered = 0;
+  const runIndexes = numberedRunIndexes(blocks);
 
-  for (const block of blocks) {
+  for (const [position, block] of blocks.entries()) {
     const text = pdfText(block.content ?? "");
     const indent = depth * 16;
-    if (block.type !== "numbered_list") numbered = 0;
     switch (block.type) {
       case "heading_1": case "heading_2": case "heading_3":
       case "heading_4": case "heading_5": case "heading_6": {
@@ -74,8 +74,8 @@ export function flattenBlocksToPdfLines(
         push(lines, { text: `• ${text}`, size: BODY, indent, gapBefore: 3 });
         break;
       case "numbered_list":
-        numbered += 1;
-        push(lines, { text: `${numbered}. ${text}`, size: BODY, indent, gapBefore: 3 });
+        // Depth 0: a decimal item stays "n." at every nesting level, as before.
+        push(lines, { text: `${numberedMarker(block, runIndexes[position], 0)} ${text}`, size: BODY, indent, gapBefore: 3 });
         break;
       case "to_do":
         push(lines, { text: `[${block.checked ? "x" : " "}] ${text}`, size: BODY, indent, gapBefore: 3 });

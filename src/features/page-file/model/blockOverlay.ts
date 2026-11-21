@@ -41,6 +41,7 @@ const isHeadingLevel: ExtraKeyCheck = (value) =>
 
 const isOneOf = (...allowed: string[]): ExtraKeyCheck => (value) =>
   typeof value === "string" && allowed.includes(value);
+const isLowerAlpha = isOneOf("lower-alpha");
 
 // Arrays and null carry other prototypes, so this one check rejects them all.
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -135,6 +136,8 @@ const SCOPED_BLOCK_KEYS: Readonly<
   Record<string, { types: ReadonlySet<string>; decode: (value: unknown) => unknown }>
 > = Object.freeze({
   embed: { types: new Set(["video", "audio", "file"]), decode: parseEmbedSnapshot },
+  // Markdown writes every numbered item as "1. ", so the letters ride here (#328).
+  listStyle: { types: new Set(["numbered_list"]), decode: (value) => (isLowerAlpha(value) ? value : undefined) },
 });
 
 export const SCOPED_OVERLAY_KEYS: readonly string[] = Object.freeze(Object.keys(SCOPED_BLOCK_KEYS));

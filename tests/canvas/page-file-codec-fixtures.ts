@@ -104,6 +104,8 @@ export const OVERLAY_PROBES: Record<string, Probe> = {
     mk({ type: "image", asset: "a", aiGenerated: { model: "sd", runId: "r1", createdAt: "2026-10-22T00:00:00.000Z" } }),
     "aiGenerated",
   ),
+  // A literal block, not mk(): mk's shared counter would shift every corpus id after it.
+  listStyle: probe({ id: "probe-list-style", type: "numbered_list", content: "x", listStyle: "lower-alpha" }, "listStyle"),
 };
 
 /** Everything Markdown or the overlay carries, on the types that own it. */

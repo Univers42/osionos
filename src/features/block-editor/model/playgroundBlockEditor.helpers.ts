@@ -12,7 +12,7 @@
 
 import React from 'react';
 import type { Block } from '@/entities/block';
-import { continuesSameType } from '@/entities/block';
+import { continuationOf } from '@/entities/block/model/listStyle';
 import type { CaretPlacement } from './blockDomFocus';
 import { paneRootOf } from './blockDomFocus';
 import { caretRect, caretOnEdgeLine, caretAtBlockEdge } from './caretGeometry';
@@ -335,7 +335,7 @@ export function handleArrowLeft(
 export function handleEnterKey(
   e: React.KeyboardEvent,
   blockId: string,
-  blockType: Block['type'],
+  block: Block,
   slashMenu: SlashMenuState | null,
   pageId: string,
   insertBlock: (pid: string, bid: string, b: Block) => void,
@@ -343,8 +343,7 @@ export function handleEnterKey(
 ): void {
   if (e.defaultPrevented) return;
   e.preventDefault();
-  const nextType = continuesSameType(blockType) ? blockType : 'paragraph';
-  const newBlock: Block = { id: crypto.randomUUID(), type: nextType, content: '' };
+  const newBlock = continuationOf(block);
   insertBlock(pageId, blockId, newBlock);
   focusBlock(newBlock.id);
 }
