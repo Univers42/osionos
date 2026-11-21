@@ -10,5 +10,5 @@
 const { config } = await import('../src/config.ts');
 
 process.stdout.write(
-	`RESULT hosts=${JSON.stringify(config.devEndpointHosts)} urls=${JSON.stringify(config.devProviderBaseUrls)}\n`,
+	`RESULT hosts=${JSON.stringify(config.devEndpointHosts)} urls=${JSON.stringify(config.devProviderBaseUrls)} research=${config.researchPlatformDaily}\n`,
 );

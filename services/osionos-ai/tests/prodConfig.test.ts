@@ -6,44 +6,52 @@ import { describe, it } from 'node:test';
 /**
  * The service in production.
  *
- * The service reads its configuration when it is imported, so the case needs
- * a process of its own: the child runs with NODE_ENV=production and with both
- * development escape hatches set, and prints what the configuration kept.
+ * The service reads its configuration when it is imported, so each case needs
+ * a process of its own: the child runs with NODE_ENV=production and prints
+ * what the configuration kept.
  */
+const CHILD = fileURLToPath(new URL('./prodConfigChild.ts', import.meta.url));
+
+function runChild(env: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string }> {
+	return new Promise((resolve, reject) => {
+		const child = spawn(process.execPath, ['--experimental-strip-types', CHILD], {
+			env,
+			stdio: ['ignore', 'pipe', 'pipe'],
+		});
+		let stdout = '';
+		let stderr = '';
+		child.stdout.on('data', (chunk: Buffer) => {
+			stdout += chunk.toString('utf8');
+		});
+		child.stderr.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString('utf8');
+		});
+		child.on('close', () => resolve({ stdout, stderr }));
+		child.on('error', reject);
+	});
+}
+
+function resultLine(output: { stdout: string; stderr: string }): string {
+	const line = output.stdout.split('\n').find((entry) => entry.startsWith('RESULT '));
+	assert.ok(line, `the child said nothing useful: ${output.stdout}${output.stderr}`);
+	return line;
+}
+
+// A deployment in production has the bridge: the write tools need it, and the
+// URL is operator configuration.
+const PRODUCTION = { NODE_ENV: 'production', OSIONOS_AI_BRIDGE_URL: 'http://bridge.invalid:4000' };
 
 describe('osionos-ai in production', () => {
 	it('the development escape hatches are ignored', async () => {
-		const child = fileURLToPath(new URL('./prodConfigChild.ts', import.meta.url));
-		const env = {
+		const output = await runChild({
 			...process.env,
-			NODE_ENV: 'production',
+			...PRODUCTION,
 			OSIONOS_AI_DEV_ENDPOINT_HOSTS: 'localhost,127.0.0.1',
 			OSIONOS_AI_DEV_PROVIDER_BASE_URLS: '{"openrouter":"https://elsewhere.example/v1"}',
-			// A deployment in production has the bridge: the write tools need
-			// it, and the URL is operator configuration.
-			OSIONOS_AI_BRIDGE_URL: 'http://bridge.invalid:4000',
-		};
-		const output = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-			const child_ = spawn(process.execPath, ['--experimental-strip-types', child], {
-				env,
-				stdio: ['ignore', 'pipe', 'pipe'],
-			});
-			let stdout = '';
-			let stderr = '';
-			child_.stdout.on('data', (chunk: Buffer) => {
-				stdout += chunk.toString('utf8');
-			});
-			child_.stderr.on('data', (chunk: Buffer) => {
-				stderr += chunk.toString('utf8');
-			});
-			child_.on('close', () => resolve({ stdout, stderr }));
-			child_.on('error', reject);
 		});
-		const line = output.stdout.split('\n').find((entry) => entry.startsWith('RESULT '));
-		assert.ok(line, `the child said nothing useful: ${output.stdout}${output.stderr}`);
+		const line = resultLine(output);
 		assert.match(line, /hosts=\[\]/);
 		assert.match(line, /urls=\{\}/);
-
 		// The warning names the variables, never what they carry.
 		assert.match(output.stderr, /OSIONOS_AI_DEV_ENDPOINT_HOSTS/);
 		assert.match(output.stderr, /OSIONOS_AI_DEV_PROVIDER_BASE_URLS/);
@@ -52,28 +60,23 @@ describe('osionos-ai in production', () => {
 	});
 
 	it('a production without the bridge refuses to start (C12)', async () => {
-		const child = fileURLToPath(new URL('./prodConfigChild.ts', import.meta.url));
-		const env: Record<string, string> = { ...process.env, NODE_ENV: 'production' };
+		const env: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: 'production' };
 		// The bridge is the operator configuration of the write tools: a
 		// deployment without it has no write path at all.
 		delete env.OSIONOS_AI_BRIDGE_URL;
-		const output = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-			const child_ = spawn(process.execPath, ['--experimental-strip-types', child], {
-				env,
-				stdio: ['ignore', 'pipe', 'pipe'],
-			});
-			let stdout = '';
-			let stderr = '';
-			child_.stdout.on('data', (chunk: Buffer) => {
-				stdout += chunk.toString('utf8');
-			});
-			child_.stderr.on('data', (chunk: Buffer) => {
-				stderr += chunk.toString('utf8');
-			});
-			child_.on('close', () => resolve({ stdout, stderr }));
-			child_.on('error', reject);
-		});
+		const output = await runChild(env);
 		assert.ok(!output.stdout.includes('RESULT '), 'the service did not start');
 		assert.match(output.stderr, /OSIONOS_AI_BRIDGE_URL/);
+	});
+
+	// The compose passes it as ${…:-}: an unset operator value arrives as "",
+	// which coerced to 0 and refused the boot (live outage 2026-11-21).
+	it('an empty research daily budget keeps the default and boots', async () => {
+		const output = await runChild({
+			...process.env,
+			...PRODUCTION,
+			OSIONOS_AI_RESEARCH_PLATFORM_DAILY: '',
+		});
+		assert.match(resultLine(output), /research=20/);
 	});
 });
