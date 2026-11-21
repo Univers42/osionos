@@ -31,15 +31,8 @@ test("the hint is muted on the plain row and --osio-fg-default on hover and aria
   assert.match(SLASH_HINT_CLASS, /group-aria-selected:text-\[var\(--osio-fg-default\)\]/);
 });
 
-// Caveat: solarized dark is skipped. Its own row label (--osio-fg-default) is 4.47:1 on
-// the highlighted row, so no hint colour reaches 4.5:1 there; that is a palette token
-// problem, not the hint's. The AA audit runs on the default palette only.
-// Tracked in https://github.com/Univers42/osionos/issues/334
-const KNOWN_UNREACHABLE = (palette: string, mode: string) => palette === "solarized" && mode === "dark";
-
 for (const palette of PALETTES) {
   for (const mode of MODES) {
-    if (KNOWN_UNREACHABLE(palette.id, mode)) continue;
     test(`palette "${palette.id}" ${mode}: the hint reaches 4.5:1 on the plain and the highlighted row`, () => {
       const tokens = resolvedTokens(palette, mode);
       const panel = tokens["--osio-bg-elevated"];

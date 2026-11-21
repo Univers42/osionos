@@ -915,7 +915,7 @@
   --osio-n-8: #1C5D6D;
   --osio-n-9: #A1B5BD;
   --osio-n-10: #B4C5C7;
-  --osio-n-11: #ABB6B3;
+  --osio-n-11: #B2BCB9;
   --osio-n-12: #EEE8D5;
   --osio-a-solid: #3D97D4;
   --osio-a-hover: #69BAF0;
@@ -957,10 +957,10 @@
   --osio-graph-field-warm: rgba(61, 151, 212, 0.1);
   --osio-shadow-rgb: 0 0 0;
   --osio-graph-bg-1: #001F27;
-  --osio-graph-grain: rgba(171, 182, 179, 0.025);
+  --osio-graph-grain: rgba(178, 188, 185, 0.025);
   --osio-graph-vignette: rgba(0, 0, 0, 0.4);
   --osio-graph-node-backing: rgba(0, 31, 39, 0.72);
-  --osio-graph-node-rim: rgba(171, 182, 179, 0.16);
+  --osio-graph-node-rim: rgba(178, 188, 185, 0.16);
   --osio-graph-node-shadow: rgba(0, 0, 0, 0.45);
   --osio-graph-halo: rgba(0, 43, 54, 0.85);
   --osio-graph-card-shadow: rgba(0, 0, 0, 0.55);

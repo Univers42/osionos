@@ -45,7 +45,7 @@ export const GENERATED_PALETTES: readonly PaletteMeta[] = [
     label: "Solarized",
     description: "Ethan Schoonover's iconic warm-neutral palette with precise base tones and the eight signature accents.",
     signatureMode: "dark",
-    swatches: ["#001F27", "#073642", "#3D97D4", "#ABB6B3"],
+    swatches: ["#001F27", "#073642", "#3D97D4", "#B2BCB9"],
   },
   {
     id: "midnight",
