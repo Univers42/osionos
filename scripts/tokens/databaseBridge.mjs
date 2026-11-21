@@ -50,8 +50,12 @@ function familyLines(family, [colour, status, elsewhere = []]) {
   const wash = TINT(colour, "bg");
   const toward = (pct) => `${wash}+${TINT(colour, "fg")} ${pct}`;
   const names = (suffixes) => suffixes.filter((suffix) => !elsewhere.includes(suffix)).map((suffix) => `${family}${suffix}`).join(" ");
+  // A chip's ink sits on a wash of the tint, so it is the tint's foreground (repaired
+  // for exactly that wash, tints.mjs). The solid status token is a button fill and a
+  // theme recolours it freely: Swiss Grid's danger on a red wash was 2.9:1.
   return [
-    `${ink}: ${names(["", "-vivid", "-bold", "-text", "-text-bold", "-text-tag", "-text-soft", "-text-faint"])}`,
+    `${ink}: ${names(["", "-vivid", "-bold", "-text", "-text-soft", "-text-faint", ...(status ? [] : ["-text-bold", "-text-tag"])])}`,
+    ...(status ? [`${TINT(colour, "fg")}: ${names(["-text-bold", "-text-tag"])}`] : []),
     `${wash}: ${names(["-surface", "-surface2"])}`,
     `${wash} 50: ${family}-surface-soft`,
     `${toward(10)}: ${family}-surface-muted`,
@@ -195,6 +199,19 @@ const OWNED_TOKENS = [
   ...CHART_NAMES.slice(8).map((name, i) => [`--osio-${name}`, `--osio-${TINT(["brown", "gray"][i], "fg")}`]),
 ];
 
+// The vendored "In progress" option (statusDefaults.ts) and every database seeded from it
+// store the accent pair, so in a theme whose accent is red, orange or green the chip reads
+// as Blocked, Medium or Done. Purple is no status colour and no default accent.
+// Caveat: the rule matches ANY element wearing both classes, so the other accent chips
+// built from that pair (Upcoming, Meeting, In Flight) turn purple too, and a theme with a
+// purple accent still shows In Progress in its accent hue. The stored value is untouched:
+// remove the rule and every chip is back on the accent.
+const PROGRESS_CHIP_SELECTOR = 'html[data-theme] [class~="bg-accent-subtle"][class~="text-accent-text-bold"]';
+const PROGRESS_CHIP = [
+  ["background-color", cssValue(`${TINT("purple", "bg")}+${TINT("purple", "fg")} 18`)],
+  ["color", cssValue(TINT("purple", "fg"))],
+];
+
 const block = (selectors, declarations) =>
   `${selectors.join(",\n")} {\n${declarations.map(([name, value]) => `  ${name}: ${value};`).join("\n")}\n}`;
 
@@ -205,6 +222,6 @@ export function renderBridge(themeCss) {
   const unmapped = names.filter((name) => !mapping.has(name.slice("--color-".length)));
   const mapped = names.filter((name) => !unmapped.includes(name)).map((name) => [name, mapping.get(name.slice("--color-".length))]);
   const owned = OWNED_TOKENS.map(([name, target]) => [name, `var(${target})`]);
-  const css = `${[HEADER, block([":root", "[data-theme]"], owned), block(BRIDGE_SELECTORS, mapped)].join("\n\n")}\n`;
+  const css = `${[HEADER, block([":root", "[data-theme]"], owned), block(BRIDGE_SELECTORS, mapped), block([PROGRESS_CHIP_SELECTOR], PROGRESS_CHIP)].join("\n\n")}\n`;
   return { css, unmapped };
 }

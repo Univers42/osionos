@@ -73,10 +73,10 @@ html[data-theme] [data-dbms-source] {
   --color-danger-surface-soft: color-mix(in srgb, var(--osio-block-tint-red-bg) 50%, transparent);
   --color-danger-surface-strong: color-mix(in srgb, var(--osio-block-tint-red-bg), var(--osio-block-tint-red-fg) 28%);
   --color-danger-text: var(--osio-danger);
-  --color-danger-text-bold: var(--osio-danger);
+  --color-danger-text-bold: var(--osio-block-tint-red-fg);
   --color-danger-text-faint: var(--osio-danger);
   --color-danger-text-soft: var(--osio-danger);
-  --color-danger-text-tag: var(--osio-danger);
+  --color-danger-text-tag: var(--osio-block-tint-red-fg);
   --color-danger-vivid: var(--osio-danger);
   --color-emerald: var(--osio-accent);
   --color-emerald-surface: color-mix(in srgb, var(--osio-accent) 8%, transparent);
@@ -231,9 +231,9 @@ html[data-theme] [data-dbms-source] {
   --color-success-surface-medium: color-mix(in srgb, var(--osio-block-tint-green-bg), var(--osio-block-tint-green-fg) 18%);
   --color-success-surface-muted: color-mix(in srgb, var(--osio-block-tint-green-bg), var(--osio-block-tint-green-fg) 10%);
   --color-success-text: var(--osio-success);
-  --color-success-text-bold: var(--osio-success);
+  --color-success-text-bold: var(--osio-block-tint-green-fg);
   --color-success-text-faint: var(--osio-success);
-  --color-success-text-tag: var(--osio-success);
+  --color-success-text-tag: var(--osio-block-tint-green-fg);
   --color-success-vivid: var(--osio-success);
   --color-surface-inverse: var(--osio-fg-strong);
   --color-surface-inverse-soft: var(--osio-fg-default);
@@ -270,6 +270,11 @@ html[data-theme] [data-dbms-source] {
   --color-warning-surface-medium: color-mix(in srgb, var(--osio-block-tint-yellow-bg), var(--osio-block-tint-yellow-fg) 18%);
   --color-warning-surface-muted: color-mix(in srgb, var(--osio-block-tint-yellow-bg), var(--osio-block-tint-yellow-fg) 10%);
   --color-warning-text: var(--osio-warning);
-  --color-warning-text-bold: var(--osio-warning);
-  --color-warning-text-tag: var(--osio-warning);
+  --color-warning-text-bold: var(--osio-block-tint-yellow-fg);
+  --color-warning-text-tag: var(--osio-block-tint-yellow-fg);
+}
+
+html[data-theme] [class~="bg-accent-subtle"][class~="text-accent-text-bold"] {
+  background-color: color-mix(in srgb, var(--osio-block-tint-purple-bg), var(--osio-block-tint-purple-fg) 18%);
+  color: var(--osio-block-tint-purple-fg);
 }

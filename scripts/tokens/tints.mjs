@@ -4,13 +4,18 @@
 // palette's muted fill in lightness and the gray tint follows its neutral hue.
 //
 // Ponytail: the foreground is repaired by lightness alone, in steps, until it
-// reads on its background, the surface and the page. A tint whose hue cannot
+// reads on its background, the chip washes of that background, the surface and the page. A tint whose hue cannot
 // reach AA at any lightness (a very saturated yellow on a mid-grey fill)
 // leaves the loop at its limit unrepaired, and contrast.mjs then fails the build.
 
-import { contrastRatio, hexToOklch, oklchToHex } from "./oklch.mjs";
+import { contrastRatio, hexToOklch, mixHex, oklchToHex } from "./oklch.mjs";
 
 const AA_TEXT = 4.5;
+
+// A status chip paints its ink on the tint background washed toward the tint
+// foreground: surface-muted (10%) and surface-medium (18%), the two the vendored
+// options use (databaseBridge.mjs writes the same percentages).
+export const CHIP_WASH_PERCENTS = [10, 18];
 const REPAIR_STEP = 0.005;
 const REPAIR_LIMIT = 60;
 
@@ -51,12 +56,12 @@ const TINT_TONES = {
 // hundredths are the shifts that come from a palette actually differing.
 const shiftOf = (neutral, referenceFill) => Math.round((hexToOklch(neutral[MUTED_FILL]).l - referenceFill) * 100) / 100;
 
-function repaired(foreground, backgrounds, mode) {
+function repaired(foreground, backgroundsOf, mode) {
   const direction = mode === "light" ? -1 : 1;
   let { l, c, h } = foreground;
   for (let step = 0; step < REPAIR_LIMIT; step += 1) {
     const hex = oklchToHex({ l, c, h });
-    if (backgrounds.every((background) => contrastRatio(hex, background) >= AA_TEXT)) return hex;
+    if (backgroundsOf(hex).every((background) => contrastRatio(hex, background) >= AA_TEXT)) return hex;
     l += direction * REPAIR_STEP;
   }
   return oklchToHex({ l, c, h });
@@ -82,7 +87,7 @@ export function blockTints(palette, mode, neutral, referenceFill) {
       const [fgL, fgC, fgH] = fg;
       const foreground = repaired(
         { l: fgL, c: gray ? fgC * scale : fgC, h: gray ? palette.neutral.hue : fgH },
-        [background, ...surfaces],
+        (hex) => [background, ...CHIP_WASH_PERCENTS.map((pct) => mixHex(background, hex, pct)), ...surfaces],
         mode,
       );
       return [
