@@ -187,7 +187,7 @@ export interface HarnessOptions {
 	 * openrouter.ai (FA5), so a test of the OpenRouter-only fields (reasoning
 	 * effort, data-collection deny) names its model here.
 	 */
-	openRouterModels?: { id: string }[];
+	openRouterModels?: { id: string; rank?: number; dataUse?: 'no-train' | 'may-train' }[];
 }
 
 /**
@@ -211,7 +211,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
 			id: 'openrouter-mock',
 			baseUrl: `${options.upstreamBaseUrl ?? mock.baseUrl}/v1`,
 			wire: 'openrouter',
-			models: all.filter((model) => pooled.has(model.id)).map((model) => ({ ...model, upstreamId: model.id })),
+			models: all.filter((model) => pooled.has(model.id)).map((model) => ({ ...model, ...(options.openRouterModels ?? []).find((m) => m.id === model.id), upstreamId: model.id })),
 		}]);
 	}
 	// The daily budget of a user: the same as the deployment's, and the dear

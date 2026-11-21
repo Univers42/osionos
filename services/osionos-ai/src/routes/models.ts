@@ -5,9 +5,10 @@ import { connectionSecret, PLATFORM_CONNECTION_ID } from '../connections/service
 import { getOwnedConnection } from '../connections/repo.ts';
 import type { ConnectionRow } from '../connections/repo.ts';
 import { providerModels } from '../connections/catalog.ts';
-import { platformModels } from '../gateway/platform.ts';
+import { platformMenu } from '../gateway/platform.ts';
 import { restingUntil } from '../runs/cooldown.ts';
 import { requireUser } from './support.ts';
+import type { DataUse } from '../platformModels.ts';
 import type { RouteContext } from './types.ts';
 
 /**
@@ -23,6 +24,8 @@ interface ListedModel {
 	default: boolean;
 	vision?: boolean;
 	reasoning: boolean;
+	rank?: number;
+	dataUse?: DataUse;
 	contextWindow?: number;
 	inputMicroUsdPerMTok?: number;
 	outputMicroUsdPerMTok?: number;
@@ -82,7 +85,7 @@ export async function handleModels(ctx: RouteContext): Promise<number> {
 	const connectionId = (ctx.url.searchParams.get('connectionId') ?? '').trim();
 	if (!connectionId || connectionId === PLATFORM_CONNECTION_ID) {
 		const status = 200;
-		const listed: ListedModel[] = platformModels().map((model) => ({ id: model.id, label: model.label, default: model.default, vision: model.vision === true, reasoning: model.reasoning === true }));
+		const listed: ListedModel[] = platformMenu().map(({ pricing: model, rank, dataUse }) => ({ id: model.id, label: model.label, default: model.default, vision: model.vision === true, reasoning: model.reasoning === true, rank, dataUse }));
 		sendJson(ctx.response, status, {
 			models: await withRest(ctx.deps.redis, user.userId, PLATFORM_CONNECTION_ID, true, listed),
 		});

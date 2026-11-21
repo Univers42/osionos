@@ -96,6 +96,11 @@ export function platformModels(): readonly PlatformModelEntry[] {
 	return config.catalog.entries.map((entry) => entry.pricing);
 }
 
+/** The menu with its ranking and data use: what the models route lists (never the pricing, FA14). */
+export function platformMenu(): readonly CatalogEntry[] {
+	return config.catalog.entries;
+}
+
 /** The default model of the allowlist: the one a run gets when it asks for none. */
 export function defaultModel(): PlatformModelEntry | null {
 	return config.platformModels.find((model) => model.default) ?? null;
