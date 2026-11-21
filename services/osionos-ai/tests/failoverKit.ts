@@ -14,13 +14,13 @@ import type { SseEvent } from './sse.ts';
  * service reads it once, when it is imported.
  */
 
-export async function startKit() {
+export async function startKit(options: Parameters<typeof startHarness>[0] = {}) {
 	const failing = await startFailingUpstream();
 	process.env.OSIONOS_AI_KEK = Buffer.alloc(32, 7).toString('base64');
 	process.env.OSIONOS_AI_KEK_ID = 'k1';
 	process.env.OSIONOS_AI_DEV_ENDPOINT_HOSTS = '127.0.0.1';
 	process.env.OSIONOS_AI_DEV_PROVIDER_BASE_URLS = JSON.stringify({ openrouter: `${failing.baseUrl}/v1` });
-	const harness = await startHarness({ upstreamBaseUrl: failing.baseUrl });
+	const harness = await startHarness({ ...options, upstreamBaseUrl: failing.baseUrl });
 	const { app, base, tokenFor, createConversation } = harness;
 
 	/** The POST of a run with the body the test names; the answer is a stream. */

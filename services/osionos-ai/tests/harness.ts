@@ -29,6 +29,7 @@ export const METERED = {
 	inputMicroUsdPerMTok: 20_000,
 	outputMicroUsdPerMTok: 20_000,
 	default: false,
+	dataUse: 'no-train' as const,
 };
 
 /**
@@ -44,6 +45,7 @@ export const PLATFORM = {
 	inputMicroUsdPerMTok: 3_000_000,
 	outputMicroUsdPerMTok: 15_000_000,
 	default: false,
+	dataUse: 'no-train' as const,
 };
 
 /** The dear model: one call of it costs more than the daily limit of a user. */
@@ -53,6 +55,7 @@ export const DEAR = {
 	inputMicroUsdPerMTok: 200_000_000,
 	outputMicroUsdPerMTok: 200_000_000,
 	default: false,
+	dataUse: 'no-train' as const,
 };
 
 /**
@@ -65,8 +68,8 @@ export const DEAR = {
 export const USER_DAILY_MICROUSD = 200_000;
 
 /** Two routes on OpenRouter's free tier: the ids are what marks them. */
-export const FREE_TIER_FIRST = { id: 'mock/first:free', label: 'Free first', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: false };
-export const FREE_TIER_SECOND = { id: 'mock/second:free', label: 'Free second', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: false };
+export const FREE_TIER_FIRST = { id: 'mock/first:free', label: 'Free first', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: false, dataUse: 'no-train' as const };
+export const FREE_TIER_SECOND = { id: 'mock/second:free', label: 'Free second', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: false, dataUse: 'no-train' as const };
 
 /** The free model: the runs of the other cases are not bounded by the budget. */
 export const FREE = {
@@ -92,6 +95,7 @@ export const VISION = {
 	inputMicroUsdPerMTok: 1_000_000,
 	outputMicroUsdPerMTok: 1_000_000,
 	default: false,
+	dataUse: 'no-train' as const,
 };
 
 /** A model that reasons: a run may ask it for an effort. */
@@ -102,6 +106,7 @@ export const REASONER = {
 	outputMicroUsdPerMTok: 0,
 	default: false,
 	reasoning: true,
+	dataUse: 'no-train' as const,
 };
 
 /** A JSON body of the service. */

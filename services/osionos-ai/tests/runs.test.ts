@@ -174,12 +174,14 @@ describe('osionos-ai runs', () => {
 		assert.equal(run.rows[0].status, 'cancelled');
 	});
 
-	it('a model that is not on the allowlist is refused', async () => {
+	it('a model that is not on the allowlist falls back to Auto (FA11)', async () => {
 		const conversationId = await createConversation();
-		const response = await postRun(conversationId, randomUUID(), 'hello', 'no-such-model');
-		assert.equal(response.status, 400);
-		const body = (await response.json()) as JsonBody;
-		assert.equal(body.code, 'model_not_allowed');
+		const runId = randomUUID();
+		const response = await postRun(conversationId, runId, 'hello', 'no-such-model');
+		assert.equal(response.status, 200);
+		await response.text();
+		const run = await app.db.query('select model from public.ai_runs where id = $1', [runId]);
+		assert.equal(run.rows[0].model, 'mock-model');
 	});
 
 	it('a run quotes the pages the caller may read, and skips the others', async () => {

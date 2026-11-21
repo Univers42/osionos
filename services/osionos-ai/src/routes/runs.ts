@@ -14,6 +14,7 @@ import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import * as runStore from '../runs/runStore.ts';
 import { gateResearch } from '../research/gate.ts';
 import { resolveFallbacks } from './fallbacks.ts';
+import { autoChainFor, wantsAuto } from '../runs/auto.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -179,7 +180,16 @@ export async function replayRun(ctx: RouteContext, runId: string): Promise<numbe
 export async function handleRuns(ctx: RouteContext): Promise<number> {
 	const user = requireUser(ctx);
 	if (!user) return 401;
-	const body = await readJson(ctx.request, startRunSchema);
+	const parsed = await readJson(ctx.request, startRunSchema);
+	// Auto (FA11): no usable platform model and no explicit fallbacks of the
+	// user's own, so the server picks the chain. An empty chain leaves the body
+	// as it was and the run answers as it did before.
+	const auto = !parsed.fallbacks && wantsAuto(config.catalog, parsed.connectionId, parsed.model)
+		? await autoChainFor(ctx.deps.redis, user.userId, config.catalog)
+		: [];
+	const body = auto.length === 0
+		? parsed
+		: { ...parsed, model: auto[0].menuId, fallbacks: auto.slice(1).map((entry) => ({ model: entry.menuId })) };
 	// The target of the run: the platform connection, or one of the caller's.
 	const resolved = await resolveTarget(ctx.deps.db, ctx.deps.redis, user, body.connectionId, body.model);
 	if (resolved.kind === 'refused') {
@@ -188,7 +198,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 	}
 	const chain = await resolveFallbacks(ctx, user, body);
 	if (chain.kind === 'refused') {
-		sendError(ctx.response, 400, 'invalid_fallback');
+		sendError(ctx.response, 400, chain.code);
 		return 400;
 	}
 	const conversation = await getOwnedConversation(ctx.deps.db, { id: body.conversationId, ownerId: user.userId });
