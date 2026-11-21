@@ -15,6 +15,7 @@
 // module always matches its runtime and a crash here never takes the node down. Its only input is
 // the node's IPC channel, whose commands pty-service.mjs already validated (pty-wire.mjs). The
 // shell, its argv, cwd and env are fixed here: $SHELL, no argument, $HOME, the server's env.
+import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -24,11 +25,36 @@ import { PTY_LIMITS } from './pty-wire.mjs';
 
 const SHELL_ENV = { TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'osionos' };
 
-// A shell is its process group's leader. The hang-up reaches it and, through the shell, its jobs;
-// the pty's own kill() then hangs up the shell itself.
-const hangUpGroup = (pid) => process.kill(-pid, 'SIGHUP');
+// The process groups of session `sid`, read from /proc (field 5 pgrp, 6 session, after the last ')'
+// so a command name holding ") " cannot shift them).
+// Caveat: Linux only; where /proc is missing this returns just [sid], the shell's own group, and a job
+// survives unless the shell forwards the hang-up. A process that called setsid() left the session and
+// is not found, by design (nohup/disown are the shell's own way out).
+export function sessionGroups(sid, procDir = '/proc') {
+	let entries;
+	try { entries = readdirSync(procDir); } catch { return [sid]; }
+	const groups = new Set([sid]);
+	for (const entry of entries) {
+		if (!/^\d+$/.test(entry)) continue;
+		let stat;
+		try { stat = readFileSync(join(procDir, entry, 'stat'), 'utf8'); } catch { continue; }
+		const [pgrp, session] = stat.slice(stat.lastIndexOf(')') + 2).split(' ').slice(2, 4).map(Number);
+		if (session === sid && pgrp > 0) groups.add(pgrp);
+	}
+	return [...groups];
+}
 
-export function createHostSessions({ spawn, send, env, cwd, killGroup = hangUpGroup }) {
+// A shell is its session's leader, and job control gives every job its own process group, so the
+// hang-up goes to each group of the session: hanging up the shell's group alone left `sleep 1000 &`
+// running on 3 of 10 closes (issue #316), whenever pty.kill()'s second SIGHUP killed bash before it
+// forwarded the first to its jobs. SIGCONT lets a stopped job act on the hang-up, as the kernel does.
+function hangUpSession(sid) {
+	for (const pgrp of sessionGroups(sid)) {
+		try { process.kill(-pgrp, 'SIGHUP'); process.kill(-pgrp, 'SIGCONT'); } catch { /* the group ended */ }
+	}
+}
+
+export function createHostSessions({ spawn, send, env, cwd, killGroup = hangUpSession }) {
 	const shell = env.SHELL || '/bin/sh';
 	const live = new Map();
 

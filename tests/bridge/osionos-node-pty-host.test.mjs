@@ -3,11 +3,11 @@
 // ABI mismatch nor a native crash in node-pty can take the node down.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createHostSessions } from '../../packages/osionos-node/pty-host.mjs';
+import { createHostSessions, sessionGroups } from '../../packages/osionos-node/pty-host.mjs';
 import { createPtyHost, ptyHostCommand } from '../../packages/osionos-node/pty-runtime.mjs';
 import { PTY_LIMITS } from '../../packages/osionos-node/pty-wire.mjs';
 
@@ -65,6 +65,21 @@ test('W8: kill hangs up the shell\'s process group and the pty, once; a dead id 
 	assert.deepEqual(sent, [{ op: 'spawned', id: 1 }], 'a killed shell reports no exit');
 	assert.doesNotThrow(() => host.handle({ op: 'write', id: 1, data: 'x' }));
 	assert.equal(host.size(), 0);
+});
+
+test('W8 (#316): the hang-up reaches every job group of the shell\'s session, read from /proc', (t) => {
+	const proc = mkdtempSync(join(tmpdir(), 'proc-'));
+	t.after(() => rmSync(proc, { recursive: true, force: true }));
+	const stat = (pid, line) => { mkdirSync(join(proc, String(pid))); writeFileSync(join(proc, String(pid), 'stat'), line); };
+	stat(42, '42 (bash) S 30 42 42 34816 48 4194560 0');
+	stat(48, '48 (sleep) S 42 48 42 34816 48 4194560 0');
+	stat(49, '49 (odd) S (name)) S 42 49 42 34816 48 4194560 0');
+	stat(50, '50 (sleep) S 42 48 42 34816 48 4194560 0');
+	stat(77, '77 (other) S 1 77 77 0 -1 4194560 0');
+	mkdirSync(join(proc, '78'));
+	mkdirSync(join(proc, 'self'));
+	assert.deepEqual(sessionGroups(42, proc).sort((a, b) => a - b), [42, 48, 49]);
+	assert.deepEqual(sessionGroups(42, join(proc, 'missing')), [42], 'no /proc: the shell\'s own group only');
 });
 
 test('W9: output pauses the pty above the high watermark and resumes below the low one', () => {

@@ -2,6 +2,9 @@
 // VS Code server's ws and node-pty, the node's own gates, bash. Runs where that server is
 // installed (OSIONOS_TEST_SERVER, default ~/.osionos/server/1.138.0) and is skipped elsewhere,
 // which CI is: the gates themselves are covered by osionos-node-pty-service.test.mjs with fakes.
+// In a container, run it with an init (`docker run --init`) and a glibc image (the server's node is
+// glibc): without an init, a hung-up job stays a zombie under PID 1 and W8's kill(pid, 0) still finds
+// it (5 of 5 runs fail, issue #316). With the session-wide hang-up (pty-host.mjs) W8 passed 20 of 20.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
