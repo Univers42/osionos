@@ -31,6 +31,8 @@ export interface MoveInput {
 	outcome: PumpOutcome;
 	records: AttemptRecord[];
 	emit: (type: string, data: unknown) => Promise<void>;
+	/** The chain has no first-part time left (FA17): no new attempt may start. */
+	chainClosed?: boolean;
 }
 
 /**
@@ -41,6 +43,8 @@ export interface MoveInput {
  */
 async function nextIndex(input: MoveInput): Promise<number> {
 	const { steps, index, current, outcome } = input;
+	// Same path as the last target of a chain: the failed attempt settles as 'stay'.
+	if (input.chainClosed) return -1;
 	const signal = spendsSharedQuota(current.target) ? quotaSignal(outcome.error)?.kind : undefined;
 	const closed = signal === 'account' || signal === 'ambiguous' || (await accountRestSeconds(input.redis)) !== undefined;
 	return steps.findIndex((step, position) => position > index && !(closed && spendsSharedQuota(step.target)));
