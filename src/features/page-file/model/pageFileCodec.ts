@@ -14,8 +14,8 @@ import type { Block } from "@/entities/block";
 import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import type { PageEntry } from "@/entities/page";
 import { codeBlockOf } from "@/features/ide/model/codeFile";
+import { parsePageBody, type PageBlocks } from "@/features/ide/model/previewDocument";
 import { serializeBlocksToMarkdown } from "@/services/page-actions/pageMarkdownSerialize";
-import { parseMarkdownToBlocks } from "@osionos/markdown-engine/markdown/shortcuts";
 import { reconcileBlocks } from "@/features/raw-mode/model/reconcileBlocks";
 
 import { EXTRA_BLOCK_KEYS, SCOPED_OVERLAY_KEYS, applyOverlay, collectOverlay } from "./blockOverlay";
@@ -119,14 +119,17 @@ export function pageToFile(page: PageEntry): string {
  * A `surface:"code"` page never comes through here: its whole file IS the text
  * of its `code` block, so `pageToFile` writes it raw and the caller stores that
  * string as the content — parsing it into blocks would round-trip fence text.
+ *
+ * `parsedBody` are the blocks of the body already parsed elsewhere (the preview's worker,
+ * previewDocument.parsePageBody); the body is then not parsed here.
  */
-export function fileToPage(text: string, existing?: PageEntry): ParsedPageFile {
+export function fileToPage(text: string, existing?: PageEntry, parsedBody?: PageBlocks): ParsedPageFile {
   const split = splitFrontMatter(text);
   const patch = patchFromMeta(split.meta);
   // Validated once: the guard walks every overlay entry, and both the meta and
   // the block restore need its verdict.
   const overlay = isBlockOverlay(split.meta.blocks) ? split.meta.blocks : undefined;
-  const { blocks, dropped } = resolveContainerAttributes(blocksOf(split.body, overlay, existing));
+  const { blocks, dropped } = resolveContainerAttributes(blocksOf(split.body, overlay, existing, parsedBody));
   const parsed: ParsedPageFile = { meta: metaOf(split.meta, patch, overlay), patch, content: blocks, frontMatterError: split.error };
   if (dropped.length > 0) parsed.attributeDrops = dropped;
   return parsed;
@@ -134,8 +137,8 @@ export function fileToPage(text: string, existing?: PageEntry): ParsedPageFile {
 
 /** Blocks for a body: the overlay restores ids/extras, else `existing` by position.
  *  Container attributes then win over either for layout keys (ADR 0064 PS14). */
-function blocksOf(body: string, overlay: BlockOverlay | undefined, existing?: PageEntry): Block[] {
-  const blocks = parseBody(body);
+function blocksOf(body: string, overlay: BlockOverlay | undefined, existing?: PageEntry, parsedBody?: PageBlocks): Block[] {
+  const blocks = parsedBody === undefined ? parseBody(body) : sanitizeLinkBlockFields(parsedBody);
   if (overlay !== undefined) return applyOverlay(blocks, overlay);
   if (existing?.content !== undefined) return reconcileBlocks(blocks, existing.content);
   return blocks;
@@ -144,7 +147,7 @@ function blocksOf(body: string, overlay: BlockOverlay | undefined, existing?: Pa
 /** A parser crash must not eat a hand-edited file: one paragraph holds the body. */
 function parseBody(body: string): Block[] {
   try {
-    return sanitizeLinkBlockFields(parseMarkdownToBlocks(body, { keepEmptyParagraphs: true, containerAttributes: true }));
+    return sanitizeLinkBlockFields(parsePageBody(body));
   } catch {
     return [{ id: crypto.randomUUID(), type: "paragraph", content: body }];
   }

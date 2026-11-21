@@ -13,31 +13,8 @@
 import React from "react";
 
 import type { ImagePolicy } from "../model/previewDocument";
-import PreviewParseWorker from "../model/previewParse.worker?worker";
-import { PreviewParseQueue, type PreviewState } from "../model/previewParseQueue";
 import { MarkdownDocumentView } from "./MarkdownDocumentView";
-
-const createWorker = () => new PreviewParseWorker();
-const WAITING: PreviewState = { kind: "waiting" };
-
-// The queue is made in an effect, never in render, so every unmount (StrictMode's first
-// one included) terminates what its mount started; a source is posted only when it changes.
-function usePreviewState(source: string, images: ImagePolicy): PreviewState {
-  const [state, setState] = React.useState<PreviewState>(WAITING);
-  const queue = React.useRef<PreviewParseQueue | null>(null);
-  React.useEffect(() => {
-    const created = new PreviewParseQueue(createWorker, setState);
-    queue.current = created;
-    return () => {
-      created.dispose();
-      queue.current = null;
-    };
-  }, []);
-  React.useEffect(() => {
-    queue.current?.request(source, images);
-  }, [source, images]);
-  return state;
-}
+import { usePreviewState } from "./usePreviewState";
 
 interface MarkdownDocumentProps {
   source: string;

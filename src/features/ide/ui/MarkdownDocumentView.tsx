@@ -33,9 +33,13 @@ function noticeOf(state: PreviewState): keyof typeof NOTICE | null {
  * What the preview shows for each outcome of the worker's parse. htmlSubset stays off and
  * no caller option reaches the engine: raw HTML in a file renders as text, never as markup.
  */
-export function MarkdownDocumentView({ state }: Readonly<{ state: PreviewState }>) {
+export function PreviewNotice({ state }: Readonly<{ state: PreviewState }>) {
   const notice = noticeOf(state);
-  if (notice !== null) return <p className="osio-md-document osio-md-document-error">{NOTICE[notice]}</p>;
-  if (state.kind !== "ready" || !state.document.ok) return null;
+  return notice === null ? null : <p className="osio-md-document osio-md-document-error">{NOTICE[notice]}</p>;
+}
+
+export function MarkdownDocumentView({ state }: Readonly<{ state: PreviewState }>) {
+  if (noticeOf(state) !== null) return <PreviewNotice state={state} />;
+  if (state.kind !== "ready" || !state.document.ok || !("blocks" in state.document)) return null;
   return <MarkdownView blocks={state.document.blocks} className="osio-md-document" />;
 }

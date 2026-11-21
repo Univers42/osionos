@@ -12,19 +12,10 @@
 
 import React from "react";
 
-import type { Block } from "@/entities/block";
 import type { PreviewFlavor } from "../model/markdownPreview";
 import { MarkdownDocument } from "./MarkdownDocument";
 
-const OmdPreview = React.lazy(async () => {
-  const [{ RawPreviewPane }, { fileToPage }] = await Promise.all([
-    import("@/features/raw-mode/ui/RawPreviewPane"),
-    import("@/features/page-file/model/pageFileCodec"),
-  ]);
-  // Built once per module load: a stable parse keeps RawPreviewPane's memo effective.
-  const parse = (text: string): Block[] => fileToPage(text).content;
-  return { default: ({ source }: Readonly<{ source: string }>) => <RawPreviewPane source={source} parse={parse} /> };
-});
+const OmdPreview = React.lazy(async () => ({ default: (await import("./OmdDocument")).OmdDocument }));
 
 /**
  * The app's preview: an .omd file is an osionos page and renders as one (blocks, the

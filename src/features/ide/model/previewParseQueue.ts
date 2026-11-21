@@ -14,7 +14,7 @@
 // One request runs at a time; a newer source replaces the single pending one, so typing
 // faster than the parse never queues work or churns workers. Every request ends in one
 // state: a result, tooSlow (the budget killed the worker), or unavailable.
-import type { ImagePolicy, PreviewDocument, PreviewRequest, PreviewResponse } from "./previewDocument";
+import type { ImagePolicy, PreviewDocument, PreviewParse, PreviewRequest, PreviewResponse } from "./previewDocument";
 
 /**
  * Caveat: timed on an i5-13600KF, where 1 MiB of the engine's testing_markdown.md parses in
@@ -29,9 +29,9 @@ export type PreviewState =
   | { kind: "tooSlow" }
   | { kind: "unavailable" };
 
-type Job = { source: string; images: ImagePolicy };
+type Job = { source: string; images: ImagePolicy; parse: PreviewParse };
 
-const sameJob = (a: Job | null, b: Job): boolean => a?.source === b.source && a.images === b.images;
+const sameJob = (a: Job | null, b: Job): boolean => a?.source === b.source && a.images === b.images && a.parse === b.parse;
 
 export class PreviewParseQueue {
   private readonly createWorker: () => Worker;
@@ -50,8 +50,8 @@ export class PreviewParseQueue {
   }
 
   /** A source equal to the last one asked for posts nothing. */
-  request(source: string, images: ImagePolicy): void {
-    const job = { source, images };
+  request(source: string, images: ImagePolicy, parse: PreviewParse = "markdown"): void {
+    const job = { source, images, parse };
     if (this.closed || sameJob(this.wanted, job)) return;
     this.wanted = job;
     if (this.inFlight === null) this.send(job);

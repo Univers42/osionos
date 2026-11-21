@@ -83,6 +83,8 @@ export default defineConfig({
       { find: /^@osionos\/ui\//, replacement: `${path.resolve(here('.'), 'packages/osionos-ui/src')}/` },
       // The preview of a .md file. Above '@', which would otherwise rewrite '@osionos/...' to src/.
       { find: /^@osionos\/markdown-engine\/react$/, replacement: path.resolve(here('.'), 'packages/markdown-engine/react.tsx') },
+      // The .omd preview's page-body parse runs in the preview worker (#320).
+      { find: /^@osionos\/markdown-engine\/markdown\/shortcuts$/, replacement: path.resolve(here('.'), 'packages/markdown-engine/markdown/shortcuts.ts') },
       { find: /^@osionos\/markdown-engine$/, replacement: path.resolve(here('.'), 'packages/markdown-engine/index.ts') },
       { find: '@', replacement: path.resolve(here('.'), 'src') },
     ],

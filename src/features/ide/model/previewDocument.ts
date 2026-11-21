@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { parse, type BlockNode } from "@osionos/markdown-engine";
+import { parseMarkdownToBlocks } from "@osionos/markdown-engine/markdown/shortcuts";
 
 /**
  * "alt": every image becomes its alt text (the editor page: its CSP refuses remote
@@ -18,7 +19,15 @@ import { parse, type BlockNode } from "@osionos/markdown-engine";
  */
 export type ImagePolicy = "alt" | "remote";
 
-export type PreviewDocument = { ok: true; blocks: BlockNode[] } | { ok: false; reason: "tooLarge" | "tooDeep" };
+/** "markdown": a plain .md, cleaned for the engine's renderer. "page": an .omd body as page blocks. */
+export type PreviewParse = "markdown" | "page";
+
+export type PageBlocks = ReturnType<typeof parseMarkdownToBlocks>;
+
+export type PreviewDocument =
+  | { ok: true; blocks: BlockNode[] }
+  | { ok: true; pageBlocks: PageBlocks }
+  | { ok: false; reason: "tooLarge" | "tooDeep" };
 
 /**
  * Measured 2026-11-07 (parse + clean + render, node SSR, i5-13600KF, 3 runs): 1 MiB of
@@ -96,7 +105,28 @@ export function parsePreviewDocument(text: string, images: ImagePolicy): Preview
   }
 }
 
-export type PreviewRequest = { id: number; source: string; images: ImagePolicy };
+/**
+ * The pure half of fileToPage: an .omd body to engine blocks. The codec and the worker both
+ * call it, so the preview shows what the page would. It may throw; callers decide the fallback.
+ */
+export function parsePageBody(body: string): PageBlocks {
+  return parseMarkdownToBlocks(body, { keepEmptyParagraphs: true, containerAttributes: true });
+}
+
+/**
+ * Caveat: the engine throwing here ends as tooDeep, where fileToPage on the main thread
+ * would have shown the body as one paragraph; the engine is not known to throw.
+ */
+export function parsePagePreview(body: string): PreviewDocument {
+  if (body.length > PREVIEW_MAX_CHARS) return { ok: false, reason: "tooLarge" };
+  try {
+    return { ok: true, pageBlocks: parsePageBody(body) };
+  } catch {
+    return { ok: false, reason: "tooDeep" };
+  }
+}
+
+export type PreviewRequest = { id: number; source: string; images: ImagePolicy; parse?: PreviewParse };
 export type PreviewResponse = { id: number; document: PreviewDocument };
 
 /**
@@ -108,7 +138,7 @@ export type PreviewResponse = { id: number; document: PreviewDocument };
  * reports tooDeep.
  */
 export function answerPreviewRequest(request: PreviewRequest, post: (response: PreviewResponse) => void): void {
-  const result = parsePreviewDocument(request.source, request.images);
+  const result = request.parse === "page" ? parsePagePreview(request.source) : parsePreviewDocument(request.source, request.images);
   try {
     post({ id: request.id, document: result });
   } catch {
