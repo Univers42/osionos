@@ -4,6 +4,7 @@ import { config } from '../config.ts';
 import { readJson } from '../http.ts';
 import { guardRefusal, sendMcpError } from '../mcp/guard.ts';
 import { createMcpServer } from '../mcp/server.ts';
+import { WRITE_SCOPE } from '../mcp/tools.ts';
 import { authenticatePat } from '../pat/authenticatePat.ts';
 import { checkMcpRateLimit } from '../rateLimit.ts';
 import type { RouteContext } from './types.ts';
@@ -66,7 +67,12 @@ export async function handleMcp(ctx: RouteContext): Promise<number> {
 		sendMcpError(response, 400, 'batch_not_supported');
 		return 400;
 	}
-	const server = createMcpServer(ctx.deps.db, ctx.deps.redis, principal);
+	// Public mode is read-only (FB5): the mint refuses write_approval, and a token stored
+	// before public mode or minted elsewhere is cut down here, on every call.
+	const effective = config.publicMode
+		? { ...principal, scopes: principal.scopes.filter((scope) => scope !== WRITE_SCOPE) }
+		: principal;
+	const server = createMcpServer(ctx.deps.db, ctx.deps.redis, effective);
 	// The host and origin check is guardRefusal above, and only it: the SDK
 	// compares the raw Host header, port included, which the configured names
 	// do not carry.
