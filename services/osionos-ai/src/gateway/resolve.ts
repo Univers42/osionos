@@ -163,9 +163,10 @@ function optionsKeyOf(entry: ProviderEntry): string {
  * The target of a catalog entry. `modelId` stays the menu id (the cooldown
  * key, FA2); the upstream is asked for the entry's own id.
  *
- * Caveat: a legacy entry is always openrouter-shaped on the wire, whatever its
- * host, because that is what the platform sent before the pool existed; only
- * the catalog's own `wire` for it (a host test) would differ.
+ * Caveat: a legacy entry's wire comes from its host (exactly openrouter.ai),
+ * so an OpenRouter-compatible proxy on another host is treated as generic and
+ * loses the data_collection deny and the OpenRouter headers. Escape hatch:
+ * declare it as a pool provider with wire 'openrouter'.
  */
 function platformTarget(entry: CatalogEntry): ResolvedTarget {
 	return {
@@ -180,7 +181,7 @@ function platformTarget(entry: CatalogEntry): ResolvedTarget {
 		reasoning: entry.pricing.reasoning === true,
 		provider: entry.providerId,
 		dataUse: entry.dataUse,
-		upstreamWire: entry.providerId === 'legacy' ? 'openrouter' : entry.wire,
+		upstreamWire: entry.wire,
 	};
 }
 

@@ -8,7 +8,7 @@ import { SseStream, collect } from './sse.ts';
  * The reasoning effort of a run: the option each wire reads, the merge with
  * the vision deny, the run body, and the request the upstream receives.
  */
-const { app, mock, base, tokenFor, createConversation } = await startHarness();
+const { app, mock, base, tokenFor, createConversation } = await startHarness({ openRouterModels: [REASONER] });
 const { reasoningOptions, mergeProviderOptions } = await import('../src/runs/effort.ts');
 const { parseCatalog } = await import('../src/connections/catalogParse.ts');
 const { config } = await import('../src/config.ts');

@@ -181,6 +181,13 @@ export interface HarnessOptions {
 	 * wants the check to be unavailable brings null.
 	 */
 	outputCheck?: OutputCheck | null;
+	/**
+	 * Models served by a pool provider that declares the OpenRouter wire, on the
+	 * same upstream as the rest. A legacy entry is generic unless its host is
+	 * openrouter.ai (FA5), so a test of the OpenRouter-only fields (reasoning
+	 * effort, data-collection deny) names its model here.
+	 */
+	openRouterModels?: { id: string }[];
 }
 
 /**
@@ -195,7 +202,18 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
 	const bridge = await startMockBridge();
 	process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${options.upstreamBaseUrl ?? mock.baseUrl}/v1`;
 	process.env.OSIONOS_AI_BRIDGE_URL = bridge.baseUrl;
-	process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([FREE, METERED, PLATFORM, DEAR, VISION, REASONER, FREE_TIER_FIRST, FREE_TIER_SECOND]);
+	const pooled = new Set((options.openRouterModels ?? []).map((model) => model.id));
+	const all = [FREE, METERED, PLATFORM, DEAR, VISION, REASONER, FREE_TIER_FIRST, FREE_TIER_SECOND];
+	process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify(all.filter((model) => !pooled.has(model.id)));
+	if (pooled.size > 0) {
+		process.env.OSIONOS_AI_DEV_ENDPOINT_HOSTS = '127.0.0.1';
+		process.env.OSIONOS_AI_PLATFORM_PROVIDERS = JSON.stringify([{
+			id: 'openrouter-mock',
+			baseUrl: `${options.upstreamBaseUrl ?? mock.baseUrl}/v1`,
+			wire: 'openrouter',
+			models: all.filter((model) => pooled.has(model.id)).map((model) => ({ ...model, upstreamId: model.id })),
+		}]);
+	}
 	// The daily budget of a user: the same as the deployment's, and the dear
 	// model asks for more than that.
 	process.env.OSIONOS_AI_USER_DAILY_MICROUSD = String(USER_DAILY_MICROUSD);

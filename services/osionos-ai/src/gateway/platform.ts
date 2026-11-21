@@ -18,8 +18,8 @@ export interface ModelUsage {
  * through the Vercel AI SDK. It is built once per process: the headers and the
  * base URL never change.
  *
- * The two extra headers are the ones OpenRouter asks for, and they name the
- * allowed origin of this deployment, never a secret.
+ * The two extra headers are the ones OpenRouter asks for, sent only on the
+ * openrouter wire (FA5); they name the allowed origin, never a secret.
  *
  * includeUsage sends `stream_options: { include_usage: true }` with the call:
  * an OpenAI-compatible upstream reports the tokens of a stream only when it
@@ -27,13 +27,18 @@ export interface ModelUsage {
  */
 let provider: ReturnType<typeof createOpenAICompatible> | undefined;
 
+/** FA5: the OpenRouter headers go only where the catalog says the legacy upstream is OpenRouter. */
+function legacyIsOpenRouter(): boolean {
+	return config.catalog.entries.some((entry) => entry.providerId === 'legacy' && entry.wire === 'openrouter');
+}
+
 function platformProvider(): ReturnType<typeof createOpenAICompatible> {
 	if (!provider) {
 		provider = createOpenAICompatible({
 			name: 'platform',
 			baseURL: config.upstreamBaseUrl,
 			...(config.upstreamApiKey ? { apiKey: config.upstreamApiKey } : {}),
-			headers: { 'HTTP-Referer': config.allowedOrigin, 'X-Title': 'osionos' },
+			...(legacyIsOpenRouter() ? { headers: { 'HTTP-Referer': config.allowedOrigin, 'X-Title': 'osionos' } } : {}),
 			includeUsage: true,
 		});
 	}
@@ -86,9 +91,9 @@ export function platformModel(menuId: string): LanguageModel {
 	return poolProvider(pooled)(entry.upstreamId);
 }
 
-/** The allowlist, as configured. */
+/** The menu: every model the catalog serves, legacy and pooled. */
 export function platformModels(): readonly PlatformModelEntry[] {
-	return config.platformModels;
+	return config.catalog.entries.map((entry) => entry.pricing);
 }
 
 /** The default model of the allowlist: the one a run gets when it asks for none. */

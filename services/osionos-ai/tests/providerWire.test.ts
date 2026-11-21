@@ -28,7 +28,7 @@ process.env.OSIONOS_AI_PLATFORM_PROVIDERS = JSON.stringify([
 		models: [poolModel('plain-x', 'shared/x'), poolModel('plain-r', 'up/plain-r', { reasoning: true })],
 	},
 ]);
-const { app, mock, base, tokenFor, createConversation } = await startHarness();
+const { app, mock, base, tokenFor, createConversation } = await startHarness({ upstreamBaseUrl: plainMock.baseUrl });
 const { resolveTarget } = await import('../src/gateway/resolve.ts');
 const { cooldownKey } = await import('../src/runs/cooldown.ts');
 
@@ -109,5 +109,18 @@ describe('provider wire', () => {
 		assert.notEqual(keys[0], keys[1]);
 		const user_ = await resolveTarget(app.db, app.redis, user, undefined, 'ora-x');
 		assert.ok(user_.kind === 'resolved' && user_.target.provider === 'ora' && user_.target.upstreamWire === 'openrouter' && user_.target.dataUse === 'no-train');
+	});
+});
+
+describe('a legacy entry off openrouter.ai (FA5)', () => {
+	it('gets reasoningEffort, no provider or reasoning field and no OpenRouter headers', async () => {
+		await run('mock-reasoner', 'high');
+		const [headers] = plainMock.headersFor('mock-reasoner');
+		const [body] = plainMock.bodiesFor('mock-reasoner');
+		assert.equal(body.reasoning_effort, 'high');
+		assert.equal('reasoning' in body, false);
+		assert.equal('provider' in body, false);
+		assert.equal(headers['http-referer'], undefined);
+		assert.equal(headers['x-title'], undefined);
 	});
 });

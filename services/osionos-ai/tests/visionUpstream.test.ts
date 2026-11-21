@@ -20,6 +20,7 @@ import { pngBytes } from './visionFixtures.ts';
 const upstream = await startVisionUpstream();
 const { app, base, bridge, mock, tokenFor, createConversation } = await startHarness({
 	upstreamBaseUrl: upstream.baseUrl,
+	openRouterModels: [VISION],
 });
 // The configuration is read when the service is imported, so the modules that
 // read it come after the harness.
