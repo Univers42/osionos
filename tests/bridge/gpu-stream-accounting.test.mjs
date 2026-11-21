@@ -1,16 +1,13 @@
 import { it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { runOne } from '../../services/osionos-ai/scripts/bench/stream-run.mjs';
 
-const source = readFileSync(new URL('../../services/osionos-ai/spikes/gpu/llm-bench-gpu.mjs', import.meta.url), 'utf8');
-const functions = source.slice(source.indexOf('async function* sseObjects'), source.indexOf('/** The metrics of the server'));
 const run = (chunks, broken = false) => {
   const body = new ReadableStream({ start(controller) {
     for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
     if (broken) controller.error(new Error('connection lost')); else controller.close();
   } });
-  const runOne = new Function('fetch', 'BASE', `${functions}\nreturn runOne;`)(async () => new Response(body), 'http://synthetic');
-  return runOne({});
+  return runOne({}, { api: 'http://synthetic', fetchImpl: async () => new Response(body) });
 };
 const content = 'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n';
 const finish = 'data: {"choices":[{"finish_reason":"stop"}]}\n\n';

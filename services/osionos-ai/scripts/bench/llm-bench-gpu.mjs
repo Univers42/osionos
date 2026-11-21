@@ -44,9 +44,9 @@ import { unlinkSync, writeFileSync } from 'node:fs';
 import { buildRequests } from './requests.mjs';
 import { parseArgs } from './bench-args.mjs';
 import { buildBody } from './bench-body.mjs';
-import { sseObjects } from './sse.mjs';
+import { runOne as runStream } from './stream-run.mjs';
 import { readMetrics } from './server-metrics.mjs';
-import { fmt, mean, mulberry32, partKind, pct } from './stream-stats.mjs';
+import { fmt, mean, mulberry32, pct } from './stream-stats.mjs';
 
 const ARGS = parseArgs(process.argv.slice(2), process.env);
 const { api: API, root: BASE, n: N } = ARGS;
@@ -61,79 +61,12 @@ const SEED = Number(process.env.SEED || 20261021);
 
 const rng = mulberry32(SEED);
 
-/** One streamed chat completion, timed. */
-async function runOne(body) {
-	const started = performance.now();
-	let res;
-	try {
-		res = await fetch(`${API}/chat/completions`, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json', ...ARGS.headers },
-			body: JSON.stringify(body),
-			signal: AbortSignal.timeout(Number(process.env.REQUEST_TIMEOUT_MS || 180000)),
-		});
-	} catch (error) {
-		return { error: `fetch_failed: ${error.message}` };
-	}
-	if (!res.ok) {
-		const text = await res.text();
-		return { error: `http_${res.status}: ${text.slice(0, 300)}` };
-	}
-	let firstAt = null;
-	let firstPartAt = null;
-	let sawReasoning = false;
-	let lastAt = null;
-	let contentChunks = 0;
-	let contentChars = 0;
-	let timings = null;
-	let usage = null;
-	let finishReason = null;
-	const contentTimes = [];
-	let completed = false;
-	try {
-		for await (const object of sseObjects(res)) {
-			if (object?.error !== undefined) return { error: `stream_error: ${JSON.stringify(object.error).slice(0, 300)}` };
-			if (object.done) completed = true;
-			const now = performance.now();
-			if (object.timings) timings = object.timings;
-			if (object.usage) usage = object.usage;
-			const choice = object.choices?.[0];
-			if (!choice) continue;
-			if (choice.finish_reason) { finishReason = choice.finish_reason; completed = true; }
-			const kind = partKind(choice.delta);
-			if (kind !== null && firstPartAt === null) firstPartAt = now;
-			if (kind === 'reasoning') sawReasoning = true;
-			const delta = choice.delta?.content;
-			if (typeof delta === 'string' && delta.length > 0) {
-				if (firstAt === null) firstAt = now;
-				contentTimes.push(now);
-				contentChunks += 1;
-				contentChars += delta.length;
-				lastAt = now;
-			}
-		}
-	} catch (error) {
-		return { error: `stream_failed: ${error.message}` };
-	}
-	if (!completed) return { error: 'stream_incomplete: ended without completion' };
-	// R24: a stream with no content part is not a success.
-	if (firstPartAt === null) return { error: 'no_content_part: the stream finished with nothing' };
-	const ended = performance.now();
-	const itl = [];
-	for (let index = 1; index < contentTimes.length; index += 1) itl.push(contentTimes[index] - contentTimes[index - 1]);
-	return {
-		ttftMs: firstAt === null ? NaN : firstAt - started,
-		firstPartMs: firstPartAt === null ? NaN : firstPartAt - started,
-		sawReasoning,
-		totalMs: ended - started,
-		itlMs: itl,
-		contentChunks,
-		contentChars,
-		finishReason,
-		timings,
-		usage,
-	};
-}
+/** One streamed chat completion, timed (stream-run.mjs). */
+const runOne = (body) => runStream(body, {
+	api: API,
+	headers: ARGS.headers,
+	timeoutMs: Number(process.env.REQUEST_TIMEOUT_MS || 180000),
+});
 
 // ---------------------------------------------------------------- start
 const MODEL = ARGS.model || (await (await fetch(`${API}/models`, { headers: ARGS.headers })).json()).data?.[0]?.id;
