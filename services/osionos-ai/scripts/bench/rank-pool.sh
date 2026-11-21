@@ -49,7 +49,8 @@ catalog() {
 	fi
 	if [ -n "${OSIONOS_AI_PLATFORM_MODELS:-}" ] && [ -n "${OSIONOS_AI_UPSTREAM_BASE_URL:-}" ]; then
 		printf '%s' "$OSIONOS_AI_PLATFORM_MODELS" | jq -r --arg b "$OSIONOS_AI_UPSTREAM_BASE_URL" \
-			'.[] | ["legacy", $b, "OSIONOS_AI_UPSTREAM_API_KEY", .id] | @tsv'
+			--arg k "${OSIONOS_AI_UPSTREAM_API_KEY:+OSIONOS_AI_UPSTREAM_API_KEY}" \
+			'.[] | ["legacy", $b, (if $k == "" then "-" else $k end), .id] | @tsv'
 	fi
 }
 
@@ -59,7 +60,7 @@ bench_one() {
 	case "$2" in http://127.0.0.1* | http://localhost*) net="--network host" ;; esac
 	mount=""
 	auth=""
-	if [ "$3" != "-" ] && write_auth_header "$3" "$WORK/auth"; then
+	if [ "$3" != "-" ]; then
 		mount="-v $WORK/auth:/auth:ro"
 		auth="--auth-file /auth"
 	fi
@@ -67,13 +68,17 @@ bench_one() {
 	timeout "${RANK_TIMEOUT:-3600}" docker run --rm $net $mount --user "$(id -u):$(id -g)" \
 		-v "$SERVICE_DIR:/s:ro" -w /s -e WARMUP=0 -e "LABEL=$1/$4" \
 		node:22-bookworm-slim node scripts/bench/llm-bench-gpu.mjs \
-		--base-url "$2" --model "$4" --n "$N" $auth
+		--base-url "$2" --model "$4" --n "$N" --plain $auth
 }
 
 : >"$WORK/rows"
 catalog >"$WORK/catalog"
 [ -s "$WORK/catalog" ] || { echo "no catalog: set OSIONOS_AI_PLATFORM_PROVIDERS" >&2; exit 1; }
 while IFS="$(printf '\t')" read -r provider base keyname model; do
+	if [ "$keyname" != "-" ] && ! write_auth_header "$keyname" "$WORK/auth"; then
+		echo "skip $provider: $keyname is unset or empty" >&2
+		continue
+	fi
 	echo "bench $provider/$model n=$N" >&2
 	if json=$(bench_one "$provider" "$base" "$keyname" "$model"); then
 		printf '%s' "$json" | jq -c --arg p "$provider" --arg m "$model" \
@@ -84,6 +89,7 @@ while IFS="$(printf '\t')" read -r provider base keyname model; do
 			'{provider:$p, model:$m, n:$n, successRate:0, firstPartP50:null, firstPartP95:null, itlP95:null, tokPerS:null, reasoningRuns:0}' >>"$WORK/rows"
 	fi
 done <"$WORK/catalog"
+[ -s "$WORK/rows" ] || { echo "nothing benched: every provider was skipped" >&2; exit 1; }
 
 {
 	printf '# Pool rank artifact\n\nDate: %s\n\nCommand: %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "\`$CMD\`"
@@ -91,6 +97,6 @@ done <"$WORK/catalog"
 	printf '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n'
 	jq -rs 'sort_by([-.successRate, (.firstPartP50 // 1e18)]) | to_entries[] | .key as $i | .value |
 		def r: if . == null then "n/a" else (. * 100 | round / 100 | tostring) end;
-		"| \($i + 1) | \(.provider)/\(.model) | \(.n) | \(.successRate * 100 | round)% | \(.firstPartP50 | r) | \(.firstPartP95 | r) | \(.itlP95 | r) | \(.tokPerS | r) | \(.reasoningRuns) | \(if .successRate == 0 then "NO-ANSWER" elif .firstPartP95 > 90000 then "NOT-FIRST (p95 > 90 s)" else "" end) |"' "$WORK/rows"
+		"| \($i + 1) | \(.provider)/\(.model) | \(.n) | \(.successRate * 100 | round)% | \(.firstPartP50 | r) | \(.firstPartP95 | r) | \(.itlP95 | r) | \(.tokPerS | r) | \(.reasoningRuns) | \(if .successRate == 0 then "NO-ANSWER" elif .firstPartP95 == null or .firstPartP95 > 90000 then "NOT-FIRST (p95 > 90 s or n/a)" else "" end) |"' "$WORK/rows"
 } >"$OUT"
 echo "wrote $OUT" >&2

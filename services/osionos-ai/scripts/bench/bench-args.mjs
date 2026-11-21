@@ -4,6 +4,7 @@
 //   --base-url <api root>  e.g. https://host/v1, used as-is (default: LLM_URL + /v1)
 //   --model <id>           the model id (default: MODEL, else the first of /v1/models)
 //   --n <N>                send exactly N requests; replaces the DURATION window
+//   --plain                no tools in the body: a plain chat (the rank run)
 //   --auth-file <path>     a file holding one "Header: value" line; the key is
 //                          read from the file so it never sits in argv
 //
@@ -16,12 +17,13 @@ const FLAGS = new Set(['--base-url', '--model', '--n', '--auth-file']);
 
 function flagValues(argv) {
 	const values = {};
-	for (let index = 0; index < argv.length; index += 2) {
+	for (let index = 0; index < argv.length; index += 1) {
+		if (argv[index] === '--plain') { values.plain = true; continue; }
 		if (!FLAGS.has(argv[index]) || argv[index + 1] === undefined) {
-			console.error(`usage: llm-bench-gpu.mjs [--base-url URL] [--model ID] [--n N] [--auth-file PATH]`);
+			console.error('usage: llm-bench-gpu.mjs [--base-url URL] [--model ID] [--n N] [--auth-file PATH] [--plain]');
 			process.exit(2);
 		}
-		values[argv[index].slice(2)] = argv[index + 1];
+		values[argv[index].slice(2)] = argv[(index += 1)];
 	}
 	return values;
 }
@@ -47,6 +49,7 @@ export function parseArgs(argv, env) {
 		root: api.replace(/\/v1$/, ''),
 		model: flags.model || env.MODEL || null,
 		n,
+		plain: flags.plain === true,
 		remote: Boolean(flags['base-url']),
 		lambdaGiven: env.LAMBDA !== undefined && env.LAMBDA !== '',
 		headers: authHeaders(flags['auth-file']),

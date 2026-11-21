@@ -26,6 +26,7 @@ done
 case "$url" in
 *alpha.invalid/v1/models) printf '{"data":[{"id":"alpha/one","owned_by":"x"},{"id":"alpha/two"}]}' ;;
 *beta.invalid/v1/models) printf '{"data":[{"id":"beta-1"}]}' ;;
+*html.invalid/v1/models) printf '<html>captive portal</html>' ;;
 *) exit 22 ;;
 esac
 FAKE
@@ -79,4 +80,25 @@ FAKE
   [ ! -e "$BATS_TEST_TMPDIR/pwned" ]
   [ ! -e "$BATS_TEST_TMPDIR/pwned2" ]
   grep -q "Authorization: Bearer $SECRET_VALUE" "$SEEN_AUTH"
+}
+
+@test "bash -x never prints the key (env and --env-file paths)" {
+  F="$BATS_TEST_TMPDIR/env"
+  printf 'OSIONOS_AI_KEY_BETA=%s-beta\n' "$SECRET_VALUE" >"$F"
+  run --separate-stderr bash -x "$SCRIPT" --env-file "$F"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" != *"$SECRET_VALUE"* ]]
+  [[ "$output" != *"$SECRET_VALUE"* ]]
+  grep -q "Authorization: Bearer $SECRET_VALUE-beta" "$SEEN_AUTH"
+}
+
+@test "a 200 that is not JSON: fail <id> on stderr, a later provider is still listed" {
+  export OSIONOS_AI_PLATFORM_PROVIDERS='[
+    {"id":"html","baseUrl":"https://html.invalid/v1","wire":"openai-compatible","models":[{"id":"h","label":"H","upstreamId":"h","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0}]},
+    {"id":"beta","baseUrl":"https://beta.invalid/v1","wire":"openai-compatible","models":[{"id":"b","label":"B","upstreamId":"beta-1","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0}]}
+  ]'
+  run --separate-stderr bash "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"fail html"* ]]
+  [ "$output" = "$(printf 'beta\tbeta-1')" ]
 }

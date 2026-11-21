@@ -43,7 +43,12 @@ while IFS="$(printf '\t')" read -r id base keyname; do
 		failed=1
 		continue
 	fi
-	printf '%s' "$body" | jq -r --arg p "$id" '.data[]?.id | [$p, .] | @tsv'
+	if ! ids=$(printf '%s' "$body" | jq -r --arg p "$id" '.data[]?.id | [$p, .] | @tsv'); then
+		echo "fail $id: /models did not answer JSON" >&2
+		failed=1
+		continue
+	fi
+	[ -z "$ids" ] || printf '%s\n' "$ids"
 done <<LIST
 $providers
 LIST

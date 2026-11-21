@@ -18,7 +18,7 @@
 // configuration, the same arrival process, the same seed.
 //
 //   node llm-bench-gpu.mjs > one-run.json
-//   node llm-bench-gpu.mjs --base-url https://host/v1 --model ID --n 20 --auth-file H
+//   node llm-bench-gpu.mjs --base-url https://host/v1 --model ID --n 20 --auth-file H [--plain]
 //
 // Flags (bench-args.mjs): --base-url, --model, --n, --auth-file. --n sends exactly
 // N requests (sequential, or Poisson when LAMBDA is set) instead of a DURATION window.
@@ -43,6 +43,7 @@
 import { unlinkSync, writeFileSync } from 'node:fs';
 import { buildRequests } from './requests.mjs';
 import { parseArgs } from './bench-args.mjs';
+import { buildBody } from './bench-body.mjs';
 import { sseObjects } from './sse.mjs';
 import { readMetrics } from './server-metrics.mjs';
 import { fmt, mean, mulberry32, partKind, pct } from './stream-stats.mjs';
@@ -115,6 +116,8 @@ async function runOne(body) {
 		return { error: `stream_failed: ${error.message}` };
 	}
 	if (!completed) return { error: 'stream_incomplete: ended without completion' };
+	// R24: a stream with no content part is not a success.
+	if (firstPartAt === null) return { error: 'no_content_part: the stream finished with nothing' };
 	const ended = performance.now();
 	const itl = [];
 	for (let index = 1; index < contentTimes.length; index += 1) itl.push(contentTimes[index] - contentTimes[index - 1]);
@@ -140,17 +143,8 @@ if (!MODEL) {
 }
 
 const { requests } = buildRequests({ count: REQUESTS, randomizePrefix: RANDOMIZE });
-const bodyOf = (request) => ({
-	model: MODEL,
-	messages: request.messages,
-	tools: request.tools,
-	tool_choice: 'auto',
-	stream: true,
-	stream_options: { include_usage: true },
-	max_tokens: MAX_TOKENS,
-	temperature: 0,
-	cache_prompt: true,
-});
+const bodyOf = (request) =>
+	buildBody({ model: MODEL, request, maxTokens: MAX_TOKENS, remote: ARGS.remote, plain: ARGS.plain });
 
 // The warm-up: two requests, discarded. The service is always running, so
 // the model is loaded and the prompt cache is warm before the window opens.
