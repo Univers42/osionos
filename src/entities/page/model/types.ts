@@ -254,8 +254,6 @@ export interface PageStore {
     targetParentBlockId: string | null,
     targetIndex: number,
   ) => void;
-  indentBlock: (pageId: string, blockId: string) => void;
-  outdentBlock: (pageId: string, blockId: string) => void;
   changeBlockType: (
     pageId: string,
     blockId: string,

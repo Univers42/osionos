@@ -31,8 +31,6 @@ import {
   applyBlockMove,
   applyBlockMoveAcrossTree,
   pruneColumns,
-  applyBlockIndent,
-  applyBlockOutdent,
   applyBlockTypeChange,
   canEditBody,
 } from "./pageStore.helpers";
@@ -320,36 +318,6 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
         applyBlockMoveAcrossTree(blockId, targetParentBlockId, targetIndex),
       ));
       savePagesCache(next.pages, page.workspaceId);
-      return {
-        ...next,
-        pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
-      };
-    });
-    debouncePersistContent(pageId);
-  },
-
-  indentBlock: (pageId, blockId) => {
-    const page = get().pageById(pageId);
-    if (!canEditBody(page, getCurrentPageAccessContext())) return;
-
-    set((s) => {
-      const next = replacePage(s, pageId, withTimestamp(applyBlockIndent(blockId)));
-      schedulePagesCachePersist(next.pages, page.workspaceId);
-      return {
-        ...next,
-        pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
-      };
-    });
-    debouncePersistContent(pageId);
-  },
-
-  outdentBlock: (pageId, blockId) => {
-    const page = get().pageById(pageId);
-    if (!canEditBody(page, getCurrentPageAccessContext())) return;
-
-    set((s) => {
-      const next = replacePage(s, pageId, withTimestamp(applyBlockOutdent(blockId)));
-      schedulePagesCachePersist(next.pages, page.workspaceId);
       return {
         ...next,
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),

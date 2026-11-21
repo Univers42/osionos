@@ -6,7 +6,7 @@ import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors"
 import { styleAttributes } from "../model/blockStyle";
 import { flattenColumns } from "../model/blockTreeUtils";
 import { useLayoutModes } from "./layoutModes";
-import { ReadOnlyBlock } from "./ReadOnlyBlock";
+import { ReadOnlyBlockList } from "./ReadOnlyBlockList";
 
 interface ReadOnlyColumnListProps {
   block: Block;
@@ -35,9 +35,7 @@ export const ReadOnlyColumnList: React.FC<ReadOnlyColumnListProps> = ({ block, b
             style={{ flexGrow: columnGrow(column, columns.length), flexBasis: 0, ...getBlockSurfaceStyle(column) }}
             {...styleAttributes(column, layoutModes)}
           >
-            {(column.children ?? []).map((child, childIndex) => (
-              <ReadOnlyBlock key={child.id} block={child} index={childIndex} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />
-            ))}
+            <ReadOnlyBlockList blocks={column.children ?? []} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />
           </div>
         ))}
       </div>

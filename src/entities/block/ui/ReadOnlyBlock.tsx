@@ -14,7 +14,7 @@ import React, { lazy, Suspense, useState, useMemo } from "react";
 import { EquationView } from "@/shared/ui";
 import type { Block } from '@/entities/block';
 import { getBulletMarker } from '@/entities/block/model/listMarkers';
-import { childNumberedDepth, numberedMarker, numberedRunIndexes } from '@/entities/block/model/listStyle';
+import { childNumberedDepth, numberedMarker } from '@/entities/block/model/listStyle';
 import { getToggleHeadingClass } from '@/entities/block/model/toggleHeading';
 import { ChevronRight } from "lucide-react";
 import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
@@ -25,6 +25,7 @@ import { SizedBlockBox } from "./SizedBlockBox";
 import { keepsWideBleed } from "../model/blockSize";
 import { LayoutBlockReadOnly } from "./LayoutBlockReadOnly";
 import { ReadOnlyColumnList } from "./ReadOnlyColumnList";
+import { ReadOnlyBlockList } from "./ReadOnlyBlockList";
 import { useLayoutModes } from "./layoutModes";
 import { wrapperStyleAttributes } from "../model/blockStyle";
 import { VisibleWhenGate } from "./VisibleWhenGate";
@@ -163,20 +164,10 @@ function renderNestedChildren(block: Block, bulletDepth: number, numberedDepth: 
 
   const nextBulletDepth = block.type === "bulleted_list" ? bulletDepth + 1 : bulletDepth;
   const nextNumberedDepth = childNumberedDepth(block, numberedDepth);
-  // Same run counter as the editor, so a nested style change restarts the count.
-  const runIndexes = numberedRunIndexes(block.children);
 
   return (
     <div className={getNestedChildrenClassName(block.type)}>
-      {block.children.map((child, index) => (
-        <ReadOnlyBlock
-          key={child.id}
-          block={child}
-          index={child.type === "numbered_list" ? runIndexes[index] - 1 : index}
-          bulletDepth={nextBulletDepth}
-          numberedDepth={nextNumberedDepth}
-        />
-      ))}
+      <ReadOnlyBlockList blocks={block.children} bulletDepth={nextBulletDepth} numberedDepth={nextNumberedDepth} />
     </div>
   );
 }
@@ -414,9 +405,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
             ) : null}
             {!block.collapsed && block.children?.length ? (
               <div className="mt-1">
-                {block.children.map((child, index) => (
-                  <ReadOnlyBlock key={child.id} block={child} index={index} />
-                ))}
+                <ReadOnlyBlockList blocks={block.children} />
               </div>
             ) : null}
           </div>

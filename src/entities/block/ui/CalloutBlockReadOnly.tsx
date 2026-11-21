@@ -19,7 +19,7 @@ import { parseInlineMarkdown } from "@osionos/markdown-engine";
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 import { useVariablesVersion } from "@/features/variables/ui/VariableChip";
 import { useVariableMode, variableResolverFor } from "@/features/variables/ui/variableMode";
-import { ReadOnlyBlock } from "./ReadOnlyBlock";
+import { ReadOnlyBlockList } from "./ReadOnlyBlockList";
 
 /**
  * A callout = a flat tinted surface (Notion pattern): no border, no rail, never collapsible.
@@ -55,9 +55,7 @@ export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
         ) : null}
         {hasChildren ? (
           <div className="min-w-0 max-w-full">
-            {block.children?.map((child, index) => (
-              <ReadOnlyBlock key={child.id} block={child} index={index} />
-            ))}
+            <ReadOnlyBlockList blocks={block.children ?? []} />
           </div>
         ) : null}
       </div>

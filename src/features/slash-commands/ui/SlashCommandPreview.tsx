@@ -16,7 +16,7 @@
 
 import React from "react";
 
-import { ReadOnlyBlock } from "@/entities/block/ui";
+import { ReadOnlyBlockList } from "@/entities/block/ui";
 import { slashPreviewSample } from "@/features/slash-commands/model/slashPreviewSamples";
 import type { SlashCommand } from "@/features/slash-commands/model/types";
 
@@ -51,9 +51,7 @@ export const SlashCommandPreview = React.memo(function SlashCommandPreview({
           className="max-h-[220px] shrink-0 overflow-hidden rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-page)] px-4 py-3"
         >
           <div style={{ zoom: SAMPLE_ZOOM }}>
-            {sample.map((block, index) => (
-              <ReadOnlyBlock key={block.id} block={block} index={index} />
-            ))}
+            <ReadOnlyBlockList blocks={sample} />
           </div>
         </div>
       ) : null}

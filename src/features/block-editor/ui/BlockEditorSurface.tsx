@@ -27,7 +27,7 @@ import {
 	ROOT_BLOCK_VIRTUALIZATION_OVERSCAN,
 	ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
-import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
+import { ReadOnlyBlockList } from "@/entities/block/ui/ReadOnlyBlockList";
 import { BlockVisibilityPopover } from "./visibility/BlockVisibilityPopover";
 import { VisibilityScopeProvider } from "@/entities/block/model/visibilityScope";
 import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
@@ -783,7 +783,7 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 			<div data-testid="locked-page-body" className={`relative flex min-w-0 flex-col ${className}`}>
 				{blocks.length === 0 ? (
 					<p className="py-8 text-sm italic text-[var(--osio-fg-subtle)]">This page is locked and has no content.</p>
-				) : blocks.map((block, index) => <ReadOnlyBlock key={block.id} block={block} index={index} wideBlock={wideBlocks} />)}
+				) : <ReadOnlyBlockList blocks={blocks} wideBlock={wideBlocks} />}
 			</div>
 		);
 	}
@@ -1168,8 +1168,8 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 			if (caret === null || indexes.includes(caret)) return indexes;
 			return [...indexes, caret].sort((a, b) => a - b);
 		}, [renderItems]);
-		// TanStack Virtual returns non-memoizable functions (sanctioned: see PageBlocksRenderer).
-		// The old counter's closure reassignment hid this from the compiler until #328.
+		// https://github.com/Univers42/osionos/issues/337: TanStack Virtual returns
+		// non-memoizable functions, so the React Compiler skips this component.
 		// eslint-disable-next-line react-hooks/incompatible-library
 		const virtualizer = useVirtualizer({
 			count: shouldVirtualize ? renderItems.length : 0,

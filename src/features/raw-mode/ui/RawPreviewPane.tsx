@@ -12,7 +12,7 @@
 
 import React, { useMemo, useRef } from "react";
 import { parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
-import { ReadOnlyBlock } from "@/entities/block/ui";
+import { ReadOnlyBlockList } from "@/entities/block/ui";
 import type { Block } from "@/entities/block";
 import { reconcileBlocks } from "../model/reconcileBlocks";
 
@@ -50,7 +50,7 @@ function RawPreviewPaneImpl({ source, parse = parseMarkdownToBlocks }: Readonly<
         {blocks.length === 0 ? (
           <p className="text-sm text-[var(--osio-fg-muted)]">Nothing to preview yet.</p>
         ) : (
-          blocks.map((block, index) => <ReadOnlyBlock key={block.id} block={block} index={index} />)
+          <ReadOnlyBlockList blocks={blocks} />
         )}
       </div>
     </div>

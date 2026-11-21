@@ -660,54 +660,6 @@ function insertBlockIntoTree(
   return false;
 }
 
-function indentBlockInTree(blocks: Block[], blockId: string): boolean {
-  for (let idx = 0; idx < blocks.length; idx += 1) {
-    const block = blocks[idx];
-
-    if (block.id === blockId) {
-      if (idx === 0) return true;
-      const [moved] = blocks.splice(idx, 1);
-      const prev = blocks[idx - 1];
-      prev.children = prev.children ?? [];
-      prev.children.push(moved);
-      return true;
-    }
-
-    if (block.children && indentBlockInTree(block.children, blockId)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function outdentBlockInTree(
-  blocks: Block[],
-  blockId: string,
-  parentBlocks: Block[] | null = null,
-  parentIndex = -1,
-): boolean {
-  for (let idx = 0; idx < blocks.length; idx += 1) {
-    const block = blocks[idx];
-
-    if (block.id === blockId) {
-      if (!parentBlocks || parentIndex < 0) return true;
-      const [moved] = blocks.splice(idx, 1);
-      parentBlocks.splice(parentIndex + 1, 0, moved);
-      return true;
-    }
-
-    if (
-      block.children &&
-      outdentBlockInTree(block.children, blockId, blocks, idx)
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 /** Creates a page updater that patches a single block. */
 export function applyBlockUpdate(
   blockId: string,
@@ -889,28 +841,6 @@ export function applyBlockTypeChange(
     ...page,
     content: updateBlockInTree(page.content ?? [], blockId, (block) => withBlockType(block, newType)),
   });
-}
-
-/** Creates a page updater that indents a block under its previous sibling. */
-export function applyBlockIndent(
-  blockId: string,
-): (page: PageEntry) => PageEntry {
-  return (page) => {
-    const content = cloneBlocks(page.content ?? []);
-    indentBlockInTree(content, blockId);
-    return { ...page, content };
-  };
-}
-
-/** Creates a page updater that outdents a block to its parent's level. */
-export function applyBlockOutdent(
-  blockId: string,
-): (page: PageEntry) => PageEntry {
-  return (page) => {
-    const content = cloneBlocks(page.content ?? []);
-    outdentBlockInTree(content, blockId);
-    return { ...page, content };
-  };
 }
 
 /** Validates if a page can be moved to the target destination. */

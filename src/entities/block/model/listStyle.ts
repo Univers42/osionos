@@ -66,6 +66,14 @@ export function numberedRunIndexes(blocks: readonly Block[]): number[] {
   return indexes;
 }
 
+/**
+ * The `index` prop each read-only sibling gets: a numbered item's 0-based run
+ * position, any other block its own position (only numbered items read it).
+ */
+export function readOnlyListIndexes(blocks: readonly Block[]): number[] {
+  return numberedRunIndexes(blocks).map((run, position) => (run > 0 ? run - 1 : position));
+}
+
 /** `block` without the attribute; the same object when it never had one. */
 function withoutListStyle(block: Block): Block {
   if (!Object.hasOwn(block, "listStyle")) return block;

@@ -16,7 +16,7 @@ import type { PagePropertyEntry } from "@/entities/page/model/types";
 import { gridConfigFromLegacy } from "@/features/block-editor/ui/canvas/model/migration";
 import { filterVisibleCells, resolvePropertyMap } from "@/entities/block/model/visibility";
 import { regionAttributes } from "@/entities/block/model/layoutRegion";
-import { ReadOnlyBlock } from "./ReadOnlyBlock";
+import { ReadOnlyBlockList } from "./ReadOnlyBlockList";
 
 /**
  * Read-only renderer for `/canvas` layout blocks. Both schema versions persist to
@@ -86,7 +86,7 @@ function LayoutCellReadOnly({ cell }: { cell: LayoutCell }): React.ReactElement 
           <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">{cell.label}</div>
         ) : null}
         {blocks.length > 0
-          ? blocks.map((child, index) => <ReadOnlyBlock key={child.id} block={child} index={index} />)
+          ? <ReadOnlyBlockList blocks={blocks} />
           : cell.content
             ? <p className="text-sm leading-relaxed text-[var(--osio-fg-default)]">{cell.content}</p>
             : null}

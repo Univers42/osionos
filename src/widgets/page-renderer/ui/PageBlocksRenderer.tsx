@@ -78,9 +78,9 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
   mark(renderStartMarkRef.current);
   const renderMeta = useMemo(() => createRootBlockRenderMeta(blocks), [blocks]);
   const shouldVirtualize = blocks.length >= ROOT_BLOCK_VIRTUALIZATION_THRESHOLD;
-  // React Compiler skips this component because of the tanstack
-  // virtualizer (library limitation, informational) — the virtualized
-  // path is perf-budgeted in the canvas benchmarks as-is.
+  // https://github.com/Univers42/osionos/issues/337: React Compiler skips this
+  // component because of the tanstack virtualizer (library limitation) — the
+  // virtualized path is perf-budgeted in the canvas benchmarks as-is.
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: shouldVirtualize ? renderMeta.length : 0,
