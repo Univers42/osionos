@@ -99,6 +99,8 @@ export interface UpstreamRunInput {
 	hooks?: RunHooks;
 	/** The account block of the caller, when requested. */
 	accountBlock?: string;
+	/** FA26: the primary target may train on the prompt, so no workspace data is sent. */
+	mayTrain?: boolean;
 	/** The view block of the caller, when reported. */
 	viewBlock?: string;
 	/** The workspace block: the pages the caller can read (plan H1). */

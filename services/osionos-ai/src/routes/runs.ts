@@ -15,6 +15,7 @@ import * as runStore from '../runs/runStore.ts';
 import { gateResearch } from '../research/gate.ts';
 import { resolveFallbacks } from './fallbacks.ts';
 import { withAuto } from '../runs/auto.ts';
+import { mayTrainRefusal } from '../runs/privacyGate.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -187,6 +188,11 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 	if (resolved.kind === 'refused') {
 		sendError(ctx.response, resolved.status, resolved.code);
 		return resolved.status;
+	}
+	const refusal = mayTrainRefusal(body, resolved.target);
+	if (refusal) {
+		sendError(ctx.response, 400, refusal);
+		return 400;
 	}
 	const chain = await resolveFallbacks(ctx, user, body);
 	if (chain.kind === 'refused') {

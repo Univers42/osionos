@@ -42,6 +42,7 @@ import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.t
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import { loadAttachments } from './attachments.ts';
+import { isMayTrain } from './privacyGate.ts';
 import { fitFiles } from '../files/excerpt.ts';
 import type { FittedFile } from '../files/excerpt.ts';
 import { THREAD_SYSTEM_PROMPT } from '../threads/context.ts';
@@ -213,6 +214,8 @@ async function findSources(
 export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const { db, redis, runId, conversationId, ownerId, text } = input;
 	let target = input.target;
+	// FA26: a primary that may train sends no workspace data; the gate skips every workspace load below.
+	const mayTrain = isMayTrain(input.target);
 	const attachments = input.attachments ?? [];
 	const sessionToken = input.sessionToken ?? '';
 	// The agent of the run: none is the general assistant. Its id and its
@@ -281,7 +284,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	}
 	// The attachments are fetched through the bridge with the caller's token of
 	// THIS request. They are validated and stripped before the money moves.
-	const loaded = await loadAttachments(attachments, sessionToken, target.vision === true);
+	const loaded = await loadAttachments(mayTrain ? [] : attachments, sessionToken, target.vision === true);
 	if (loaded.kind === 'refused') {
 		await markRun(db, runId, 'failed', loaded.code);
 		return loaded;
@@ -305,7 +308,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const history = window.messages;
 	// The summary of the turns the window dropped, quoted when it ends before
 	// the window starts (context C384). Flag off: no column is read (C389).
-	const summary = config.summaryEnabled && !input.thread
+	const summary = config.summaryEnabled && !input.thread && !mayTrain
 		? await readRunSummary(db, { conversationId, ownerId, oldestKeptId: window.oldestKeptId, dropped: window.dropped })
 		: null;
 	const summaryBlockText = summary?.quoted ? conversationSummaryBlock(summary.quoted.text, summary.quoted.through) : undefined;
@@ -317,18 +320,18 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const context = await loadPageContext(db, {
 		userId: ownerId,
 		memberWorkspaceIds: input.memberWorkspaceIds ?? [],
-		pageIds: input.pageIds ?? [],
+		pageIds: mayTrain ? [] : (input.pageIds ?? []),
 	});
 	// The sources of the run: the pages of the caller's workspaces that answer
 	// the question. They are read before the money moves too: they are part of
 	// the prompt. A retrieval that fails is not a failure of the run: the run
 	// goes on without sources, and the failure is logged once.
-	const { sources, abstained } = await findSources(db, input, text);
+	const { sources, abstained } = mayTrain ? { sources: [], abstained: false } : await findSources(db, input, text);
 	// The skills index of THIS run: the agent's built-ins and the workspace's
 	// skills, built once so the reservation counts the prompt the call sends.
 	const skillIndex = buildSkillIndex(
 		agent?.skills ?? [],
-		await workspaceSkillsForRun(db, input.user, input.workspaceId),
+		mayTrain ? [] : await workspaceSkillsForRun(db, input.user, input.workspaceId),
 	);
 	// C340: the prefix is judged again with the real index, after the row exists
 	// and before any money moves, so a refusal leaves reserved_microusd at 0.
@@ -340,7 +343,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// row (C40): a continuation run loads its own, as skills do. The pin is what
 	// the run was GIVEN, recorded before it executes: a run that fails before
 	// the upstream call still lists them.
-	const memories = await memoriesForRun(db, input.user, input.workspaceId);
+	const memories = mayTrain ? [] : await memoriesForRun(db, input.user, input.workspaceId);
 	await recordMemoryPins(db, runId, memories);
 	// U1: the user's rules and own skills, for the user turn. A thread run
 	// answers with its own prompt only. Flag off: no query (C1010).
@@ -357,7 +360,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		const runWorkspaceId = input.workspaceId ?? input.user.workspaceId;
 		const accountCtx = await loadAccountContext(db, input.user, runWorkspaceId);
 		accountBlockText = accountBlock(accountCtx, new Date());
-		const overview = await loadWorkspaceOverview(db, input.user, runWorkspaceId);
+		const overview = mayTrain ? null : await loadWorkspaceOverview(db, input.user, runWorkspaceId);
 		if (overview) workspaceBlockText = workspaceBlock(overview, accountCtx.workspaceName);
 	}
 	// The view block, when the client reports one.
@@ -470,6 +473,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			web,
 			...(input.research ? { research: true } : {}),
 			workspaceId: input.workspaceId,
+			...(mayTrain ? { mayTrain } : {}),
 			...(summaryBlockText ? { summaryBlock: summaryBlockText } : {}),
 			...(userContext ? { userContext } : {}),
 			...(summary && window.dropped ? { truncated: { summarized: summaryBlockText !== undefined } } : {}),
