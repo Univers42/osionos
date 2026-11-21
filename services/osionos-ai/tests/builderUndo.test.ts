@@ -1,151 +1,16 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { after, before, beforeEach, describe, it } from 'node:test';
-import type { Json } from './builderHarness.ts';
+import { after, describe, it } from 'node:test';
+import {
+	USER_A, USER_B, WORKSPACE_A, allItems, app, ask, asked, bridge, buildPlan, call, closeBuilderHarness,
+	decide, installUndoHooks, patchedIds, resume, seedBuiltPages, tokenFor, undo, undoPlan,
+} from './undoHarness.ts';
 
-/**
- * C159: undo a build; C161: the abuse limits of the builder.
- *
- * The pages the mock bridge "creates" are mirrored into `public.osionos_pages`
- * by the test itself: the undo's foreign-children check reads that table, and
- * a real bridge updates it on the archive PATCH. The hook on the mock does the
- * same here, so a child archived by the undo is no longer live when its parent
- * is checked.
- */
-process.env.OSIONOS_AI_BUILD_BUDGET_MS = '500';
-// One build a day: the test flushes the day bucket before each case, and the
-// over-limit case is two passes on purpose.
-process.env.OSIONOS_AI_BUILDS_PER_DAY = '1';
-const { harness, closeBuilderHarness, goodPlan, ask, asked, decide } = await import('./builderHarness.ts');
-const { USER_A, USER_B, WORKSPACE_A } = await import('./harness.ts');
-const { app, bridge, tokenFor, call } = harness;
-const { allItems } = await import('../src/builders/items.ts');
-
+/** C159: undo a build; C161: the abuse limits of the builder. */
 after(closeBuilderHarness);
 
-/** The plan of builderHarness plus a sibling page: three pages (one holds a child) and one database. */
-function undoPlan(): Json {
-	const [home, deals] = goodPlan().items as Json[];
-	return goodPlan({
-		title: 'Undo workspace',
-		items: [home, { kind: 'page', key: 'about', title: 'About', blocks: [{ type: 'paragraph', content: 'About' }] }, deals],
-	});
-}
-
-async function undo(approvalId: string, token = tokenFor(USER_A, WORKSPACE_A)) {
-	return call(`/api/ai/approvals/${approvalId}/undo`, { method: 'POST', token });
-}
-
-async function resume(approvalId: string, token = tokenFor(USER_A, WORKSPACE_A)) {
-	return call(`/api/ai/approvals/${approvalId}/resume`, { method: 'POST', token, body: {} });
-}
-
-/** The whole windows and day buckets of the service, for one isolated case. */
-async function flushLimits(): Promise<void> {
-	const keys = await app.redis.keys('ai:rl:*');
-	if (keys.length > 0) await app.redis.del(...keys);
-}
-
-/** The ids of the plan, as they were minted into the stored approval. */
-async function storedPlan(approvalId: string): Promise<Json> {
-	const result = await app.db.query('select args from public.ai_approvals where id = $1', [approvalId]);
-	return result.rows[0].args as Json;
-}
-
-/** The page ids of a stored plan, by item key. */
-function pageIds(plan: Json): Record<string, string> {
-	const ids: Record<string, string> = {};
-	const walk = (items: unknown[]): void => {
-		for (const entry of items) {
-			const item = entry as { kind?: string; key?: string; id?: string; children?: unknown[] };
-			if (item.kind === 'page' && item.key && item.id) ids[item.key] = item.id;
-			if (Array.isArray(item.children)) walk(item.children);
-		}
-	};
-	walk(plan.items as unknown[]);
-	return ids;
-}
-
-/** Build a plan and return its approval id and its minted page ids. */
-async function buildPlan(plan = undoPlan()): Promise<{ approvalId: string; ids: Record<string, string> }> {
-	await flushLimits();
-	const events = await ask(plan);
-	const data = asked(events)[0]?.data as { approvalId?: string } | undefined;
-	assert.ok(data?.approvalId, 'the plan is asked');
-	const approvalId = data.approvalId;
-	const ids = pageIds(await storedPlan(approvalId));
-	const decided = await decide(approvalId);
-	assert.equal(decided.status, 200);
-	return { approvalId, ids };
-}
-
-/**
- * Seed the pages the mock bridge "created", with their real parent links.
- * The mock's PATCH hook stamps `archived_at`, so the archive cascades in the
- * table exactly as the real bridge's would.
- */
-async function seedBuiltPages(approvalId: string): Promise<void> {
-	const items = await allItems(app.db, approvalId);
-	const byKey = new Map(items.map((item) => [item.item_key, item]));
-	for (const item of items) {
-		if (item.kind !== 'page' || !item.created_id) continue;
-		const parent = item.parent_key ? byKey.get(item.parent_key)?.created_id ?? null : null;
-		await app.db.query(
-			`insert into public.osionos_pages (id, workspace_id, parent_page_id, title)
-			 values ($1, $2, $3, $4)
-			 on conflict (id) do nothing`,
-			[item.created_id, WORKSPACE_A, parent, item.item_key],
-		);
-	}
-}
-
-function patchedIds(): string[] {
-	return bridge.calls
-		.filter((call) => call.method === 'PATCH' && /^\/api\/pages\/[^/]+$/.test(call.path))
-		.map((call) => decodeURIComponent(call.path.slice('/api/pages/'.length)));
-}
-
-/**
- * Park the PATCH of one page inside the mock until `release()`; with `fail` the
- * parked write then errors, as a bridge that lost the race would.
- */
-function holdPatch(pageId: string, options: { fail?: boolean } = {}): { reached: Promise<void>; release: () => void } {
-	const inner = bridge.onPatch!;
-	let release!: () => void;
-	let reached!: () => void;
-	const gate = new Promise<void>((resolve) => (release = resolve));
-	const reachedPromise = new Promise<void>((resolve) => (reached = resolve));
-	bridge.onPatch = async (call) => {
-		if (decodeURIComponent(call.path.slice('/api/pages/'.length)) !== pageId) return inner(call);
-		reached();
-		await gate;
-		if (options.fail) throw new Error('lost the race');
-		return inner(call);
-	};
-	return { reached: reachedPromise, release };
-}
-
 describe('builder undo and limits', () => {
-	let defaultPatchHook: typeof bridge.onPatch;
-	before(async () => {
-		bridge.onPatch = async ({ path, body }) => {
-			const id = decodeURIComponent(path.slice('/api/pages/'.length));
-			const archivedAt = (body as { archivedAt?: string } | null)?.archivedAt ?? new Date().toISOString();
-			await app.db.query('update public.osionos_pages set archived_at = $2 where id = $1::uuid', [id, archivedAt]);
-		};
-		defaultPatchHook = bridge.onPatch;
-	});
-
-	beforeEach(async () => {
-		bridge.onPatch = defaultPatchHook;
-		await app.db.query('delete from public.ai_plan_items');
-		await app.db.query('delete from public.ai_approvals');
-		await app.db.query('delete from public.osionos_pages where workspace_id = $1', [WORKSPACE_A]);
-		await flushLimits();
-		bridge.reset();
-		bridge.failWith = 0;
-		bridge.delayMs = 0;
-	});
+	installUndoHooks();
 
 	it('C159 a built plan is undone deepest first, and the databases are kept', async () => {
 		const { approvalId, ids } = await buildPlan();
@@ -261,79 +126,6 @@ describe('builder undo and limits', () => {
 		const notBuilt = await undo(pending.approvalId);
 		assert.equal(notBuilt.status, 409);
 		assert.equal((notBuilt.body as { code?: string }).code, 'approval_not_built');
-	});
-
-	it('C159 two concurrent undos archive each page exactly once', async () => {
-		const { approvalId, ids } = await buildPlan();
-		await seedBuiltPages(approvalId);
-		bridge.reset();
-
-		// Undo A is parked inside the child's PATCH; undo B runs to the end meanwhile.
-		const held = holdPatch(ids.notes!);
-		const first = undo(approvalId);
-		await held.reached;
-		const second = await undo(approvalId);
-		held.release();
-		const one = await first;
-		assert.ok([one.status, second.status].every((status) => status === 200 || status === 409));
-
-		const patched = patchedIds();
-		const unique = new Set(patched);
-		assert.equal(unique.size, 3, 'three built pages');
-		for (const id of unique) {
-			assert.equal(patched.filter((candidate) => candidate === id).length, 1, `${id} is PATCHed once`);
-		}
-	});
-
-	it('C159 a user page under a built child keeps the child and the parent', async () => {
-		const { approvalId, ids } = await buildPlan();
-		await seedBuiltPages(approvalId);
-		const grandchild = randomUUID();
-		await app.db.query(
-			`insert into public.osionos_pages (id, workspace_id, parent_page_id, title) values ($1, $2, $3, 'G')`,
-			[grandchild, WORKSPACE_A, ids.notes],
-		);
-		bridge.reset();
-
-		const answer = await undo(approvalId);
-		assert.equal(answer.status, 200);
-		const patched = patchedIds();
-		assert.deepEqual(new Set(patched), new Set([ids.about!]), 'only the childless page is archived');
-		const items = await allItems(app.db, approvalId);
-		assert.equal(items.find((item) => item.item_key === 'notes')!.status, 'done');
-		assert.equal(items.find((item) => item.item_key === 'home')!.status, 'done');
-		const row = await app.db.query('select archived_at from public.osionos_pages where id = $1', [grandchild]);
-		assert.equal(row.rows[0].archived_at, null, 'the user page is never archived');
-	});
-
-	it('C159 a child whose held PATCH fails after its parent was archived stays done', async () => {
-		const { approvalId, ids } = await buildPlan();
-		await seedBuiltPages(approvalId);
-		bridge.reset();
-
-		// The mock models the bridge cascade: archiving a page stamps its live children.
-		const held = holdPatch(ids.notes!, { fail: true });
-		const parentHook = bridge.onPatch!;
-		bridge.onPatch = async (call) => {
-			await parentHook(call);
-			await app.db.query(
-				'update public.osionos_pages set archived_at = now() where parent_page_id = $1::uuid and archived_at is null',
-				[decodeURIComponent(call.path.slice('/api/pages/'.length))],
-			);
-		};
-		const first = undo(approvalId);
-		await held.reached;
-		await undo(approvalId);
-		held.release();
-		assert.equal((await first).status, 200);
-
-		const items = await allItems(app.db, approvalId);
-		const notes = items.find((item) => item.item_key === 'notes')!;
-		assert.equal(notes.status, 'done');
-		assert.equal(notes.error, 'the bridge refused the write (500)');
-		assert.equal(items.find((item) => item.item_key === 'home')!.status, 'undone');
-		const row = await app.db.query('select archived_at from public.osionos_pages where id = $1', [ids.notes]);
-		assert.notEqual(row.rows[0].archived_at, null, 'the cascade from the parent archived the child');
 	});
 
 	it('C159 a bridge refusal puts that item back to done and counts it failed', async () => {

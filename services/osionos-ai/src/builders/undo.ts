@@ -42,8 +42,9 @@ export const KEPT_FOREIGN_CHILDREN = 'kept: it holds pages that this plan did no
  * A child this approval has claimed ('undone') is mid-archive in a concurrent
  * undo: its PATCH has not landed, but it is plan-built and about to go. Only
  * 'undone' qualifies: a child released 'done' was kept because it holds a
- * user's page, and excluding it would cascade-archive that page. One statement,
- * so the claim and the count cannot interleave with another undo's claim.
+ * user's page, and excluding it would cascade-archive that page. The filter makes
+ * the other undo's claim visible to this count; the claim itself stays a
+ * separate statement.
  */
 async function liveChildCount(db: Pool, approvalId: string, pageId: string): Promise<number> {
 	const result = await db.query<{ count: number }>(
