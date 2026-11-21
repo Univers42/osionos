@@ -55,10 +55,10 @@ function legacyEntries(legacy: readonly PlatformModelEntry[], baseUrl: string): 
 	}));
 }
 
-/** A provider whose key env is named but unset or empty is dropped; the log carries ids and names only (FA6). */
+/** A provider whose key env is named but unset, empty or whitespace-only is dropped; the log carries ids and names only (FA6). */
 function liveProviders(providers: readonly PlatformProvider[], env: CatalogEnv): PlatformProvider[] {
 	return providers.filter((provider) => {
-		if (provider.apiKeyEnv === undefined || (env.keyOf(provider.apiKeyEnv) ?? '') !== '') return true;
+		if (provider.apiKeyEnv === undefined || (env.keyOf(provider.apiKeyEnv) ?? '').trim() !== '') return true;
 		env.log(`[osionos-ai] provider ${provider.id} dropped: ${provider.apiKeyEnv} is unset`);
 		return false;
 	});
@@ -97,7 +97,7 @@ export function buildCatalog(
 	legacy: readonly PlatformModelEntry[],
 	providers: readonly PlatformProvider[],
 	env: CatalogEnv,
-	legacyBaseUrl = '',
+	legacyBaseUrl: string,
 ): PlatformCatalog | { refused: string } {
 	const live = liveProviders(providers, env);
 	const tagged = [...legacyEntries(legacy, legacyBaseUrl), ...live.flatMap(poolEntries)];

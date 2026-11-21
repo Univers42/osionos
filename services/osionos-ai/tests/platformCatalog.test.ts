@@ -115,3 +115,8 @@ test('rank sorts ascending, unranked last in list order', () => {
 	const out = built(LEGACY, [provider('alpha', [poolModel('u1'), poolModel('r2', { rank: 2 }), poolModel('r1', { rank: 1 }), poolModel('u2')])]);
 	assert.deepEqual(out.entries.map((entry) => entry.menuId), ['r1', 'r2', 'base', 'u1', 'u2']);
 });
+
+test('a whitespace-only key counts as unset', () => {
+	const out = built(LEGACY, [provider('blank', [poolModel('blank-m')], { apiKeyEnv: 'OSIONOS_AI_KEY_BLANK' })], baseEnv({ keyOf: () => '  \t ' }));
+	assert.deepEqual(out.providers, []);
+});

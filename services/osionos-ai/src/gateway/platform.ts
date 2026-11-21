@@ -2,6 +2,8 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { LanguageModel } from 'ai';
 import { config } from '../config.ts';
 import type { PlatformModelEntry } from '../config.ts';
+import type { CatalogEntry } from './catalog.ts';
+import type { PlatformProvider } from '../platformProviders.ts';
 
 export type { PlatformModelEntry };
 
@@ -12,8 +14,8 @@ export interface ModelUsage {
 }
 
 /**
- * The provider of the platform: ONE OpenAI-compatible upstream, reached through
- * the Vercel AI SDK. The handle is built once per process: the headers and the
+ * The legacy upstream of the platform: ONE OpenAI-compatible handle, reached
+ * through the Vercel AI SDK. It is built once per process: the headers and the
  * base URL never change.
  *
  * The two extra headers are the ones OpenRouter asks for, and they name the
@@ -38,9 +40,50 @@ function platformProvider(): ReturnType<typeof createOpenAICompatible> {
 	return provider;
 }
 
-/** The upstream model handle of an allowlist entry. */
-export function platformModel(id: string): LanguageModel {
-	return platformProvider()(id);
+/**
+ * One handle per pooled provider, built on first use and cached by provider id
+ * (FA5): its own base URL and its own key, read from the env at that moment and
+ * never logged. The OpenRouter headers go on the openrouter wire only; the
+ * handle's name is the key its provider options are read under.
+ */
+const poolHandles = new Map<string, ReturnType<typeof createOpenAICompatible>>();
+
+function poolProvider(entry: PlatformProvider): ReturnType<typeof createOpenAICompatible> {
+	let handle = poolHandles.get(entry.id);
+	if (!handle) {
+		const apiKey = entry.apiKeyEnv ? process.env[entry.apiKeyEnv]?.trim() : undefined;
+		handle = createOpenAICompatible({
+			name: entry.id,
+			baseURL: entry.baseUrl,
+			...(apiKey ? { apiKey } : {}),
+			...(entry.wire === 'openrouter' ? { headers: { 'HTTP-Referer': config.allowedOrigin, 'X-Title': 'osionos' } } : {}),
+			includeUsage: true,
+		});
+		poolHandles.set(entry.id, handle);
+	}
+	return handle;
+}
+
+/** The catalog entry of a menu id, or undefined when the platform does not serve it. */
+export function catalogEntry(menuId: string): CatalogEntry | undefined {
+	return config.catalog.entries.find((entry) => entry.menuId === menuId);
+}
+
+/** The key the provider options of an entry are read under: the name of its handle. */
+export function platformOptionsKey(entry: CatalogEntry): string {
+	return entry.providerId === 'legacy' ? 'platform' : entry.providerId;
+}
+
+/**
+ * The upstream model handle of a menu id. The upstream is asked for the
+ * entry's `upstreamId`; an id the catalog does not know goes to the legacy
+ * handle as it always did.
+ */
+export function platformModel(menuId: string): LanguageModel {
+	const entry = catalogEntry(menuId);
+	const pooled = entry && config.catalog.providers.find((one) => one.id === entry.providerId);
+	if (!entry || !pooled) return platformProvider()(entry?.upstreamId ?? menuId);
+	return poolProvider(pooled)(entry.upstreamId);
 }
 
 /** The allowlist, as configured. */
@@ -54,13 +97,12 @@ export function defaultModel(): PlatformModelEntry | null {
 }
 
 /**
- * The allowlist entry a request asks for, or null when it asks for a model the
+ * The catalog entry a request asks for, or null when it asks for a model the
  * platform does not serve. An empty request means the default model.
  */
-export function resolveModel(requested?: string): PlatformModelEntry | null {
+export function resolveModel(requested?: string): CatalogEntry | null {
 	const asked = requested?.trim();
-	if (!asked) return defaultModel();
-	return config.platformModels.find((model) => model.id === asked) ?? null;
+	return catalogEntry(asked || config.catalog.defaultId) ?? null;
 }
 
 /**

@@ -79,8 +79,10 @@ export function startAttempt(
 }
 
 /**
- * The provider options of ONE target: the data-collection deny of a platform
- * vision call, and the effort of a model that reasons. Recomputed per target
+ * The provider options of ONE target: the data-collection deny of an
+ * openrouter-wire call (every vision call, and every call of a no-train model,
+ * FA25; other wires never get the field, FA5), and the effort of a model that
+ * reasons. Recomputed per target
  * (devil C253): a fallback never inherits the primary's wire options.
  */
 export function providerOptionsFor(
@@ -88,8 +90,10 @@ export function providerOptionsFor(
 	imageCount: number,
 	effort: Effort | undefined,
 ): ProviderOptionsFragment | undefined {
-	const visionDeny: ProviderOptionsFragment = target.platformBudget && imageCount > 0
-		? { platform: { provider: { data_collection: 'deny' } } }
+	const denies = target.platformBudget && target.upstreamWire === 'openrouter'
+		&& (imageCount > 0 || target.dataUse === 'no-train');
+	const visionDeny: ProviderOptionsFragment = denies
+		? { [target.optionsKey]: { provider: { data_collection: 'deny' } } }
 		: {};
 	const merged = mergeProviderOptions(visionDeny, reasoningOptions(target, effort));
 	return Object.keys(merged).length > 0 ? merged : undefined;

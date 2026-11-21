@@ -190,6 +190,9 @@ describe('the money of a step, and of the answer that follows it', () => {
 			wire: 'openai-compatible' as const,
 			optionsKey: 'platform',
 			reasoning: false,
+			provider: 'legacy',
+			dataUse: 'no-train' as const,
+			upstreamWire: 'openrouter' as const,
 		};
 
 		// The row of the run cannot be written: the id of a run is a uuid,

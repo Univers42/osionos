@@ -51,6 +51,10 @@ export interface FailingUpstream {
 	countFor(model: string): number;
 	/** The body of every request, in order. */
 	readonly bodies: unknown[];
+	/** The JSON body of every request that named `model`, in order. */
+	bodiesFor(model: string): Record<string, unknown>[];
+	/** The headers (lower-cased names) of every request that named `model`, in order. */
+	headersFor(model: string): Record<string, string | string[] | undefined>[];
 	/** The answers `model` gives, in order (they replace the previous list). */
 	script(model: string, ...answers: (Behaviour | Scripted)[]): void;
 	/** `model` answers `behaviour` to every request once its list is spent. */
@@ -72,6 +76,8 @@ function sendStatus(response: ServerResponse, status: number, scripted: Pick<Scr
 export async function startFailingUpstream(): Promise<FailingUpstream> {
 	const requests: string[] = [];
 	const bodies: unknown[] = [];
+	const headersByModel = new Map<string, Record<string, string | string[] | undefined>[]>();
+	const bodiesByModel = new Map<string, Record<string, unknown>[]>();
 	const scripts = new Map<string, Scripted[]>();
 	const steady = new Map<string, Behaviour>();
 	let usage: StreamOptions['usage'] = { promptTokens: 1000, completionTokens: 500 };
@@ -93,6 +99,8 @@ export async function startFailingUpstream(): Promise<FailingUpstream> {
 			const model = String(body.model);
 			requests.push(model);
 			bodies.push(body);
+			headersByModel.set(model, [...(headersByModel.get(model) ?? []), { ...request.headers }]);
+			bodiesByModel.set(model, [...(bodiesByModel.get(model) ?? []), body]);
 			const next = scripts.get(model)?.shift() ?? { behaviour: steady.get(model) ?? ('ok' as const) };
 			setTimeout(() => answer(response, next, askedForUsage(body)), next.delayMs ?? 0);
 		});
@@ -128,6 +136,8 @@ export async function startFailingUpstream(): Promise<FailingUpstream> {
 		baseUrl: `http://127.0.0.1:${port}`,
 		requests,
 		bodies,
+		bodiesFor: (model) => bodiesByModel.get(model) ?? [],
+		headersFor: (model) => headersByModel.get(model) ?? [],
 		countFor: (model) => requests.filter((name) => name === model).length,
 		script(model, ...answers) {
 			scripts.set(model, answers.map((item) => (typeof item === 'object' ? item : { behaviour: item })));
@@ -141,6 +151,8 @@ export async function startFailingUpstream(): Promise<FailingUpstream> {
 		reset() {
 			requests.length = 0;
 			bodies.length = 0;
+			headersByModel.clear();
+			bodiesByModel.clear();
 			scripts.clear();
 			steady.clear();
 			usage = { promptTokens: 1000, completionTokens: 500 };

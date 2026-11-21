@@ -29,7 +29,7 @@ const ANTHROPIC_MIN_BUDGET = 1_024;
 
 /** The options that make a reasoning model think at `effort`, or `{}`. */
 export function reasoningOptions(
-	target: Pick<ResolvedTarget, 'wire' | 'optionsKey' | 'reasoning' | 'platformBudget'>,
+	target: Pick<ResolvedTarget, 'wire' | 'optionsKey' | 'reasoning' | 'platformBudget'> & Partial<Pick<ResolvedTarget, 'upstreamWire'>>,
 	effort: Effort | undefined,
 	maxOutputTokens: number = config.maxOutputTokens,
 ): ProviderOptionsFragment {
@@ -44,10 +44,11 @@ export function reasoningOptions(
 		case 'google':
 			return { [target.optionsKey]: { thinkingConfig: { thinkingBudget: GOOGLE_BUDGET[effort] } } };
 		default:
-			// The platform is OpenRouter, which reads `reasoning: { effort }` in the
-			// body; the adapter passes an unknown key through. Any other
-			// OpenAI-compatible upstream reads `reasoning_effort`.
-			return target.platformBudget
+			// Only the OpenRouter wire reads `reasoning: { effort }` in the body (the
+			// adapter passes an unknown key through, FA5); any other OpenAI-compatible
+			// upstream reads `reasoning_effort`. A target that names no upstream wire
+			// is judged by who pays: the platform is OpenRouter-shaped.
+			return (target.upstreamWire ?? (target.platformBudget ? 'openrouter' : 'user')) === 'openrouter'
 				? { [target.optionsKey]: { reasoning: { effort } } }
 				: { [target.optionsKey]: { reasoningEffort: effort } };
 	}

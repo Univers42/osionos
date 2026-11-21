@@ -15,8 +15,10 @@ import { guardedFetch } from '../connections/endpointGuard.ts';
 import { ENDPOINT_PROVIDER, providerBaseUrl } from '../connections/providers.ts';
 import { providerEntry, providerModels } from '../connections/catalog.ts';
 import type { ProviderEntry } from '../connections/providers.ts';
-import { costMicroUsd, platformModel, resolveModel } from './platform.ts';
+import { costMicroUsd, platformModel, platformOptionsKey, resolveModel } from './platform.ts';
 import type { PlatformModelEntry } from './platform.ts';
+import type { CatalogEntry } from './catalog.ts';
+import type { DataUse, Wire } from '../platformProviders.ts';
 
 /**
  * The target of a run: where the model is called, and who pays for it.
@@ -50,6 +52,12 @@ export interface ResolvedTarget {
 	optionsKey: string;
 	/** Whether the model reasons, so an effort applies to it. */
 	reasoning: boolean;
+	/** The provider the call goes to: its catalog id, or `user` for the connection of a user. */
+	provider: string;
+	/** What the provider does with the prompt; a user's own provider is theirs to judge. */
+	dataUse: DataUse;
+	/** The wire dialect of the upstream: it gates the OpenRouter-only fields (FA5). */
+	upstreamWire: Wire | 'user';
 }
 
 /** The answer of the resolver: a target, or a refusal. */
@@ -152,6 +160,31 @@ function optionsKeyOf(entry: ProviderEntry): string {
 }
 
 /**
+ * The target of a catalog entry. `modelId` stays the menu id (the cooldown
+ * key, FA2); the upstream is asked for the entry's own id.
+ *
+ * Caveat: a legacy entry is always openrouter-shaped on the wire, whatever its
+ * host, because that is what the platform sent before the pool existed; only
+ * the catalog's own `wire` for it (a host test) would differ.
+ */
+function platformTarget(entry: CatalogEntry): ResolvedTarget {
+	return {
+		model: platformModel(entry.menuId),
+		modelId: entry.menuId,
+		connectionId: PLATFORM_CONNECTION_ID,
+		pricing: entry.pricing,
+		platformBudget: true,
+		vision: entry.pricing.vision === true,
+		wire: 'openai-compatible',
+		optionsKey: platformOptionsKey(entry),
+		reasoning: entry.pricing.reasoning === true,
+		provider: entry.providerId,
+		dataUse: entry.dataUse,
+		upstreamWire: entry.providerId === 'legacy' ? 'openrouter' : entry.wire,
+	};
+}
+
+/**
  * The provider a connection calls.
  *
  * A connection of a provider is that provider of the catalog; an endpoint is
@@ -184,20 +217,7 @@ export async function resolveTarget(
 	if (wanted === PLATFORM_CONNECTION_ID) {
 		const entry = resolveModel(modelId);
 		if (!entry) return { kind: 'refused', status: 400, code: 'model_not_allowed' };
-		return {
-			kind: 'resolved',
-			target: {
-				model: platformModel(entry.id),
-				modelId: entry.id,
-				connectionId: PLATFORM_CONNECTION_ID,
-				pricing: entry,
-				platformBudget: true,
-				vision: entry.vision === true,
-				wire: 'openai-compatible',
-				optionsKey: 'platform',
-				reasoning: entry.reasoning === true,
-			},
-		};
+		return { kind: 'resolved', target: platformTarget(entry) };
 	}
 
 	const row = await getOwnedConnection(db, { id: wanted, ownerUserId: user.userId });
@@ -228,6 +248,9 @@ export async function resolveTarget(
 			wire: entry.wire === 'anthropic' || entry.wire === 'google' ? entry.wire : 'openai-compatible',
 			optionsKey: optionsKeyOf(entry),
 			reasoning: catalogReasoning,
+			provider: 'user',
+			dataUse: 'no-train',
+			upstreamWire: 'user',
 		},
 	};
 }
