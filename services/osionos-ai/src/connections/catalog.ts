@@ -112,8 +112,10 @@ async function writeShared(redis: Redis, found: CatalogProvider[]): Promise<void
  */
 async function loadOnce(redis: Redis): Promise<CatalogProvider[]> {
 	const shared = await readShared(redis);
+	// Caveat: a copy taken from Redis lives a full day in memory whatever its
+	// remaining PTTL, so it can be up to 48 h old (24 h in Redis + 24 h here), not 24 h.
 	if (shared) {
-		copy = { providers: shared, expiresAt: Date.now() + CATALOG_TTL_SECONDS };
+		copy = { providers: shared, expiresAt: Date.now() + CATALOG_TTL_SECONDS * 1000 };
 		return shared;
 	}
 	const fetched = await fetchCatalog();
@@ -122,7 +124,7 @@ async function loadOnce(redis: Redis): Promise<CatalogProvider[]> {
 			console.warn(JSON.stringify({ event: 'catalog_capped', providers: fetched.length, kept: MAX_PROVIDERS }));
 			fetched.length = MAX_PROVIDERS;
 		}
-		copy = { providers: fetched, expiresAt: Date.now() + CATALOG_TTL_SECONDS };
+		copy = { providers: fetched, expiresAt: Date.now() + CATALOG_TTL_SECONDS * 1000 };
 		await writeShared(redis, fetched);
 		return fetched;
 	}
