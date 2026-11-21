@@ -10,6 +10,7 @@ import type { AccountContext } from './account.ts';
 import type { WorkspaceOverview, WorkspacePageEntry } from './workspace.ts';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 import { config } from '../config.ts';
+import { isContinuationParts } from './privacyGate.ts';
 import { readableByRules } from '../retrieval/shareRules.ts';
 
 /**
@@ -59,6 +60,8 @@ export const HISTORY_CHAR_BUDGET = 24_000;
 export interface HistoryMessage {
 	role: string;
 	text: string;
+	/** An approval continuation: the service wrote this user turn (R37). */
+	continuation?: true;
 }
 
 /** The text of a message: its text parts, in order. */
@@ -110,7 +113,7 @@ export function pickHistoryWindow(rows: readonly { id: unknown; role: string; pa
 			dropped = true;
 			break;
 		}
-		picked.push({ role: row.role, text });
+		picked.push({ role: row.role, text, ...(isContinuationParts(row.parts) ? { continuation: true as const } : {}) });
 		oldestKeptId = String(row.id);
 		chars += text.length;
 	}

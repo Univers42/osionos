@@ -12,7 +12,7 @@ import { SseStream, collect } from './sse.ts';
 const upstream = await startFailingUpstream();
 const MAY_TRAIN = FREE_TIER_FIRST.id;
 const NO_TRAIN = FREE.id;
-const { app, mock, base, tokenFor, createConversation, postComplete } = await startHarness({
+const { app, mock, base, tokenFor, createConversation, postComplete, call } = await startHarness({
 	upstreamBaseUrl: upstream.baseUrl,
 	openRouterModels: [{ id: MAY_TRAIN, dataUse: 'may-train' }],
 });
@@ -49,6 +49,46 @@ async function citedConversation(): Promise<string> {
 		);
 	}
 	return conversationId;
+}
+
+const CONTINUATION_SECRET = 'CONTINUATION-SECRET-9001';
+const LEGACY_SECRET = 'LEGACY-CONTINUATION-SECRET-9002';
+
+async function seedTurn(conversationId: string, role: string, text: string): Promise<void> {
+	await app.db.query(
+		`insert into public.ai_messages (conversation_id, role, parts) values ($1, $2, $3::jsonb)`,
+		[conversationId, role, JSON.stringify([{ type: 'text', text }])],
+	);
+}
+
+/** A continuation turn written by the runner itself, as an approval decision starts it. */
+async function continuationTurn(conversationId: string, text: string): Promise<void> {
+	const { startRun } = await import('../src/runs/runner.ts');
+	const { resolveTarget } = await import('../src/gateway/resolve.ts');
+	const resolved = await resolveTarget(app.db, app.redis, { userId: USER_A } as never, undefined, NO_TRAIN);
+	if (resolved.kind === 'refused') throw new Error('no target');
+	const started = await startRun({
+		db: app.db, redis: app.redis, runId: randomUUID(), conversationId, ownerId: USER_A,
+		text, target: resolved.target, emit: () => undefined, continuation: true,
+	} as never);
+	assert.equal(started.kind, 'started');
+	if (started.kind === 'started') await started.execute();
+}
+
+/** A pending approval of a run whose model now resolves to {@link MAY_TRAIN}. */
+async function mayTrainApproval(conversationId: string): Promise<string> {
+	const runId = randomUUID();
+	const approvalId = randomUUID();
+	await app.db.query(
+		`insert into public.ai_runs (id, conversation_id, owner_id, status, model) values ($1, $2, $3, 'succeeded', $4)`,
+		[runId, conversationId, USER_A, MAY_TRAIN],
+	);
+	await app.db.query(
+		`insert into public.ai_approvals (id, owner_id, workspace_id, tool, args, args_sha256, status, origin, conversation_id, run_id, expires_at)
+		 values ($1, $2, $3, 'create_page', $4::jsonb, $5, 'pending', 'run', $6, $7, now() + interval '10 minutes')`,
+		[approvalId, USER_A, WORKSPACE_A, JSON.stringify({ title: CONTINUATION_SECRET }), `mt-${approvalId}`, conversationId, runId],
+	);
+	return approvalId;
 }
 
 async function post(conversationId: string, model: string, extra: object = {}): Promise<Response> {
@@ -136,5 +176,34 @@ describe('a may-train run carries no workspace data', () => {
 		assert.ok(sent.includes('<account'), 'the account block itself is still sent');
 		await finished(await post(await createConversation(), NO_TRAIN, { context: { view, account: true } }));
 		assert.ok(JSON.stringify(upstream.bodiesFor(NO_TRAIN).at(-1)).includes('WS-NAME-SECRET'), 'no-train keeps it');
+	});
+
+	it('R37: replays no approval continuation, marked or written before the mark; typed turns stay', async () => {
+		const conversationId = await createConversation();
+		await seedTurn(conversationId, 'user', 'TYPED-OWN-WORDS-1');
+		await seedTurn(conversationId, 'user', `the user approved create_page (create), result: ${LEGACY_SECRET}`);
+		await continuationTurn(conversationId, `MCP output ${CONTINUATION_SECRET}`);
+		await finished(await post(conversationId, MAY_TRAIN));
+		const sent = JSON.stringify(upstream.bodiesFor(MAY_TRAIN).at(-1));
+		assert.ok(sent.includes('TYPED-OWN-WORDS-1'), 'the typed turn is replayed');
+		assert.equal(sent.includes(CONTINUATION_SECRET), false, 'a marked continuation is not replayed');
+		assert.equal(sent.includes(LEGACY_SECRET), false, 'an unmarked continuation of an older row is not replayed');
+		await finished(await post(conversationId, NO_TRAIN));
+		const noTrain = JSON.stringify(upstream.bodiesFor(NO_TRAIN).at(-1));
+		assert.ok(noTrain.includes(CONTINUATION_SECRET) && noTrain.includes(LEGACY_SECRET), 'no-train keeps the continuations');
+	});
+
+	it('R37: a decision on a run whose model is now may-train starts no continuation', async () => {
+		const conversationId = await createConversation();
+		const calls = upstream.countFor(MAY_TRAIN);
+		const decided = await call(`/api/ai/approvals/${await mayTrainApproval(conversationId)}`, {
+			method: 'POST', token: tokenFor(USER_A, WORKSPACE_A), body: { decision: 'decline' },
+		});
+		assert.equal(decided.status, 200, 'the decision itself succeeds');
+		assert.equal(decided.body?.status, 'declined');
+		assert.equal(decided.body?.continuationRunId, null, 'no continuation run starts');
+		const runs = await app.db.query('select count(*)::int as n from public.ai_runs where conversation_id = $1', [conversationId]);
+		assert.equal(runs.rows[0].n, 1, 'only the run that asked');
+		assert.equal(upstream.countFor(MAY_TRAIN), calls, 'no upstream request reaches the may-train model');
 	});
 });

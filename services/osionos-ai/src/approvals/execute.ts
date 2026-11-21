@@ -8,6 +8,7 @@ import { checkDailyBuildLimit } from '../rateLimit.ts';
 import { resolveTarget } from '../gateway/resolve.ts';
 import { resolvePinnedAgent } from '../agents/resolve.ts';
 import { startRun } from '../runs/runner.ts';
+import { isMayTrain } from '../runs/privacyGate.ts';
 import { getRun } from '../runs/repo.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
 import { bridgeWrite, refusalMessage } from './bridge.ts';
@@ -266,6 +267,12 @@ async function continueRun(
 	const model = run?.model ?? conversation.model ?? undefined;
 	const resolved = await resolveTarget(db, redis, user, undefined, model);
 	if (resolved.kind === 'refused') return undefined;
+	// R37: the continuation text carries tool output and titles, which a
+	// may-train model never reads; the decision stands, the run does not go on.
+	if (isMayTrain(resolved.target)) {
+		console.warn(JSON.stringify({ event: 'continuation_refused', approvalId: row.id, code: 'may_train_context' }));
+		return undefined;
+	}
 	// The agent of the continuation is the version the run pinned, under the same
 	// gate as a new run (C333, C334). A refusal creates no run row (C336).
 	const pinned = await resolvePinnedAgent(db, user, run, conversation.workspace_id);

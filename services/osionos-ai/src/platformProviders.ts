@@ -59,13 +59,15 @@ const RESERVED_ID = 'legacy';
  * Whether a baseUrl's host is internal: a single label (a compose service
  * name), localhost, or an IP literal in a blocked range (FC7).
  *
- * Caveat: it reads the host as written. A DNS name that resolves to a private
- * address passes, and it over-drops any blocked literal (CGNAT 100.64/10, the
- * documentation ranges); the deployment's network policy is the boundary for
- * names, and an operator names a public provider by its public DNS name.
+ * Caveat: it reads the host as written, with one trailing dot (the DNS root)
+ * dropped. A DNS name that resolves to a private address (an internal zone, a
+ * public name pointed at 10.x, nip.io) still passes, and it over-drops any
+ * blocked literal (CGNAT 100.64/10, the documentation ranges); the
+ * deployment's network policy is the boundary for names, and an operator
+ * names a public provider by its public DNS name.
  */
 function isInternalHost(baseUrl: string): boolean {
-	const written = new URL(baseUrl).hostname.toLowerCase();
+	const written = new URL(baseUrl).hostname.toLowerCase().replace(/\.$/, '');
 	const host = written.startsWith('[') ? written.slice(1, -1) : written;
 	if (isIP(host) !== 0) return isBlockedAddress(host);
 	return host === 'localhost' || host.endsWith('.localhost') || !host.includes('.');

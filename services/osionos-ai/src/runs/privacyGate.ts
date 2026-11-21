@@ -1,7 +1,7 @@
-import type { ModelMessage, ToolSet } from 'ai';
+import type { ToolSet } from 'ai';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
 import type { AccountContext } from './account.ts';
-import type { RunView } from './prompt.ts';
+import type { HistoryMessage, RunView } from './prompt.ts';
 
 /**
  * FA26: a run on a may-train target sends no page context, workspace
@@ -36,12 +36,35 @@ export function mayTrainRefusal(body: GatedBody, target: Pick<ResolvedTarget, 'd
 }
 
 /**
+ * The mark on the text part of an approval continuation's user turn: the turn
+ * is stored as role 'user', but the service wrote it (tool output, page and
+ * plan titles), not the user.
+ */
+export const CONTINUATION_MARK = { continuation: true } as const;
+
+/** Whether stored parts carry {@link CONTINUATION_MARK}. */
+export function isContinuationParts(parts: unknown): boolean {
+	return Array.isArray(parts) && parts.some((part) => (part as { continuation?: unknown } | null)?.continuation === true);
+}
+
+/**
+ * Caveat: rows written before the mark are known by the opening of
+ * `continuationText` only. A typed message that opens the same way is dropped
+ * too (over-drop, the safe side); a reworded continuation text is caught only
+ * by the mark.
+ */
+const UNMARKED_CONTINUATION = /^the user (approved|declined) /;
+
+/**
  * R37: the replayed turns of a may-train run are the user's own typed turns.
  * An earlier answer may paraphrase private pages in plain prose, which no
- * pattern can tell from any other prose, so no answer is replayed.
+ * pattern can tell from any other prose, so no answer is replayed; nor is an
+ * approval continuation, which carries tool output and titles.
  */
-export function userTurnsOnly(messages: ModelMessage[]): ModelMessage[] {
-	return messages.filter((message) => message.role === 'user');
+export function typedTurnsOnly(history: readonly HistoryMessage[]): HistoryMessage[] {
+	return history.filter(
+		(message) => message.role === 'user' && message.continuation !== true && !UNMARKED_CONTINUATION.test(message.text),
+	);
 }
 
 /** The tools a may-train run keeps: the web ones, which read no workspace. */

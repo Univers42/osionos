@@ -306,6 +306,7 @@ upstream, e.g. `https://openrouter.ai/api/v1`), `OSIONOS_AI_PLATFORM_MODELS` (th
 JSON allowlist: `[{"id","label","inputMicroUsdPerMTok","outputMicroUsdPerMTok","default"?,"dataUse"?}]`,
 exactly one default, and the default must declare `"dataUse": "no-train"` or the
 service refuses to boot (FA23)).
+In `OSIONOS_AI_PLATFORM_PROVIDERS` a provider with the reserved id `legacy` is dropped with a log line naming the id, where any other invalid entry refuses boot: dropping it fails safe, since the built-in legacy route stays and the log says which entry went.
 Optional: `OSIONOS_AI_PORT` (4300), `OSIONOS_ALLOWED_ORIGIN` (the app URL),
 `OSIONOS_APP_SESSION_TTL_SECONDS` (3600), `OSIONOS_BAAS_URL` and `SERVICE_ROLE_KEY`
 (the bridge's names — the session-cutoff poller reads them), `OSIONOS_SESSION_CUTOFFS`

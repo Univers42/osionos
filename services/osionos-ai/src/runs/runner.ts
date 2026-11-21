@@ -42,7 +42,7 @@ import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.t
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import { loadAttachments } from './attachments.ts';
-import { accountWithoutWorkspace, isMayTrain, viewWithoutPages } from './privacyGate.ts';
+import { accountWithoutWorkspace, CONTINUATION_MARK, isMayTrain, viewWithoutPages } from './privacyGate.ts';
 import { fitFiles } from '../files/excerpt.ts';
 import type { FittedFile } from '../files/excerpt.ts';
 import { THREAD_SYSTEM_PROMPT } from '../threads/context.ts';
@@ -423,7 +423,11 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 
 	// (c) The user's message joins the transcript, and the conversation takes
 	// its title when it has none: one transaction, one question.
-	const userParts: unknown[] = [{ type: 'text', text: [text, ...images.map(() => '[image]'), ...files.map((file) => `[file: ${file.name.replaceAll('\n', ' ')}]`)].join('\n') }];
+	const userParts: unknown[] = [{
+		type: 'text',
+		text: [text, ...images.map(() => '[image]'), ...files.map((file) => `[file: ${file.name.replaceAll('\n', ' ')}]`)].join('\n'),
+		...(input.continuation ? CONTINUATION_MARK : {}),
+	}];
 	for (const attachment of attachments) {
 		userParts.push({ type: 'attachment', ...attachment });
 	}

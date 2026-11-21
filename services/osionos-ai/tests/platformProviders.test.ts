@@ -114,6 +114,7 @@ const INTERNAL_HOSTS: Record<string, string[]> = {
 	'private IP': ['https://10.0.0.5/v1', 'https://192.168.1.2/v1', 'https://172.16.0.1/v1'],
 	'link-local IP': ['https://169.254.169.254/v1', 'https://[fe80::1]/v1'],
 	'unique-local IP': ['https://[fd00::1]/v1'],
+	'trailing-dot': ['https://localhost./v1', 'https://127.0.0.1./v1', 'https://osionos-ai-llm./v1', 'https://ai.localhost./v1'],
 };
 
 for (const [label, urls] of Object.entries(INTERNAL_HOSTS)) {
