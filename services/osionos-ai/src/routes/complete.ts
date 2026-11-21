@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { config } from '../config.ts';
 import { readJson, sendError, sendSseHeaders, writeSseFrame } from '../http.ts';
 import { resolveTarget } from '../gateway/resolve.ts';
+import { chosenModel } from '../gateway/modelChoice.ts';
 import { reserveTarget, settleTarget, targetCost } from '../gateway/resolve.ts';
 import { checkRunRateLimit } from '../rateLimit.ts';
 import { findCommand, renderTemplate } from '../commands/builtins.ts';
@@ -29,7 +30,7 @@ const completeSchema = z.object({
 	runId: z.string().regex(UUID, 'runId must be a uuid'),
 	command: z.string().min(1).max(64),
 	input: z.object({ text: z.string().min(1).max(8_000) }),
-	model: z.string().min(1).optional(),
+	model: chosenModel,
 	// The connection the completion spends: the platform one, or one of the caller's.
 	connectionId: z.string().min(1).max(64).optional(),
 });

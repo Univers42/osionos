@@ -15,6 +15,7 @@ import * as runStore from '../runs/runStore.ts';
 import { gateResearch } from '../research/gate.ts';
 import { resolveFallbacks } from './fallbacks.ts';
 import { withAuto } from '../runs/auto.ts';
+import { chosenModel } from '../gateway/modelChoice.ts';
 import { mayTrainRefusal } from '../runs/privacyGate.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
@@ -37,7 +38,7 @@ const startRunSchema = z.object({
 	// dropped before the new turn, so the model never sees the edited-away
 	// turns. Valid only with the conversationId, which the schema requires.
 	replaceFromRunId: z.string().regex(UUID, 'replaceFromRunId must be a uuid').optional(),
-	model: z.string().min(1).optional(),
+	model: chosenModel,
 	// The agent that shapes the run: one of the built-ins, or none. An id the
 	// service does not know is a bad request — the client never guesses. A
 	// uuid is a custom agent, accepted only while OSIONOS_AI_CUSTOM_AGENTS is on (C329).
