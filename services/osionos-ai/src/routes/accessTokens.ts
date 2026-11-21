@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { config } from '../config.ts';
 import type { AuthUser } from '../auth.ts';
 import { readJson, sendError, sendJson, sendNoContent } from '../http.ts';
 import { checkPatRateLimit } from '../rateLimit.ts';
@@ -103,6 +104,12 @@ async function handleCreateToken(ctx: RouteContext, user: AuthUser): Promise<num
 	const body = await readJson(ctx.request, createSchema);
 	const scopes = [...new Set(body.scopes)];
 	const workspaceIds = [...new Set(body.workspaceIds)];
+	// Public mode mints read-only tokens until a live approve-and-deny e2e of an
+	// MCP proposal exists (FB8).
+	if (config.publicMode && scopes.includes('write_approval')) {
+		sendError(ctx.response, 400, 'scope_not_allowed');
+		return 400;
+	}
 	// The workspaces of the caller, LIVE (C115): a membership that ended
 	// ends the scope of the token at once.
 	const live = await liveMemberWorkspaces(ctx.deps.db, user);
