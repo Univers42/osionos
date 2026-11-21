@@ -16,7 +16,7 @@ import { Seeds, USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } from './retrievalSeed
  */
 process.env.OSIONOS_AI_PAT = 'on';
 process.env.OSIONOS_AI_PLATFORM_MODELS ??= JSON.stringify([
-	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true },
+	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true, dataUse: 'no-train' },
 ]);
 export const embedder = await startMockEmbedder();
 process.env.OSIONOS_AI_EMBED_URL = embedder.baseUrl;

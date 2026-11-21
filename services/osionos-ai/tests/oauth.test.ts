@@ -37,7 +37,7 @@ const mock = await startMockUpstream();
 
 process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${mock.baseUrl}/v1`;
 process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([
-	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true },
+	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true, dataUse: 'no-train' },
 ]);
 process.env.OSIONOS_AI_RUNS_PER_MINUTE = '100';
 // The KEK of the envelope, and the hosts of the development escape hatch.

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { type DataUse, type PlatformModelEntry, dataUseSchema } from './platformModels.ts';
+import { type DataUse, type PlatformModelEntry, dataUseSchema, platformModelSchema } from './platformModels.ts';
 
 export type { DataUse };
 export type Wire = 'openrouter' | 'openai-compatible';
@@ -19,14 +19,7 @@ export interface PlatformProvider {
 	models: PoolModel[];
 }
 
-const poolModelSchema = z.object({
-	id: z.string().min(1),
-	label: z.string().min(1),
-	input: z.array(z.string().min(1)).optional(),
-	inputMicroUsdPerMTok: z.number().int().nonnegative(),
-	outputMicroUsdPerMTok: z.number().int().nonnegative(),
-	default: z.boolean().optional(),
-	reasoning: z.boolean().optional(),
+const poolModelSchema = platformModelSchema.extend({
 	upstreamId: z.string().min(1),
 	dataUse: dataUseSchema.default('may-train'),
 	rank: z.number().int().nonnegative().optional(),

@@ -75,6 +75,7 @@ export const FREE = {
 	inputMicroUsdPerMTok: 0,
 	outputMicroUsdPerMTok: 0,
 	default: true,
+	dataUse: 'no-train' as const,
 };
 
 /**

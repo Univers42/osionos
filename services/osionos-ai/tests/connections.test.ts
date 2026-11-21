@@ -27,7 +27,7 @@ function tokenFor(userId: string, workspaceId: string): string {
 const mock = await startMockUpstream();
 process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${mock.baseUrl}/v1`;
 process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([
-	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true },
+	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true, dataUse: 'no-train' },
 	{ id: 'mock-priced', label: 'Mock priced', inputMicroUsdPerMTok: 1000, outputMicroUsdPerMTok: 2000 },
 ]);
 // The platform budget of the day is empty: a run on the platform is refused.

@@ -21,7 +21,7 @@ export function tokenFor(userId: string, workspaceId: string = randomUUID()): st
 /** Starts the service and resolves to its base URL. */
 export async function serveAi(): Promise<string> {
 	process.env.OSIONOS_AI_PLATFORM_MODELS ??= JSON.stringify([
-		{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true },
+		{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true, dataUse: 'no-train' },
 	]);
 	const { createAiServer } = await import('../src/server.ts');
 	const app = createAiServer();

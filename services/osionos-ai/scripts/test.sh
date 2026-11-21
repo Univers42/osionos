@@ -92,7 +92,7 @@ docker run --rm --network "$NETWORK" \
 	-e OSIONOS_BAAS_URL="https://baas.invalid" \
 	-e SERVICE_ROLE_KEY="test-service-role-key" \
 	-e OSIONOS_AI_UPSTREAM_BASE_URL="https://127.0.0.1:1/v1" \
-	-e OSIONOS_AI_PLATFORM_MODELS='[{"id":"placeholder","label":"Placeholder","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true}]' \
+	-e OSIONOS_AI_PLATFORM_MODELS='[{"id":"placeholder","label":"Placeholder","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true,"dataUse":"no-train"}]' \
 	-e OSIONOS_AI_MAX_OUTPUT_TOKENS=1024 \
 	-e OSIONOS_AI_USER_DAILY_MICROUSD=200000 \
 	-e OSIONOS_AI_PLATFORM_DAILY_MICROUSD=20000000 \

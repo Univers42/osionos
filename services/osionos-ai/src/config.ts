@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { compareCodeUnits } from './order.ts';
+import { buildCatalog, type PlatformCatalog } from './gateway/catalog.ts';
 import { decodePlatformModels, type PlatformModelEntry } from './platformModels.ts';
+import { decodePlatformProviders } from './platformProviders.ts';
 
 /**
  * The configuration is parsed once, at import time, and frozen.
@@ -41,6 +43,8 @@ const envSchema = z.object({
 	OSIONOS_AI_UPSTREAM_BASE_URL: z.string().min(1),
 	OSIONOS_AI_UPSTREAM_API_KEY: z.string().optional(),
 	OSIONOS_AI_PLATFORM_MODELS: z.string().min(1),
+	OSIONOS_AI_PLATFORM_PROVIDERS: z.string().optional(),
+	OSIONOS_AI_PUBLIC_MODE: z.enum(['on', '']).optional(),
 	OSIONOS_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(1024),
 	OSIONOS_AI_VISION_TOKENS_PER_IMAGE: z.coerce.number().int().positive().default(1600),
 	OSIONOS_AI_USER_DAILY_MICROUSD: z.coerce.number().int().nonnegative().default(200_000),
@@ -218,6 +222,8 @@ const rawEnv = {
 	// A local runtime needs no key: an empty value is no key at all.
 	OSIONOS_AI_UPSTREAM_API_KEY: firstEnv('OSIONOS_AI_UPSTREAM_API_KEY'),
 	OSIONOS_AI_PLATFORM_MODELS: process.env.OSIONOS_AI_PLATFORM_MODELS,
+	OSIONOS_AI_PLATFORM_PROVIDERS: process.env.OSIONOS_AI_PLATFORM_PROVIDERS,
+	OSIONOS_AI_PUBLIC_MODE: process.env.OSIONOS_AI_PUBLIC_MODE,
 	OSIONOS_AI_MAX_OUTPUT_TOKENS: process.env.OSIONOS_AI_MAX_OUTPUT_TOKENS,
 	OSIONOS_AI_VISION_TOKENS_PER_IMAGE: process.env.OSIONOS_AI_VISION_TOKENS_PER_IMAGE,
 	OSIONOS_AI_USER_DAILY_MICROUSD: process.env.OSIONOS_AI_USER_DAILY_MICROUSD,
@@ -298,6 +304,21 @@ function refuse(name: string): never {
  */
 function parsePlatformModels(raw: string): PlatformModelEntry[] {
 	return decodePlatformModels(raw) ?? refuse('OSIONOS_AI_PLATFORM_MODELS');
+}
+
+/**
+ * The boot catalog of the legacy list and the provider pool. A refusal names the
+ * variable at fault; a provider whose key is unset is dropped by buildCatalog.
+ */
+function parseCatalog(
+	legacy: readonly PlatformModelEntry[],
+	opts: { rawProviders: string | undefined; legacyBaseUrl: string; publicMode: boolean; devHosts: readonly string[] },
+): PlatformCatalog {
+	const providers = decodePlatformProviders(opts.rawProviders, { devHosts: opts.devHosts })
+		?? refuse('OSIONOS_AI_PLATFORM_PROVIDERS');
+	const env = { publicMode: opts.publicMode, keyOf: (name: string) => process.env[name], log: (line: string) => console.warn(line) };
+	const built = buildCatalog(legacy, providers, env, opts.legacyBaseUrl);
+	return 'refused' in built ? refuse(built.refused) : built;
 }
 
 /**
@@ -390,6 +411,10 @@ export interface AiServiceConfig {
 	upstreamBaseUrl: string;
 	upstreamApiKey?: string;
 	platformModels: readonly PlatformModelEntry[];
+	/** The legacy allowlist and the live provider pool as one menu (read by the router). */
+	catalog: PlatformCatalog;
+	/** OSIONOS_AI_PUBLIC_MODE=on: boot refused any priced model. */
+	publicMode: boolean;
 	maxOutputTokens: number;
 	/** The per-image input-token ceiling added to the reservation of a vision run. */
 	visionTokensPerImage: number;
@@ -502,6 +527,10 @@ export interface AiServiceConfig {
 	describePerMinute: number;
 }
 
+const platformModels = Object.freeze(parsePlatformModels(parsed.data.OSIONOS_AI_PLATFORM_MODELS));
+const devEndpointHosts = parseDevHosts(parsed.data.OSIONOS_AI_DEV_ENDPOINT_HOSTS);
+const publicMode = parsed.data.OSIONOS_AI_PUBLIC_MODE === 'on';
+
 export const config: AiServiceConfig = Object.freeze({
 	port: parsed.data.OSIONOS_AI_PORT,
 	databaseUrl: parsed.data.OSIONOS_AI_DATABASE_URL,
@@ -517,7 +546,9 @@ export const config: AiServiceConfig = Object.freeze({
 	serviceKey: parsed.data.SERVICE_ROLE_KEY,
 	upstreamBaseUrl: parsed.data.OSIONOS_AI_UPSTREAM_BASE_URL,
 	upstreamApiKey: parsed.data.OSIONOS_AI_UPSTREAM_API_KEY,
-	platformModels: Object.freeze(parsePlatformModels(parsed.data.OSIONOS_AI_PLATFORM_MODELS)),
+	platformModels,
+	catalog: Object.freeze(parseCatalog(platformModels, { rawProviders: parsed.data.OSIONOS_AI_PLATFORM_PROVIDERS, legacyBaseUrl: parsed.data.OSIONOS_AI_UPSTREAM_BASE_URL, publicMode, devHosts: devEndpointHosts })),
+	publicMode,
 	maxOutputTokens: parsed.data.OSIONOS_AI_MAX_OUTPUT_TOKENS,
 	visionTokensPerImage: parsed.data.OSIONOS_AI_VISION_TOKENS_PER_IMAGE,
 	userDailyMicroUsd: parsed.data.OSIONOS_AI_USER_DAILY_MICROUSD,
@@ -527,7 +558,7 @@ export const config: AiServiceConfig = Object.freeze({
 	sourcesPerMinute: parsed.data.OSIONOS_AI_SOURCES_PER_MINUTE,
 	kek: parsed.data.OSIONOS_AI_KEK,
 	kekId: parsed.data.OSIONOS_AI_KEK_ID,
-	devEndpointHosts: parseDevHosts(parsed.data.OSIONOS_AI_DEV_ENDPOINT_HOSTS),
+	devEndpointHosts,
 	devProviderBaseUrls: parseDevProviderUrls(parsed.data.OSIONOS_AI_DEV_PROVIDER_BASE_URLS),
 	catalogUrl: parsed.data.OSIONOS_AI_CATALOG_URL,
 	bridgeUrl: parsed.data.OSIONOS_AI_BRIDGE_URL,

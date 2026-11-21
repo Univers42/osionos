@@ -18,7 +18,7 @@ process.env.OSIONOS_AI_REDIS_URL ??= 'redis://127.0.0.1:6379';
 process.env.OSIONOS_APP_SESSION_SECRET ??= 'test-app-session-secret';
 process.env.OSIONOS_AI_UPSTREAM_BASE_URL ??= 'http://127.0.0.1:1/v1';
 process.env.OSIONOS_AI_PLATFORM_MODELS ??=
-	'[{"id":"placeholder","label":"Placeholder","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true}]';
+	'[{"id":"placeholder","label":"Placeholder","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true,"dataUse":"no-train"}]';
 
 const { buildUserTurn, pageBlock } = await import('../src/runs/prompt.ts');
 const { searchWorkspace } = await import('../src/tools/readTools.ts');

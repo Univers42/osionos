@@ -27,7 +27,7 @@ export interface PlatformModelEntry {
 export type DataUse = 'no-train' | 'may-train';
 export const dataUseSchema = z.enum(['no-train', 'may-train']);
 
-const platformModelSchema = z.object({
+export const platformModelSchema = z.object({
 	id: z.string().min(1),
 	label: z.string().min(1),
 	input: z.array(z.string().min(1)).optional(),
