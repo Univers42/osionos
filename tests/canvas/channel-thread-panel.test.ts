@@ -52,3 +52,7 @@ test("OB6: in the thread, a channel admin may delete an AI answer; another membe
 test("OB6: in the thread, an AI answer can be reported", () => {
   assert.match(panel(answer(ANA), { canModerate: false, onReport: noop }), /aria-label="Report AI answer"/);
 });
+
+test("OB6: in the thread, an AI answer names the member who asked for it", () => {
+  assert.match(panel(answer(ANA), { authorNames: { [ANA]: "Ana" } }), /AI answer, asked by Ana/);
+});
