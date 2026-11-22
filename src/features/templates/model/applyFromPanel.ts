@@ -18,6 +18,7 @@
 import { useUserStore } from "@/features/auth";
 import { getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { canEditBody } from "@/store/pageStore.helpers";
+import { isLayoutModesEnabled } from "@/shared/config/featureFlags";
 import { usePageStore } from "@/store/usePageStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import type { TemplateSource } from "./templateSlice";
@@ -62,6 +63,8 @@ function reportOutcome(outcome: ApplyOutcome): void {
  *  (a page with no content is replaced without asking); its "cancel" answer
  *  stops before anything is written. */
 export async function applyTemplateToActivePage(templateId: string, ask: ApplyAsk): Promise<void> {
+  // The catalogue writes region cells: off with osio.layout.modes (TD18, groot ADR 0067 RD6).
+  if (!isLayoutModesEnabled()) return;
   const target = currentTarget();
   if (!target.ok) {
     useToastStore.getState().push({ kind: "error", title: TARGET_TOAST[target.reason] });
