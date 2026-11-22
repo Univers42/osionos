@@ -10,10 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { mediaCrossOrigin } from "@/shared/lib/media/mediaCrossOrigin";
 import { ImageTagChips } from "./ImageTagChips";
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { FileText, ImageIcon, Music, Pause, Play } from "lucide-react";
+import { AudioPreview, FileLinkPreview, VideoPreview } from "./DirectMediaPlayers";
 
 import {
   MEDIA_BLOCK_LABELS,
@@ -254,70 +254,9 @@ const DirectMediaPreview: React.FC<MediaBlockPreviewProps> = ({
     );
   }
 
-  if (block.type === "video") {
-    return (
-      <div style={mediaWidthStyle(block)}>
-        <video
-          controls
-          preload="metadata"
-          crossOrigin={mediaCrossOrigin(resolved.url)}
-          poster={resolved.thumbnailUrl}
-          className="block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] bg-black/90"
-        >
-          <source src={resolved.url} />
-          <track kind="captions" />
-        </video>
-      </div>
-    );
-  }
-
-  if (block.type === "audio") {
-    return (
-      <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
-        <div className="mb-3 flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)]">
-            <Music size={22} aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-[var(--osio-fg-default)]">
-              {label}
-            </p>
-            <p className="text-xs text-[var(--osio-fg-muted)]">
-              Audio asset
-            </p>
-          </div>
-        </div>
-        <audio controls preload="metadata" className="w-full">
-          <source src={resolved.url} />
-          <track kind="captions" />
-        </audio>
-      </div>
-    );
-  }
-
-  return (
-    <a
-      href={resolved.url}
-      target="_blank"
-      rel="noreferrer"
-      className="flex items-center gap-3 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4 transition-colors hover:bg-[var(--osio-bg-hover)]"
-    >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)]">
-        <FileText size={22} aria-hidden />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-[var(--osio-fg-default)]">
-          {label}
-        </span>
-        <span className="block text-xs text-[var(--osio-fg-muted)]">
-          Open file
-        </span>
-      </span>
-      <span className="text-xs font-medium text-[var(--osio-accent)]">
-        Open
-      </span>
-    </a>
-  );
+  if (block.type === "video") return <VideoPreview block={block} resolved={resolved} />;
+  if (block.type === "audio") return <AudioPreview resolved={resolved} label={label} />;
+  return <FileLinkPreview resolved={resolved} label={label} />;
 };
 
 /** The block's media. A video/audio/file link that is a provider page (YouTube, Spotify,
