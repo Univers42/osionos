@@ -12,6 +12,8 @@ import type { SseEvent } from './sse.ts';
  * answers so the bridge can post exactly that answer.
  */
 process.env.OSIONOS_AI_THREAD_ANSWERS = 'on';
+// One asker runs most cases here: their daily share (OB10, default 2) would refuse them first.
+process.env.OSIONOS_AI_THREAD_RUNS_PER_USER_PER_DAY = '8';
 const { startHarness, USER_A, USER_B, WORKSPACE_A } = await import('./harness.ts');
 const { app, base, mock, bridge, call, postRun, tokenFor, createConversation } = await startHarness();
 const { THREAD_SYSTEM_PROMPT, CHANNEL_RUNS, MEMBER_CHANNEL_RUNS, admitThreadRun, checkThreadLimits } = await import('../src/threads/context.ts');

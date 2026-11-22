@@ -13,6 +13,8 @@ import { refusal, threadKit, until } from './threadKit.ts';
  * The best-ranked model is may-train: it must never be called.
  */
 process.env.OSIONOS_AI_THREAD_ANSWERS = 'on';
+// One asker runs every case here: their daily share (OB10, default 2) would refuse them first.
+process.env.OSIONOS_AI_THREAD_RUNS_PER_USER_PER_DAY = '8';
 const upstream = await startFailingUpstream();
 const { startHarness, FREE, FREE_TIER_FIRST, METERED, USER_A, WORKSPACE_A } = await import('./harness.ts');
 const MAY_TRAIN = FREE_TIER_FIRST.id;

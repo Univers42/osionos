@@ -14,6 +14,7 @@ process.env.OSIONOS_AI_THREAD_ANSWERS = 'on';
 process.env.OSIONOS_AI_THREAD_RUNS_PER_DAY = '2';
 const { startHarness, USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
 const harness = await startHarness();
+const { config } = await import('../src/config.ts');
 const { app, mock, bridge, createConversation, tokenFor } = harness;
 const inA = threadKit(harness, USER_A, WORKSPACE_A);
 const inB = threadKit(harness, USER_B, WORKSPACE_B);
@@ -44,5 +45,9 @@ describe('the platform daily thread-run cap (OB10)', () => {
 		assert.deepEqual([answer.status, answer.code], [429, 'ai_busy']);
 		assert.ok(Number(answer.retryAfter) > 0);
 		assert.equal(mock.calls, calls);
+	});
+
+	it("defaults one member's daily share of it to 2", () => {
+		assert.equal((config as { threadRunsPerUserPerDay?: number }).threadRunsPerUserPerDay, 2);
 	});
 });
