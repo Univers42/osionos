@@ -83,7 +83,7 @@ export function createStub(world={}, opts={}) {
 }
 
 export async function call(handlerFactory, stub, opts={}) {
-  const handler=handlerFactory({config:CONFIG, verifySession:()=>({userId: opts.userId||uid(1), isAdmin: opts.isAdmin||false}), fetchImpl:stub.fetchImpl, env:{}});
+  const handler=handlerFactory({config:CONFIG, verifySession:()=>({userId: opts.userId||uid(1), isAdmin: opts.isAdmin||false}), fetchImpl:stub.fetchImpl, env:opts.env||{}});
   const request={method:opts.method||'GET', headers: opts.token?{authorization:opts.token}:{}, [Symbol.asyncIterator]: async function*(){ if (opts.body!==undefined) yield JSON.stringify(opts.body); } };
   const captured={};
   const response={writeHead:(s,h)=>{captured.status=s;captured.headers=h||{};}, end:(t)=>{captured.text=t||''; try{captured.body=JSON.parse(captured.text);}catch{captured.body=null;}}};
