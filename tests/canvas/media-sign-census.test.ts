@@ -97,7 +97,9 @@ const MEDIA_CENSUS: Row[] = [
 
 const PRIMITIVE = /<img|<video|<audio|<source|backgroundImage|new Image\(\)/;
 const SOURCE = /\.(tsx?|css)$/;
-const SKIP = /(^|\/)(node_modules|dist|playground|__tests__|tests?)(\/|$)|\.test\.tsx?$/;
+// vendor/ is a nested submodule of third-party tools (a VS Code extension) the app never bundles;
+// it is empty in a non-recursive checkout, so only CI saw it.
+const SKIP = /(^|\/)(node_modules|dist|playground|vendor|__tests__|tests?)(\/|$)|\.test\.tsx?$/;
 
 function drawingFiles(root: string): string[] {
   return readdirSync(root, { recursive: true, encoding: "utf8" })
