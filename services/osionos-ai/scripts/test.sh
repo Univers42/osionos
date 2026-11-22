@@ -80,8 +80,15 @@ echo "[test] running the suite"
 # --test-concurrency=1: the files share one database, and the conversations of
 # one file must not disappear under the feet of another one.
 
+# The models directory is mounted read-only: modesMigration.test.ts replays its
+# migration file on rows made before it.
+FIRST_MIGRATION=${MIGRATIONS# }
+FIRST_MIGRATION=${FIRST_MIGRATION%% *}
+MODELS_MOUNT=$(CDPATH= cd -- "$(dirname -- "$FIRST_MIGRATION")" && pwd)
+
 docker run --rm --network "$NETWORK" \
-	-v "$REPO_ROOT:/app" -w /app/services/osionos-ai \
+	-v "$REPO_ROOT:/app" -v "$MODELS_MOUNT:/models:ro" -w /app/services/osionos-ai \
+	-e OSIONOS_AI_MODELS_DIR=/models \
 	-e OSIONOS_AI_PORT=0 \
 	-e OSIONOS_AI_DATABASE_URL="postgres://postgres:ai_test_password@pg:5432/osionos_ai_test" \
 	-e OSIONOS_AI_REDIS_URL="redis://redis:6379" \

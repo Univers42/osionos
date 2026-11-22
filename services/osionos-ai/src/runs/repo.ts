@@ -72,6 +72,7 @@ export async function insertRun(
 		customAgentId = null,
 		customAgentVersion = null,
 		surface,
+		turnId = null,
 	}: {
 		runId: string;
 		conversationId: string | null;
@@ -89,22 +90,25 @@ export async function insertRun(
 		 * so a database without them takes every other run as before.
 		 */
 		surface?: { channelId: string; messageId: string; readAt: Date };
+		/** The user turn the run belongs to; null means the run's own id (AM3). */
+		turnId?: string | null;
 	},
 ): Promise<{ kind: 'inserted' | 'exists' | 'conflict' | 'missing' }> {
 	try {
 		const result = await db.query(
 			surface
-				? `insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind, agent_id, agent_version, custom_agent_id, custom_agent_version, surface, surface_ref)
-				   values ($1, $2, $3, 'running', $4, $5, $6, $7, $8, $9, 'channel', $10::jsonb)
+				? `insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind, agent_id, agent_version, custom_agent_id, custom_agent_version, surface, surface_ref, turn_id)
+				   values ($1, $2, $3, 'running', $4, $5, $6, $7, $8, $9, 'channel', $10::jsonb, coalesce($11::uuid, $1))
 				   on conflict (id) do nothing
 				   returning id`
-				: `insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind, agent_id, agent_version, custom_agent_id, custom_agent_version)
-				   values ($1, $2, $3, 'running', $4, $5, $6, $7, $8, $9)
+				: `insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind, agent_id, agent_version, custom_agent_id, custom_agent_version, turn_id)
+				   values ($1, $2, $3, 'running', $4, $5, $6, $7, $8, $9, coalesce($10::uuid, $1))
 				   on conflict (id) do nothing
 				   returning id`,
 			[
 				runId, conversationId, ownerId, model, kind, agentId, agentVersion, customAgentId, customAgentVersion,
 				...(surface ? [JSON.stringify({ channelId: surface.channelId, messageId: surface.messageId, readAt: surface.readAt.toISOString() })] : []),
+				turnId,
 			],
 		);
 		return result.rowCount === 1 ? { kind: 'inserted' } : { kind: 'exists' };

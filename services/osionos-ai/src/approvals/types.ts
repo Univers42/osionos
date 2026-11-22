@@ -39,6 +39,9 @@ export type ApprovalStatus =
 	| 'expired'
 	| 'unknown';
 
+/** Who decided a write: the user, or an auto mode (AM3). */
+export type DecidedBy = 'user' | 'auto:accept_edits' | 'auto:auto';
+
 /** The row of an approval: what the user is asked, and what became of it. */
 export interface ApprovalRow extends QueryResultRow {
 	id: string;
@@ -65,6 +68,8 @@ export interface ApprovalRow extends QueryResultRow {
 	created_at: Date;
 	decided_at: Date | null;
 	expires_at: Date;
+	/** Null until decided; written by the decision path, never by the insert. */
+	decided_by: DecidedBy | null;
 }
 
 /**

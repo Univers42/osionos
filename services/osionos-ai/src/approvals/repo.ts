@@ -19,7 +19,7 @@ import { EXECUTING_TIMEOUT_MS } from './timeouts.ts';
 
 /** The columns of an approval, in the order the queries read them. */
 const COLUMNS =
-	'id, origin, run_id, conversation_id, token_id, owner_id, workspace_id, tool, args, args_sha256, status, result, error, created_at, decided_at, expires_at';
+	'id, origin, run_id, conversation_id, token_id, owner_id, workspace_id, tool, args, args_sha256, status, result, error, created_at, decided_at, expires_at, decided_by';
 
 /** How long a user has to decide a run's write: ten minutes. */
 export const APPROVAL_TTL_MS = 10 * 60_000;
