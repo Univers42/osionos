@@ -20,7 +20,7 @@
 import { useEffect, useState } from 'react';
 
 import { chatTopic } from '@/services/realtime-messages/wsTopics';
-import { subscribeTopic } from '@/services/realtime-messages/wsTransport';
+import { subscribeTopic, type LiveRealtimeEventFrame } from '@/services/realtime-messages/wsTransport';
 import { fetchThread, type Attachment, type ChatMessage } from '@/shared/chat/messageApi';
 
 interface ThreadFrame {
@@ -33,6 +33,28 @@ interface ThreadFrame {
   createdAt?: string;
   attachments?: Attachment[];
   mentions?: string[];
+}
+
+/** A `message_created` frame of this thread, appended once; any other frame leaves the list as it is. */
+export function applyThreadFrame(messages: ChatMessage[], frame: LiveRealtimeEventFrame, rootId: string, channelId: string): ChatMessage[] {
+  if (frame.event_type !== 'message_created') return messages;
+  const payload = (frame.payload ?? {}) as ThreadFrame;
+  if (payload.threadRootId !== rootId || !payload.messageId) return messages;
+  if (messages.some((m) => m.id === payload.messageId)) return messages;
+  return [...messages, {
+    id: payload.messageId,
+    channelId,
+    authorId: payload.authorId ?? '',
+    authorName: payload.authorName ?? 'Member',
+    authorAvatar: payload.authorAvatar ?? null,
+    content: payload.content ?? '',
+    createdAt: payload.createdAt ?? new Date().toISOString(),
+    reactions: [],
+    attachments: payload.attachments ?? [],
+    mentions: payload.mentions ?? [],
+    threadRootId: rootId,
+    replyTo: null,
+  }];
 }
 
 export function useThread(rootId: string, channelId: string, workspaceId: string) {
@@ -53,23 +75,7 @@ export function useThread(rootId: string, channelId: string, workspaceId: string
       read().catch((error: unknown) => console.warn('[chat] catching up a thread after a reconnect failed:', error));
     };
     const dispose = subscribeTopic(chatTopic(workspaceId, channelId), (frame) => {
-      if (frame.event_type !== 'message_created') return;
-      const payload = (frame.payload ?? {}) as ThreadFrame;
-      if (payload.threadRootId !== rootId || !payload.messageId) return;
-      setMessages((prev) => prev.some((m) => m.id === payload.messageId) ? prev : [...prev, {
-        id: payload.messageId as string,
-        channelId,
-        authorId: payload.authorId ?? '',
-        authorName: payload.authorName ?? 'Member',
-        authorAvatar: payload.authorAvatar ?? null,
-        content: payload.content ?? '',
-        createdAt: payload.createdAt ?? new Date().toISOString(),
-        reactions: [],
-        attachments: payload.attachments ?? [],
-        mentions: payload.mentions ?? [],
-        threadRootId: rootId,
-        replyTo: null,
-      }]);
+      setMessages((prev) => applyThreadFrame(prev, frame, rootId, channelId));
     }, catchUp);
     return () => { alive = false; dispose(); };
   }, [rootId, channelId, workspaceId]);
