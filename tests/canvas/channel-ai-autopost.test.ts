@@ -26,11 +26,11 @@ function card(draft: AiDraft): string {
   );
 }
 
-/** The Post button of a rendered card, by its label. */
-function postButton(markup: string): string {
-  const button = markup.match(/<button[^>]*>(Post|Posting…)<\/button>/);
+/** Whether the card's Post button carries the disabled attribute (its class names "disabled:" variants). */
+function postDisabled(markup: string): boolean {
+  const button = markup.match(/<button([^>]*)>(Post|Posting…)<\/button>/);
   assert.ok(button, "the card has a Post button");
-  return button[0];
+  return /\sdisabled=""/.test(button[1]);
 }
 
 test("OB3: consent to drafts does not cover auto-posting; the autopost notice asks again and sends nothing", async () => {
@@ -101,7 +101,7 @@ test("OB7: a refused auto-post leaves a private draft with its reason, and its P
   await w.settled();
   const held = w.draft();
   assert.deepEqual([held?.status, held?.code, held?.text], ["held", "context_changed", "Friday it is."]);
-  assert.doesNotMatch(postButton(card(held as AiDraft)), /disabled/);
+  assert.equal(postDisabled(card(held as AiDraft)), false);
   const message = await w.store.getState().post(CHANNEL);
   assert.equal(message?.id, "posted-2");
   assert.deepEqual(w.calls.posts.map((call) => call.runId), ["run-1", "run-1"], "the same run, through the same route");
@@ -122,7 +122,7 @@ test("OB7: answer_blocked never clears: the held draft cannot be posted", async 
   await w.settled();
   const held = w.draft();
   assert.deepEqual([held?.status, held?.code], ["held", "answer_blocked"]);
-  assert.match(postButton(card(held as AiDraft)), /disabled/);
+  assert.equal(postDisabled(card(held as AiDraft)), true);
   assert.equal(await w.store.getState().post(CHANNEL), null);
   assert.equal(w.calls.posts.length, 1, "no second call");
 });
