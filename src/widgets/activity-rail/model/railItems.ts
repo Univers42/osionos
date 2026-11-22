@@ -33,6 +33,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { calendarAppUrl, mailAppUrl } from "@/shared/config/appUrls";
+import { isLayoutModesEnabled } from "@/shared/config/featureFlags";
 import type { ActivePanel } from "@/shared/config/uiStore";
 import type { CommandId } from "@/features/automations/model/types";
 import { roleAtLeast, type PlatformRole } from "@/features/auth/model/platformRole";
@@ -82,6 +83,8 @@ export interface RailGroup {
 /** The rail, grouped by what the user does there. Installed marketplace apps
  *  are appended to "apps" at render time, except those that already have a static
  *  item here (`STATIC_APP_IDENTIFIERS`). */
+const TEMPLATES_ITEM: RailItem = { id: "templates", label: "Templates", Icon: LayoutTemplate, action: { kind: "panel", panel: "templates" } };
+
 export const RAIL_GROUPS: readonly RailGroup[] = [
   {
     id: "workspace",
@@ -90,7 +93,9 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
       { id: "files", label: "Explorer", Icon: Files, action: { kind: "panel", panel: "files" }, commandId: "focusExplorer" },
       { id: "search", label: "Search", Icon: Search, action: { kind: "panel", panel: "search" }, commandId: "openSearchPanel" },
       { id: "database", label: "Databases", Icon: Database, action: { kind: "panel", panel: "database" } },
-      { id: "templates", label: "Templates", Icon: LayoutTemplate, action: { kind: "panel", panel: "templates" } },
+      // The panel lists catalogue templates, TD18 writers: absent with osio.layout.modes off
+      // (groot ADR 0067 RD7). Read at load, like LayoutModesContext.
+      ...(isLayoutModesEnabled() ? [TEMPLATES_ITEM] : []),
       { id: "tasks", label: "My Tasks", Icon: ListTodo, action: { kind: "panel", panel: "tasks" } },
       // ponytail: nav LABEL renamed Public→Shared (AOC §12); panel id stays "public"
       // (R-R3) so the persisted uiStore activePanel keeps resolving.

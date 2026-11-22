@@ -31,6 +31,7 @@ import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
 import { dedupeById, safeCardCover, signCardCovers } from "./homeLiveEntries";
 import { TEMPLATES_DB_ID, TEMPLATES_GALLERY_VIEW } from "./workspaceDatabaseConstants";
 import type { CatalogueCard } from "@/data/templates/catalogue/types";
+import { listEnabledCatalogue } from "@/features/templates/model/catalogueGate";
 
 const TEMPLATE_TITLE = "home-template-title";
 const TEMPLATE_SOURCE = "home-template-source";
@@ -128,8 +129,7 @@ export function templatesState(cards: CatalogueCard[] = []): NotionState {
 let cataloguePromise: Promise<CatalogueCard[]> | null = null;
 
 function catalogueCards(): Promise<CatalogueCard[]> {
-  cataloguePromise ??= import("@/data/templates/catalogue")
-    .then((module) => module.listCatalogue())
+  cataloguePromise ??= listEnabledCatalogue()
     .catch(() => { cataloguePromise = null; return []; });
   return cataloguePromise;
 }

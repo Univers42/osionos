@@ -14,6 +14,12 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 const WCAG_AA = ["wcag2a", "wcag2aa"];
+
+// The panel and its catalogue exist only with osio.layout.modes on (groot ADR 0067 RD7).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("osio.layout.modes", "1"));
+});
+
 const panel = (page) => page.locator('[data-sidebar-panel="templates"]');
 
 async function openTemplates(page, baseURL) {
