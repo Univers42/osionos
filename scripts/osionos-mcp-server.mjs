@@ -705,7 +705,7 @@ server.registerTool('osionos_update_page', {
     cover: z.string().optional(),
     text: z.string().optional().describe('Markdown/slash-like replacement content.'),
     content: z.array(z.unknown()).optional().describe('Explicit replacement osionos block array for rich notes.'),
-    baseVersion: z.number().int().min(0).optional().describe('The contentVersion osionos_read_page returned. A page changed since then refuses the replacement instead of losing that change.'),
+    baseVersion: z.number().int().min(0).optional().describe('The contentVersion osionos_read_page returned. Required with text or content. A page changed since then refuses the replacement instead of losing that change.'),
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
 }, async ({ pageId, title, icon, cover, text, content, baseVersion }) => {
@@ -716,11 +716,12 @@ server.registerTool('osionos_update_page', {
   if (cover !== undefined) patch.cover = cover;
   if (Array.isArray(content)) patch.content = normalizeExplicitBlocks(content);
   else if (text !== undefined) patch.content = textToBlocks(text);
-  // Strict mode (#82) refuses an unversioned content PATCH. Without the agent's version,
-  // the one read here narrows the lost-update window to this read→write gap.
+  // A content replacement names the version it was made against. Reading the current one here
+  // would pin the write to whatever landed since the agent's own read (an auto-applied AI edit
+  // included) and erase it silently, past strict mode (AM16).
   if (patch.content) {
-    const version = baseVersion ?? (await apiRequest(path))?.contentVersion;
-    if (Number.isSafeInteger(version)) patch.baseVersion = version;
+    if (baseVersion === undefined) throw new Error('Replacing page content needs the version you read: call osionos_read_page first and pass its contentVersion as baseVersion.');
+    patch.baseVersion = baseVersion;
   }
   const page = await apiRequest(path, { method: 'PATCH', body: patch });
   return textResult({ updated: compactPage(page), page });

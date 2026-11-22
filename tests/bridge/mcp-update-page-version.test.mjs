@@ -13,8 +13,8 @@
 /**
  * #82: strict mode (OSIONOS_PAGE_STRICT_VERSION) refuses a content PATCH that carries
  * no baseVersion and changes the content. osionos_update_page replaces content, so it
- * must send the version the replacement was made against — the agent's, or the one it
- * reads right before the write. A metadata-only update needs no version.
+ * must send the version the AGENT read: a version read at write time would hide whatever
+ * landed since (AM16), so a call without one is refused. A metadata-only update needs none.
  */
 
 import { describe, it, before, after } from 'node:test';
@@ -25,7 +25,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const STORED_VERSION = 7;
 
-describe('osionos MCP update_page sends the content version it writes against', () => {
+describe('osionos MCP update_page needs the content version the agent read', () => {
 	const requests = [];
 	let fakeBridge;
 	let mcpClient;
@@ -73,12 +73,19 @@ describe('osionos MCP update_page sends the content version it writes against', 
 		assert.ok(Array.isArray(calls[0].body.content));
 	});
 
-	it('reads the stored version first when the agent gave none', async () => {
+	it('refuses a content replacement without a baseVersion, with no read and no write', async () => {
 		requests.length = 0;
-		await update({ text: 'new body' });
-		const calls = pageCalls();
-		assert.deepEqual(calls.map((r) => r.method), ['GET', 'PATCH']);
-		assert.equal(calls[1].body.baseVersion, STORED_VERSION);
+		const result = await update({ text: 'new body' });
+		assert.equal(result.isError, true);
+		assert.match(JSON.stringify(result.content), /call osionos_read_page first and pass its contentVersion as baseVersion/);
+		assert.deepEqual(pageCalls(), []);
+	});
+
+	it('refuses an explicit content array without a baseVersion too', async () => {
+		requests.length = 0;
+		const result = await update({ content: [{ id: 'b1', type: 'paragraph', content: 'x' }] });
+		assert.equal(result.isError, true);
+		assert.deepEqual(pageCalls(), []);
 	});
 
 	it('sends no version and no read for a metadata-only update', async () => {
