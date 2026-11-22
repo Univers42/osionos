@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import { config } from '../config.ts';
-import type { ApprovalRow, ApprovalSource, ApprovalStatus } from './types.ts';
+import type { ApprovalRow, ApprovalSource, ApprovalStatus, DecidedBy } from './types.ts';
 import { EXECUTING_TIMEOUT_MS } from './timeouts.ts';
 
 /**
@@ -120,20 +120,39 @@ export async function claimApproval(
 		id,
 		ownerId,
 		next,
+		decidedBy,
 	}: {
 		id: string;
 		ownerId: string;
 		next: Extract<ApprovalStatus, 'executing' | 'declined'>;
+		decidedBy: DecidedBy;
 	},
 ): Promise<ApprovalRow | null> {
 	const result = await db.query<ApprovalRow>(
 		`update public.ai_approvals
-		    set status = $3, decided_at = now()
+		    set status = $3, decided_at = now(), decided_by = $4
 		  where id = $1 and owner_id = $2 and status = 'pending' and expires_at > now()
 		  returning ${COLUMNS}`,
-		[id, ownerId, next],
+		[id, ownerId, next, decidedBy],
 	);
 	return result.rows[0] ?? null;
+}
+
+/**
+ * Gives an AUTO claim back: executing -> pending, with no decider.
+ *
+ * Only an auto claim: a human's decision is never taken back by the service.
+ * Caveat: it must run before any write went out; once the bridge was called the
+ * row is the record of a write and stays executing until its outcome lands.
+ */
+export async function unclaimAuto(db: Pool, id: string): Promise<boolean> {
+	const result = await db.query(
+		`update public.ai_approvals
+		    set status = 'pending', decided_by = null, decided_at = null
+		  where id = $1 and status = 'executing' and decided_by like 'auto:%'`,
+		[id],
+	);
+	return result.rowCount === 1;
 }
 
 /**
