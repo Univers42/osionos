@@ -43,7 +43,7 @@ export const RecordChildRecords: React.FC<{ recordRef: LiveRecordRef; compact?: 
       listChildRecords(recordRef, found).then((r) => { if (alive) setRows(r); });
     });
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dependency list is deliberate; changing it alters effect timing (osionos#341)
   }, [refKey]);
 
   if (!info) return null;

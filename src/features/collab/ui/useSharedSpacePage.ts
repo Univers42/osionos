@@ -44,7 +44,7 @@ export function useSharedSpacePage(
     }
     void connectPage(spaceId, pageId, { id: selfId, displayName, avatarRef }, joinSharedSpacePage);
     return () => disconnectPage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dependency list is deliberate; changing it alters effect timing (osionos#341)
   }, [spaceId, pageId, selfId, connectPage, disconnectPage]);
 
   useEffect(() => {

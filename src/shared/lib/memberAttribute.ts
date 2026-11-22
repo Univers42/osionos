@@ -31,7 +31,7 @@ export function validateValue(value: unknown, field = 'value'): string | null {
   if (text.length > 64) return `${field} is too long`;
   if (text.includes(':')) return `${field} must not contain ":"`;
   if (text.startsWith(' ') || text.endsWith(' ')) return `${field} must not have leading or trailing spaces`;
-  // eslint-disable-next-line no-control-regex -- rejecting control characters is the point.
+  // eslint-disable-next-line no-control-regex -- rejecting control characters is the point (osionos#341)
   if (/[\u0000-\u001f\u007f]/.test(text)) return `${field} must not contain control characters`;
   return null;
 }

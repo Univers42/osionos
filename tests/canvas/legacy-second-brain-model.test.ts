@@ -19,9 +19,13 @@ import { type GraphModel, type NodeId, makeRecordNodeId } from "../../src/featur
 import { deriveGraph } from "../../src/features/legacy-second-brain/model/deriveGraph.ts";
 import { diffGraph } from "../../src/features/legacy-second-brain/model/diffGraph.ts";
 import { buildSearchIndex, filterByDatabase, neighborhood } from "../../src/features/legacy-second-brain/model/selectors.ts";
+import type { NotionState } from "@notion-db/contract-types";
 import { deriveTagConfig } from "../../src/features/legacy-second-brain/model/deriveTagConfig.ts";
 
 const SOURCE = "mongodb";
+
+/** The fixtures are partial on purpose; one cast, here, instead of one per call. */
+const asState = (state: unknown): NotionState => state as NotionState;
 
 /** A small but representative canonical state: projects + tasks (relation + tags). */
 function buildState() {
@@ -98,8 +102,7 @@ function hasEdge(model: GraphModel, a: NodeId, b: NodeId, kind?: string): boolea
 }
 
 test("derive: records, relation edges, and tag hubs", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const model = deriveGraph(buildState() as any, {
+  const model = deriveGraph(asState(buildState()), {
     source: SOURCE,
     tagConfig: { tagProperties: { "db-tasks": "t-tags" } },
   });
@@ -124,10 +127,8 @@ test("derive: records, relation edges, and tag hubs", () => {
 
 test("derive is deterministic across runs (stable ids)", () => {
   const opts = { source: SOURCE, tagConfig: { tagProperties: { "db-tasks": "t-tags" } } };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const a = deriveGraph(buildState() as any, opts);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const b = deriveGraph(buildState() as any, opts);
+  const a = deriveGraph(asState(buildState()), opts);
+  const b = deriveGraph(asState(buildState()), opts);
   const ids = (model: GraphModel) => model.nodes.map((node) => node.id).sort();
   const eids = (model: GraphModel) => model.edges.map((edge) => edge.id).sort();
   assert.deepEqual(ids(a), ids(b));
@@ -136,13 +137,11 @@ test("derive is deterministic across runs (stable ids)", () => {
 
 test("diff: editing one title yields exactly one updated node, no structural churn", () => {
   const opts = { source: SOURCE, tagConfig: { tagProperties: { "db-tasks": "t-tags" } } };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const prev = deriveGraph(buildState() as any, opts);
+  const prev = deriveGraph(asState(buildState()), opts);
 
   const nextState = buildState();
   nextState.pages["task-1"].properties["t-title"] = "Build API v2";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const next = deriveGraph(nextState as any, opts);
+  const next = deriveGraph(asState(nextState), opts);
 
   const patch = diffGraph(prev, next);
   assert.equal(patch.updatedNodes.length, 1);
@@ -155,8 +154,7 @@ test("diff: editing one title yields exactly one updated node, no structural chu
 });
 
 test("explicit edges: cross-record link kept; dangling endpoint dropped", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const model = deriveGraph(buildState() as any, {
+  const model = deriveGraph(asState(buildState()), {
     source: SOURCE,
     explicitEdges: [
       { from: TASK2, to: TASK1, type: "blocks", directed: true },
@@ -168,8 +166,7 @@ test("explicit edges: cross-record link kept; dangling endpoint dropped", () => 
 });
 
 test("tag pairwise mode links members directly without a hub", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const model = deriveGraph(buildState() as any, {
+  const model = deriveGraph(asState(buildState()), {
     source: SOURCE,
     tagConfig: { tagProperties: { "db-tasks": "t-tags" }, materializeTagNodes: false, maxPairwiseTagDegree: 50 },
   });
@@ -178,17 +175,14 @@ test("tag pairwise mode links members directly without a hub", () => {
 });
 
 test("deriveTagConfig auto-detects the tag property (Phase 4 local tag edges)", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const config = deriveTagConfig(buildState() as any);
+  const config = deriveTagConfig(asState(buildState()));
   assert.equal(config.tagProperties["db-tasks"], "t-tags");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const model = deriveGraph(buildState() as any, { source: SOURCE, tagConfig: config });
+  const model = deriveGraph(asState(buildState()), { source: SOURCE, tagConfig: config });
   assert.ok(model.nodeById.has("tag:backend"), "shared tag becomes a hub without explicit config");
 });
 
 test("selectors: neighborhood, filterByDatabase, search", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const model = deriveGraph(buildState() as any, { source: SOURCE });
+  const model = deriveGraph(asState(buildState()), { source: SOURCE });
 
   const hood = neighborhood(model, PROJ, 1);
   assert.ok(hood.nodeIds.has(TASK1) && hood.nodeIds.has(TASK2));
@@ -233,19 +227,16 @@ test("scale guard: 5k records derive fast and diff stays incremental", () => {
   const state = { databases, pages, views: {} };
 
   const t0 = performance.now();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const prev = deriveGraph(state as any, { source: SOURCE });
+  const prev = deriveGraph(asState(state), { source: SOURCE });
   const deriveMs = performance.now() - t0;
 
   assert.equal(prev.stats.nodes, 5050);
   assert.equal(prev.stats.edges, 5000); // one relation edge per task, no explosion
   assert.ok(deriveMs < 2000, `derive of 5k should be well under 2s (was ${deriveMs.toFixed(1)}ms)`);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (state.pages as any)["task-7"].properties["t-title"] = "edited";
+  (state.pages as Record<string, { properties: Record<string, unknown> }>)["task-7"].properties["t-title"] = "edited";
   const t1 = performance.now();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const next = deriveGraph(state as any, { source: SOURCE });
+  const next = deriveGraph(asState(state), { source: SOURCE });
   const patch = diffGraph(prev, next);
   const diffMs = performance.now() - t1;
 

@@ -1170,7 +1170,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 		}, [renderItems]);
 		// https://github.com/Univers42/osionos/issues/337: TanStack Virtual returns
 		// non-memoizable functions, so the React Compiler skips this component.
-		// eslint-disable-next-line react-hooks/incompatible-library
+		// eslint-disable-next-line react-hooks/incompatible-library -- the library returns unmemoizable functions; no local fix (osionos#341)
 		const virtualizer = useVirtualizer({
 			count: shouldVirtualize ? renderItems.length : 0,
 			// Observed from mount for the root list, so the render that crosses the threshold

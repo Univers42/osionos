@@ -67,7 +67,7 @@ const SIGNATURE = /^[A-Za-z0-9_-]{86}$/;
 const NODE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const STATES: ReadonlySet<string> = new Set(["connecting", "connected", "reconnecting", "error"]);
 const REFUSALS: ReadonlySet<string> = new Set(["mismatch", "unavailable", "other-account"]);
-// eslint-disable-next-line no-control-regex -- refusing control characters is the point
+// eslint-disable-next-line no-control-regex -- refusing control characters is the point (osionos#341)
 const CONTROL = /[\u0000-\u001f\u007f\\]/;
 
 function shaped(data: unknown, keys: readonly string[]): Record<string, unknown> | null {

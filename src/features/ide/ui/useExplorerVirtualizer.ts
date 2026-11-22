@@ -44,7 +44,7 @@ export function useExplorerVirtualizer(rows: readonly RenderRow[], keepMounted: 
   // React Compiler skips this hook because of the tanstack virtualizer (library
   // limitation, informational) — the same sanctioned use as PageBlocksRenderer; the
   // row model it reads is benchmarked in tests/bench/explorer-rows.bench.ts.
-  // eslint-disable-next-line react-hooks/incompatible-library
+  // eslint-disable-next-line react-hooks/incompatible-library -- the library returns unmemoizable functions; no local fix (osionos#341)
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,

@@ -41,7 +41,7 @@ export function useThread(rootId: string, channelId: string, workspaceId: string
 
   useEffect(() => {
     let alive = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset loading before the refetch triggered by a thread (rootId/channel/workspace) change
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset loading before the refetch triggered by a thread (rootId/channel/workspace) change (osionos#341)
     setLoading(true);
     const read = () => fetchThread(rootId).then((found) => { if (alive) setMessages(found); });
     read()

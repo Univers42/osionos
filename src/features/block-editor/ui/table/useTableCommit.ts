@@ -65,7 +65,7 @@ export function useTableCommit(block: Block, pageId: string) {
   }, [flushCellCommit]);
   // The memo only BUILDS event-handler closures around the ref-touching
   // scheduler — no ref is dereferenced while the memo body runs.
-  // eslint-disable-next-line react-hooks/refs
+  // eslint-disable-next-line react-hooks/refs -- ref read during render is deliberate; a fix changes timing (osionos#341)
   const cellCommitHandlers = useMemo(() => createCellCommitHandlers(data.length, columnCount, scheduleCellCommit), [columnCount, data.length, scheduleCellCommit]);
 
   const commitStructure = useCallback((nextData: string[][], nextConfig: TableBlockConfig) => {

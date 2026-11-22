@@ -218,7 +218,7 @@ const EditableTableCell = React.memo(function EditableTableCell({ cellId, initia
 
   // onInput/onBlur call commitFromNode — an event-time contentEditable read
   // (never during render); the analyzer anchors its diagnostic here.
-  // eslint-disable-next-line react-hooks/refs
+  // eslint-disable-next-line react-hooks/refs -- ref read during render is deliberate; a fix changes timing (osionos#341)
   return React.createElement("div", {
     ref: cellRef,
     ...CELL_PROPS,

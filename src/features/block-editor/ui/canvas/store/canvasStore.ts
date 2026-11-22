@@ -44,7 +44,7 @@ const STORE_EVICT_GRACE_MS = 30_000;
 export function useCanvasStore(layoutBlockId: string, block: Block, onPersist?: CanvasPersistHandler): CanvasStoreApi {
   // `block` is only consulted when the store is first created; hydration of
   // later block versions happens in the dedicated effect below.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- dependency list is deliberate; changing it alters effect timing (osionos#341)
   const store = useMemo(() => getOrCreateCanvasStore(layoutBlockId, block), [layoutBlockId]);
 
   useEffect(() => {

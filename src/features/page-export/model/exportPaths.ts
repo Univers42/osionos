@@ -18,7 +18,7 @@
 /** Make a title safe as a file/folder name (keeps spaces, strips separators). */
 export function sanitizeFileName(title: string): string {
   const cleaned = title
-    // eslint-disable-next-line no-control-regex -- strip filesystem-hostile control chars
+    // eslint-disable-next-line no-control-regex -- strip filesystem-hostile control chars (osionos#341)
     .replace(/[/\\:*?"<>|\x00-\x1f]/g, "-")
     .replace(/\s+/g, " ")
     .trim()

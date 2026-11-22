@@ -81,7 +81,7 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
   // https://github.com/Univers42/osionos/issues/337: React Compiler skips this
   // component because of the tanstack virtualizer (library limitation) — the
   // virtualized path is perf-budgeted in the canvas benchmarks as-is.
-  // eslint-disable-next-line react-hooks/incompatible-library
+  // eslint-disable-next-line react-hooks/incompatible-library -- the library returns unmemoizable functions; no local fix (osionos#341)
   const virtualizer = useVirtualizer({
     count: shouldVirtualize ? renderMeta.length : 0,
     getScrollElement: () => scrollElement,

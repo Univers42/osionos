@@ -77,7 +77,7 @@ export interface PumpInput {
 	system?: string;
 	messages: ModelMessage[];
 	/** Extra body fields forwarded to the upstream. */
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the SDK's JSON option type is not importable here; unverifiable without the 'ai' package installed (osionos#341)
 	providerOptions?: Record<string, any>;
 	/** The signal of the call: the caller owns it, so it can cancel the run. */
 	controller: AbortController;

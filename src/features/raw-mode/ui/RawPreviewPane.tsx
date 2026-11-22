@@ -38,9 +38,9 @@ function RawPreviewPaneImpl({ source, parse = parseMarkdownToBlocks }: Readonly<
     // (source, previous) and re-running with the same source is idempotent,
     // so the render-time ref access is safe — the id-reuse across renders is
     // the entire point (stable keys, minimal re-renders).
-    // eslint-disable-next-line react-hooks/refs
+    // eslint-disable-next-line react-hooks/refs -- ref read during render is deliberate; a fix changes timing (osionos#341)
     const reconciled = reconcileBlocks(parse(source), previousBlocksRef.current);
-    // eslint-disable-next-line react-hooks/refs
+    // eslint-disable-next-line react-hooks/refs -- ref read during render is deliberate; a fix changes timing (osionos#341)
     previousBlocksRef.current = reconciled;
     return reconciled;
   }, [source, parse]);

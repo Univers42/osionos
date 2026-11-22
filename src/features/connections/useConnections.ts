@@ -41,7 +41,7 @@ export function useConnections(userId: string) {
   useEffect(() => {
     void contacts.hydrate();
     void blocks.hydrate();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- dependency list is deliberate; changing it alters effect timing (osionos#341)
 
   const edge = useMemo(
     () => edgeFor(userId, contacts.data, contacts.requests),

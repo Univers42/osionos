@@ -99,7 +99,7 @@ export function ThemeJsonEditor({ pageId }: { pageId: string }) {
       editorRef.current = null;
       modelRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dependency list is deliberate; changing it alters effect timing (osionos#341)
   }, [pageId, target]);
 
   // Markers + schema rebuild after each parse (issues change).

@@ -60,7 +60,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onComplete, onCanc
       onCancel();
     });
     return () => cancel();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dependency list is deliberate; changing it alters effect timing (osionos#341)
   }, []);
 
   // Hard one-minute cap — finalize to the review step.

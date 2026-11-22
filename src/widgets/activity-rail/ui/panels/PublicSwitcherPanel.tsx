@@ -37,7 +37,7 @@ export const PublicSwitcherPanel: React.FC = () => {
   }, [joined, query]);
 
   // TanStack Virtual returns non-memoizable functions (sanctioned: see PageBlocksRenderer).
-  // eslint-disable-next-line react-hooks/incompatible-library
+  // eslint-disable-next-line react-hooks/incompatible-library -- the library returns unmemoizable functions; no local fix (osionos#341)
   const rows = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,

@@ -72,7 +72,7 @@ function fullwidth(char: string): string {
  * zero-widths, the line separators and the bidi controls (a right-to-left
  * override makes a file name read as another one).
  */
-// eslint-disable-next-line no-control-regex -- stripping the control characters is the point
+// eslint-disable-next-line no-control-regex -- stripping the control characters is the point (osionos#341)
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/g;
 
 /** How the emitter draws a diagram. */

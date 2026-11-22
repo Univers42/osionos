@@ -23,7 +23,7 @@ import { isMachineId } from "../../machines/model/machineShape.ts";
 export type MachineTarget = { node: string; folder: string | null };
 
 const NODE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
-// eslint-disable-next-line no-control-regex -- refusing control characters is the point
+// eslint-disable-next-line no-control-regex -- refusing control characters is the point (osionos#341)
 const CONTROL = /[\u0000-\u001f\u007f\\]/;
 const OPEN_VSX = "https://open-vsx.org/vscode";
 

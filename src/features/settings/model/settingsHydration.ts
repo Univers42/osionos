@@ -118,7 +118,7 @@ export function useSettingsHydration(
       dispatch({ type: "unmount" });
     };
     // The caller's deps ARE the reload trigger, so the spread is the API.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the dependency list is the caller's, by design
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the dependency list is the caller's, by design (osionos#341)
   }, [...deps, retryToken]);
 
   const retry = useCallback(() => {

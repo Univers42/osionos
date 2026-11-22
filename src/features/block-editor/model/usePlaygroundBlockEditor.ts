@@ -666,7 +666,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   // (recompute only when the key changes) stops the churn.
   const normalizedSource = normalizeEditorSource(editorSource);
   const sourceKey = editorSourceKey(normalizedSource);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- identity anchored to sourceKey, not the churning `normalizedSource` object
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- identity anchored to sourceKey, not the churning `normalizedSource` object (osionos#341)
   const source = useMemo(() => normalizedSource, [sourceKey]);
   const pageId = source.pageId;
   const content = usePageStore(

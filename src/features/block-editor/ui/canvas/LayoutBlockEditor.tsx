@@ -211,7 +211,7 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
   const resolvedCells = useMemo(
     () => resolveMeasuredAutoHeightFootprints(cells, config, measuredCellHeightsRef.current),
     // measurementVersion invalidates the memo when a cell crosses a row boundary
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dependency list is deliberate; changing it alters effect timing (osionos#341)
     [cells, config, measurementVersion],
   );
   const selectedCell = useMemo(
