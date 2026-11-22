@@ -17,29 +17,32 @@ import { MediaPageContext, mountedMediaSrc, retriedMediaSrc, useSignedMediaUrl }
 const ME = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 const path = (owner: string, n: number) => `/api/media/uploads/${owner}/${n.toString(16).padStart(64, "0")}.png`;
-const signedOf = (p: string) => `${p}?exp=1763830800&kid=0a1b2c3d&sig=${"f".repeat(64)}`;
+const NOW_MS = Date.UTC(2026, 10, 22, 10, 5);
+const signedOf = (p: string) => `${p}?exp=${Date.UTC(2026, 10, 22, 12) / 1000}&kid=0a1b2c3d&sig=${"f".repeat(64)}`;
 
 function answering(answer: (paths: string[], pageId: string | null) => SignAnswer) {
   const calls: Array<{ paths: string[]; pageId: string | null }> = [];
   const signer = createMediaSigner({
     transport: async (paths, pageId) => { calls.push({ paths, pageId }); return answer(paths, pageId); },
-    nowMs: () => Date.UTC(2026, 10, 22, 10, 5),
+    nowMs: () => NOW_MS,
     userId: () => ME,
   });
   return { calls, signer };
 }
-const signAll = (paths: string[]): SignAnswer => ({ kind: "signed", signed: Object.fromEntries(paths.map((p) => [p, signedOf(p)])), serverNowSec: Date.UTC(2026, 10, 22, 10, 5) / 1000 });
+const signAll = (paths: string[]): SignAnswer => ({ kind: "signed", signed: Object.fromEntries(paths.map((p) => [p, signedOf(p)])), serverNowSec: NOW_MS / 1000 });
 
 function Probe({ url, pageId, signer }: { url: string; pageId?: string; signer: ReturnType<typeof answering>["signer"] }) {
   const { src } = useSignedMediaUrl(url, pageId, signer);
   return React.createElement("img", { src, alt: "" });
 }
 const render = (element: React.ReactElement) => renderToStaticMarkup(element);
+// React 19 adds a <link rel="preload"> for an <img src>, so a bare element is the reference.
+const plainImg = (src: string) => render(React.createElement("img", { src, alt: "" }));
 
 test("a URL that is not a bridge upload renders byte-identical, with no request", () => {
   const { calls, signer } = answering(signAll);
   for (const url of ["https://images.unsplash.com/x.jpg?w=1&amp;h=2", "data:image/png;base64,AAAA", "/api/media/avatars/a.png"]) {
-    assert.equal(render(React.createElement(Probe, { url, signer })), renderToStaticMarkup(React.createElement("img", { src: url, alt: "" })));
+    assert.equal(render(React.createElement(Probe, { url, signer })), plainImg(url));
   }
   assert.equal(calls.length, 0);
 });
@@ -48,7 +51,7 @@ test("signing off: every upload renders its stored URL at once, and no request i
   const { calls, signer } = answering(() => ({ kind: "off" }));
   await signer.sign(path(ME, 1));
   const stored = path(ME, 2);
-  assert.equal(render(React.createElement(Probe, { url: stored, signer })), `<img src="${stored}" alt=""/>`);
+  assert.equal(render(React.createElement(Probe, { url: stored, signer })), plainImg(stored));
   assert.equal(calls.length, 1);
 });
 
