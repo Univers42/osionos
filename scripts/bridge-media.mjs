@@ -21,7 +21,7 @@
  *   session, secrecy = the unguessable 64-hex sha in the key.
  *   It also opens with a signature (?exp&kid&sig, bridge-media-sign.mjs) or the
  *   owner's own Bearer session; MEDIA_URL_ENFORCE=true refuses the bare form.
- * POST /api/media/uploads/sign {paths, pageId?} — app-session authed; signs the
+ * POST /api/media/uploads/sign {paths, pageId?} — app-session authed, rate-limited; signs the
  *   caller's own paths, and a path in the content or cover of a page the caller can read when
  *   its owner is the page's owner or a member of the page's workspace (osionos#233 D233-12).
  *
@@ -48,6 +48,11 @@ import { pageMediaOwners } from './bridge-media-owners.mjs';
 
 const SERVE_RE = /^\/api\/media\/uploads\/([0-9a-f-]{36})\/([0-9a-f]{64}\.[a-z0-9]{1,8})$/i;
 const MAX_SIGN_PATHS = 200;
+// D233-10: a 30-page gallery of teammates' covers costs at most 31 calls (one own, one per page,
+// D233-2), so a burst of 120 opens four such views at once and 2/s refills one view every 15 s.
+// Caveat: sized from that count, not from traffic. A home page with more than ~120 teammates'
+// cards in one burst gets a 429 for the rest; their images render bare while enforce is off.
+const SIGN_RATE = { capacity: 120, refillPerSec: 2 };
 
 /** Who is reading: a valid signature, the owner's session, or nobody named (bare). */
 function readerOf(deps, url, request, ownerId, requestConfig) {
@@ -122,6 +127,7 @@ async function pageOwnersFor(deps, row, uploads, me, config) {
  */
 async function signPaths(deps, session, request, response, config) {
 	if (deps.keys.length === 0) throw httpError('Signed media links are not configured on this bridge.', 503);
+	takeToken(`media-sign:${session.userId}`, SIGN_RATE);
 	const body = await readJsonBody(request);
 	const paths = Array.isArray(body?.paths) ? body.paths.filter((value) => typeof value === 'string') : [];
 	if (paths.length > MAX_SIGN_PATHS) throw httpError(`At most ${MAX_SIGN_PATHS} paths per request.`, 413);
