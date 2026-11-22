@@ -28,7 +28,7 @@ import {
   isPageClean,
   mergeServerPage,
   mergeServerPages,
-  resolveFetchedPage,
+  settleFetchedPage,
 } from "@/store/sync/mergeServerPages";
 
 const P = "fcf48b5b-2fed-41d6-9c5d-0075988728d1";
@@ -165,7 +165,7 @@ test("F1: after the page list merge and the content fetch, B holds A's body and 
   for (const won of merged.serverWon) ledger[won._id] = pageStamp(won);
   assert.deepEqual(publishes(merged.pages, ledger), [], "the stale body must not publish");
 
-  const fetched = resolveFetchedPage(merged.pages[0], page({ updatedAt: T2, content: body("C2") }), ledger, true);
+  const fetched = settleFetchedPage(merged.pages[0], page({ updatedAt: T2, content: body("C2") }), ledger, true).resolved;
   assert.ok(fetched);
   assert.deepEqual(fetched.page.content, body("C2"));
   assert.equal(fetched.recordSynced, true);
@@ -194,24 +194,24 @@ test("F1: a read-only viewer drops its stale body without any ledger entry", () 
   assert.equal(merged.pages[0].content, undefined);
 });
 
-test("resolveFetchedPage: fills an unloaded body and records it as synced", () => {
+test("settleFetchedPage: fills an unloaded body and records it as synced", () => {
   const unloaded = page({ updatedAt: T2 });
-  const result = resolveFetchedPage(unloaded, page({ updatedAt: T2, content: body("C2") }), synced(unloaded), true);
+  const result = settleFetchedPage(unloaded, page({ updatedAt: T2, content: body("C2") }), synced(unloaded), true).resolved;
   assert.ok(result);
   assert.deepEqual(result.page.content, body("C2"));
   assert.equal(result.recordSynced, true);
 });
 
-test("resolveFetchedPage: nothing to apply when the server copy is what the page holds", () => {
+test("settleFetchedPage: nothing to apply when the server copy is what the page holds", () => {
   const loaded = page({ content: body("C1"), updatedAt: T2 });
-  assert.equal(resolveFetchedPage(loaded, page({ updatedAt: T2, content: body("C1") }), synced(loaded), true), null);
+  assert.equal(settleFetchedPage(loaded, page({ updatedAt: T2, content: body("C1") }), synced(loaded), true).resolved, null);
 });
 
-test("resolveFetchedPage: heals a cache that kept an old body under a newer updatedAt", () => {
+test("settleFetchedPage: heals a cache that kept an old body under a newer updatedAt", () => {
   // What the previous hydrate left behind: A's T2 on B's old body C1, recorded as synced.
   const poisoned = page({ content: body("C1"), updatedAt: T2 });
   const ledger = synced(poisoned);
-  const result = resolveFetchedPage(poisoned, page({ updatedAt: T2, content: body("C2") }), ledger, true);
+  const result = settleFetchedPage(poisoned, page({ updatedAt: T2, content: body("C2") }), ledger, true).resolved;
   assert.ok(result);
   assert.deepEqual(result.page.content, body("C2"));
   assert.equal(result.recordSynced, true);
@@ -219,22 +219,22 @@ test("resolveFetchedPage: heals a cache that kept an old body under a newer upda
   assert.deepEqual(publishes([result.page], ledger), []);
 });
 
-test("resolveFetchedPage: an unpublished change keeps its body unless the server is newer", () => {
+test("settleFetchedPage: an unpublished change keeps its body unless the server is newer", () => {
   const before = page({ content: body("C1") });
   const ledger = synced(before);
   const typedDuringRequest = { ...before, content: body("C1 + typed"), updatedAt: T3 };
-  assert.equal(resolveFetchedPage(typedDuringRequest, page({ updatedAt: T2, content: body("C2") }), ledger, true), null);
+  assert.equal(settleFetchedPage(typedDuringRequest, page({ updatedAt: T2, content: body("C2") }), ledger, true).resolved, null);
   assert.deepEqual(publishes([typedDuringRequest], ledger), [P], "the edit still publishes");
 
   const olderEdit = { ...before, title: "Renamed while loading", updatedAt: T1 };
-  const result = resolveFetchedPage(olderEdit, page({ updatedAt: T2, content: body("C2") }), ledger, true);
+  const result = settleFetchedPage(olderEdit, page({ updatedAt: T2, content: body("C2") }), ledger, true).resolved;
   assert.ok(result);
   assert.equal(result.recordSynced, false, "an unclean page is never recorded as the server's copy");
 });
 
-test("resolveFetchedPage: a viewer who cannot publish never records the ledger", () => {
+test("settleFetchedPage: a viewer who cannot publish never records the ledger", () => {
   const unloaded = page({ updatedAt: T2 });
-  const result = resolveFetchedPage(unloaded, page({ updatedAt: T2, content: body("C2") }), {}, false);
+  const result = settleFetchedPage(unloaded, page({ updatedAt: T2, content: body("C2") }), {}, false).resolved;
   assert.equal(result?.recordSynced, false);
 });
 

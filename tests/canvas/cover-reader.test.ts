@@ -22,7 +22,7 @@ import type { PageEntry } from "@/entities/page";
 import type { SeedPage } from "@/data/seedPages";
 import { seedToEntry } from "@/store/pageStore.helpers";
 import { pageStamp } from "@/store/sync/pageStamp";
-import { resolveFetchedPage } from "@/store/sync/mergeServerPages";
+import { settleFetchedPage } from "@/store/sync/mergeServerPages";
 
 const P = "fcf48b5b-2fed-41d6-9c5d-0075988728d1";
 const T1 = "2026-10-01T10:00:00.000Z";
@@ -37,7 +37,7 @@ const cleanLedger = (page: PageEntry): SyncLedger => ({ [P]: pageStamp(page) });
 
 test("a content fetch reads the three cover fields back", () => {
   const current = mkPage();
-  const resolved = resolveFetchedPage(current, mkPage({ ...COVER }), cleanLedger(current), true);
+  const resolved = settleFetchedPage(current, mkPage({ ...COVER }), cleanLedger(current), true).resolved;
   assert.ok(resolved);
   assert.equal(resolved.page.coverPosition, 30);
   assert.equal(resolved.page.coverHeight, 320);
@@ -47,7 +47,7 @@ test("a content fetch reads the three cover fields back", () => {
 test("a content fetch clamps the height and drops a width it does not know", () => {
   const current = mkPage();
   const server = { ...mkPage(), coverHeight: 5000, coverWidth: "wide" } as unknown as PageEntry;
-  const resolved = resolveFetchedPage(current, server, cleanLedger(current), true);
+  const resolved = settleFetchedPage(current, server, cleanLedger(current), true).resolved;
   assert.ok(resolved);
   assert.equal(resolved.page.coverHeight, 640);
   assert.equal("coverWidth" in resolved.page, false);
@@ -58,26 +58,26 @@ test("a content fetch clamps the height and drops a width it does not know", () 
 // next content fetch of a page whose row held an older position.
 test("CV4: a clean page keeps its own cover position against a server copy that is not newer", () => {
   const current = mkPage({ coverPosition: 50 });
-  const resolved = resolveFetchedPage(current, mkPage({ coverPosition: 20 }), cleanLedger(current), true);
+  const resolved = settleFetchedPage(current, mkPage({ coverPosition: 20 }), cleanLedger(current), true).resolved;
   assert.equal(resolved, null);
 });
 
 test("CV4: a newer server copy brings its cover position", () => {
   const current = mkPage({ coverPosition: 50 });
-  const resolved = resolveFetchedPage(current, mkPage({ coverPosition: 20, updatedAt: T2 }), cleanLedger(current), true);
+  const resolved = settleFetchedPage(current, mkPage({ coverPosition: 20, updatedAt: T2 }), cleanLedger(current), true).resolved;
   assert.equal(resolved?.page.coverPosition, 20);
 });
 
 test("CV4: a page without a cover position takes the server's at the same updatedAt", () => {
   const current = mkPage();
-  const resolved = resolveFetchedPage(current, mkPage({ coverPosition: 20 }), cleanLedger(current), true);
+  const resolved = settleFetchedPage(current, mkPage({ coverPosition: 20 }), cleanLedger(current), true).resolved;
   assert.equal(resolved?.page.coverPosition, 20);
   assert.equal(resolved?.recordSynced, true);
 });
 
 test("CV4: a clean page still takes a cover size at the same updatedAt, not the position", () => {
   const current = mkPage({ coverPosition: 50 });
-  const resolved = resolveFetchedPage(current, mkPage({ ...COVER }), cleanLedger(current), true);
+  const resolved = settleFetchedPage(current, mkPage({ ...COVER }), cleanLedger(current), true).resolved;
   assert.equal(resolved?.page.coverPosition, 50);
   assert.equal(resolved?.page.coverHeight, 320);
   assert.equal(resolved?.page.coverWidth, "content");
@@ -87,7 +87,7 @@ test("a page with an unpublished change keeps its own cover layout against an ol
   const current = mkPage({ ...COVER, title: "edited", updatedAt: T2 });
   const ledger: SyncLedger = { [P]: "an older stamp" };
   const server = mkPage({ coverPosition: 80, coverHeight: 200, coverWidth: "full", content: undefined });
-  assert.equal(resolveFetchedPage(current, server, ledger, true), null);
+  assert.equal(settleFetchedPage(current, server, ledger, true).resolved, null);
 });
 
 // PS25: two writers alternate on the server, one that knows the cover keys and one that predates
@@ -99,7 +99,7 @@ function alternate(advanceClock: boolean, start: Partial<PageEntry> = {}): { pag
   for (let round = 0; round < 10; round += 1) {
     const updatedAt = advanceClock ? new Date(Date.parse(T1) + (round + 1) * 1000).toISOString() : T1;
     const server = round % 2 === 0 ? mkPage({ ...COVER, updatedAt }) : mkPage({ updatedAt });
-    const resolved = resolveFetchedPage(page, server, ledger, true);
+    const resolved = settleFetchedPage(page, server, ledger, true).resolved;
     if (!resolved) continue;
     rewrites += 1;
     page = resolved.page;

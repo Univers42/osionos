@@ -46,7 +46,7 @@ import { applyServerPages } from "./sync/applyServerPages";
 import { isPageClean, settleFetchedPage } from "./sync/mergeServerPages";
 import { sameTimeEditNotice } from "./sync/pageConflict";
 import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./sync/pageStamp";
-import { baseFor, setBase } from "./sync/pageBase";
+import { setBase } from "./sync/pageBase";
 import { markServerCopy } from "./sync/serverFetchedPages";
 import { forgetAppRemovals, recordAppRemovals } from "./appRemovals";
 import { createExtrasOf, templateCopyOptions } from "./templateCopy";
@@ -216,9 +216,9 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
       if (!current) return;
       const ledger = loadLedger(PAGE_OUTBOX_KEY);
       const canPublish = context !== null && canEditPage(current, context);
-      // The base the merge reads is the one BEFORE this fetch; it moves to the server's copy
-      // only once the body holds that copy, never over unpublished keystrokes (AM15).
-      const fetched = settleFetchedPage(current, fullPage, ledger, canPublish, baseFor(current));
+      // The base moves to the server's copy only once the body holds it, never over
+      // unpublished keystrokes (AM15).
+      const fetched = settleFetchedPage(current, fullPage, ledger, canPublish);
       if (fetched.base) setBase(pageId, fetched.base.version, fetched.base.content);
       if (fetched.conflicts) useToastStore.getState().push(sameTimeEditNotice(current.title));
       const resolved = fetched.resolved;

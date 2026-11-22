@@ -6,6 +6,9 @@
 //       same version IS the base content: it must be learned, so a later 409 can merge.
 //   P3: a refresh that merges a block both sides changed keeps both variants, and says so
 //       with the same notice the 409 path gives.
+//   P4: an answer older than the version the page records is not stale when there is no
+//       body to protect (boot race, or a database restored from a backup): the body loads.
+//       After a reload (base is a version alone) a clean page takes a restored copy.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -14,6 +17,9 @@ import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { baseFor, clearBase } from "@/store/sync/pageBase";
 import { createBridge, para } from "./page-version.fixtures";
 import { PAGE_ID, blockIds, loadPage, openPage, refresh, save, serveReads, textOf, typeLocally } from "./refresh-merge.fixtures";
+
+const { usePageStore } = await import("../../src/store/usePageStore.ts");
+const { derivePageState } = await import("../../src/store/pageStore.helpers.ts");
 
 const loaded = [para("b1", "draft")];
 const typed = [para("b1", "draft + my keystrokes")];
@@ -79,4 +85,57 @@ test("a refresh without a same-block conflict warns nobody", async () => {
   row.version = 6;
   await refresh();
   assert.equal(sameTimeNotices().length, 0);
+});
+
+/** The open page as a boot leaves it: listed at `version`, body not loaded, no base yet. */
+function unloadPage(version: number): void {
+  loadPage([para("b1", "x")], version, { contentVersion: version });
+  clearBase(PAGE_ID);
+  usePageStore.setState({ ...derivePageState({ ws: [{ ...openPage(), content: undefined }] }) });
+}
+
+test("P4 restore: an unloaded page recording v7 loads the server's v6 body", async () => {
+  serveReads(createBridge({ [PAGE_ID]: { version: 6, content: [para("b1", "v6 body")] } }));
+  unloadPage(7);
+  await refresh();
+  assert.equal(textOf(openPage().content ?? [], "b1"), "v6 body", "the body loads (no 'failed')");
+});
+
+test("P4 boot race: the page list moves the version while the GET is out, the body still loads", async () => {
+  serveReads(createBridge({ [PAGE_ID]: { version: 6, content: [para("b1", "v6 body")] } }));
+  const read = globalThis.fetch;
+  globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+    usePageStore.getState().setPageContentVersion(PAGE_ID, 7);
+    return read(...args);
+  }) as typeof fetch;
+  unloadPage(5);
+  await refresh();
+  assert.equal(textOf(openPage().content ?? [], "b1"), "v6 body");
+});
+
+test("restore after a reload: a loaded page with no unsaved edits takes the restored copy", async () => {
+  serveReads(createBridge({ [PAGE_ID]: { version: 3, content: [para("b1", "restored")] } }));
+  loadPage(typed, 7, { contentVersion: 7 });
+  clearBase(PAGE_ID);
+  await refresh();
+  assert.equal(textOf(openPage().content ?? [], "b1"), "restored", "the editor shows the server's copy");
+  assert.equal(baseFor(openPage()).version, 3, "the next save goes against the restored version");
+  assert.deepEqual(baseFor(openPage()).content, [para("b1", "restored")]);
+});
+
+// Pins the Caveat on isStaleAnswer: inside the session a restore reads as an out-of-order answer.
+test("restore during a session: ignored like any older answer until a reload", async () => {
+  serveReads(createBridge({ [PAGE_ID]: { version: 3, content: [para("b1", "restored")] } }));
+  loadPage(typed, 7, { contentVersion: 7 });
+  await refresh();
+  assert.deepEqual(openPage().content, typed);
+  assert.equal(baseFor(openPage()).version, 7);
+});
+
+test("restore: a loaded page with unsaved edits keeps the keystrokes", async () => {
+  serveReads(createBridge({ [PAGE_ID]: { version: 3, content: [para("b1", "restored")] } }));
+  loadPage(loaded, 7, { contentVersion: 7 });
+  typeLocally(typed);
+  await refresh();
+  assert.deepEqual(openPage().content, typed);
 });
