@@ -121,9 +121,12 @@ test("non-shortcut and incomplete prefixes return null (no false positives)", ()
   }
 });
 
-test("ordered-list detection is space-optional (engine converts '1.x')", () => {
-  assert.equal(detectBlockType("1.nospace")?.type, "numbered_list");
-  assert.equal(detectBlockType("1)nospace")?.type, "numbered_list");
+// Engine f1b5d24: the delimiter needs a following space, so "1.5" or "v1.x" stays text.
+test("ordered-list detection needs a space after the delimiter", () => {
+  assert.equal(detectBlockType("1. item")?.type, "numbered_list");
+  assert.equal(detectBlockType("1) item")?.type, "numbered_list");
+  assert.equal(detectBlockType("1.nospace"), null);
+  assert.equal(detectBlockType("1)nospace"), null);
 });
 
 test("toggle-heading is detected before a plain heading or plain toggle", () => {
