@@ -44,8 +44,12 @@ harness_apply_fixture "$PG_CONTAINER" osionos_ai_test postgres
 harness_apply_migrations "$PG_CONTAINER" osionos_ai_test postgres $MIGRATIONS
 
 
+# Read-only models mount for modesMigration.test.ts, as in scripts/test.sh.
+MODELS_MOUNT=$(CDPATH= cd -- "${MODELS_DIR:-$(dirname -- "$1")}" && pwd)
+
 docker run --rm --network "$NETWORK" \
-	-v "$REPO_ROOT:/app" -w /app/services/osionos-ai \
+	-v "$REPO_ROOT:/app" -v "$MODELS_MOUNT:/models:ro" -w /app/services/osionos-ai \
+	-e OSIONOS_AI_MODELS_DIR=/models \
 	-e OSIONOS_AI_PORT=0 \
 	-e OSIONOS_AI_DATABASE_URL="postgres://postgres:ai_test_password@pg:5432/osionos_ai_test" \
 	-e OSIONOS_AI_REDIS_URL="redis://redis:6379" \

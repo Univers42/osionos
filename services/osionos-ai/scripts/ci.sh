@@ -43,6 +43,7 @@ fi
 
 # The migrations become the positional arguments of test.sh, one per line of
 # the list; a name that is not a file stops the gate before anything starts.
+export MODELS_DIR
 HARNESS_LABEL=ci
 HARNESS_DIR="$SERVICE_DIR/eval"
 # shellcheck source=../eval/harness.sh

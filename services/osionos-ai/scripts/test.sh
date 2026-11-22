@@ -82,9 +82,13 @@ echo "[test] running the suite"
 
 # The models directory is mounted read-only: modesMigration.test.ts replays its
 # migration file on rows made before it.
+# Caveat: unset MODELS_DIR, the mount is the directory of the first migration
+# argument, so a first argument that is a copied temp file mounts the wrong
+# directory and only modesMigration.test.ts fails (ENOENT). scripts/ci.sh
+# exports MODELS_DIR.
 FIRST_MIGRATION=${MIGRATIONS# }
 FIRST_MIGRATION=${FIRST_MIGRATION%% *}
-MODELS_MOUNT=$(CDPATH= cd -- "$(dirname -- "$FIRST_MIGRATION")" && pwd)
+MODELS_MOUNT=$(CDPATH= cd -- "${MODELS_DIR:-$(dirname -- "$FIRST_MIGRATION")}" && pwd)
 
 docker run --rm --network "$NETWORK" \
 	-v "$REPO_ROOT:/app" -v "$MODELS_MOUNT:/models:ro" -w /app/services/osionos-ai \
