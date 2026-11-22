@@ -1,16 +1,17 @@
 /**
- * osionos#233 D233-9: what an export does with uploads. An upload is a private link that opens only
- * for a signed-in osionos reader, so an export that holds one says so in one line, and no export
+ * osionos#233 D233-9: what an export does with uploads. An upload link may stop opening outside
+ * osionos (once the bridge enforces signed links), so an export that holds one says so in one line
+ * (N2: worded to stay true while enforce is off), and no export
  * ever carries a signature (it dies within 2 h, and while it lives it opens the file for anyone).
  *
  * Caveat: an upload is found by its path's text shape. One that is percent-encoded or split across
- * two text runs is not seen, so that export lacks the note; its link still opens nowhere outside.
+ * two text runs is not seen, so that export lacks the note.
  */
 
 import { stripMediaSignature } from "@/shared/lib/media/mediaSignature";
 
 export const PRIVATE_MEDIA_NOTE =
-  "Uploaded images and files in this export are private osionos links: they open only for a signed-in member, not outside osionos.";
+  "Uploaded images and files in this export are osionos links: they may stop opening outside osionos.";
 
 const UPLOAD_IN_TEXT = /\/api\/media\/uploads\/[0-9a-f-]{36}\/[0-9a-f]{64}\.[a-z0-9]{1,8}/i;
 
