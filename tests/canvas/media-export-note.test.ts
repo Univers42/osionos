@@ -67,3 +67,8 @@ test("pasting copied markdown back into a page drops the note, keeps the user's 
   assert.ok(pasted.includes(UPLOAD), "the paste lost the upload");
   assert.match(JSON.stringify(parseMarkdownClipboard("> my own quote")), /my own quote/);
 });
+
+test("N2: the note promises nothing enforce does not do yet: the links may stop opening outside osionos", () => {
+  assert.match(PRIVATE_MEDIA_NOTE, /may stop opening outside osionos/);
+  assert.doesNotMatch(PRIVATE_MEDIA_NOTE, /open only|signed-in/);
+});

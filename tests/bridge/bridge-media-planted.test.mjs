@@ -12,6 +12,8 @@ const SECRET = 'media-url-secret-for-tests-0123456789';
 const victimPath = (key) => `/api/media/uploads/${IDS.userA}/${key.repeat(64)}.png`;
 const memberPath = `/api/media/uploads/${IDS.userB}/${'e'.repeat(64)}.png`;
 const PLANTED_PAGE = 'e2e2e2e2-6666-4666-8666-e2e2e2e2e2e2';
+const WORKSPACE_OWNER = 'f0f0f0f0-7777-4777-8777-f0f0f0f0f0f0';
+const ownerPath = `/api/media/uploads/${WORKSPACE_OWNER}/${'d'.repeat(64)}.png`;
 
 const sign = (base, headers, body) => send(base, '/api/media/uploads/sign', headers, post(body));
 const imageBlock = (id, path) => ({ id, type: 'image', content: `http://bridge.example${path}` });
@@ -65,6 +67,17 @@ describe('a teammate on a shared page still gets the images signed', () => {
 			const answer = await sign(base, asA(), { pageId: IDS.sharedA, paths: [memberPath] });
 			assert.deepEqual(Object.keys(answer.body.signed), [memberPath]);
 			assert.equal(membershipReads(mock).length, 1);
+		});
+	});
+
+	it('the workspace owner with no member row counts as a member (G4)', async () => {
+		const world = membershipWorld();
+		world.osionos_workspaces.find((workspace) => workspace.id === IDS.team).owner_id = WORKSPACE_OWNER;
+		world.osionos_pages.find((page) => page.id === IDS.sharedA).content = [imageBlock('s4', ownerPath)];
+		await inMembershipWorld(world, {}, async (base) => {
+			const answer = await sign(base, asA(), { pageId: IDS.sharedA, paths: [ownerPath] });
+			assert.equal(answer.status, 200, answer.text);
+			assert.deepEqual(Object.keys(answer.body.signed), [ownerPath]);
 		});
 	});
 

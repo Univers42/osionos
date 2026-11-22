@@ -106,3 +106,18 @@ test("transport: a 503 is off, a 200 is the signed map with the bridge clock, th
   assert.deepEqual(await createFetchSignTransport({ apiBase: "", fetchImpl: reply(200, {}) as typeof fetch, token: () => "t" })(["a"], null), { kind: "off" });
   assert.equal(seen.length, before, "no token or no bridge: no request");
 });
+
+test("N1: the app signer starts off: an upload renders its stored URL at first paint and nothing is posted", async () => {
+  const posted: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => { posted.push(String(input)); return new Response(null, { status: 503 }); }) as typeof fetch;
+  try {
+    const stored = path(ME, 77);
+    assert.equal(mountedMediaSrc(stored, null), stored);
+    assert.equal(mountedMediaSrc(stored, "page-1"), stored);
+    await new Promise((done) => setTimeout(done, 0));
+    assert.deepEqual(posted.filter((url) => url.includes("/api/media/uploads/sign")), []);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

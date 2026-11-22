@@ -181,3 +181,35 @@ test("parseSignAnswer: keeps string links, takes now or the Date header, refuses
   assert.deepEqual(parseSignAnswer(null, null), { kind: "failed" });
   assert.deepEqual(parseSignAnswer({ signed: [] }, null), { kind: "failed" });
 });
+
+test("N1: a signer that waits on the bridge's word renders the stored URL and posts nothing until it says it signs", async () => {
+  const server = clock(Date.UTC(2026, 10, 22, 10, 5));
+  const { calls, transport } = bridge(server.now);
+  let say: (signs: boolean | null) => void = () => {};
+  const word = new Promise<boolean | null>((done) => { say = done; });
+  const signer = createMediaSigner({ transport, nowMs: server.now, userId: () => ME, signs: () => word });
+  const own = upload(ME, 1);
+  assert.deepEqual(signer.peek(own), { kind: "bare" });
+  assert.equal(await signer.sign(own), null);
+  say(true);
+  await tick();
+  assert.deepEqual(signer.peek(own), { kind: "pending" });
+  assert.match(String(await signer.sign(own)), /sig=/);
+  assert.equal(calls.length, 1);
+});
+
+test("N1: a bridge that does not sign gets no request over 100 renders; one that cannot say is asked again later", async () => {
+  const server = clock(Date.UTC(2026, 10, 22, 10, 5));
+  const { calls, transport } = bridge(server.now);
+  const off = createMediaSigner({ transport, nowMs: server.now, userId: () => ME, signs: async () => false });
+  for (let render = 0; render < 100; render += 1) await off.sign(upload(ME, render));
+  assert.equal(calls.length, 0);
+  let asked = 0;
+  const unsure = createMediaSigner({ transport, nowMs: server.now, userId: () => ME, signs: async () => { asked += 1; return null; } });
+  for (let render = 0; render < 100; render += 1) await unsure.sign(upload(ME, render));
+  assert.equal(asked, 1);
+  server.advance(61_000);
+  await unsure.sign(upload(ME, 0));
+  assert.equal(asked, 2);
+  assert.equal(calls.length, 0);
+});

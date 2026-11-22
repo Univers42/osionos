@@ -26,14 +26,19 @@ describe('GET /api/capabilities', () => {
 	it('C1 answers 200 with each feature off when its flag is unset', async () => {
 		const result = await build().get();
 		assert.equal(result.status, 200);
-		assert.deepEqual(result.body, { capabilities: { recs: false, publish: false } });
+		assert.deepEqual(result.body, { capabilities: { recs: false, publish: false, mediaSign: false } });
 	});
 
 	it('C2 reports a feature on only for the exact value its own route checks', async () => {
-		assert.deepEqual((await build({ OSIONOS_RECS_FOR_YOU: '1', OSIONOS_PUBLISH_ENABLED: '1' }).get()).body, { capabilities: { recs: true, publish: true } });
+		assert.deepEqual((await build({ OSIONOS_RECS_FOR_YOU: '1', OSIONOS_PUBLISH_ENABLED: '1' }).get()).body, { capabilities: { recs: true, publish: true, mediaSign: false } });
 		for (const value of ['true', '0', 'yes']) {
-			assert.deepEqual((await build({ OSIONOS_RECS_FOR_YOU: value, OSIONOS_PUBLISH_ENABLED: value }).get()).body.capabilities, { recs: false, publish: false }, value);
+			assert.deepEqual((await build({ OSIONOS_RECS_FOR_YOU: value, OSIONOS_PUBLISH_ENABLED: value }).get()).body.capabilities, { recs: false, publish: false, mediaSign: false }, value);
 		}
+	});
+
+	it('C6 reports mediaSign only when the bridge holds a media key (osionos#233 N1)', async () => {
+		assert.equal((await build({ MEDIA_URL_SECRET: 'media-url-secret-for-tests-0123456789' }).get()).body.capabilities.mediaSign, true);
+		assert.equal((await build({ MEDIA_URL_SECRET: '   ' }).get()).body.capabilities.mediaSign, false);
 	});
 
 	it('C3 needs a session: a caller without one cannot tell an off feature from a missing route', async () => {
@@ -56,6 +61,6 @@ describe('the bridge serves GET /api/capabilities', () => {
 		const { base, config } = await startBridgeWorld(t);
 		const response = await send(base, PATH, { token: sessionToken(config) });
 		assert.equal(response.status, 200);
-		assert.deepEqual(Object.keys(response.body.capabilities).sort(), ['publish', 'recs']);
+		assert.deepEqual(Object.keys(response.body.capabilities).sort(), ['mediaSign', 'publish', 'recs']);
 	});
 });
