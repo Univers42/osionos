@@ -14,7 +14,7 @@ const WS_OWNER = '20000000-0000-4000-8000-000000000004';
 const PAGE_A = '4000000a-0000-4000-8000-00000000000a';
 
 function userAs(userId: string): AuthUser {
-	return { userId, workspaceId: WS1, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+	return { userId, workspaceId: WS1, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 }
 
 describe('shareRules attributes', () => {

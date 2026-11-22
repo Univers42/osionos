@@ -28,7 +28,7 @@ const harness = await startHarness();
 const db = harness.app.db;
 const seeds = new Seeds(db);
 const QUERY = 'zorblax quux';
-const userA: AuthUser = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() };
+const userA: AuthUser = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null };
 
 /** The score a passage gets from the mock: the vector page is the best answer. */
 function scoreOf(text: string): number {

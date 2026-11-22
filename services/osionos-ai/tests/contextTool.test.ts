@@ -30,7 +30,7 @@ after(async () => {
 const OTHER_WORKSPACE = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const SENTINEL = 'SENTINEL-BODY-NEVER-LISTED';
 // The token's private workspace is not WORKSPACE_A: the member row alone decides.
-const USER = (userId: string, extra: Record<string, unknown> = {}) => ({ userId, workspaceId: OTHER_WORKSPACE, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, ...extra });
+const USER = (userId: string, extra: Record<string, unknown> = {}) => ({ userId, workspaceId: OTHER_WORKSPACE, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null, ...extra });
 const SKILLS = [{ id: 'tone', version: 1, source: 'user' as const, description: 'Answer like me', skillId: randomUUID() }];
 
 async function seedItem(kind: string, slug: string, body: string, owner: string | null = USER_A, over: Record<string, string> = {}): Promise<string> {

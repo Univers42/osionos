@@ -94,7 +94,7 @@ function fakeDb(w: World): { db: QueryRunner; calls: Call[] } {
 }
 
 function userAs(userId: string): AuthUser {
-	return { userId, workspaceId: WS1, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+	return { userId, workspaceId: WS1, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 }
 
 /** The ids readableByRules lets `userId` see among `rows` (default: every page of the world). */

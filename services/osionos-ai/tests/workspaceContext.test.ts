@@ -26,7 +26,7 @@ const WORKSPACE_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const WORKSPACE_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 function user(userId: string, workspaceId: string) {
-	return { userId, workspaceId, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() };
+	return { userId, workspaceId, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null };
 }
 
 interface PageSpec {

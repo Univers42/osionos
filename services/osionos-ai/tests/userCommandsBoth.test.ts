@@ -36,7 +36,7 @@ describe('user context and commands (both flags on)', () => {
 		await seedMany('command', MAX_USER_COMMANDS);
 		await seedMany('rule', MAX_USER_RULES);
 		await seedMany('skill', MAX_USER_SKILLS);
-		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 		const context = await userContextForRun(app.db as Pool, { user, workspaceId: undefined, research: false, skillIndex: buildSkillIndex([], []) });
 		assert.equal(context?.included.size, MAX_USER_RULES + MAX_USER_SKILLS);
 		assert.deepEqual(context?.dropped, []);
@@ -57,7 +57,7 @@ describe('user context and commands (both flags on)', () => {
 		const put = await call(`/api/ai/context/items/${id}`, { method: 'PUT', token, body: { name: 'n', description: 'd', body: 'NEW TEMPLATE $ARGUMENTS' } });
 		assert.equal(put.status, 200);
 		assert.equal((put.body as { kind: string }).kind, 'command');
-		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 		const context = await userContextForRun(app.db as Pool, { user, workspaceId: undefined, research: false, skillIndex: buildSkillIndex([], []) });
 		assert.ok(!JSON.stringify(context).includes('NEW TEMPLATE'), 'a command is never run context');
 		assert.equal((await call(`/api/ai/context/items/${id}`, { method: 'DELETE', token })).status, 204);

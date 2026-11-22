@@ -30,7 +30,7 @@ after(async () => {
 const A = () => tokenFor(USER_A, WORKSPACE_A);
 // B's token carries B's own workspace: a token whose workspace is A makes B its owner.
 const B = () => tokenFor(USER_B, WORKSPACE_B);
-const USER = (userId: string, workspaceId: string) => ({ userId, workspaceId, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 });
+const USER = (userId: string, workspaceId: string) => ({ userId, workspaceId, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null });
 const items = (id = '') => `/api/ai/context/items${id ? `/${id}` : ''}`;
 const rules = (slug = '') => `/api/ai/workspaces/${WORKSPACE_A}/rules${slug ? `/${slug}` : ''}`;
 const fields = (over: Record<string, unknown> = {}) => ({ name: 'Tone', description: 'How I want answers', body: 'Answer in short sentences.', ...over });

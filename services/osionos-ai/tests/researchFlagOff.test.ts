@@ -40,7 +40,7 @@ describe('research mode with the flag off', () => {
 	it('C415 the tool set has only the chat\'s tools and the reservation of a hello is today\'s', () => {
 		const run = buildRunTools({
 			db: {} as Pool,
-			user: { userId: randomUUID(), workspaceId: randomUUID(), memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() },
+			user: { userId: randomUUID(), workspaceId: randomUUID(), memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null },
 			pool: createToolPool(),
 			runId: randomUUID(),
 			conversationId: randomUUID(),

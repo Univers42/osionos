@@ -24,7 +24,7 @@ const { TOOL_DEFINITION_CHARS } = await import('../src/tools/index.ts');
 function context(userId: string, workspaceId: string) {
 	return {
 		db,
-		user: { userId, workspaceId, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() },
+		user: { userId, workspaceId, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null },
 	};
 }
 

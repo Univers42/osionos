@@ -74,7 +74,7 @@ describe('the stored answer names its agent', () => {
 describe('suggest_agent', () => {
 	const caller = (agentId: string | null) => ({
 		db: app.db,
-		user: { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() },
+		user: { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null },
 		agentId,
 	});
 

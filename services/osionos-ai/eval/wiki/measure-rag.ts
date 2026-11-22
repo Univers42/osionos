@@ -105,7 +105,7 @@ async function asker(): Promise<AuthUser> {
 		 group by workspace_id, owner_id order by count(*) desc limit 1`,
 	);
 	const row = result.rows[0];
-	return { userId: row.owner_id, workspaceId: row.workspace_id, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() };
+	return { userId: row.owner_id, workspaceId: row.workspace_id, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null };
 }
 
 async function run(user: AuthUser, question: string): Promise<Run> {

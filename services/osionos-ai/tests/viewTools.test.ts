@@ -29,7 +29,7 @@ const NOT_FOUND = 'no page with that id in your workspaces';
 function context(userId: string, workspaceId: string) {
 	return {
 		db: app.db,
-		user: { userId, workspaceId, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() },
+		user: { userId, workspaceId, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null },
 	};
 }
 

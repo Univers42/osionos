@@ -21,8 +21,8 @@ export interface AuthUser {
 	 * is measured against.
 	 */
 	issuedAtMs: number;
-	/** The token's expiry (`exp` * 1000), or null when it carries none. Optional so existing literals still compile. */
-	expiresAtMs?: number | null;
+	/** The token's expiry (`exp` * 1000), or null when it carries none. */
+	expiresAtMs: number | null;
 	/**
 	 * The workspaces a personal access token is limited to (C115).
 	 *
@@ -96,9 +96,9 @@ function issuedAtMsOf(verified: VerifiedAppSessionToken): number {
 	return Number.isFinite(iat) ? iat * 1000 : 0;
 }
 
-function expiresAtMsOf(verified: VerifiedAppSessionToken): number | null {
-	const exp = Number((verified.raw as { exp?: unknown }).exp);
-	return Number.isFinite(exp) ? exp * 1000 : null;
+export function expiresAtMsOf(verified: VerifiedAppSessionToken): number | null {
+	const exp = (verified.raw as { exp?: unknown }).exp;
+	return typeof exp === 'number' && Number.isFinite(exp) ? exp * 1000 : null;
 }
 
 /** The failure's code and status; the token itself never reaches the log. */

@@ -12,7 +12,7 @@ const USER: AuthUser = {
 	workspaceId: WORKSPACE,
 	memberWorkspaces: [],
 	isAdmin: false,
-	issuedAtMs: 0,
+	issuedAtMs: 0, expiresAtMs: null,
 };
 
 /** A pool whose members table holds the given row, or none. */

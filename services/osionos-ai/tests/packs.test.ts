@@ -55,14 +55,14 @@ const userA: AuthUser = {
 	workspaceId: WORKSPACE_A,
 	memberWorkspaces: [],
 	isAdmin: false,
-	issuedAtMs: Date.now(),
+	issuedAtMs: Date.now(), expiresAtMs: null,
 };
 const stranger: AuthUser = {
 	userId: '99999999-9999-4999-8999-999999999999',
 	workspaceId: '99999999-9999-4999-8999-999999999998',
 	memberWorkspaces: [],
 	isAdmin: false,
-	issuedAtMs: Date.now(),
+	issuedAtMs: Date.now(), expiresAtMs: null,
 };
 
 const seeds = new Seeds(db);
@@ -434,7 +434,7 @@ describe('the pack retrieval', () => {
 			`import { createPool } from ${JSON.stringify(dbUrl)};`,
 			`import { retrieve } from ${JSON.stringify(searchUrl)};`,
 			'const pool = createPool(process.env.OSIONOS_AI_DATABASE_URL);',
-			`const user = { userId: '99999999-9999-4999-8999-999999999999', workspaceId: '99999999-9999-4999-8999-999999999998', memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() };`,
+			`const user = { userId: '99999999-9999-4999-8999-999999999999', workspaceId: '99999999-9999-4999-8999-999999999998', memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null };`,
 			`const chunks = await retrieve(pool, user, { query: 'alphazorblax', packs: ['alpha'] });`,
 			'console.log(JSON.stringify({ count: chunks.length }));',
 			'await pool.end();',

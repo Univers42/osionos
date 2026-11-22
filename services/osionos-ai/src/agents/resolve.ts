@@ -60,7 +60,7 @@ export function toAgentConfig(stored: StoredAgent): CustomAgentConfig {
 
 /** A user with no claim at all: only the member row can make them an admin. */
 function blankUser(userId: string): AuthUser {
-	return { userId, workspaceId: '', memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+	return { userId, workspaceId: '', memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 }
 
 /**

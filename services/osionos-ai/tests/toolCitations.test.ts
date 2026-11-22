@@ -158,7 +158,7 @@ describe('the citations of two searches of one step', () => {
 		pool.startStep();
 		const run = buildRunTools({
 			db: app.db,
-			user: { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() },
+			user: { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null },
 			pool,
 			runId: randomUUID(),
 			conversationId: randomUUID(),

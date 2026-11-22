@@ -31,7 +31,7 @@ describe('the web tools with the flag off', () => {
 	it('C369 C375 the run tool set has no web key and the reservation is today\'s', () => {
 		const run = buildRunTools({
 			db: {} as Pool,
-			user: { userId: randomUUID(), workspaceId: randomUUID(), memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() },
+			user: { userId: randomUUID(), workspaceId: randomUUID(), memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null },
 			pool: createToolPool(),
 			runId: randomUUID(),
 			conversationId: randomUUID(),

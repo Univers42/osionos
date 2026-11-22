@@ -18,7 +18,7 @@ const USER: AuthUser = {
 	workspaceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
 	memberWorkspaces: [],
 	isAdmin: false,
-	issuedAtMs: 0,
+	issuedAtMs: 0, expiresAtMs: null,
 };
 const OTHER_WORKSPACE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 

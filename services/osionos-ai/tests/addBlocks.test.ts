@@ -17,7 +17,7 @@ const { app, bridge, mock, postRun, tokenFor, createConversation, call } = await
 const { addBlocks, anchorOf, ADD_MAX_BYTES } = await import('../src/tools/writeTools.ts');
 const { appendOutcome, bridgeWriteOf } = await import('../src/approvals/execute.ts');
 
-const USER = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+const USER = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 /** The context a write tool runs in: the database and the caller. */
 const CTX = { db: app.db, user: USER };
 

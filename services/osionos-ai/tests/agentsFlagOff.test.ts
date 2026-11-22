@@ -35,7 +35,7 @@ describe('C329 custom agents are off unless the flag is exactly on', () => {
 		const { resolvePinnedAgent } = await import('../src/agents/resolve.ts');
 		type PinnedRun = Parameters<typeof resolvePinnedAgent>[2];
 		const run = { agent_id: null, custom_agent_id: id, custom_agent_version: 1 } as unknown as PinnedRun;
-		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 		assert.deepEqual(await resolvePinnedAgent(app.db, user, run, WORKSPACE_A), { ok: false, reason: 'custom_agents_off' });
 	});
 

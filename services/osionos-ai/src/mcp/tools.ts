@@ -45,7 +45,7 @@ export function patUser(principal: PatPrincipal): AuthUser {
 		workspaceId: '',
 		memberWorkspaces: [],
 		isAdmin: false,
-		issuedAtMs: 0,
+		issuedAtMs: 0, expiresAtMs: null,
 		scope: principal.workspaceIds,
 	};
 }

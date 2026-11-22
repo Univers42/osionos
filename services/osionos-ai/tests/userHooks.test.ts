@@ -206,7 +206,7 @@ describe('user hooks (hooks flag on)', () => {
 	});
 
 	it('C1122: an unreadable hook read leaves research and agent runs with no tools either', async () => {
-		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 		const base = { db: app.db as Pool, user, runId: randomUUID(), conversationId: randomUUID(), ownerId: USER_A, pages: [], sources: [], workspaceId: WORKSPACE_A, emit: async () => {} };
 		const agent = BUILTIN_AGENTS[0];
 		for (const extra of [{ research: true }, { agent }]) {

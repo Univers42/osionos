@@ -14,7 +14,7 @@ import { SseStream, collect } from './sse.ts';
 const t = await startAgents();
 const { app, mock: upstream, actor, setRole, as, make, settings, call } = t;
 const { resolvePinnedAgent } = await import('../src/agents/resolve.ts');
-const memberUser = (id: string) => ({ userId: id, workspaceId: '', memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 });
+const memberUser = (id: string) => ({ userId: id, workspaceId: '', memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null });
 
 before(() => settings(WORKSPACE_A, { agents_enabled: true, custom_agents_allowed: true }));
 

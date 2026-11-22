@@ -86,7 +86,7 @@ async function rememberFor() {
 	);
 	const pool = createToolPool();
 	pool.startStep();
-	const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+	const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 	const events: string[] = [];
 	const frames: { name: string; data: unknown }[] = [];
 	const built = buildRunTools({

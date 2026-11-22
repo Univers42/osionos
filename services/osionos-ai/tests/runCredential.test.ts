@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import type { IncomingMessage } from 'node:http';
 import { describe, it } from 'node:test';
 import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
-import { verifyRequest } from '../src/auth.ts';
+import { expiresAtMsOf, verifyRequest } from '../src/auth.ts';
 import { CREDENTIAL_MARGIN_MS, makeRunCredential } from '../src/modes/credential.ts';
 
 const SECRET_TOKEN = 'tok-SECRET-abc123';
@@ -46,5 +46,11 @@ describe('AuthUser.expiresAtMs', () => {
 		const { user } = verifyRequest(request);
 		assert.ok(user);
 		assert.equal(user.expiresAtMs, Date.parse(signed.expiresAt));
+	});
+
+	it('is null when exp is not a number', () => {
+		for (const exp of [null, '', false, '1800000000', undefined, Number.NaN]) {
+			assert.equal(expiresAtMsOf({ raw: { exp } } as never), null);
+		}
 	});
 });

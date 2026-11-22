@@ -208,7 +208,7 @@ describe('workspace skills', () => {
 
 	it('a removed member sees no skills in a run', async () => {
 		await create('notes');
-		const user = { userId: USER_B, workspaceId: WORKSPACE_B, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+		const user = { userId: USER_B, workspaceId: WORKSPACE_B, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 		assert.equal((await workspaceSkillsForRun(app.db, user, WORKSPACE_A)).length, 1);
 		await seedMember(USER_B, 'none');
 		assert.equal((await workspaceSkillsForRun(app.db, user, WORKSPACE_A)).length, 0);
@@ -236,7 +236,7 @@ async function toolsFor() {
 	);
 	const pool = createToolPool();
 	pool.startStep();
-	const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+	const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 	const built = buildRunTools({
 		db: app.db as Pool, user, pool, runId, conversationId, ownerId: USER_A, pages: [], sources: [],
 		agent: findBuiltinAgent('analyst'), skillIndex, workspaceId: WORKSPACE_A, emit: async () => {},

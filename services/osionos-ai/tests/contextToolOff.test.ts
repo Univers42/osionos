@@ -29,7 +29,7 @@ describe('list_my_context (flag off)', () => {
 		assert.equal(config.contextToolEnabled, false);
 		const seen: string[] = [];
 		const db = { query: (sql: string, values?: unknown[]) => (seen.push(sql), app.db.query(sql, values)) } as unknown as Pool;
-		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
 		const built = buildRunTools({
 			db, user, pool: createToolPool(), runId: randomUUID(), conversationId: randomUUID(), ownerId: USER_A,
 			pages: [], sources: [], workspaceId: WORKSPACE_A, emit: async () => {}, promptItemIds: new Set(['x']),
