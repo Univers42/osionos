@@ -4,7 +4,7 @@ import type { AuthUser } from '../auth.ts';
 import { config } from '../config.ts';
 import { resolveTarget } from '../gateway/resolve.ts';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
-import { checkRateLimit } from '../rateLimit.ts';
+import { takeDaySeat } from '../images/quota.ts';
 import { autoChainFor } from '../runs/auto.ts';
 import { accountRestSeconds } from '../runs/cooldown.ts';
 import { isMayTrain } from '../runs/privacyGate.ts';
@@ -28,8 +28,11 @@ export interface Refused {
 
 const UNAVAILABLE: Refused = { kind: 'refused', status: 503, code: 'rate_limit_unavailable' };
 const LOCK_PREFIX = 'ai:lock:thread-channel:';
-const PLATFORM_LIMIT_PREFIX = 'ai:rl:thread-platform';
-const DAY_SECONDS = 86_400;
+/** Under ai:rl: so the test harness clears them with every other bucket. */
+const THREAD_DAY_KEYS = {
+	user: (userId: string, day: string): string => `ai:rl:thread-day:${userId}:${day}`,
+	global: (day: string): string => `ai:rl:thread-day:all:${day}`,
+};
 
 function aiBusy(retryAfterSeconds?: number): Refused {
 	return { kind: 'refused', status: 429, code: 'ai_busy', ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }) };
@@ -69,19 +72,40 @@ export async function acquireChannelLock(
 }
 
 /**
- * OB10: one count of thread runs a day for the whole platform. It is read
- * after the four C449 buckets, so a member they refuse spends none of it.
+ * OB10: one member's share of the thread runs of the day, and one count for
+ * the whole platform. Both are taken after the four C449 buckets, so a member
+ * they refuse spends neither; a member past their share gives the platform
+ * seat back in the same call, so one account cannot spend the platform's day.
  *
- * Caveat: a fixed UTC-day window (INCR + EXPIRE): up to twice the cap can
- * run within the hours around midnight.
+ * Caveat: both counters move up before either is read (takeDaySeat), so for
+ * one round trip a refused member holds a platform seat: a run admitted in
+ * that instant at the platform's last seat reads "AI busy". Fixed UTC day:
+ * up to twice the caps can run within the hours around midnight.
  */
-async function platformCapRefusal(redis: Redis, now: Date): Promise<Refused | null> {
+async function takeThreadDaySeat(redis: Redis, userId: string, now: Date): Promise<{ kind: 'taken'; giveBack: () => Promise<void> } | Refused> {
+	const limits = { perUser: config.threadRunsPerUserPerDay, global: config.threadRunsPerDay };
 	try {
-		const result = await checkRateLimit(redis, 'all', config.threadRunsPerDay, now, PLATFORM_LIMIT_PREFIX, DAY_SECONDS);
-		return result.allowed ? null : aiBusy(result.retryAfterSeconds);
+		const seat = await takeDaySeat(redis, userId, limits, now, THREAD_DAY_KEYS);
+		return seat.kind === 'taken' ? seat : aiBusy(seat.retryAfterSeconds);
 	} catch {
 		return UNAVAILABLE;
 	}
+}
+
+/** A refund that fails leaves the seat spent until midnight: the run is refused either way. */
+async function giveSeatBack(giveBack: () => Promise<void>): Promise<void> {
+	try {
+		await giveBack();
+	} catch (error) {
+		console.warn(JSON.stringify({ event: 'thread_seat_refund_failed', error: error instanceof Error ? error.message : String(error) }));
+	}
+}
+
+export interface Admitted {
+	kind: 'admitted';
+	release: () => Promise<void>;
+	/** Gives the day's seats back: for a run startRun refuses, which never reaches a model. */
+	refund: () => Promise<void>;
 }
 
 /**
@@ -93,16 +117,16 @@ export async function admitThread(
 	redis: Redis,
 	scope: ThreadLimitScope & { runId: string },
 	now: Date = new Date(),
-): Promise<{ kind: 'admitted'; release: () => Promise<void> } | Refused> {
+): Promise<Admitted | Refused> {
 	const resting = await accountRestSeconds(redis, now.getTime());
 	if (resting !== undefined) return aiBusy(resting);
 	const lock = await acquireChannelLock(redis, scope.channelId, scope.runId);
 	if (lock.kind === 'refused') return lock;
 	const buckets = await admitThreadRun(redis, scope, now);
-	const refused = buckets.kind === 'refused' ? buckets : await platformCapRefusal(redis, now);
-	if (!refused) return { kind: 'admitted', release: lock.release };
+	const seat = buckets.kind === 'refused' ? buckets : await takeThreadDaySeat(redis, scope.userId, now);
+	if (seat.kind === 'taken') return { kind: 'admitted', release: lock.release, refund: () => giveSeatBack(seat.giveBack) };
 	await lock.release();
-	return refused;
+	return seat;
 }
 
 /**

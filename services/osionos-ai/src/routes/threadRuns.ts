@@ -4,7 +4,7 @@ import { getOwnedConversation } from '../conversations/repo.ts';
 import { getRun } from '../runs/repo.ts';
 import { startRun } from '../runs/runner.ts';
 import { admitThread, threadTargets } from '../threads/admission.ts';
-import type { Refused } from '../threads/admission.ts';
+import type { Admitted, Refused } from '../threads/admission.ts';
 import { channelWorkspace, loadThreadWindow, threadPrompt, triggerRefusal } from '../threads/context.ts';
 import type { ThreadMessage } from '../threads/context.ts';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
@@ -35,6 +35,9 @@ const TRIGGER_STATUS = { not_found: 404, no_mention: 400, trigger_stale: 409 } a
 type Scope = { channelId: string; userId: string; messageId: string };
 type Targets = { target: ResolvedTarget; fallbacks: ResolvedTarget[] };
 
+const nothing = async (): Promise<void> => {};
+const REPLAY: Admitted = { kind: 'admitted', release: nothing, refund: nothing };
+
 export async function handleThreadRuns(ctx: RouteContext): Promise<number> {
 	const user = requireUser(ctx);
 	if (!user) return 401;
@@ -47,16 +50,12 @@ export async function handleThreadRuns(ctx: RouteContext): Promise<number> {
 	if ('refused' in read) return refuse(read.refused);
 	const { scope, window, workspaceId } = read;
 	// A run id already started re-attaches to that run: replaying it spends no bucket and takes no lock.
-	let release = async (): Promise<void> => {};
-	if (!(await getRun(db, body.runId))) {
-		const admitted = await admitThread(redis, { channelId: body.channelId, workspaceId, userId: user.userId, runId: body.runId });
-		if (admitted.kind === 'refused') return refuse(admitted);
-		release = admitted.release;
-	}
+	const admitted = (await getRun(db, body.runId)) ? REPLAY : await admitThread(redis, { channelId: body.channelId, workspaceId, userId: user.userId, runId: body.runId });
+	if (admitted.kind === 'refused') return refuse(admitted);
 	try {
-		return await runThread(ctx, { ...body, scope, window, targets });
+		return await runThread(ctx, { ...body, scope, window, targets }, admitted.refund);
 	} finally {
-		await release();
+		await admitted.release();
 	}
 }
 
@@ -87,8 +86,13 @@ function refuser(ctx: RouteContext): (refused: Pick<Refused, 'status' | 'code' |
 
 type ThreadRunPlan = { runId: string; conversationId: string; scope: Scope; window: ThreadMessage[]; targets: Targets };
 
-async function runThread(ctx: RouteContext, run: ThreadRunPlan): Promise<number> {
-	const outcome = await startRun(threadRunInput(ctx, run));
+/** A run startRun does not start (refused, re-attached or thrown) reaches no model: `refund` gives its day's seats back. */
+async function runThread(ctx: RouteContext, run: ThreadRunPlan, refund: () => Promise<void>): Promise<number> {
+	const outcome = await startRun(threadRunInput(ctx, run)).catch(async (error: unknown) => {
+		await refund();
+		throw error;
+	});
+	if (outcome.kind !== 'started') await refund();
 	if (outcome.kind === 'refused') return refuser(ctx)(outcome);
 	if (outcome.kind === 'reattach') return replayRun(ctx, run.runId);
 	sendSseHeaders(ctx.response);

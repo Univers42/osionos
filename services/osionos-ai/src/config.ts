@@ -57,6 +57,11 @@ const envSchema = z.object({
 	// and up to 3 requests a run (the failover chain): 8 x 3 = 24 < 25. Raise it
 	// only from a measured allowance; a fixed UTC day lets a burst straddle midnight.
 	OSIONOS_AI_THREAD_RUNS_PER_DAY: z.coerce.number().int().positive().default(8),
+	// One member's share of those runs, so one account cannot spend the
+	// platform's day. Caveat: 2 is not measured; it is a quarter of the default
+	// cap. A seat over either count is given back at once, so a refused member
+	// can briefly make another member's run read as "AI busy"; a fixed UTC day.
+	OSIONOS_AI_THREAD_RUNS_PER_USER_PER_DAY: z.coerce.number().int().positive().default(2),
 	// The window of the related reads: a kNN over the vectors of a workspace is
 	// the most expensive read of the service, and it has its own budget so a
 	// client that hammers it cannot spend the budget of the runs.
@@ -239,6 +244,7 @@ const rawEnv = {
 	OSIONOS_AI_PLATFORM_DAILY_MICROUSD: process.env.OSIONOS_AI_PLATFORM_DAILY_MICROUSD,
 	OSIONOS_AI_RUNS_PER_MINUTE: process.env.OSIONOS_AI_RUNS_PER_MINUTE,
 	OSIONOS_AI_THREAD_RUNS_PER_DAY: process.env.OSIONOS_AI_THREAD_RUNS_PER_DAY,
+	OSIONOS_AI_THREAD_RUNS_PER_USER_PER_DAY: process.env.OSIONOS_AI_THREAD_RUNS_PER_USER_PER_DAY,
 	OSIONOS_AI_RELATED_PER_MINUTE: process.env.OSIONOS_AI_RELATED_PER_MINUTE,
 	OSIONOS_AI_SOURCES_PER_MINUTE: process.env.OSIONOS_AI_SOURCES_PER_MINUTE,
 	OSIONOS_AI_KEK: firstEnv('OSIONOS_AI_KEK'),
@@ -435,6 +441,8 @@ export interface AiServiceConfig {
 	runsPerMinute: number;
 	/** Thread runs a day, summed over every workspace (OB10). */
 	threadRunsPerDay: number;
+	/** One member's share of `threadRunsPerDay` (OB10). */
+	threadRunsPerUserPerDay: number;
 	/** The window of the related reads: the calls per minute of one user. */
 	relatedPerMinute: number;
 	/** The window of the device-run sources: the calls per minute of one user. */
@@ -569,6 +577,7 @@ export const config: AiServiceConfig = Object.freeze({
 	platformDailyMicroUsd: parsed.data.OSIONOS_AI_PLATFORM_DAILY_MICROUSD,
 	runsPerMinute: parsed.data.OSIONOS_AI_RUNS_PER_MINUTE,
 	threadRunsPerDay: parsed.data.OSIONOS_AI_THREAD_RUNS_PER_DAY,
+	threadRunsPerUserPerDay: parsed.data.OSIONOS_AI_THREAD_RUNS_PER_USER_PER_DAY,
 	relatedPerMinute: parsed.data.OSIONOS_AI_RELATED_PER_MINUTE,
 	sourcesPerMinute: parsed.data.OSIONOS_AI_SOURCES_PER_MINUTE,
 	kek: parsed.data.OSIONOS_AI_KEK,
