@@ -103,7 +103,11 @@ describe('mode route', () => {
 	it('refuses an anchor on any mode but accept_edits: 400', async () => {
 		const id = await createConversation('m7');
 		const anchor = await page(WORKSPACE_A, USER_A);
-		for (const mode of ['manual', 'plan', 'auto']) assert.equal((await patch(id, { mode, anchorPageId: anchor })).status, 400);
+		for (const mode of ['manual', 'plan', 'auto']) {
+			const answer = await patch(id, { mode, anchorPageId: anchor });
+			assert.equal(answer.status, 400);
+			assert.equal(answer.body?.code, 'anchor_not_allowed');
+		}
 	});
 
 	it('refuses bypass and unknown fields: 400', async () => {

@@ -56,9 +56,10 @@ async function patchMode(ctx: RouteContext, user: AuthUser, id: string, workspac
 }
 
 export async function handleConversationMode(ctx: RouteContext): Promise<number> {
+	// Flag first: off, even an anonymous caller must not learn the route exists.
+	if (!config.modesEnabled) return refuse(ctx, 404, 'not_found');
 	const user = requireUser(ctx);
 	if (!user) return 401;
-	if (!config.modesEnabled) return refuse(ctx, 404, 'not_found');
 	if (user.scope !== undefined) return refuse(ctx, 403, 'forbidden');
 	const rate = await checkRunRateLimit(ctx.deps.redis, user.userId, config.runsPerMinute);
 	if (!rate.allowed) return refuse(ctx, 429, 'rate_limited');

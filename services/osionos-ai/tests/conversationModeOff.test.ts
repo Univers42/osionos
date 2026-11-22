@@ -20,4 +20,9 @@ describe('mode route, flag off', () => {
 		assert.equal((await call(`/api/ai/conversations/${id}/mode`, { token })).status, 404);
 		assert.equal((await call(`/api/ai/conversations/${id}/mode`, { method: 'PATCH', token, body: { mode: 'plan' } })).status, 404);
 	});
+
+	it('answers 404 to an anonymous caller too', async () => {
+		const id = await createConversation('off-anon');
+		assert.equal((await call(`/api/ai/conversations/${id}/mode`)).status, 404);
+	});
 });

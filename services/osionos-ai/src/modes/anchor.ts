@@ -3,6 +3,10 @@ import type { AuthUser } from '../auth.ts';
 import { loadAccessMaps } from '../retrieval/shareRules.ts';
 import { pageAccessLevel } from '../../../../scripts/bridge-page-access.mjs';
 
+const PAGE_SQL = `select id, workspace_id, owner_id, visibility, collaborators
+	from public.osionos_pages
+	where id = $1 and workspace_id = $2 and archived_at is null`;
+
 /**
  * Whether the caller may edit the anchor page of an accept_edits conversation.
  *
@@ -10,10 +14,6 @@ import { pageAccessLevel } from '../../../../scripts/bridge-page-access.mjs';
  * is not seen here (the write tools re-check at write time). A workspace the
  * access loader cannot read is closed, so a database fault refuses the anchor.
  */
-const PAGE_SQL = `select id, workspace_id, owner_id, visibility, collaborators
-	from public.osionos_pages
-	where id = $1 and workspace_id = $2 and archived_at is null`;
-
 export async function anchorWritable(db: Pool, user: AuthUser, workspaceId: string, pageId: string): Promise<boolean> {
 	const page = (await db.query(PAGE_SQL, [pageId, workspaceId])).rows[0];
 	if (!page) return false;
