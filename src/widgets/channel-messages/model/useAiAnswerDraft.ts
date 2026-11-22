@@ -1,7 +1,8 @@
 /**
  * The "@AI" draft store of the app: aiAnswerDraft.ts over the real AI service
- * and bridge calls. The notice is remembered per user in localStorage; a
- * browser that cannot store it shows the notice again, which is the safe side.
+ * and bridge calls. The notice is remembered per (user, autopost) in
+ * localStorage (OB3: a yes to drafts is not a yes to auto-posting); a browser
+ * that cannot store it shows the notice again, which is the safe side.
  */
 
 import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
@@ -13,7 +14,8 @@ import { postAiAnswer } from "@/shared/chat/messageApi";
 import { createAiDraftStore, type AiDraft } from "./aiAnswerDraft";
 
 const writeAnswerNotice = noticingWriter("AI answer notice");
-const noticeKey = (userId: string) => `osionos.ai.channelNotice.${userId}`;
+const noticeKey = (userId: string, autopost?: boolean) =>
+  autopost ? `osionos.ai.channelNotice.autopost.${userId}` : `osionos.ai.channelNotice.${userId}`;
 
 export const aiDraftStore = createAiDraftStore({
   createConversation,
@@ -21,16 +23,16 @@ export const aiDraftStore = createAiDraftStore({
   resumeRun,
   cancelRun,
   postAiAnswer,
-  noticeSeen: (userId) => {
+  noticeSeen: (userId, autopost) => {
     try {
-      return globalThis.localStorage?.getItem(noticeKey(userId)) === "1";
+      return globalThis.localStorage?.getItem(noticeKey(userId, autopost)) === "1";
     } catch {
       return false;
     }
   },
-  markNoticeSeen: (userId) => {
+  markNoticeSeen: (userId, autopost) => {
     // Not stored: the notice shows again next time.
-    writeAnswerNotice(noticeKey(userId), "1");
+    writeAnswerNotice(noticeKey(userId, autopost), "1");
   },
   newId: () => globalThis.crypto.randomUUID(),
 });

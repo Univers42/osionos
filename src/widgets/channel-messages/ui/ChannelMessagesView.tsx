@@ -46,6 +46,7 @@ import { mentionsAi } from "../model/aiAnswerDraft";
 import { aiDraftStore, useAiDraft } from "../model/useAiAnswerDraft";
 import { isChannelAiAnswersEnabled } from "@/shared/config/featureFlags";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
+import { AiAutopostMarker } from "./AiAutopostMarker";
 import { AiDraftCard } from "./AiDraftCard";
 import { CallPanel } from "./CallPanel";
 import { ChannelHeader } from "./ChannelHeader";
@@ -164,11 +165,18 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   // is the author's question, and the composer answers it.
   const aiDraft = useAiDraft(channelId);
   const canAskAi = channel?.kind === "text" && isChannelAiAnswersEnabled() && isAiConfigured();
+  const autopost = canAskAi && channel?.aiAutopost === true;
   const draftWorkspaceId = liveWorkspaceId || channel?.workspaceId || workspaceId;
+  const { setMessages } = history;
+  // A posted answer shows at once, by a click or by auto-post; the realtime echo is the same id.
+  const addPosted = useCallback((message: ChatMessage) => {
+    setMessages((current) => (current.some((m) => m.id === message.id) ? current : [...current, message]));
+  }, [setMessages]);
   const handleSendOutcome = useCallback((outcome: SendOutcome): SendOutcome => {
     if (outcome.ok) {
       setReplyTarget(null);
-      // "@AI" drafts privately for the sender; the channel sees nothing until they post (C429).
+      // "@AI" drafts privately for the sender; the channel sees nothing until they post (C429)
+      // or, in an auto-post channel, until the bridge's guards pass the ready answer (OB1).
       if (canAskAi && outcome.message && mentionsAi(outcome.message.content)) {
         aiDraftStore.getState().ask({
           channelId,
@@ -176,6 +184,8 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
           channelName: title || "messages",
           triggerId: outcome.message.id,
           userId: activeUserId,
+          autopost,
+          onPosted: addPosted,
         });
       }
       return outcome;
@@ -184,12 +194,7 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
       useToastStore.getState().push({ kind: "error", title: "Couldn't send message", description: "Check your connection and try again." });
     }
     return outcome;
-  }, [canAskAi, channelId, draftWorkspaceId, title, activeUserId]);
-  const { setMessages } = history;
-  const postAiDraft = useCallback(async () => {
-    const message = await aiDraftStore.getState().post(channelId);
-    if (message) setMessages((current) => (current.some((m) => m.id === message.id) ? current : [...current, message]));
-  }, [channelId, setMessages]);
+  }, [canAskAi, autopost, addPosted, channelId, draftWorkspaceId, title, activeUserId]);
   const canModerate = channel?.memberRole === "owner" || channel?.memberRole === "admin";
 
   const jumpToBottom = () => {
@@ -345,17 +350,18 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
         <TypingIndicator channelId={channelId} names={authorNames} />
       </div>
 
-      {aiDraft && (
-        <div className={compact ? "px-2" : "mx-auto w-full max-w-4xl px-4"}>
+      <div className={compact ? "px-2" : "mx-auto w-full max-w-4xl px-4"}>
+        <AiAutopostMarker autopost={autopost} />
+        {aiDraft && (
           <AiDraftCard
             draft={aiDraft}
             onAccept={() => aiDraftStore.getState().accept(channelId)}
-            onPost={() => { void postAiDraft(); }}
+            onPost={() => { void aiDraftStore.getState().post(channelId); }}
             onRetry={() => aiDraftStore.getState().retry(channelId)}
             onDiscard={() => aiDraftStore.getState().discard(channelId)}
           />
-        </div>
-      )}
+        )}
+      </div>
       <MessageComposer
         key={channelId}
         channelId={channelId}

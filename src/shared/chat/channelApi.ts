@@ -26,6 +26,8 @@ export interface ChatChannel {
   isPrivate: boolean;
   memberRole: string | null;
   createdAt: string | null;
+  /** Present only while the bridge's auto-post flag is on (osio-bot OB2, OB11). */
+  aiAutopost?: boolean;
 }
 
 export function chatBridgeAvailable(): boolean {

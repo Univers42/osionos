@@ -1,7 +1,9 @@
 /**
  * The asker's "@AI" draft above the composer (C429, C453): only they see it,
  * it says what was sent to the model, and nothing reaches the channel until
- * they press Post.
+ * they press Post. In an auto-post channel (osio-bot OB3, OB7) the notice says
+ * the answer posts without review, and a refused answer comes back here,
+ * "held", with its reason.
  */
 
 import React from "react";
@@ -9,7 +11,7 @@ import { Sparkles } from "lucide-react";
 
 import { Button } from "@/shared/ui";
 
-import type { AiDraft } from "../model/aiAnswerDraft";
+import { canPostDraft, type AiDraft } from "../model/aiAnswerDraft";
 
 const FAILURES: Record<string, string> = {
   rate_limited: "Too many @AI requests in this channel right now. Try again in a few minutes.",
@@ -23,6 +25,9 @@ const FAILURES: Record<string, string> = {
   budget_exhausted: "The AI budget for today is used up.",
   not_found: "@AI cannot read this channel.",
   empty_answer: "The AI wrote nothing. Draft it again.",
+  ai_busy: "AI is busy right now. Try again later.",
+  channel_busy: "@AI is already answering in this channel. Try again when it is done.",
+  may_train_target: "@AI has no private model available right now. Try again later.",
 };
 
 function failureText(code: string | null): string {
@@ -50,11 +55,12 @@ export const AiDraftCard: React.FC<AiDraftCardProps> = ({ draft, onAccept, onPos
     {draft.status === "notice" ? (
       <div className="mt-2 space-y-2">
         <p>
-          To draft an answer, @AI sends your message and up to 30 recent messages of this channel to the
-          platform AI model. Nothing is posted until you press Post.
+          {draft.autopost
+            ? "To answer, @AI sends your message and up to 30 recent messages of this channel to the platform AI model. The answer posts to the channel without review."
+            : "To draft an answer, @AI sends your message and up to 30 recent messages of this channel to the platform AI model. Nothing is posted until you press Post."}
         </p>
         <div className="flex gap-2">
-          <Button tone="primary" size="sm" onClick={onAccept}>Draft an answer</Button>
+          <Button tone="primary" size="sm" onClick={onAccept}>{draft.autopost ? "Answer in the channel" : "Draft an answer"}</Button>
           <Button tone="ghost" size="sm" onClick={onDiscard}>Not now</Button>
         </div>
       </div>
@@ -63,15 +69,19 @@ export const AiDraftCard: React.FC<AiDraftCardProps> = ({ draft, onAccept, onPos
         <p className="whitespace-pre-wrap break-words leading-6" aria-live="polite">
           {draft.text || (draft.status === "drafting" ? "Drafting…" : "")}
         </p>
-        {draft.status === "error" && <p role="alert" className="text-[var(--osio-danger)]">{failureText(draft.code)}</p>}
+        {(draft.status === "error" || draft.status === "held") && (
+          <p role="alert" className="text-[var(--osio-danger)]">{failureText(draft.code)}</p>
+        )}
         <p className="text-xs text-[var(--osio-fg-subtle)]">
           Drafted by the platform AI model from your message and the recent messages of this channel.
         </p>
         <div className="flex gap-2">
-          <Button tone="primary" size="sm" disabled={draft.status !== "ready"} onClick={onPost}>
+          <Button tone="primary" size="sm" disabled={!canPostDraft(draft)} onClick={onPost}>
             {draft.status === "posting" ? "Posting…" : "Post"}
           </Button>
-          {draft.status === "error" && <Button tone="ghost" size="sm" onClick={onRetry}>Draft again</Button>}
+          {(draft.status === "error" || draft.status === "held") && (
+            <Button tone="ghost" size="sm" onClick={onRetry}>Draft again</Button>
+          )}
           <Button tone="ghost" size="sm" onClick={onDiscard}>Discard</Button>
         </div>
       </div>

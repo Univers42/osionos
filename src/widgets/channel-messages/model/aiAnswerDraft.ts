@@ -8,6 +8,12 @@
  * The first ask of a user stops at a notice (C453): the channel's recent
  * messages are about to go to the platform model, and the user says yes once.
  *
+ * In a channel whose admin opted in to auto-post (osio-bot OB1, OB3, OB7), the
+ * consent is asked apart, per (user, autopost), and a ready draft posts
+ * itself through the same post route, so the bridge's guards still decide.
+ * A refused post is "held": the private draft keeps the reason, and its Post
+ * tries the same route again, except `answer_blocked`, which never clears.
+ *
  * Pure: the caller brings the service calls and the storage, so the whole
  * flow is testable without a server and without React (useAiAnswerDraft.ts
  * wires the real ones).
@@ -26,7 +32,7 @@ export function mentionsAi(text: string): boolean {
   return AI_MENTION.test(text);
 }
 
-export type AiDraftStatus = "notice" | "drafting" | "ready" | "posting" | "error";
+export type AiDraftStatus = "notice" | "drafting" | "ready" | "posting" | "held" | "error";
 
 export interface AiDraft {
   triggerId: string;
@@ -34,6 +40,8 @@ export interface AiDraft {
   text: string;
   /** The refusal or failure code of the last step, when it failed. */
   code: string | null;
+  /** Present only in an auto-post channel: the answer posts without the asker's click. */
+  autopost?: true;
 }
 
 export interface AiDraftDeps {
@@ -45,8 +53,8 @@ export interface AiDraftDeps {
   resumeRun: (runId: string, lastEventId?: string, signal?: AbortSignal) => Promise<Response>;
   cancelRun: (runId: string) => Promise<void>;
   postAiAnswer: (channelId: string, runId: string) => Promise<ChatMessage>;
-  noticeSeen: (userId: string) => boolean;
-  markNoticeSeen: (userId: string) => void;
+  noticeSeen: (userId: string, autopost?: boolean) => boolean;
+  markNoticeSeen: (userId: string, autopost?: boolean) => void;
   newId: () => string;
 }
 
@@ -56,6 +64,10 @@ export interface AskInput {
   channelName: string;
   triggerId: string;
   userId: string;
+  /** The channel's admin opted in to auto-post. */
+  autopost?: boolean;
+  /** Gets the message once it is posted, by a click or by auto-post. */
+  onPosted?: (message: ChatMessage) => void;
 }
 
 export interface AiDraftState {
@@ -89,6 +101,22 @@ function deltaOf(data: StreamPayload): string {
   return typeof data.text === "string" ? data.text : "";
 }
 
+function draftOf(input: AskInput, status: AiDraftStatus, text: string, code: string | null): AiDraft {
+  return { triggerId: input.triggerId, status, text, code, ...(input.autopost ? { autopost: true as const } : {}) };
+}
+
+/** A held draft may be posted again, unless its guard never clears. */
+export function canPostDraft(draft: AiDraft | undefined): draft is AiDraft {
+  return draft?.status === "ready" || (draft?.status === "held" && draft.code !== "answer_blocked");
+}
+
+/** One run of a session: its id, its abort, and whether it is still the session's run. */
+interface Attempt {
+  runId: string;
+  controller: AbortController;
+  current: () => boolean;
+}
+
 export function createAiDraftStore(deps: AiDraftDeps) {
   const sessions = new Map<string, Session>();
 
@@ -103,11 +131,68 @@ export function createAiDraftStore(deps: AiDraftDeps) {
         return { drafts };
       });
     };
+    const forget = (channelId: string, session: Session): void => {
+      if (sessions.get(channelId) !== session) return;
+      sessions.delete(channelId);
+      removeDraft(channelId);
+    };
     const stop = (session: Session): void => {
       if (!session.controller || session.controller.signal.aborted) return;
       session.controller.abort();
       // The cancel is a courtesy: the run may already be over.
       if (session.runId) void deps.cancelRun(session.runId).catch(() => undefined);
+    };
+
+    const conversationOf = async (session: Session): Promise<string> => {
+      const { workspaceId, channelName } = session.input;
+      session.conversationId ??= (await deps.createConversation({ workspaceId, title: `@AI in #${channelName}` })).id;
+      return session.conversationId;
+    };
+
+    const stream = async (channelId: string, session: Session, attempt: Attempt): Promise<{ text: string; failure: string | null }> => {
+      const { runId, controller, current } = attempt;
+      let text = "";
+      let failure: string | null = null;
+      try {
+        const conversationId = await conversationOf(session);
+        await streamRun({
+          start: () => deps.startThreadRun({ runId, conversationId, channelId, messageId: session.input.triggerId }, controller.signal),
+          resume: (lastEventId) => deps.resumeRun(runId, lastEventId, controller.signal),
+          signal: controller.signal,
+          onEvent: (event, data) => {
+            if (!current()) return;
+            if (event === "text.delta") {
+              text += deltaOf(data);
+              setDraft(channelId, draftOf(session.input, "drafting", text, null));
+            } else if (event === "error") {
+              failure = codeOf(data, "upstream_error");
+            }
+          },
+        });
+      } catch (error) {
+        failure = codeOf(error, "upstream_error");
+      }
+      return { text, failure };
+    };
+
+    const post = async (channelId: string): Promise<ChatMessage | null> => {
+      const session = sessions.get(channelId);
+      const draft = get().drafts[channelId];
+      if (!session?.runId || !canPostDraft(draft)) return null;
+      setDraft(channelId, { ...draft, status: "posting" });
+      try {
+        const message = await deps.postAiAnswer(channelId, session.runId);
+        forget(channelId, session);
+        session.input.onPosted?.(message);
+        return message;
+      } catch (error) {
+        const code = codeOf(error, "post_failed");
+        if (sessions.get(channelId) !== session) return null;
+        if (code === "already_posted") forget(channelId, session);
+        // OB7: a refused auto-post stays private, with its reason and a Post that tries the guards again.
+        else setDraft(channelId, { ...draft, status: session.input.autopost ? "held" : "error", code });
+        return null;
+      }
     };
 
     const run = async (channelId: string): Promise<void> => {
@@ -119,36 +204,15 @@ export function createAiDraftStore(deps: AiDraftDeps) {
       const runId = deps.newId();
       session.controller = controller;
       session.runId = runId;
-      const { triggerId, workspaceId, channelName } = session.input;
       const current = () => sessions.get(channelId) === session && session.controller === controller && !controller.signal.aborted;
-      setDraft(channelId, { triggerId, status: "drafting", text: "", code: null });
-      let text = "";
-      let failure: string | null = null;
-      try {
-        session.conversationId ??= (await deps.createConversation({ workspaceId, title: `@AI in #${channelName}` })).id;
-        const conversationId = session.conversationId;
-        await streamRun({
-          start: () => deps.startThreadRun({ runId, conversationId, channelId, messageId: triggerId }, controller.signal),
-          resume: (lastEventId) => deps.resumeRun(runId, lastEventId, controller.signal),
-          signal: controller.signal,
-          onEvent: (event, data) => {
-            if (!current()) return;
-            if (event === "text.delta") {
-              text += deltaOf(data);
-              setDraft(channelId, { triggerId, status: "drafting", text, code: null });
-            } else if (event === "error") {
-              failure = codeOf(data, "upstream_error");
-            }
-          },
-        });
-      } catch (error) {
-        failure = codeOf(error, "upstream_error");
-      }
+      setDraft(channelId, draftOf(session.input, "drafting", "", null));
+      const { text, failure } = await stream(channelId, session, { runId, controller, current });
       if (!current()) return;
       session.controller = null;
-      if (failure) setDraft(channelId, { triggerId, status: "error", text, code: failure });
-      else if (!text.trim()) setDraft(channelId, { triggerId, status: "error", text, code: "empty_answer" });
-      else setDraft(channelId, { triggerId, status: "ready", text, code: null });
+      const code = failure ?? (text.trim() ? null : "empty_answer");
+      setDraft(channelId, draftOf(session.input, code ? "error" : "ready", text, code));
+      // OB1: the asker's own client posts, through the route that runs every guard.
+      if (!code && session.input.autopost) void post(channelId);
     };
 
     return {
@@ -159,8 +223,8 @@ export function createAiDraftStore(deps: AiDraftDeps) {
         if (previous) stop(previous);
         // A new ask in the same channel replaces the old draft, conversation included.
         sessions.set(input.channelId, { input, conversationId: null, runId: null, controller: null });
-        if (!deps.noticeSeen(input.userId)) {
-          setDraft(input.channelId, { triggerId: input.triggerId, status: "notice", text: "", code: null });
+        if (!deps.noticeSeen(input.userId, input.autopost === true)) {
+          setDraft(input.channelId, draftOf(input, "notice", "", null));
           return;
         }
         void run(input.channelId);
@@ -169,7 +233,7 @@ export function createAiDraftStore(deps: AiDraftDeps) {
       accept: (channelId) => {
         const session = sessions.get(channelId);
         if (!session || get().drafts[channelId]?.status !== "notice") return;
-        deps.markNoticeSeen(session.input.userId);
+        deps.markNoticeSeen(session.input.userId, session.input.autopost === true);
         void run(channelId);
       },
 
@@ -184,30 +248,7 @@ export function createAiDraftStore(deps: AiDraftDeps) {
         removeDraft(channelId);
       },
 
-      post: async (channelId) => {
-        const session = sessions.get(channelId);
-        const draft = get().drafts[channelId];
-        if (!session?.runId || draft?.status !== "ready") return null;
-        setDraft(channelId, { ...draft, status: "posting" });
-        try {
-          const message = await deps.postAiAnswer(channelId, session.runId);
-          if (sessions.get(channelId) === session) {
-            sessions.delete(channelId);
-            removeDraft(channelId);
-          }
-          return message;
-        } catch (error) {
-          const code = codeOf(error, "post_failed");
-          if (sessions.get(channelId) !== session) return null;
-          if (code === "already_posted") {
-            sessions.delete(channelId);
-            removeDraft(channelId);
-          } else {
-            setDraft(channelId, { ...draft, status: "error", code });
-          }
-          return null;
-        }
-      },
+      post,
     };
   });
 }
