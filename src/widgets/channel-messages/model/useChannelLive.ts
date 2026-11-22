@@ -30,7 +30,7 @@ import { catchUpHistory } from './historyCatchUp';
 
 type Patch = (updater: (messages: ChatMessage[]) => ChatMessage[]) => void;
 
-interface ChatEventPayload {
+export interface ChatEventPayload {
   messageId?: string;
   channelId?: string;
   authorId?: string;
@@ -50,6 +50,30 @@ interface ChatEventPayload {
   aiRequestedBy?: { id?: string } | null;
 }
 
+/**
+ * The message a `message_created` frame carries: the ONE mapper of the
+ * timeline and the thread, so a flag such as isAi (osio-bot OB4: an AI row
+ * renders as plain text) cannot be kept by one view and dropped by the other.
+ */
+export function chatMessageOf(payload: ChatEventPayload, id: string): ChatMessage {
+  return {
+    id,
+    channelId: payload.channelId ?? '',
+    authorId: payload.authorId ?? '',
+    authorName: payload.authorName ?? 'Member',
+    authorAvatar: payload.authorAvatar ?? null,
+    content: payload.content ?? '',
+    createdAt: payload.createdAt ?? new Date().toISOString(),
+    reactions: [],
+    attachments: payload.attachments ?? [],
+    mentions: payload.mentions ?? [],
+    threadRootId: payload.threadRootId ?? null,
+    replyCount: payload.replyCount ?? 0,
+    replyTo: payload.replyTo ?? null,
+    ...(payload.isAi ? { isAi: true, aiRequestedBy: payload.aiRequestedBy?.id ?? null } : {}),
+  };
+}
+
 export function applyChatEvent(messages: ChatMessage[], frame: LiveRealtimeEventFrame): ChatMessage[] {
   const payload = (frame.payload ?? {}) as ChatEventPayload;
   const id = payload.messageId;
@@ -61,22 +85,7 @@ export function applyChatEvent(messages: ChatMessage[], frame: LiveRealtimeEvent
     const base = payload.threadRootId
       ? messages.map((m) => (m.id === payload.threadRootId ? { ...m, replyCount: (m.replyCount ?? 0) + 1 } : m))
       : messages;
-    return [...base, {
-      id,
-      channelId: payload.channelId ?? '',
-      authorId: payload.authorId ?? '',
-      authorName: payload.authorName ?? 'Member',
-      authorAvatar: payload.authorAvatar ?? null,
-      content: payload.content ?? '',
-      createdAt: payload.createdAt ?? new Date().toISOString(),
-      reactions: [],
-      attachments: payload.attachments ?? [],
-      mentions: payload.mentions ?? [],
-      threadRootId: payload.threadRootId ?? null,
-      replyCount: payload.replyCount ?? 0,
-      replyTo: payload.replyTo ?? null,
-      ...(payload.isAi ? { isAi: true, aiRequestedBy: payload.aiRequestedBy?.id ?? null } : {}),
-    }];
+    return [...base, chatMessageOf(payload, id)];
   }
   if (frame.event_type === 'message_updated') {
     return messages.map((message) => message.id === id

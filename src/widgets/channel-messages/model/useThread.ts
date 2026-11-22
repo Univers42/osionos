@@ -21,40 +21,18 @@ import { useEffect, useState } from 'react';
 
 import { chatTopic } from '@/services/realtime-messages/wsTopics';
 import { subscribeTopic, type LiveRealtimeEventFrame } from '@/services/realtime-messages/wsTransport';
-import { fetchThread, type Attachment, type ChatMessage } from '@/shared/chat/messageApi';
+import { fetchThread, type ChatMessage } from '@/shared/chat/messageApi';
 
-interface ThreadFrame {
-  messageId?: string;
-  threadRootId?: string;
-  authorId?: string;
-  authorName?: string;
-  authorAvatar?: string | null;
-  content?: string;
-  createdAt?: string;
-  attachments?: Attachment[];
-  mentions?: string[];
-}
+import { chatMessageOf, type ChatEventPayload } from './useChannelLive';
 
 /** A `message_created` frame of this thread, appended once; any other frame leaves the list as it is. */
 export function applyThreadFrame(messages: ChatMessage[], frame: LiveRealtimeEventFrame, rootId: string, channelId: string): ChatMessage[] {
   if (frame.event_type !== 'message_created') return messages;
-  const payload = (frame.payload ?? {}) as ThreadFrame;
+  const payload = (frame.payload ?? {}) as ChatEventPayload;
   if (payload.threadRootId !== rootId || !payload.messageId) return messages;
   if (messages.some((m) => m.id === payload.messageId)) return messages;
-  return [...messages, {
-    id: payload.messageId,
-    channelId,
-    authorId: payload.authorId ?? '',
-    authorName: payload.authorName ?? 'Member',
-    authorAvatar: payload.authorAvatar ?? null,
-    content: payload.content ?? '',
-    createdAt: payload.createdAt ?? new Date().toISOString(),
-    reactions: [],
-    attachments: payload.attachments ?? [],
-    mentions: payload.mentions ?? [],
-    threadRootId: rootId,
-    replyTo: null,
-  }];
+  // The thread's channel and root win over the frame's; replyTo stays null, as the thread append always set it.
+  return [...messages, { ...chatMessageOf(payload, payload.messageId), channelId, threadRootId: rootId, replyTo: null }];
 }
 
 export function useThread(rootId: string, channelId: string, workspaceId: string) {
