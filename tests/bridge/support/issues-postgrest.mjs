@@ -15,7 +15,8 @@ const reply = (rows, status = 200) => ({
 function eqOf(v){ return String(v ?? '').replace(/^eq\./,''); }
 
 const SHAPES = [
-  { logical:'admin', method:'GET', table:'osionos_bridge_identities', keys:['user_id','select','limit'], fixed:{select:'is_admin',limit:'1'},
+  // Every identity row of the user, no limit: any flagged row is an admin (hasAdminFlag, RULING-296 A296-8).
+  { logical:'admin', method:'GET', table:'osionos_bridge_identities', keys:['user_id','select'], fixed:{select:'is_admin'},
     run:(world,p)=> [{is_admin: (world.admin??true)}] },
   { logical:'membership', method:'GET', table:'osionos_workspace_members', keys:['workspace_id','user_id','select','limit'], fixed:{select:'role,permissions',limit:'1'},
     run:(world,p)=> (world.members||[]).filter(r=>r.workspace_id===eqOf(p.workspace_id)&&r.user_id===eqOf(p.user_id)).map(r=>({role:r.role??'member',permissions:r.permissions??[]})) },

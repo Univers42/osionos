@@ -39,7 +39,7 @@
 
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { decodeCursor, inFilter, keyset, pageOf } from './bridge-paging.mjs';
-import { isPlatformRole, readPlatformRole, roleAtLeast, roleFromNames } from './bridge-roles.mjs';
+import { hasAdminFlag, isPlatformRole, readPlatformRole, roleAtLeast, roleFromNames } from './bridge-roles.mjs';
 import { timestampMicros } from './bridge-session-tracker.mjs';
 import { UUID_REGEX, bearerToken, readJsonBody, sendJson } from './bridge-social-core.mjs';
 
@@ -192,8 +192,7 @@ async function targetIsAdmin(client, userId) {
 			const names = (Array.isArray(catalogue) ? catalogue : []).map((r) => String(r?.name ?? '').trim().toLowerCase()).filter(isPlatformRole);
 			if (roleFromNames(names) === 'admin') return true;
 		}
-		const rows = await client.get(`osionos_bridge_identities?user_id=eq.${userId}&select=is_admin&limit=1`);
-		return Array.isArray(rows) && rows[0]?.is_admin === true;
+		return await hasAdminFlag(client, userId);
 	} catch {
 		throw unavailable();
 	}

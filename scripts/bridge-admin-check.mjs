@@ -21,8 +21,9 @@
  *   1. the CLAIM first — a caller whose token does not claim the right never
  *      reaches the database at all: not one row is read for a call that cannot
  *      be allowed.
- *   2. the ROW second — `osionos_bridge_identities.is_admin` is re-read on every
- *      call, because the claim outlives a demotion.
+ *   2. the ROWS second — `osionos_bridge_identities.is_admin` is re-read on every
+ *      call, because the claim outlives a demotion. Any identity row of the user
+ *      carrying the flag counts (hasAdminFlag, bridge-roles.mjs).
  *
  * A read that FAILS is a 503 (`admin_check_failed`): a broken read is not a
  * permission. Anything but `is_admin === true` is a 403 (`admin_required`).
@@ -31,6 +32,7 @@
  * written once, and the console's own answers do not change.
  */
 
+import { hasAdminFlag } from './bridge-roles.mjs';
 import { rest } from './bridge-social-core.mjs';
 
 /** An error the admin gate answers itself: a status and a code the client reads. */
@@ -45,12 +47,11 @@ const adminError = (message, status, code) => Object.assign(new Error(message), 
 export async function requireAdmin(deps, config, session) {
 	// The claim first: without it the database is never touched.
 	if (session?.isAdmin !== true) throw adminError('Administrator access required.', 403, 'admin_required');
-	let rows;
+	let flagged;
 	try {
-		rows = await rest(config, deps.fetchImpl, `osionos_bridge_identities?user_id=eq.${session.userId}&select=is_admin&limit=1`);
+		flagged = await hasAdminFlag({ get: (path) => rest(config, deps.fetchImpl, path) }, session.userId);
 	} catch {
 		throw adminError('The administrator flag could not be read.', 503, 'admin_check_failed');
 	}
-	const row = Array.isArray(rows) ? rows[0] : null;
-	if (row?.is_admin !== true) throw adminError('Administrator access required.', 403, 'admin_required');
+	if (!flagged) throw adminError('Administrator access required.', 403, 'admin_required');
 }

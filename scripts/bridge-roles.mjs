@@ -87,6 +87,19 @@ export function platformRoleReader(pg) {
 	}
 }
 
+/**
+ * True when ANY identity row of the user carries `osionos_bridge_identities.is_admin`, the flag
+ * OSIONOS_ADMIN_EMAILS sets and the claim trusts (ADR 0005). Every row is read and checked: a user
+ * can hold more than one identity, and `limit=1` answered from an arbitrary one (osionos#296).
+ * `client` is a PostgREST reader with a `get(path)`. Unlike readPlatformRole this throws on a
+ * failed read: every caller refuses on it (503) rather than treating it as "not an admin".
+ */
+export async function hasAdminFlag(client, userId) {
+	const params = new URLSearchParams({ user_id: `eq.${userId}`, select: 'is_admin' });
+	const rows = await client.get(`osionos_bridge_identities?${params}`);
+	return Array.isArray(rows) && rows.some((row) => row?.is_admin === true);
+}
+
 function grantQuery(userId, now) {
 	const params = new URLSearchParams({ user_id: `eq.${userId}`, select: 'role_id' });
 	// An expired grant is no grant: the filter keeps the row that never expires and the ones

@@ -18,8 +18,12 @@
  *
  * Who may call: a session whose platform role, RE-READ from `public.user_roles` and
  * `public.roles` on every request, is admin. The role claim in the token is a hint for the
- * client and never grants here, so a revoked admin loses the console on the next request.
- * Every other caller gets 403 admin_required before a profile row is read.
+ * client and never grants here, so an admin whose grant is revoked loses the console on the
+ * next request. Every other caller gets 403 admin_required before a profile row is read.
+ *
+ * The admin role of an account whose identity flag is set (`osionos_bridge_identities.is_admin`)
+ * cannot be revoked here (409 admin_flag_set): sign-in and refresh re-write the grant the flag
+ * implies (osionos#296), so the revoke would be undone within the hour and demote nothing.
  *
  * What an admin sees of another user: the public profile fields and the platform role names.
  * The select is an allowlist: an email, a setting, a session or a deletion state is not in it,
@@ -33,8 +37,9 @@
  * Caveat: sudo is not required. requireSudo has no caller yet (the grant belongs to P1-2b), so
  * demanding it would make the action unreachable; the role gate and the audit row are the gate
  * until it lands.
- * Caveat: two admins revoking each other's admin role at once can still leave no admin; only a
- * self-revoke is refused. A platform with no admin recovers through OSIONOS_ADMIN_EMAILS.
+ * Caveat: two admins without the identity flag revoking each other's admin role at once can still
+ * leave no admin; a self-revoke and a flagged target are refused. A platform with no admin
+ * recovers through OSIONOS_ADMIN_EMAILS.
  * Caveat: the audit row records an attempt, so a write that fails after it leaves a row for an
  * action that did not happen.
  */
@@ -42,7 +47,7 @@
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { decodeCursor, keyset, pageOf } from './bridge-paging.mjs';
 import { pgError } from './bridge-pg.mjs';
-import { isPlatformRole, readPlatformRole, roleAtLeast } from './bridge-roles.mjs';
+import { hasAdminFlag, isPlatformRole, readPlatformRole, roleAtLeast } from './bridge-roles.mjs';
 import { UUID_REGEX, bearerToken, readJsonBody, sendJson } from './bridge-social-core.mjs';
 
 const USERS_PATH = '/api/account/admin/users';
@@ -171,14 +176,31 @@ async function patchUser(ctx, request, userId, response) {
 	return sendJson(response, 200, { ok: true, user: userEntry(rows[0]) }, config);
 }
 
+/**
+ * The admin revokes this console refuses, before any audit row or write. The real demotion of a
+ * flagged account is clearing `osionos_bridge_identities.is_admin`, an operator step today; an API
+ * for it is tracked at https://github.com/Univers42/osionos/issues/343 (A296-9).
+ */
+async function assertAdminRevocable(client, session, userId) {
+	// A lockout is cheaper to refuse than to repair: the only way back is the env admin list.
+	if (userId === session.userId.toLowerCase()) throw adminError(422, 'self_role_change', 'You cannot revoke your own admin role.');
+	let flagged;
+	try {
+		flagged = await hasAdminFlag(client, userId);
+	} catch {
+		throw adminError(503, 'admin_flag_unavailable', 'The admin flag of this account could not be read; nothing was changed.');
+	}
+	if (flagged) {
+		throw adminError(409, 'admin_flag_set', 'This account is an admin by its identity flag, which every sign-in and refresh turns back into the admin role. '
+			+ 'Demoting it means clearing osionos_bridge_identities.is_admin, an operator step today.');
+	}
+}
+
 async function changeRole(ctx, request, userId, response) {
 	const { client, config, pg, session } = ctx;
 	const { role, action } = await readBody(request);
 	if (!isPlatformRole(role) || !ACTIONS.has(action)) throw adminError(422, 'invalid_role', 'The role or the action is not one the platform knows.');
-	// A lockout is cheaper to refuse than to repair: the only way back is the env admin list.
-	if (action === 'revoke' && role === 'admin' && userId === session.userId.toLowerCase()) {
-		throw adminError(422, 'self_role_change', 'You cannot revoke your own admin role.');
-	}
+	if (action === 'revoke' && role === 'admin') await assertAdminRevocable(client, session, userId);
 	const found = await client.get(`roles?name=eq.${role}&select=id&limit=1`);
 	const roleId = Array.isArray(found) ? found[0]?.id : null;
 	// The four rows are seeded by grobase's migrations: a missing one is a broken install.

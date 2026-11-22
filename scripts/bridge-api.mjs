@@ -2113,8 +2113,9 @@ async function ensureAdminWorkspaceMembership(userId, config, fetchImpl) {
 /**
  * The grant the users console reads. The flag names the admin role in the claim, but the console
  * re-reads `public.user_roles` (bridge-account-users.mjs), so a flag with no row was refused there
- * (osionos#296). `expires_at: null` renews an expired grant. Best-effort, like the membership: a
- * failure leaves the console refused until the next sign-in, never the sign-in itself.
+ * (osionos#296). `expires_at: null` renews an expired grant. Sign-in and refresh both write it.
+ * Best-effort, like the membership: a failure leaves the console refused until the next sign-in or
+ * refresh (about an hour), never fails either of them.
  */
 async function ensureAdminRoleGrant(userId, config, fetchImpl) {
 	if (!config.serviceKey || !config.baasUrl) return;
@@ -2168,13 +2169,24 @@ function privateWorkspaceIdOf(payload, persisted) {
 /**
  * What a refresh re-reads instead of replaying: the admin flag, the platform role and the member
  * workspaces, the way a sign-in reads them. The private workspace stays the token's own.
+ * A flag read as true also re-writes the admin grant it implies, so a grant lost to a failed write
+ * or a revoke comes back within one refresh, not at the next sign-in (osionos#296). The flag is
+ * never set here (emailVerified: false), so this cannot widen who is admin. The grant runs beside
+ * the member read, not after it: both are best-effort and never reject, so on a hung link the
+ * refresh waits for the slower of the two, never their sum.
  * Caveat: a read that fails degrades to fewer rights (no extras, no role), never more; the next
- * sign-in restores them.
+ * sign-in restores them. A failed flag read writes no grant.
+ * Caveat: the grant is written before the rotation commits (bridge-sessions.mjs refreshSession),
+ * so a refresh that then loses the parent_id race or meets a revoke has still upserted it. It is
+ * idempotent and only for flagged accounts; never read the grant as proof a refresh happened.
  */
 export async function readRefreshClaims(identity, { config, pg, fetchImpl }) {
 	const payload = { subject: identity.sub, provider: identity.provider, email: identity.email, emailVerified: false };
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
-	const memberWorkspaces = await memberWorkspaceEntries(identity.sub, identity.workspace_ids.slice(0, 1), config, fetchImpl);
+	const [memberWorkspaces] = await Promise.all([
+		memberWorkspaceEntries(identity.sub, identity.workspace_ids.slice(0, 1), config, fetchImpl),
+		isAdmin ? ensureAdminRoleGrant(identity.sub, config, fetchImpl) : null,
+	]);
 	const platformRole = isAdmin ? 'admin' : (await readPlatformRole(platformRoleReader(pg), identity.sub)).role;
 	return { isAdmin, platformRole, memberWorkspaces };
 }
