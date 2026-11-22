@@ -70,6 +70,9 @@ const perfRun = process.env.PLAYWRIGHT_PERF === "1";
 // The co-editing latency spec needs a real bridge and two accounts (COEDIT_* env), so it
 // never rides the default suite: only `test:e2e:coedit` (PLAYWRIGHT_COEDIT=1) runs it.
 const coeditRun = process.env.PLAYWRIGHT_COEDIT === "1";
+// The #314 CSP sweep needs a production build served with the nginx policy (vite preview) and
+// runs ~170 heavy surfaces per engine: only its runner, which sets CSP_MODE, runs it.
+const cspSweepRun = Boolean(process.env.CSP_MODE);
 // Opt-in (PLAYWRIGHT_BRIDGE_STUB=1): the app is built with a bridge URL, so code that only runs
 // when a bridge is configured (the handoff consume, the public-page fetch) is reachable. The
 // default offline run has `VITE_API_URL=""`, where such a test would pass vacuously. The specs
@@ -103,6 +106,7 @@ export default defineConfig({
     ...(legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`)),
     ...(perfRun ? [] : ["**/perf/**"]),
     ...(coeditRun ? [] : ["**/latency/**"]),
+    ...(cspSweepRun ? [] : ["**/bridge-stub/cspSweep.spec.mjs"]),
     // Needs built /assets chunks: only the production preload helper dispatches vite:preloadError.
     ...(productionBuild ? [] : ["**/bridge-stub/preloadErrorReload.spec.mjs"]),
   ],
