@@ -4,6 +4,7 @@ import { buildCatalog, type PlatformCatalog } from './gateway/catalog.ts';
 import { decodePlatformModels, type PlatformModelEntry } from './platformModels.ts';
 import { decodePlatformProviders } from './platformProviders.ts';
 import { MAX_PASS_BUDGET_MS } from './approvals/timeouts.ts';
+import { parseModesConfig, type ModesConfig } from './modes/modesConfig.ts';
 
 /**
  * The configuration is parsed once, at import time, and frozen.
@@ -415,7 +416,7 @@ function optionalUuid(raw: string | undefined): string | null {
 	return UUID.test(value) ? value.toLowerCase() : null;
 }
 
-export interface AiServiceConfig {
+export interface AiServiceConfig extends ModesConfig {
 	port: number;
 	databaseUrl: string;
 	redisUrl: string;
@@ -633,6 +634,7 @@ export const config: AiServiceConfig = Object.freeze({
 	vlmTimeoutMs: parsed.data.OSIONOS_AI_VLM_TIMEOUT_MS,
 	vlmQueueWaitMs: parsed.data.OSIONOS_AI_VLM_QUEUE_WAIT_MS,
 	describePerMinute: parsed.data.OSIONOS_AI_DESCRIBE_PER_MINUTE,
+	...parseModesConfig(process.env),
 });
 
 // The image generation, turned on, needs its engine, a price (an image is

@@ -36,7 +36,7 @@ run_node ./node_modules/.bin/tsc --noEmit -p .
 if [ -z "${MODELS_DIR:-}" ]; then
 	GROOT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/groot-models.XXXXXX")
 	git clone -q --depth 1 --filter=blob:none --sparse "${GROOT_REPO:-https://github.com/Univers42/groot.git}" "$GROOT_DIR"
-	git -C "$GROOT_DIR" sparse-checkout set --no-cone models
+	git -C "$GROOT_DIR" sparse-checkout set --no-cone models docker-compose.public.yml
 	MODELS_DIR=$GROOT_DIR/models
 	echo "[ci] groot models from $(git -C "$GROOT_DIR" rev-parse --short HEAD)"
 fi

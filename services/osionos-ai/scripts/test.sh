@@ -90,7 +90,15 @@ FIRST_MIGRATION=${MIGRATIONS# }
 FIRST_MIGRATION=${FIRST_MIGRATION%% *}
 MODELS_MOUNT=$(CDPATH= cd -- "${MODELS_DIR:-$(dirname -- "$FIRST_MIGRATION")}" && pwd)
 
-docker run --rm --network "$NETWORK" \
+# modesConfig.test.ts reads groot's docker-compose.public.yml, next to models/.
+# Caveat: a missing file is not mounted (docker would make a directory of it),
+# so that one test then fails with ENOENT instead of being skipped.
+GROOT_COMPOSE_MOUNT=""
+if [ -f "$MODELS_MOUNT/../docker-compose.public.yml" ]; then
+	GROOT_COMPOSE_MOUNT="-v $MODELS_MOUNT/../docker-compose.public.yml:/groot/docker-compose.public.yml:ro"
+fi
+
+docker run --rm --network "$NETWORK" $GROOT_COMPOSE_MOUNT \
 	-v "$REPO_ROOT:/app" -v "$MODELS_MOUNT:/models:ro" -w /app/services/osionos-ai \
 	-e OSIONOS_AI_MODELS_DIR=/models \
 	-e OSIONOS_AI_PORT=0 \
