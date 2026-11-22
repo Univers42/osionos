@@ -58,7 +58,8 @@ const MAX_KEPT_FILES = 400;
 
 // Only the app page itself replaces the kept shell, not a file opened in a tab. A redirected
 // answer can't be replayed for a navigation, so it isn't kept either.
-const isShell = (response) => response.ok && !response.redirected && (response.headers.get("content-type") || "").includes("text/html");
+const isPage = (response) => (response.headers.get("content-type") || "").includes("text/html");
+const isShell = (response) => response.ok && !response.redirected && isPage(response);
 const isBuildFile = (url) => url.pathname.startsWith("/assets/") || url.pathname.startsWith("/fonts/");
 
 // The app page only, as it is now; resolves with its HTML, or "" when the answer isn't the app page.
@@ -96,12 +97,15 @@ async function navigate(request) {
   }
 }
 
+// A build file is never HTML. An answer that is (an nginx that fell back to the app page for a
+// missing font, #313) is passed on uncached, and one kept before that fix is dropped.
 async function buildFile(request) {
   const cache = await caches.open(SHELL_CACHE);
   const kept = await cache.match(request);
-  if (kept) return kept;
+  if (kept && !isPage(kept)) return kept;
+  if (kept) await cache.delete(request);
   const response = await fetch(request);
-  if (response.ok) {
+  if (response.ok && !isPage(response)) {
     await cache.put(request, response.clone());
     await trim(cache);
   }
