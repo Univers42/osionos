@@ -6,7 +6,8 @@
  * PostgREST, so "nothing was written" is an assertion on the fake's state.
  *
  * Caveat: the fake models eq / neq / in / is.null / gt / gte / lt / lte / or
- * filters (ranges compare ISO strings) and answers a PATCH
+ * filters (ranges compare ISO strings), a `column->>key` text path on a JSON
+ * column, and answers a PATCH
  * naming a missingColumns entry with PostgREST's PGRST204 400; a filter the
  * handlers add later passes every row here.
  */
@@ -32,7 +33,8 @@ function matches(row, key, value) {
 			return matches(row, column, `${op}.${rest.join('.')}`);
 		});
 	}
-	const cell = row[key];
+	const [column, field] = key.split('->>');
+	const cell = field === undefined ? row[column] : row[column]?.[field];
 	const bare = (raw) => raw.replace(/^"|"$/g, '');
 	const list = (raw) => raw.split(',').map(bare);
 	const ranges = { 'gt.': (a, b) => a > b, 'gte.': (a, b) => a >= b, 'lt.': (a, b) => a < b, 'lte.': (a, b) => a <= b };
@@ -125,6 +127,14 @@ const setAutopost = (w, enabled, as = ADMIN) => call(w.handler, `/api/chat/chann
 const listed = async (w, as = MEMBER) => (await call(w.handler, '/api/chat/channels', { method: 'GET', as })).body.channels.find((c) => c.id === w.channelId);
 const typing = (w, payload, as) => call(w.handler, `/api/chat/channels/${w.channelId}/typing`, { payload, as });
 
+/** A thread run of `owner` still streaming its answer in `channelId`. */
+function runInFlight(w, owner = w.asker, channelId = w.channelId) {
+	w.baas.tables.ai_runs.push({
+		id: randomUUID(), owner_id: owner, status: 'running', finish_reason: null, created_at: ago(1_000), ended_at: null,
+		surface: 'channel', surface_ref: { channelId, messageId: randomUUID() }, answer_message_id: null,
+	});
+}
+
 describe('the auto-post flag (OB11)', () => {
 	it('hides the opt-in unless OSIONOS_AI_AUTOPOST and OSIONOS_THREAD_ANSWERS are exactly "on"', async () => {
 		const envs = [{}, { OSIONOS_AI_AUTOPOST: 'on' }, { OSIONOS_THREAD_ANSWERS: 'on' }, { ...ON, OSIONOS_AI_AUTOPOST: 'On' }, { ...ON, OSIONOS_AI_AUTOPOST: 'true' }];
@@ -198,6 +208,7 @@ describe('an auto-posted answer (OB1, OB5)', () => {
 describe('"osio is answering" (OB12)', () => {
 	it('publishes a textless ai typing event in an auto-post channel', async () => {
 		const w = world({ channel: { ai_autopost: true } });
+		runInFlight(w);
 		const result = await typing(w, { ai: true, text: 'partial answer' }, w.asker);
 		assert.equal(result.status, 200);
 		const frame = w.baas.frames.at(-1);
@@ -211,6 +222,15 @@ describe('"osio is answering" (OB12)', () => {
 			const w = world({ env, channel });
 			assert.equal((await typing(w, payload, w.asker)).status, 200);
 			assert.deepEqual(w.baas.frames.at(-1).payload, { channelId: w.channelId, userId: w.asker });
+		}
+	});
+
+	it('stays the plain typing event for a caller with no thread run in flight in this channel', async () => {
+		const w = world({ channel: { ai_autopost: true } });
+		runInFlight(w, w.asker, randomUUID());
+		for (const caller of [MEMBER, w.asker]) {
+			assert.equal((await typing(w, { ai: true }, caller)).status, 200);
+			assert.deepEqual(w.baas.frames.at(-1).payload, { channelId: w.channelId, userId: caller }, 'an ended run, or one in another channel, is not osio answering here');
 		}
 	});
 });
