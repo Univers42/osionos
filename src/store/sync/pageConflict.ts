@@ -116,11 +116,7 @@ export async function resolvePageConflict(
     setBase(page._id, server.version, server.content);
     if (merged.status === "conflicts" && !notified) {
       notified = true;
-      deps.notify({
-        kind: "warning",
-        title: `Someone edited “${page.title || "Untitled"}” at the same time`,
-        description: "Both versions were kept — theirs sits right next to yours.",
-      });
+      deps.notify(sameTimeEditNotice(page.title));
     }
     const outcome = await deps.resend(mergedPage);
     if (outcome.result === "ok") return { kind: "merged", page: mergedPage, conflicts: notified };
@@ -133,6 +129,15 @@ export async function resolvePageConflict(
   // Past the bound: the server keeps moving under the re-send. The copy path keeps the
   // local edit — and the server's copy — safe (C28).
   return copied(await deps.copyPath(freshest(local)));
+}
+
+/** The notice for a merge that kept both variants of a block: theirs sits next to yours. */
+export function sameTimeEditNotice(title: string): { kind: "warning"; title: string; description: string } {
+  return {
+    kind: "warning",
+    title: `Someone edited “${title || "Untitled"}” at the same time`,
+    description: "Both versions were kept — theirs sits right next to yours.",
+  };
 }
 
 function sameContent(a: Block[] | undefined, b: Block[]): boolean {

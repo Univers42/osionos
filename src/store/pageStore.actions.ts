@@ -43,7 +43,8 @@ import {
 import { replacePage } from "./replacePage";
 import { loadLedger } from "@osionos/outbox-ledger";
 import { applyServerPages } from "./sync/applyServerPages";
-import { fetchedBase, isPageClean, resolveFetchedPage } from "./sync/mergeServerPages";
+import { isPageClean, settleFetchedPage } from "./sync/mergeServerPages";
+import { sameTimeEditNotice } from "./sync/pageConflict";
 import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./sync/pageStamp";
 import { baseFor, setBase } from "./sync/pageBase";
 import { markServerCopy } from "./sync/serverFetchedPages";
@@ -216,11 +217,11 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
       const ledger = loadLedger(PAGE_OUTBOX_KEY);
       const canPublish = context !== null && canEditPage(current, context);
       // The base the merge reads is the one BEFORE this fetch; it moves to the server's copy
-      // only once the body holds that copy (fetchedBase), never over unpublished keystrokes.
-      const base = baseFor(current);
-      const resolved = resolveFetchedPage(current, fullPage, ledger, canPublish, base);
-      const nextBase = fetchedBase(current, fullPage, ledger, canPublish, base);
-      if (nextBase) setBase(pageId, nextBase.version, nextBase.content);
+      // only once the body holds that copy, never over unpublished keystrokes (AM15).
+      const fetched = settleFetchedPage(current, fullPage, ledger, canPublish, baseFor(current));
+      if (fetched.base) setBase(pageId, fetched.base.version, fetched.base.content);
+      if (fetched.conflicts) useToastStore.getState().push(sameTimeEditNotice(current.title));
+      const resolved = fetched.resolved;
       if (!resolved) return;
       set((s) => replacePage(s, pageId, () => resolved.page));
       savePagesCache(get().pages, page.workspaceId);

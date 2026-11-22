@@ -1,7 +1,8 @@
 // AM15, randomized: local keystrokes and server appends (the AI's add_blocks) interleaved
-// with refreshes, saves and keystrokes typed while a refresh is in flight. Seeded, so a
-// failure names the seed that reproduces it. Whatever the order, once the client settles
-// the server holds every block either side made, once, with the local text last typed.
+// with refreshes, saves, and keystrokes or saves landing while a refresh is in flight.
+// Seeded, so a failure names the seed that reproduces it. Whatever the order, once the
+// client settles the server holds every block either side made, once, with the local text
+// last typed.
 // Caveat: a sample of interleavings (60 seeds x 40 steps), not all of them; the two sides
 // never edit the same block, so this checks loss and duplication, not conflict copies
 // (page-version-conflict.test.ts covers those).
@@ -58,14 +59,13 @@ function serverAppend(run: Run): void {
 async function act(run: Run, random: () => number): Promise<void> {
   const pick = random();
   if (pick < 0.3) return typeOne(run, random);
-  if (pick < 0.5) return serverAppend(run);
-  if (pick < 0.65) return refresh();
-  if (pick < 0.8) {
-    const pending = refresh();
-    typeOne(run, random);
-    return pending;
-  }
-  if (await save(run.bridge)) run.copies += 1;
+  if (pick < 0.45) return serverAppend(run);
+  if (pick < 0.55) return refresh();
+  const pending = pick < 0.85 ? refresh() : null;
+  if (pick < 0.7) typeOne(run, random);
+  // A save while a refresh is out: its answer comes back older than the 200's base.
+  else if (await save(run.bridge)) run.copies += 1;
+  await pending;
 }
 
 async function play(seed: number): Promise<Run> {

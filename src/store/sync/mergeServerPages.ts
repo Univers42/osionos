@@ -136,63 +136,89 @@ function fetchedCoverFields(current: PageEntry, server: PageEntry, takeServer: b
   return takesPosition && coverPosition !== undefined ? { ...size, coverPosition } : size;
 }
 
-// What a content fetch does to the body. "take": nothing unpublished (or no body loaded),
-// the server's copy stands. "merge": the server moved past the base under unpublished
-// keystrokes, so base, local and server merge three ways and neither side is lost.
-// "keep": the server holds nothing past the base (or the base content is unknown, after a
-// reload): the local body stays and so does the base, so the next save is refused with a
-// 409 and the conflict path merges or copies it (C25), never a blind overwrite (AM15).
-type FetchPlan = "take" | "merge" | "keep";
+// What a content fetch does. "stale": the answer is older than the base (a GET that left
+// before the client's own save landed, or two refreshes resolving out of order): nothing
+// moves, not the body, not the base. "take": nothing unpublished (or no body loaded), the
+// server's copy stands. "merge": the server moved past the base under unpublished keystrokes,
+// so base, local and server merge three ways and neither side is lost. "keep": the server
+// holds nothing past the base, or the base content is unknown (a reload): the local body
+// stays, and a later 409 merges or copies it (C25), never a blind overwrite (AM15).
+type FetchPlan = "stale" | "take" | "merge" | "keep";
 
-// Caveat: staleness is read from content versions only. Against a bridge without the version
-// column (both null) a fetch that left before the client's own save landed looks fresh, and
-// the merge can drop the blocks that save added: the legacy last-writer-wins case AM16 retires.
-const isStale = (server: PageEntry, base: PageBase) =>
-  typeof server.contentVersion === "number" && typeof base.version === "number"
-  && server.contentVersion <= base.version;
+// Caveat: the order of two copies is read from content versions only. Against a bridge
+// without the version column (both null) a fetch that left before the client's own save
+// landed looks fresh, and is taken or merged as one: the legacy last-writer-wins case AM16
+// retires. O(1).
+function versionOrder(server: PageEntry, base: PageBase): number | null {
+  if (typeof server.contentVersion !== "number" || typeof base.version !== "number") return null;
+  return Math.sign(server.contentVersion - base.version);
+}
 
 function fetchPlan(current: PageEntry, server: PageEntry, base: PageBase, clean: boolean): FetchPlan {
+  const order = versionOrder(server, base);
+  if (order === -1) return "stale";
   if (clean || current.content === undefined) return "take";
-  if (server.content === undefined || base.content === null || isStale(server, base)) return "keep";
+  if (order === 0 || server.content === undefined || base.content === null) return "keep";
   return "merge";
 }
 
+// The base a fetch leaves, or null when it stays: it moves to the server's copy only once the
+// body holds that copy (taken or merged), never over unpublished keystrokes (AM15). An answer
+// at the base's own version IS the base content: a reload lost it, this learns it back.
+function nextBase(plan: FetchPlan, server: PageEntry, base: PageBase): PageBase | null {
+  if (plan === "stale") return null;
+  if (plan !== "keep") return { version: server.contentVersion ?? null, content: server.content ?? null };
+  if (versionOrder(server, base) !== 0) return null;
+  return { version: base.version, content: base.content ?? server.content ?? null };
+}
+
+function fetchedBody(current: PageEntry, server: PageEntry, base: PageBase, plan: FetchPlan) {
+  if (plan === "take") return { content: server.content ?? current.content, conflicts: false };
+  if (plan !== "merge") return { content: current.content, conflicts: false };
+  const merged = mergePageContent(base.content, current.content ?? [], server.content ?? []);
+  return { content: merged.content, conflicts: merged.status === "conflicts" };
+}
+
+export interface FetchedPage {
+  /** The page to store, or null when the fetch changes nothing. */
+  resolved: { page: PageEntry; recordSynced: boolean } | null;
+  /** The base to remember, or null when it stays where it is. */
+  base: PageBase | null;
+  /** The merge kept both variants of a block both sides changed: the reader must be told. */
+  conflicts: boolean;
+}
+
 /**
- * The base a content fetch leaves, or null when it must stay where it is: the base moves to
- * the server's copy only once the local body holds that copy (taken or merged). Moving it
- * over unpublished keystrokes would let the next save pass the version check and erase what
- * the server added (devil ruling AM15). O(1).
+ * Everything one content fetch decides, decided once: the page, the base, and whether the
+ * merge kept a conflict. `base` defaults to the registry's, read BEFORE anything moves it.
+ * O(content), plus the merge when the page holds unpublished keystrokes.
  */
-export function fetchedBase(
+export function settleFetchedPage(
   current: PageEntry,
   server: PageEntry,
   ledger: SyncLedger,
   canPublish: boolean,
   base: PageBase = baseFor(current),
-): PageBase | null {
-  if (fetchPlan(current, server, base, isPageClean(current, ledger, canPublish)) === "keep") return null;
-  return { version: server.contentVersion ?? null, content: server.content ?? null };
-}
-
-function fetchedContent(current: PageEntry, server: PageEntry, base: PageBase, clean: boolean) {
+): FetchedPage {
+  const clean = isPageClean(current, ledger, canPublish);
   const plan = fetchPlan(current, server, base, clean);
-  if (plan === "keep") return current.content;
-  if (plan === "take") return server.content ?? current.content;
-  return mergePageContent(base.content, current.content ?? [], server.content ?? []).content;
+  if (plan === "stale") return { resolved: null, base: null, conflicts: false };
+  const body = fetchedBody(current, server, base, plan);
+  const resolved = fetchedPage(current, server, body.content, clean, canPublish);
+  return { resolved, base: nextBase(plan, server, base), conflicts: resolved !== null && body.conflicts };
 }
 
 /**
  * The page after a content fetch, or null when the server copy changes nothing (no store write,
  * no cache write). A clean page (nothing unpublished) takes the server copy whatever the
  * timestamps say (except coverPosition, fetchedCoverFields): that also heals a cache an older
- * merge left as {newer updatedAt, older body}.
+ * merge left as {newer updatedAt, older body}. An answer older than the base changes nothing.
  * A page with an unpublished change takes the server's metadata only when the server copy is
- * newer, and its body is the 3-way merge of base, local and server (fetchedContent), whatever
- * the timestamps say: the keystrokes and the server's blocks both stay.
+ * newer, and its body is the 3-way merge of base, local and server (settleFetchedPage),
+ * whatever the timestamps say: the keystrokes and the server's blocks both stay.
  * `recordSynced`: the page was clean, so its new stamp is the server's and the outbox must not
  * PATCH that body back. Called on the store's CURRENT page (after the await): an edit typed
  * during the request makes it unclean, and it still publishes.
- * O(content), plus the merge when the page holds unpublished keystrokes.
  */
 export function resolveFetchedPage(
   current: PageEntry,
@@ -201,9 +227,17 @@ export function resolveFetchedPage(
   canPublish: boolean,
   base: PageBase = baseFor(current),
 ): { page: PageEntry; recordSynced: boolean } | null {
-  const clean = isPageClean(current, ledger, canPublish);
+  return settleFetchedPage(current, server, ledger, canPublish, base).resolved;
+}
+
+function fetchedPage(
+  current: PageEntry,
+  server: PageEntry,
+  content: PageEntry["content"],
+  clean: boolean,
+  canPublish: boolean,
+): { page: PageEntry; recordSynced: boolean } | null {
   const takeServer = clean || isNewer(server, current);
-  const content = fetchedContent(current, server, base, clean);
   if (!takeServer && content === current.content) return null;
   const page: PageEntry = {
     ...current,
