@@ -60,6 +60,30 @@ async function continuationTarget(db: Pool, redis: Redis, user: AuthUser, row: A
 	return { conversation, target: resolved.target, agent: pinned.agent };
 }
 
+type ContinuationTarget = NonNullable<Awaited<ReturnType<typeof continuationTarget>>>;
+
+/**
+ * The options of the continuation run. The workspace and the agent of the
+ * conversation go on too: without them the continuation lost the workspace
+ * skills and the approved memories (review p5d1, gap 1).
+ */
+function continuationOptions(db: Pool, redis: Redis, user: AuthUser, row: ApprovalRow, next: ContinuationTarget, text: string) {
+	return {
+		db,
+		redis,
+		runId: randomUUID(),
+		conversationId: row.conversation_id as string,
+		ownerId: row.owner_id,
+		text,
+		target: next.target,
+		user,
+		workspaceId: next.conversation.workspace_id,
+		agent: next.agent,
+		emit: () => {},
+		continuation: true,
+	};
+}
+
 /**
  * The continuation of a decided approval: a NEW run in the same conversation,
  * with its own reservation and its own row: the run that asked is over, and
@@ -79,22 +103,7 @@ export async function continueRun(
 	if (row.origin !== 'run' || !row.conversation_id) return undefined;
 	const next = await continuationTarget(db, redis, user, row);
 	if (!next) return undefined;
-	// The workspace and the agent of the conversation go on too: without them the
-	// continuation lost the workspace skills and the approved memories (review p5d1, gap 1).
-	const started = await startRun({
-		db,
-		redis,
-		runId: randomUUID(),
-		conversationId: row.conversation_id,
-		ownerId: row.owner_id,
-		text: continuationText(row, outcome, detail),
-		target: next.target,
-		user,
-		workspaceId: next.conversation.workspace_id,
-		agent: next.agent,
-		emit: () => {},
-		continuation: true,
-	});
+	const started = await startRun(continuationOptions(db, redis, user, row, next, continuationText(row, outcome, detail)));
 	if (started.kind !== 'started') {
 		console.warn(JSON.stringify({ event: 'continuation_refused', approvalId: row.id, outcome: started.kind, code: started.kind === 'refused' ? started.code : null }));
 		return undefined;

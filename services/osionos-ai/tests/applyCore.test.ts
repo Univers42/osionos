@@ -10,7 +10,7 @@ import { SseStream, collect } from './sse.ts';
  */
 const { app, bridge, mock, postRun, tokenFor, createConversation, call } = await startHarness();
 const { blockDigest } = await import('../src/approvals/inverseData.ts');
-const { unclaimAuto } = await import('../src/approvals/repo.ts');
+const { unclaimAuto } = await import('../src/approvals/claim.ts');
 
 after(async () => {
 	await app.close();

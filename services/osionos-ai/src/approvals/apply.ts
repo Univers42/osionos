@@ -130,13 +130,13 @@ function executedOf(row: ApprovalRow, answerBody: string, previousTitle: string 
 	const legacy = createdPage(answerBody);
 	const pageId = str(row.args.pageId);
 	if (row.tool === 'rename_page') {
-		const result = { tool: 'rename_page' as const, pageId, previousTitle: previousTitle ?? '', appliedTitle: str(row.args.title) };
+		const result = { tool: 'rename_page' as const, pageId, previousTitle, appliedTitle: str(row.args.title) };
 		return { status: 'executed', result, recorded: { ok: true, ...legacy, ...result }, detail };
 	}
 	if (row.tool === 'create_page') {
 		const result = {
 			tool: 'create_page' as const,
-			createdPageId: legacy.pageId ?? '',
+			createdPageId: legacy.pageId ?? null,
 			parentPageId: typeof row.args.parentPageId === 'string' ? row.args.parentPageId : null,
 		};
 		return { status: 'executed', result, recorded: { ok: true, ...legacy, ...result }, detail };

@@ -16,10 +16,17 @@ export interface AddedBlock {
 
 export type AppliedResult =
 	| { tool: 'add_blocks'; pageId: string; version: number | null; blocks: AddedBlock[]; summary: string }
-	| { tool: 'rename_page'; pageId: string; previousTitle: string; appliedTitle: string }
-	| { tool: 'create_page'; createdPageId: string; parentPageId: string | null };
+	| { tool: 'rename_page'; pageId: string; previousTitle: string | null; appliedTitle: string }
+	| { tool: 'create_page'; createdPageId: string | null; parentPageId: string | null };
 
-/** The digest of a block's type and content: the content as the model wrote it, nothing else. */
+/**
+ * The digest of a block's type and content, as sent.
+ *
+ * Caveat: it hashes the content as the write sent it. If the bridge normalises
+ * the content, the digest never matches what the page holds and undo refuses
+ * to remove the block (the safe direction). `language` is not in the hash: a
+ * code block whose language changed still matches.
+ */
 export function blockDigest(block: { type: string; content: unknown }): string {
 	return createHash('sha256').update(JSON.stringify([block.type, block.content])).digest('hex');
 }

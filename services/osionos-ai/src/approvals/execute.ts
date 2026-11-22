@@ -3,7 +3,8 @@ import type { Redis } from 'ioredis';
 import { config } from '../config.ts';
 import { approvalToolNames, hookRefusal } from '../context/hooks.ts';
 import { checkDailyBuildLimit } from '../rateLimit.ts';
-import { claimApproval, expireApproval, getOwnedApproval, recordOutcome } from './repo.ts';
+import { claimApproval } from './claim.ts';
+import { expireApproval, getOwnedApproval, recordOutcome } from './repo.ts';
 import { getTokenState } from '../pat/repo.ts';
 import { revalidateStoredPlan, flattenPlan } from '../builders/plan.ts';
 import { approvedKeys, executePlan } from '../builders/execute.ts';
@@ -73,6 +74,23 @@ async function mcpTokenCovers(db: Pool, row: ApprovalRow): Promise<boolean> {
 	return token.workspace_ids.map(String).includes(row.workspace_id);
 }
 
+/** An approval nobody answered in time is not decided at all: it expires. */
+async function expireRow(db: Pool, id: string): Promise<DecisionOutcome> {
+	await db.query(
+		`update public.ai_approvals set status = 'expired', decided_at = now() where id = $1 and status = 'pending'`,
+		[id],
+	);
+	return { kind: 'refused', status: 409, code: 'approval_expired' };
+}
+
+/** Whether the items name a step the stored plan does not have. */
+function hasUnknownItem(row: ApprovalRow, items: string[]): boolean {
+	const rv = revalidateStoredPlan(row.args);
+	if (!rv.ok) return false;
+	const keys = new Set(flattenPlan(rv.plan).map((f) => f.key));
+	return items.some((key) => !keys.has(key));
+}
+
 /** The refusals that need no claim: the row stays as it is. */
 async function refusalBeforeClaim(input: Decision, row: ApprovalRow): Promise<DecisionOutcome | null> {
 	const { db, decision, items } = input;
@@ -80,13 +98,7 @@ async function refusalBeforeClaim(input: Decision, row: ApprovalRow): Promise<De
 		return { kind: 'refused', status: 400, code: 'items_not_allowed' };
 	}
 	if (row.status !== 'pending') return { kind: 'refused', status: 409, code: 'approval_not_pending' };
-	if (row.expires_at.getTime() <= Date.now()) {
-		await db.query(
-			`update public.ai_approvals set status = 'expired', decided_at = now() where id = $1 and status = 'pending'`,
-			[row.id],
-		);
-		return { kind: 'refused', status: 409, code: 'approval_expired' };
-	}
+	if (row.expires_at.getTime() <= Date.now()) return expireRow(db, row.id);
 	// An MCP approval is decided against the token LIVE: a revoked or expired
 	// token, or a workspace taken out of its scope, kills the question before
 	// the claim, and nothing is written (C114, C115, C117). A decline needs no
@@ -95,10 +107,8 @@ async function refusalBeforeClaim(input: Decision, row: ApprovalRow): Promise<De
 		await expireApproval(db, row.id);
 		return { kind: 'refused', status: 409, code: 'approval_expired' };
 	}
-	if (row.tool === 'build_plan' && items && items.length > 0) {
-		const rv = revalidateStoredPlan(row.args);
-		const keys = rv.ok ? new Set(flattenPlan(rv.plan).map((f) => f.key)) : null;
-		if (keys && items.some((key) => !keys.has(key))) return { kind: 'refused', status: 400, code: 'unknown_item' };
+	if (row.tool === 'build_plan' && items && items.length > 0 && hasUnknownItem(row, items)) {
+		return { kind: 'refused', status: 400, code: 'unknown_item' };
 	}
 	return null;
 }
@@ -123,26 +133,35 @@ async function failedDecision(input: Decision, claimed: ApprovalRow, error: stri
 	return { kind: 'decided', status: 'failed', approval: claimed, continuationRunId };
 }
 
+/** Seeds the plan's items and skips the ones the user did not approve. */
+async function seedAndSkip(db: Pool, approvalId: string, flat: ReturnType<typeof flattenPlan>, approved: string[]) {
+	await seedItems(db, approvalId, flat);
+	const approvedSet = new Set(approved);
+	for (const f of flat) {
+		if (!approvedSet.has(f.key)) await setItem(db, approvalId, f.key, 'skipped');
+	}
+}
+
+/** The keys to build, or null when the items are not the plan's (validated before the claim; should not happen). */
+function approvedOrNull(flat: ReturnType<typeof flattenPlan>, items?: string[]): string[] | null {
+	try {
+		return approvedKeys(flat, items);
+	} catch {
+		return null;
+	}
+}
+
 async function decideBuildPlan(input: Decision, claimed: ApprovalRow): Promise<DecisionOutcome> {
 	const { db, redis, user, sessionToken, items } = input;
 	const rv = revalidateStoredPlan(claimed.args);
-	if (!rv.ok) {
-		await recordOutcome(db, { id: claimed.id, status: 'failed', error: rv.error });
-		return failedDecision(input, claimed, rv.error);
+	const flat = rv.ok ? flattenPlan(rv.plan) : [];
+	const approved = rv.ok ? approvedOrNull(flat, items) : null;
+	if (!rv.ok || !approved) {
+		const error = rv.ok ? 'unknown_item' : rv.error;
+		await recordOutcome(db, { id: claimed.id, status: 'failed', error });
+		return failedDecision(input, claimed, error);
 	}
-	const flat = flattenPlan(rv.plan);
-	let approved: string[];
-	try {
-		approved = approvedKeys(flat, items);
-	} catch {
-		// Should not happen: validated before the claim. Failed, without a bridge call.
-		await recordOutcome(db, { id: claimed.id, status: 'failed', error: 'unknown_item' });
-		return failedDecision(input, claimed, 'unknown_item');
-	}
-	await seedItems(db, claimed.id, flat);
-	for (const f of flat) {
-		if (!approved.includes(f.key)) await setItem(db, claimed.id, f.key, 'skipped');
-	}
+	await seedAndSkip(db, claimed.id, flat, approved);
 	const execResult = await executePlan({ db, user, sessionToken, approval: claimed, plan: rv.plan, budgetMs: config.buildBudgetMs });
 	const c = execResult.counts;
 	const status = c.pending > 0 ? 'partial' : c.done === 0 ? 'failed' : 'executed';
