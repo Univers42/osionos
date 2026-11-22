@@ -69,6 +69,14 @@ export function stripMediaSignature(text) {
 		query.split('&').some((param) => SIGNATURE_PARAM.test(param)) ? `${path}${keptQuery(query)}` : match);
 }
 
+/**
+ * What a page write stores: stripped on a bridge that signs, `value` as sent on one with no key
+ * (it signs nothing, so it changes nothing a user wrote, osionos#233 N1).
+ */
+export function storedMediaText(value, env = process.env) {
+	return mediaKeysFromEnv(env).length > 0 ? stripMediaSignatures(value) : value;
+}
+
 /** `value` with every string stripped; the same reference when nothing held a signature. */
 export function stripMediaSignatures(value) {
 	if (typeof value === 'string') return stripMediaSignature(value);

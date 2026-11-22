@@ -6,7 +6,7 @@
 // by a newer client, or holding a retired type, and lose the edit. Fields specific to a
 // block type are not checked either, `diagramSpec.kind` being the one exception.
 
-import { stripMediaSignatures } from './bridge-media-sign.mjs';
+import { storedMediaText } from './bridge-media-sign.mjs';
 
 const DIAGRAM_KINDS = new Set(['mermaid', 'schema', 'graph', 'hierarchy', 'pipeline']);
 const MAX_BLOCK_DEPTH = 64;
@@ -34,12 +34,12 @@ function assertBlock(block, path, depth) {
 	children.forEach((child, index) => assertBlock(child, `${path}.children[${index}]`, depth + 1));
 }
 
-/** The page body to store (signed media links made bare, osionos#233 D233-1), or a 422 naming the first bad field. */
-export function validatedPageContent(value) {
+/** The page body to store (signed media links made bare on a bridge that signs, osionos#233 D233-1), or a 422 naming the first bad field. */
+export function validatedPageContent(value, env = process.env) {
 	if (value === undefined || value === null) return [];
 	if (!Array.isArray(value)) refuse('content', 'must be an array of blocks.');
 	value.forEach((block, index) => assertBlock(block, `content[${index}]`, 0));
-	return stripMediaSignatures(value);
+	return storedMediaText(value, env);
 }
 
 /** The database slice to store, or a 422: it holds databases, pages and views. */

@@ -12,9 +12,9 @@ import { createCapabilityReader } from "./capabilityReader";
  * own GET /api/capabilities 404 once per session.
  */
 
-export type BridgeCapability = "recs" | "publish";
+export type BridgeCapability = "recs" | "publish" | "mediaSign";
 
-const NAMES: readonly BridgeCapability[] = ["recs", "publish"];
+const NAMES: readonly BridgeCapability[] = ["recs", "publish", "mediaSign"];
 
 const reader = createCapabilityReader(NAMES, {
   // No bridge configured (an offline build): nothing to ask, and a relative URL would 404 on the app.

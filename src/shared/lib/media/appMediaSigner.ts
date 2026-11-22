@@ -1,3 +1,4 @@
+import { bridgeServes } from "@/shared/api/bridgeCapabilities";
 import { API_BASE, getActivePageJwt, getActivePageUserId } from "@/shared/api/client";
 import { createMediaSigner, parseSignAnswer, type SignAnswer, type SignTransport } from "@/shared/lib/media/mediaSigner";
 
@@ -47,4 +48,6 @@ export const KNOWN_MEDIA_BRIDGES: readonly string[] = (
 export const appMediaSigner = createMediaSigner({
   transport: createFetchSignTransport({ apiBase: API_BASE, fetchImpl: (input, init) => fetch(input, init), token: getActivePageJwt }),
   userId: getActivePageUserId,
+  // N1: off (no request, the stored URL) until GET /api/capabilities says the bridge signs.
+  signs: () => bridgeServes("mediaSign"),
 });

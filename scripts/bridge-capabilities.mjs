@@ -11,6 +11,7 @@
  * off feature from a missing route (the rule bridge-events.mjs keeps for the beacon).
  */
 
+import { mediaKeysFromEnv } from './bridge-media-sign.mjs';
 import { recsEnabled } from './bridge-recs.mjs';
 import { bearerToken, sendJson } from './bridge-social-core.mjs';
 
@@ -22,7 +23,8 @@ export function publishEnabled(env) {
 }
 
 export function bridgeCapabilities(env) {
-	return { recs: recsEnabled(env), publish: publishEnabled(env) };
+	// mediaSign: the app asks POST /api/media/uploads/sign only when this is true (osionos#233 N1).
+	return { recs: recsEnabled(env), publish: publishEnabled(env), mediaSign: mediaKeysFromEnv(env).length > 0 };
 }
 
 export function createCapabilitiesHandler({ config, verifySession, env = process.env }) {

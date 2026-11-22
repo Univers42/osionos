@@ -8,11 +8,15 @@
  * - D233-4: a link is kept for `exp − bridge now`, measured on the client's own clock from the
  *   moment the answer arrived, so a skewed client clock neither serves an expired link nor re-signs.
  * - D233-5: nothing here re-signs on a timer; only a mount (`sign`) or an error (`forget`) asks.
+ * - N1 (security review): given `signs`, the signer is off (no request, the stored URL) until the
+ *   bridge says it signs, so a bridge with no secret sees no traffic and first paint is unchanged.
  *
  * Caveat: the off window is a guess at how long a bridge stays unconfigured. A secret set during
  * it is used only after the 10 min (or a reload); a bridge that loses its secret is noticed on
  * the next miss. The 10 min lifetime margin is a guess at the longest gap between a cache hit and
  * the browser's request; a link that still dies in between is caught by the element's onError.
+ * The bridge's word is read once per session: a secret set later is used after a reload, and an
+ * element that mounts before the word arrives renders bare (under enforce: one 403, then its retry).
  */
 
 import { MEDIA_UPLOAD_PATH } from "@/shared/lib/media/mediaSignature";
@@ -36,6 +40,8 @@ export interface MediaSignerOptions {
   transport: SignTransport;
   nowMs?: () => number;
   userId?: () => string | null;
+  /** Whether the bridge signs (null: cannot say yet). Absent: assume it does. */
+  signs?: (() => Promise<boolean | null>) | null;
 }
 
 export const MAX_SIGN_BATCH = 200;
@@ -75,11 +81,14 @@ class BatchingMediaSigner implements MediaSigner {
   private readonly waiting = new Map<string, Array<(signed: string | null) => void>>();
   private readonly lanes = new Map<string, Lane>();
   private offUntil = Number.NEGATIVE_INFINITY;
+  private signing: boolean | null;
+  private askedAt = Number.NEGATIVE_INFINITY;
 
   private readonly options: Required<MediaSignerOptions>;
 
   constructor(options: Required<MediaSignerOptions>) {
     this.options = options;
+    this.signing = options.signs ? null : true;
   }
 
   peek(path: string, pageId: string | null = null): MediaLink {
@@ -110,8 +119,18 @@ class BatchingMediaSigner implements MediaSigner {
     const now = this.options.nowMs();
     const hit = this.fresh.get(path);
     if (hit && now < hit.until) return { kind: "signed", path: hit.path };
-    if (now < this.offUntil || now - (this.failedAt.get(path) ?? Number.NEGATIVE_INFINITY) < RETRY_MS) return BARE;
+    if (!this.bridgeSigns(now) || now < this.offUntil || now - (this.failedAt.get(path) ?? Number.NEGATIVE_INFINITY) < RETRY_MS) return BARE;
     return PENDING;
+  }
+
+  /** N1: false until the bridge says it signs; "cannot say" (signed out) is asked again after a minute. */
+  private bridgeSigns(now: number): boolean {
+    if (this.signing !== null) return this.signing;
+    if (now - this.askedAt >= RETRY_MS) {
+      this.askedAt = now;
+      void this.options.signs?.().then((signs) => { if (signs !== null) this.signing = signs; }, () => undefined);
+    }
+    return false;
   }
 
   /** True for a path owned by someone else, false for the caller's own, null when signed out. */
@@ -187,6 +206,6 @@ class BatchingMediaSigner implements MediaSigner {
   }
 }
 
-export function createMediaSigner({ transport, nowMs = Date.now, userId = () => null }: MediaSignerOptions): MediaSigner {
-  return new BatchingMediaSigner({ transport, nowMs, userId });
+export function createMediaSigner({ transport, nowMs = Date.now, userId = () => null, signs = null }: MediaSignerOptions): MediaSigner {
+  return new BatchingMediaSigner({ transport, nowMs, userId, signs });
 }
