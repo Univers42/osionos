@@ -22,17 +22,12 @@ import React from 'react';
 
 import { useReceiptsStore } from '@/store/chat/useReceiptsStore';
 
+import { typingPhrase } from '../model/aiTyping';
+
 interface TypingIndicatorProps {
   channelId: string;
   /** id → display name, e.g. from the loaded message authors. */
   names?: Record<string, string>;
-}
-
-function phrase(typers: string[], names: Record<string, string>): string {
-  const labels = typers.map((id) => names[id] ?? 'Someone');
-  if (labels.length === 1) return `${labels[0]} is typing…`;
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]} are typing…`;
-  return 'Several people are typing…';
 }
 
 export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ channelId, names = {} }) => {
@@ -41,7 +36,7 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ channelId, nam
 
   return (
     <div className="px-1 pb-1 text-xs italic text-[var(--osio-fg-muted)]" aria-live="polite">
-      {phrase(typers, names)}
+      {typingPhrase(typers, names)}
     </div>
   );
 };

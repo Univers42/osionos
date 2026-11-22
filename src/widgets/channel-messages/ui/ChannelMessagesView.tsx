@@ -43,6 +43,7 @@ import { useChannelLive } from "../model/useChannelLive";
 import { useChannelReceipts } from "../model/useChannelReceipts";
 import { buildMessageRows, firstUnreadId } from "../model/messageGrouping";
 import { mentionsAi } from "../model/aiAnswerDraft";
+import { canDeleteMessage, reportAiAnswer } from "../model/aiAnswerRow";
 import { aiDraftStore, useAiDraft } from "../model/useAiAnswerDraft";
 import { isChannelAiAnswersEnabled } from "@/shared/config/featureFlags";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
@@ -320,7 +321,7 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
                   <MessageRow
                     message={message}
                     grouped={index === 0 && windowStart > 0 ? false : grouped}
-                    isAuthor={message.isAi ? message.aiRequestedBy === activeUserId || canModerate : message.authorId === activeUserId}
+                    isAuthor={canDeleteMessage(message, activeUserId, canModerate)}
                     canInteract={history.mode === "bridge"}
                     userId={activeUserId}
                     onEdit={handleEdit}
@@ -328,6 +329,8 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
                     onReact={handleReact}
                     onReply={setReplyTarget}
                     onOpenThread={compact ? undefined : setThreadRoot}
+                    askerName={message.aiRequestedBy ? authorNames[message.aiRequestedBy] : undefined}
+                    onReport={reportAiAnswer}
                   />
                 </React.Fragment>
               ))}

@@ -13,6 +13,8 @@
  * itself through the same post route, so the bridge's guards still decide.
  * A refused post is "held": the private draft keeps the reason, and its Post
  * tries the same route again, except `answer_blocked`, which never clears.
+ * While such a run streams, the channel hears a textless "osio is answering"
+ * (OB12); the text itself stays with the asker until the post.
  *
  * Pure: the caller brings the service calls and the storage, so the whole
  * flow is testable without a server and without React (useAiAnswerDraft.ts
@@ -56,6 +58,8 @@ export interface AiDraftDeps {
   noticeSeen: (userId: string, autopost?: boolean) => boolean;
   markNoticeSeen: (userId: string, autopost?: boolean) => void;
   newId: () => string;
+  /** Tells the channel, with no text, that osio is answering (auto-post runs only). */
+  answering?: (channelId: string) => void;
 }
 
 export interface AskInput {
@@ -90,7 +94,15 @@ interface Session {
   conversationId: string | null;
   runId: string | null;
   controller: AbortController | null;
+  /** When the channel last heard "osio is answering", in ms since the epoch. */
+  answeredAt: number;
 }
+
+// Caveat: readers drop the signal 4 s after its last frame (TYPING_TTL_MS in
+// useChannelReceipts), so a model silent for over 4 s between deltas goes dark
+// until its next delta. 2.5 s keeps a streaming run lit for about one POST per
+// 2.5 s instead of one per delta.
+const ANSWERING_EVERY_MS = 2500;
 
 function codeOf(value: unknown, fallback: string): string {
   const code = (value as { code?: unknown } | null)?.code;
@@ -143,6 +155,17 @@ export function createAiDraftStore(deps: AiDraftDeps) {
       if (session.runId) void deps.cancelRun(session.runId).catch(() => undefined);
     };
 
+    const signalAnswering = (channelId: string, session: Session): void => {
+      const now = Date.now();
+      if (!session.input.autopost || !deps.answering || now - session.answeredAt < ANSWERING_EVERY_MS) return;
+      session.answeredAt = now;
+      deps.answering(channelId);
+    };
+    const showDrafting = (channelId: string, session: Session, text: string): void => {
+      setDraft(channelId, draftOf(session.input, "drafting", text, null));
+      signalAnswering(channelId, session);
+    };
+
     const conversationOf = async (session: Session): Promise<string> => {
       const { workspaceId, channelName } = session.input;
       session.conversationId ??= (await deps.createConversation({ workspaceId, title: `@AI in #${channelName}` })).id;
@@ -163,7 +186,7 @@ export function createAiDraftStore(deps: AiDraftDeps) {
             if (!current()) return;
             if (event === "text.delta") {
               text += deltaOf(data);
-              setDraft(channelId, draftOf(session.input, "drafting", text, null));
+              showDrafting(channelId, session, text);
             } else if (event === "error") {
               failure = codeOf(data, "upstream_error");
             }
@@ -205,7 +228,7 @@ export function createAiDraftStore(deps: AiDraftDeps) {
       session.controller = controller;
       session.runId = runId;
       const current = () => sessions.get(channelId) === session && session.controller === controller && !controller.signal.aborted;
-      setDraft(channelId, draftOf(session.input, "drafting", "", null));
+      showDrafting(channelId, session, "");
       const { text, failure } = await stream(channelId, session, { runId, controller, current });
       if (!current()) return;
       session.controller = null;
@@ -222,7 +245,7 @@ export function createAiDraftStore(deps: AiDraftDeps) {
         const previous = sessions.get(input.channelId);
         if (previous) stop(previous);
         // A new ask in the same channel replaces the old draft, conversation included.
-        sessions.set(input.channelId, { input, conversationId: null, runId: null, controller: null });
+        sessions.set(input.channelId, { input, conversationId: null, runId: null, controller: null, answeredAt: 0 });
         if (!deps.noticeSeen(input.userId, input.autopost === true)) {
           setDraft(input.channelId, draftOf(input, "notice", "", null));
           return;

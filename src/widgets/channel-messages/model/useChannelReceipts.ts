@@ -14,8 +14,8 @@
  * Read/delivered receipts + typing for one channel, riding the SAME realtime
  * topic as useChannelLive (`chat:<ws>:<channel>`). The bridge emits
  * `receipt_updated {userId, upToMessageId, status}` (a per-user high-water
- * mark) and `typing {userId}` (a fire signal with no stop — expired on a
- * timer here). When the thread is viewed we POST a `seen` receipt up to the
+ * mark) and `typing {userId}` or `typing {ai}` (a fire signal with no stop —
+ * expired on a timer here). When the thread is viewed we POST a `seen` receipt up to the
  * latest message so peers' ticks flip. All state lives in the ephemeral
  * useReceiptsStore; nothing is persisted.
  */
@@ -27,8 +27,12 @@ import { chatTopic } from '@/services/realtime-messages/wsTopics';
 import { subscribeTopic } from '@/services/realtime-messages/wsTransport';
 import { useReceiptsStore } from '@/store/chat/useReceiptsStore';
 
+import { typerOf } from './aiTyping';
+
 interface ReceiptPayload {
   userId?: string;
+  /** A typing frame of osio answering in an auto-post channel: no userId, no text. */
+  ai?: boolean;
   upToMessageId?: string;
   status?: 'delivered' | 'seen';
 }
@@ -62,8 +66,8 @@ export function useChannelReceipts(
         if (payload.userId === selfUserId || !payload.upToMessageId) return;
         applyReceipt(payload.upToMessageId, payload.status === 'delivered' ? 'delivered' : 'seen');
       } else if (frame.event_type === 'typing') {
-        const who = payload.userId;
-        if (!who || who === selfUserId) return;
+        const who = typerOf(payload, selfUserId);
+        if (!who) return;
         setTyping(channelId, who, true);
         clearTimeout(timers.get(who));
         timers.set(who, setTimeout(() => setTyping(channelId, who, false), TYPING_TTL_MS));

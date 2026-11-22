@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
-import { Pencil, Reply, SmilePlus, Sparkles, Trash2 } from 'lucide-react';
+import { Flag, Pencil, Reply, SmilePlus, Sparkles, Trash2 } from 'lucide-react';
 
 import { renderInlineToReact } from '@osionos/markdown-engine/react';
 import type { ChatMessage } from '@/shared/chat/messageApi';
@@ -45,6 +45,10 @@ interface MessageRowProps {
   onReact: (messageId: string, emoji: string, add: boolean) => void;
   onReply: (message: ChatMessage) => void;
   onOpenThread?: (message: ChatMessage) => void;
+  /** The asker's display name, on an AI answer someone else asked for. */
+  askerName?: string;
+  /** Reports an AI answer (OB6); a person's row is reported from their profile. */
+  onReport?: (message: ChatMessage) => void;
 }
 
 // Hoisted: constructing an Intl.DateTimeFormat is one of the pricier JS built-ins;
@@ -68,6 +72,9 @@ function groupReactions(message: ChatMessage) {
 const URL_RE = /\bhttps?:\/\/[^\s<>()]+[^\s<>().,!?:;'"]/gi;
 
 function contentLinks(message: ChatMessage): string[] {
+  // OB4: an AI answer gets no card. A card fetches a favicon or a player for
+  // every reader, and an answer can be steered into naming any URL.
+  if (message.isAi) return [];
   const already = new Set(
     (message.attachments ?? []).filter((a) => a.type === 'url' && a.url).map((a) => a.url as string),
   );
@@ -95,7 +102,12 @@ function renderContent(content: string): React.ReactNode {
   );
 }
 
-const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInteract, userId, grouped, onEdit, onDelete, onReact, onReply, onOpenThread }) => {
+function askedBy(message: ChatMessage, userId: string, askerName?: string): string {
+  if (message.aiRequestedBy === userId) return 'AI answer, asked by you';
+  return `AI answer, asked by ${askerName || 'a member'}`;
+}
+
+const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInteract, userId, grouped, onEdit, onDelete, onReact, onReply, onOpenThread, askerName, onReport }) => {
   const [editing, setEditing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const isMentioned = Boolean(message.mentions?.includes(userId));
@@ -119,7 +131,7 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
           <span className="text-sm font-semibold">{message.authorName}</span>
           {message.isAi && (
             <span className="osio-chip text-xs text-[var(--osio-fg-muted)]">
-              {message.aiRequestedBy === userId ? 'AI answer, asked by you' : 'AI answer'}
+              {askedBy(message, userId, askerName)}
             </span>
           )}
           <time className="text-xs text-[var(--osio-fg-subtle)]">{formatTime(message.createdAt)}</time>
@@ -141,9 +153,10 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
             onClose={() => setEditing(false)}
           />
         ) : (
-          <p className="whitespace-pre-wrap break-words text-sm leading-6">{renderContent(message.content)}</p>
+          // OB4: an AI answer stays plain text, so markdown cannot inline an image.
+          <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.isAi ? message.content : renderContent(message.content)}</p>
         )}
-        <MessageAttachments attachments={message.attachments} />
+        {!message.isAi && <MessageAttachments attachments={message.attachments} />}
         {!editing && contentLinks(message).map((url) => (
           <LinkPreviewCard key={url} attachment={{ type: 'url', url }} />
         ))}
@@ -184,6 +197,9 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
           )}
           {isAuthor && !message.isAi && (
             <IconButton size="xs" label="Edit message" onClick={() => setEditing(true)}><Pencil size={14} /></IconButton>
+          )}
+          {message.isAi && onReport && (
+            <IconButton size="xs" label="Report AI answer" onClick={() => onReport(message)}><Flag size={14} /></IconButton>
           )}
           {isAuthor && (
             <IconButton size="xs" label="Delete message" onClick={() => onDelete(message.id)}><Trash2 size={14} /></IconButton>

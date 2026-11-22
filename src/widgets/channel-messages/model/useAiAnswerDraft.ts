@@ -9,6 +9,7 @@ import { noticingWriter } from "@/shared/lib/storage-full/noticingWrite";
 import { useStore } from "zustand";
 
 import { cancelRun, createConversation, resumeRun, startThreadRun } from "@/features/ai/api/aiClient";
+import { postAiAnswering } from "@/shared/chat/channelApi";
 import { postAiAnswer } from "@/shared/chat/messageApi";
 
 import { createAiDraftStore, type AiDraft } from "./aiAnswerDraft";
@@ -35,6 +36,10 @@ export const aiDraftStore = createAiDraftStore({
     writeAnswerNotice(noticeKey(userId, autopost), "1");
   },
   newId: () => globalThis.crypto.randomUUID(),
+  answering: (channelId) => {
+    // A lost signal only hides "osio is answering"; the answer itself is not touched.
+    void postAiAnswering(channelId).catch(() => undefined);
+  },
 });
 
 export function useAiDraft(channelId: string): AiDraft | null {

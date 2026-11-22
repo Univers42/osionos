@@ -56,3 +56,8 @@ export async function openDm(peerUserId: string, workspaceId?: string): Promise<
   const reply = await api.post<{ channel: ChatChannel }>('/api/chat/dm', { peerUserId, workspaceId }, getActivePageJwt() ?? undefined);
   return reply.channel;
 }
+
+/** Tells an auto-post channel, with no text, that osio is answering (osio-bot OB12). */
+export async function postAiAnswering(channelId: string): Promise<void> {
+  await api.post(`/api/chat/channels/${encodeURIComponent(channelId)}/typing`, { ai: true }, getActivePageJwt() ?? undefined);
+}
