@@ -28,6 +28,7 @@
  *   DELETE /api/chat/messages/:id/reactions        {emoji} (or ?emoji=)
  *   POST   /api/chat/dm                            {peerUserId, workspaceId?}
  *   POST   /api/chat/channels/:id/ai-answers       {runId} (bridge-chat-ai.mjs, flag-gated)
+ *   PUT    /api/chat/channels/:id/ai-autopost      {enabled} (bridge-chat-autopost.mjs, flag-gated)
  *
  * Membership model: dm/private channels require an osionos_channel_members
  * row; public text channels accept any osionos_workspace_members row of the
@@ -76,6 +77,7 @@ import { takeToken } from './bridge-ratelimit.mjs';
 import { publicIconAvatar } from './bridge-avatar.mjs';
 import { searchMessages } from './bridge-chat-search.mjs';
 import { AI_HANDLES, authorSummary, isAiAnswer, postAiAnswer, threadAnswersEnabled } from './bridge-chat-ai.mjs';
+import { autopostEnabled, setChannelAutopost, typingPayload, withAutopost } from './bridge-chat-autopost.mjs';
 import { getThread } from './bridge-chat-threads.mjs';
 import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 import { assertNotBlocked, requireInteraction } from './bridge-moderation-core.mjs';
@@ -235,7 +237,7 @@ async function listChannels(deps, session, url, response, config) {
 	for (const row of listed) if (!byId.has(row.id)) byId.set(row.id, row);
 	const channels = [...byId.values()]
 		.sort((left, right) => String(left.created_at ?? '').localeCompare(String(right.created_at ?? '')))
-		.map((row) => channelEntry(row, roleByChannel.get(row.id) ?? null, config));
+		.map((row) => withAutopost(channelEntry(row, roleByChannel.get(row.id) ?? null, config), row, deps.env));
 	return sendJson(response, 200, { ok: true, channels }, config);
 }
 
@@ -681,7 +683,8 @@ async function patchChannel(deps, session, request, channelId, response, config)
 	if (Object.hasOwn(payload, 'topic')) update.topic = safeText(payload.topic, 200) || null;
 	const rows = await rest(config, deps.fetchImpl, `osionos_channels?id=eq.${channelId}`, { method: 'PATCH', body: update, prefer: 'return=representation' });
 	const row = Array.isArray(rows) ? rows[0] : rows;
-	return sendJson(response, 200, { ok: true, channel: channelEntry(row ?? { id: channelId }, null, config) }, config);
+	const saved = row ?? { id: channelId };
+	return sendJson(response, 200, { ok: true, channel: withAutopost(channelEntry(saved, null, config), saved, deps.env) }, config);
 }
 
 /** POST /api/chat/channels/:id/members — owner/admin adds members. */
@@ -778,12 +781,12 @@ async function listReceipts(deps, session, messageId, response, config) {
 }
 
 /** POST /api/chat/channels/:id/typing — ephemeral, realtime-only (no DB write). */
-async function postTyping(deps, session, channelId, response, config) {
+async function postTyping(deps, session, request, channelId, response, config) {
 	const { channel } = await requireChannelAccess(config, deps.fetchImpl, session.userId, channelId);
 	await publishRealtime({
 		topic: chatTopic(channel),
 		eventType: 'typing',
-		payload: { channelId: channel.id, userId: session.userId },
+		payload: await typingPayload(request, channel, session.userId, deps.env),
 		fetchImpl: deps.fetchImpl,
 		env: deps.env,
 	});
@@ -852,6 +855,10 @@ export function createChatHandler({ config, verifySession, fetchImpl = fetch, en
 			if (channelAiAnswers && method === 'POST' && threadAnswersEnabled(env)) {
 				return await postAiAnswer(deps, session, request, requireUuid(channelAiAnswers[1], 'channelId'), response, requestConfig, { requireChannelAccess, chatTopic, messageEntry });
 			}
+			const channelAutopost = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/ai-autopost$/i.exec(pathname);
+			if (channelAutopost && method === 'PUT' && autopostEnabled(env)) {
+				return await setChannelAutopost(deps, session, request, requireUuid(channelAutopost[1], 'channelId'), response, requestConfig, { requireChannelAdmin, channelEntry });
+			}
 			const channelMembersOne = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/members\/([0-9a-f-]{36})$/i.exec(pathname);
 			if (channelMembersOne && method === 'DELETE') return await removeMember(deps, session, requireUuid(channelMembersOne[1], 'channelId'), requireUuid(channelMembersOne[2], 'userId'), response, requestConfig);
 			if (channelMembersOne && method === 'PATCH') return await setMemberRole(deps, session, request, requireUuid(channelMembersOne[1], 'channelId'), requireUuid(channelMembersOne[2], 'userId'), response, requestConfig);
@@ -860,7 +867,7 @@ export function createChatHandler({ config, verifySession, fetchImpl = fetch, en
 			const channelReceipts = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/receipts$/i.exec(pathname);
 			if (channelReceipts && method === 'POST') return await postReceipts(deps, session, request, requireUuid(channelReceipts[1], 'channelId'), response, requestConfig);
 			const channelTyping = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/typing$/i.exec(pathname);
-			if (channelTyping && method === 'POST') return await postTyping(deps, session, requireUuid(channelTyping[1], 'channelId'), response, requestConfig);
+			if (channelTyping && method === 'POST') return await postTyping(deps, session, request, requireUuid(channelTyping[1], 'channelId'), response, requestConfig);
 			const channelRead = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/read$/i.exec(pathname);
 			if (channelRead && method === 'POST') return await markChannelRead(deps, session, request, requireUuid(channelRead[1], 'channelId'), response, requestConfig);
 			const channelOne = /^\/api\/chat\/channels\/([0-9a-f-]{36})$/i.exec(pathname);
