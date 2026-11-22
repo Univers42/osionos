@@ -361,6 +361,34 @@ jobs:
       - name: Install, type-check and run the service suite
         run: sh services/osionos-ai/scripts/ci.sh
 
+  # The recommender's model (services/osionos-ml) had pytest suites and no job that ran them.
+  # The tests run inside the service's own image, so the interpreter and the hash-pinned
+  # wheels are the ones production uses; the image leaves tests/ out (.dockerignore), so
+  # they are mounted read-only.
+  # Caveat: no DATABASE_URL here, so the `db` tests (tests/test_job_db.py) are SKIPPED, not
+  # passed. scripts/test-db.sh runs them against a throwaway Postgres on a developer's machine.
+  ml-service:
+    name: ML service (pytest)
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Build the service image
+        run: docker build -t osionos-ml-ci services/osionos-ml
+
+      - name: Run the suite in the image
+        run: docker run --rm -v "$PWD/services/osionos-ml/tests:/app/tests:ro" osionos-ml-ci python -m pytest tests -p no:cacheprovider -rs
+
   # The E2E suite is 421 tests. A single ubuntu-latest runner (4 vCPU) chews through it at
   # ~6 tests/min, i.e. ~70 min — it never fit the old 30-min single job (it was killed at
   # test ~174). It is split across 6 shards so each runs ~70 tests in ~12 min.
