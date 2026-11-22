@@ -21,8 +21,9 @@
  *   session, secrecy = the unguessable 64-hex sha in the key.
  *   It also opens with a signature (?exp&kid&sig, bridge-media-sign.mjs) or the
  *   owner's own Bearer session; MEDIA_URL_ENFORCE=true refuses the bare form.
- * POST /api/media/uploads/sign {paths, pageId?} — app-session authed; signs the caller's own
- *   paths, and any path in the content or cover of a page the caller can read.
+ * POST /api/media/uploads/sign {paths, pageId?} — app-session authed; signs the
+ *   caller's own paths, and a path in the content or cover of a page the caller can read when
+ *   its owner is the page's owner or a member of the page's workspace (osionos#233 D233-12).
  *
  * Caveat: until MEDIA_URL_ENFORCE is on, a bare URL is still a capability: anyone
  * holding it reads the file (#235). The bare-read log says when it is safe to turn on.
@@ -43,6 +44,7 @@ import {
 	typeFromMime,
 } from './bridge-storage-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { pageMediaOwners } from './bridge-media-owners.mjs';
 
 const SERVE_RE = /^\/api\/media\/uploads\/([0-9a-f-]{36})\/([0-9a-f]{64}\.[a-z0-9]{1,8})$/i;
 const MAX_SIGN_PATHS = 200;
@@ -88,28 +90,51 @@ async function readableRow(deps, request, pageId, config) {
 	}
 }
 
-/** The caller's own media paths and those of a page they can read, signed; any other is left out. */
+/** The uploads path and its owner (lower-case) that `input` names, or null. */
+function uploadOf(input) {
+	try {
+		const pathname = new URL(input, 'https://media.invalid').pathname;
+		const match = SERVE_RE.exec(pathname);
+		return match ? { pathname, owner: match[1].toLowerCase() } : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * The foreign owners whose paths may be signed: in the page's content or cover AND bound to the
+ * page by pageMediaOwners (D233-12, the planted-path bypass). One membership read per request.
+ */
+async function pageOwnersFor(deps, row, uploads, me, config) {
+	if (!row) return new Set();
+	const pageMedia = mediaOfPage(row);
+	const inPage = uploads.filter((upload) => upload.owner !== me && pageMedia.includes(upload.pathname));
+	const foreign = [...new Set(inPage.map((upload) => upload.owner))];
+	if (foreign.length === 0) return new Set();
+	const owners = await pageMediaOwners(row, foreign, config, deps.fetchImpl);
+	return new Set(inPage.filter((upload) => owners.has(upload.owner)).map((upload) => upload.pathname));
+}
+
+/**
+ * The caller's own media paths and those of a page they can read, signed; any other is left out.
+ * `now` is the bridge's clock, so a client with a skewed clock still knows how long a link lives
+ * (D233-4).
+ */
 async function signPaths(deps, session, request, response, config) {
 	if (deps.keys.length === 0) throw httpError('Signed media links are not configured on this bridge.', 503);
 	const body = await readJsonBody(request);
 	const paths = Array.isArray(body?.paths) ? body.paths.filter((value) => typeof value === 'string') : [];
 	if (paths.length > MAX_SIGN_PATHS) throw httpError(`At most ${MAX_SIGN_PATHS} paths per request.`, 413);
+	const me = String(session.userId).toLowerCase();
+	const uploads = paths.map((input) => ({ input, ...uploadOf(input) })).filter((upload) => upload.pathname);
 	const row = await readableRow(deps, request, body?.pageId, config);
-	const pageMedia = row ? mediaOfPage(row) : '';
+	const inPage = await pageOwnersFor(deps, row, uploads, me, config);
+	const now = Math.floor(Date.now() / 1000);
 	const signed = {};
-	for (const input of paths) {
-		let pathname;
-		try {
-			pathname = new URL(input, 'https://media.invalid').pathname;
-		} catch {
-			continue;
-		}
-		const match = SERVE_RE.exec(pathname);
-		if (!match) continue;
-		const own = match[1].toLowerCase() === String(session.userId).toLowerCase();
-		if (own || (pageMedia !== '' && pageMedia.includes(pathname))) signed[input] = signMediaPath(deps.keys, pathname);
+	for (const upload of uploads) {
+		if (upload.owner === me || inPage.has(upload.pathname)) signed[upload.input] = signMediaPath(deps.keys, upload.pathname, now);
 	}
-	return sendJson(response, 200, { ok: true, signed }, config);
+	return sendJson(response, 200, { ok: true, signed, now }, config);
 }
 
 async function upload(deps, session, url, request, response, config) {

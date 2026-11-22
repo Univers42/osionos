@@ -197,9 +197,10 @@ describe('signing for a page the caller can read (a teammate on a shared page)',
 	const READER = '7a7a7a7a-0000-4000-8000-000000000001';
 	const ownerImage = `/api/media/uploads/${subject}/${'b'.repeat(64)}.png`;
 	const elsewhere = `/api/media/uploads/${subject}/${'c'.repeat(64)}.png`;
+	// D233-12: the image's owner must be bound to the page, here as its owner (owner_id).
 	const pages = new Map([
-		['page-shared', { content: [{ type: 'image', content: `http://bridge.example${ownerImage}` }], cover: null }],
-		['page-cover', { content: [], cover: `http://bridge.example${elsewhere}` }],
+		['page-shared', { owner_id: subject, content: [{ type: 'image', content: `http://bridge.example${ownerImage}` }], cover: null }],
+		['page-cover', { owner_id: subject, content: [], cover: `http://bridge.example${elsewhere}` }],
 	]);
 	let server;
 	let base;
