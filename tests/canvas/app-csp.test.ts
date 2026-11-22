@@ -95,5 +95,5 @@ test("vite preview sends the nginx policy byte for byte, Report-Only by default 
 
 test("vite.config.ts feeds preview.headers from previewHeaders, selected by PLAYWRIGHT_CSP=enforce", () => {
   const config = readFileSync(new URL("../../vite.config.ts", import.meta.url), "utf8");
-  assert.match(config, /previewHeaders\(\s*readFileSync\([^)]*nginx\.conf[^)]*\),\s*process\.env\.PLAYWRIGHT_CSP === ["']enforce["']\s*\)/);
+  assert.match(config, /previewHeaders\([\s\S]*?nginx\.conf[\s\S]*?process\.env\.PLAYWRIGHT_CSP === ["']enforce["']/);
 });

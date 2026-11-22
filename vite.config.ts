@@ -12,10 +12,11 @@
 
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
+import { previewHeaders } from './scripts/vite/appCsp';
 import { lucideIconChunks } from './scripts/vite/lucideIconChunks';
 import { siblingSelectors } from './scripts/vite/siblingSelectors';
 import { vendorChunkOf } from './scripts/vite/vendorChunks';
@@ -48,7 +49,7 @@ function bundleAnalyzer() {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, isPreview }) => {
   const root = __dirname;
 
   const env = loadEnv(mode, root, '');
@@ -224,6 +225,16 @@ export default defineConfig(({ mode }) => {
       // lazily is not the same module as the barrel's (no identity check relies on that).
       exclude: ['lucide-react/dynamicIconImports'],
     },
+    // `vite preview` has no nginx: without these, a production-build e2e run (PLAYWRIGHT_BUILD) would
+    // check no policy at all and pass vacuously (#314). Enforced only for PLAYWRIGHT_CSP=enforce.
+    preview: isPreview
+      ? {
+          headers: previewHeaders(
+            readFileSync(path.resolve(root, 'docker/services/node/nginx.conf'), 'utf8'),
+            process.env.PLAYWRIGHT_CSP === 'enforce',
+          ),
+        }
+      : {},
     server: {
       port: 3001,
       host: '0.0.0.0',

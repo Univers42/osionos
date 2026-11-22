@@ -79,3 +79,11 @@ export function inlineScriptSources(html: string): string[] {
   const scripts = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
   return [...html.matchAll(scripts)].map((m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`);
 }
+
+/** The headers `vite preview` sends so a production-build e2e run checks a real policy: the nginx
+ *  string itself, as Report-Only, or as the enforced header when `enforce` (PLAYWRIGHT_CSP=enforce). */
+export function previewHeaders(nginxConf: string, enforce: boolean): Record<string, string> {
+  const policy = readPolicy(nginxConf);
+  if (policy === null) throw new Error(`nginx.conf has no app_csp_report_only map`);
+  return { [enforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only"]: policy };
+}
