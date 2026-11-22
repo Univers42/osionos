@@ -29,6 +29,7 @@
 import { api, ApiError, API_BASE, getActivePageJwt } from "@/shared/api/client";
 import type { PageEntry } from "@/entities/page";
 import { isCatalogueId } from "@/data/templates/catalogue/tplId";
+import { stripMediaSignature, stripMediaSignaturesDeep } from "@/shared/lib/media/mediaSignature";
 import { baseFor, setBase } from "./pageBase";
 import {
   conflictFrom,
@@ -80,7 +81,8 @@ function pageToPatchBody(page: PageEntry, baseVersion: number | null): Record<st
     workspaceId: page.workspaceId,
     visibility: page.visibility ?? "private",
     icon: page.icon ?? null,
-    cover: page.cover ?? null,
+    // osionos#233 D233-1: the flush never publishes a signed media link (it dies within 2 h).
+    cover: typeof page.cover === "string" ? stripMediaSignature(page.cover) : null,
     properties: page.properties ?? [],
   };
   // Only send the cover focal point once the user has actually repositioned a
@@ -102,7 +104,7 @@ function pageToPatchBody(page: PageEntry, baseVersion: number | null): Record<st
   // skew let a stale server copy clobber fresher local edits on reload.
   if (typeof page.updatedAt === "string" && page.updatedAt) body.updatedAt = page.updatedAt;
   const carriesContent = page.content !== undefined;
-  if (carriesContent) body.content = page.content;
+  if (carriesContent) body.content = stripMediaSignaturesDeep(page.content);
   // The version this edit was made against — with the content, and only with it: the
   // bridge refuses a stale one (a 409 with the server's copy), so a metadata-only
   // write must never claim a version it does not depend on.

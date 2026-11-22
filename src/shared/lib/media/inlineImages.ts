@@ -9,6 +9,8 @@
  * gets the "too large to save" notice instead of being shrunk).
  */
 
+import { stripMediaSignature } from "./mediaSignature";
+
 const INLINE_IMAGE = /data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi;
 
 /** Each distinct base64 image URL anywhere in `value`. O(size of the value). */
@@ -25,7 +27,7 @@ export function replaceInlineImages<T>(value: T, urls: ReadonlyMap<string, strin
   // The URL goes in JSON-escaped: whatever it holds cannot break the document around it.
   const replaced = text.replace(INLINE_IMAGE, (match) => {
     const url = urls.get(match);
-    return url === undefined ? match : JSON.stringify(url).slice(1, -1);
+    return url === undefined ? match : JSON.stringify(stripMediaSignature(url)).slice(1, -1);
   });
   return replaced === text ? value : (JSON.parse(replaced) as T);
 }

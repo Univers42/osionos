@@ -37,6 +37,7 @@ import {
 import { blockUpdateIsNoop, persistedValueIsUnchanged } from "./pageStore.blockNoop";
 import { replacePage } from "./replacePage";
 import { patchActivePageSlice } from "./activePageMetadata";
+import { stripMediaSignaturesDeep } from "@/shared/lib/media/mediaSignature";
 import {
   createSeedOfflinePages,
   createSeedOnlinePages,
@@ -246,7 +247,9 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
     set({ deniedPage: page });
   },
 
-  updateBlock: (pageId, blockId, updates) => {
+  // osionos#233 D233-1: every content write drops exp/kid/sig — a signed link dies within 2 h.
+  updateBlock: (pageId, blockId, rawUpdates) => {
+    const updates = stripMediaSignaturesDeep(rawUpdates);
     timed("updateBlock", () => {
       const page = get().pageById(pageId);
       if (!canEditBody(page, getCurrentPageAccessContext())) return;
@@ -264,7 +267,8 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
     });
   },
 
-  insertBlock: (pageId, afterBlockId, block) => {
+  insertBlock: (pageId, afterBlockId, rawBlock) => {
+    const block = stripMediaSignaturesDeep(rawBlock);
     const page = get().pageById(pageId);
     if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
@@ -341,7 +345,8 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
     debouncePersistContent(pageId);
   },
 
-  updatePageContent: (pageId, blocks) => {
+  updatePageContent: (pageId, rawBlocks) => {
+    const blocks = stripMediaSignaturesDeep(rawBlocks);
     timed("updatePageContent", () => {
       const page = get().pageById(pageId);
       if (!canEditBody(page, getCurrentPageAccessContext())) return;
@@ -404,7 +409,10 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
     });
   },
 
-  patchPage: (pageId, patch) => {
+  patchPage: (pageId, rawPatch) => {
+    const patch = typeof rawPatch === "function"
+      ? (current: PageEntry) => stripMediaSignaturesDeep(rawPatch(current))
+      : stripMediaSignaturesDeep(rawPatch);
     if (isCatalogueId(pageId)) return;
     const page = get().pageById(pageId);
     if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
@@ -453,7 +461,8 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
 
   // groot ADR 0065 CV2: coverPosition is outside the stamp, so the updatedAt bump is what makes
   // the outbox publish a reposition. A patch that changes nothing is no edit and bumps nothing.
-  editPageHeader: (pageId, patch) => {
+  editPageHeader: (pageId, rawPatch) => {
+    const patch = stripMediaSignaturesDeep(rawPatch);
     const page = get().pageById(pageId);
     if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
     if (Object.entries(patch).every(([key, value]) => page[key as keyof PageEntry] === value)) return;
