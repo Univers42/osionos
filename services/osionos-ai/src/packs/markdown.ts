@@ -81,7 +81,6 @@ function headingPath(title: string, stack: readonly Heading[]): string {
  */
 function readSections(path: string, text: string): { title: string; sections: RawSection[] } {
 	const lines = text.split(/\r?\n/);
-	const headings: { level: number; text: string }[] = [];
 	let fence: { char: string; length: number } | null = null;
 	let title: string | null = null;
 

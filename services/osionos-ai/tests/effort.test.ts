@@ -11,7 +11,7 @@ import { SseStream, collect } from './sse.ts';
 const { app, mock, base, tokenFor, createConversation } = await startHarness({ openRouterModels: [REASONER] });
 const { reasoningOptions, mergeProviderOptions } = await import('../src/runs/effort.ts');
 const { parseCatalog } = await import('../src/connections/catalogParse.ts');
-const { config } = await import('../src/config.ts');
+await import('../src/config.ts');
 
 after(async () => {
 	await app.close();

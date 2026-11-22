@@ -89,7 +89,12 @@ describe('POST /api/ai/media/describe', () => {
 		assert.ok(hasBytes(exif, 'Exif'));
 		const path = serve(exif, 'image/jpeg');
 		await describePath(path);
-		const body = vlm.bodies.at(-1) as Record<string, any>;
+		const body = vlm.bodies.at(-1) as {
+			temperature?: number;
+			max_tokens?: number;
+			response_format: { type: string; json_schema: { strict: boolean } };
+			messages: { content: unknown }[];
+		};
 		assert.equal(body.temperature, 0);
 		assert.equal(body.max_tokens, 640);
 		assert.equal(body.response_format.type, 'json_schema');

@@ -157,7 +157,6 @@ console.log(`backfill: ${fmt(backfillMs / 1000)} s -> ${fmt(chunksPerSecond, 2)}
 console.log(`\n== (c) QUERY LATENCY WHILE THE BACKFILL RUNS ==`);
 const busyBatches = [];
 for (let index = 0; index < PASSAGES; index += BATCH) busyBatches.push(backfillInputs.slice(index, index + BATCH));
-let busyDone = 0;
 const busyStarted = performance.now();
 const busyLat = [];
 let querying = true;
@@ -167,7 +166,6 @@ const backfillPromise = Promise.all(
 			const batch = busyBatches.shift();
 			if (!batch) return;
 			await embed(batch);
-			busyDone += 1;
 		}
 	}),
 );

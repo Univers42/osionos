@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { quotedData, sourceBlock } from '../../src/runs/sources.ts';
+import { sourceBlock } from '../../src/runs/sources.ts';
 import type { RetrievedChunk } from '../../src/retrieval/search.ts';
 
 /**

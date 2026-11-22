@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
 import type { Pool } from 'pg';
 import { startHarness } from './harness.ts';
-import { vectorFor } from './mockEmbed.ts';
 import { EXACT_SQL, HNSW_SQL } from '../src/retrieval/related.ts';
 import { USER_A } from './retrievalSeed.ts';
 

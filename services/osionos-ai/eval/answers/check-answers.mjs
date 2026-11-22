@@ -21,7 +21,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { contentWords, isFrench, rareTerms, properNouns } from "../text.mjs";
+import { contentWords, rareTerms, properNouns } from "../text.mjs";
 import { pages, bySlug } from "../check-lib.mjs";
 import { readGolden } from "../lib.mjs";
 

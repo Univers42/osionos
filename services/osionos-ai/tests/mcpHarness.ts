@@ -35,10 +35,22 @@ export const seeds = new Seeds(app.db);
 
 export { USER_A, USER_B, WORKSPACE_A, WORKSPACE_B };
 
+/** The JSON the tests read back: only the fields they name. */
+export interface WireBody {
+	result: { instructions?: string; tools?: { name: string }[]; content?: { text?: string }[]; isError?: boolean };
+	error?: unknown;
+	id?: unknown;
+	token?: unknown;
+	status?: unknown;
+	code?: unknown;
+	continuationRunId?: unknown;
+	approvals?: Record<string, unknown>[];
+}
+
 export interface Answer {
 	status: number;
 	headers: IncomingHttpHeaders;
-	body: any;
+	body: WireBody;
 	raw: string;
 }
 
@@ -56,11 +68,12 @@ export function raw(
 				let text = '';
 				res.on('data', (chunk) => (text += chunk));
 				res.on('end', () => {
-					let body: unknown = null;
+					// An empty or non-JSON answer reads as null; tests assert the status before the body.
+					let body = null as unknown as WireBody;
 					try {
 						body = text ? JSON.parse(text) : null;
 					} catch {
-						body = null;
+						body = null as unknown as WireBody;
 					}
 					resolve({ status: res.statusCode ?? 0, headers: res.headers, body, raw: text });
 				});

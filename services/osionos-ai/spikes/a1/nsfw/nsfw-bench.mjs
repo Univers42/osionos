@@ -180,7 +180,7 @@ for (let index = 0; index < rows.length; index += concurrency) {
 			const start = performance.now();
 			const bytes = readFileSync(row.path);
 			const image = await RawImage.read(new Blob([bytes]));
-			const answer = await classifier(image);
+			await classifier(image);
 			return { id: row.id, ms: performance.now() - start };
 		}),
 	);

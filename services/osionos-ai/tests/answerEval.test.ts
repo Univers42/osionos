@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync, readFileSync, mkdtempSync, rmSync, copyFileSync, appendFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdtempSync, rmSync, appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseVerdict, judgePrompt } from '../eval/answers/judge.ts';
@@ -72,7 +72,7 @@ describe('score', () => {
 			{ questionId: 'c', answerable: false, origin: 'human', verdict: { faithful: true, relevant: 1, abstained: true } },
 			{ questionId: 'd', answerable: false, origin: 'human', verdict: { faithful: true, relevant: 2, abstained: false } },
 		];
-		const s = score(items as any);
+		const s = score(items as Parameters<typeof score>[0]);
 		assert.equal(s.faithfulnessRate, 0.75);
 		assert.equal(s.meanRelevance, 2.5);
 		assert.equal(s.abstentionPrecision, 1.0);

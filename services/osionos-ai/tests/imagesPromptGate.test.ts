@@ -6,7 +6,6 @@ import { after, before, describe, it } from 'node:test';
 import { startMockImageEngine } from './mockImageEngine.ts';
 import { startMockPromptGuard } from './mockPromptGuard.ts';
 import { collect, SseStream } from './sse.ts';
-import type { SseEvent } from './sse.ts';
 
 /**
  * The prompt gate of the images (devil C72): L0 then L1, synchronous, before
@@ -85,13 +84,6 @@ async function ledger(userId: string): Promise<{ spent: number; reserved: number
 async function runOf(runId: string): Promise<{ status: string; error: string | null }> {
 	const result = await app.db.query('select status, error from public.ai_runs where id = $1', [runId]);
 	return { status: result.rows[0]?.status ?? '', error: result.rows[0]?.error ?? null };
-}
-
-/** The data of the one event of a type. */
-function dataOf(events: SseEvent[], type: string): Record<string, unknown> {
-	const event = events.find((candidate) => candidate.event === type);
-	assert.ok(event, `the stream carries ${type}: ${events.map((candidate) => candidate.event).join(',')}`);
-	return event.data as Record<string, unknown>;
 }
 
 describe('osionos-ai images: the prompt gate (C72)', () => {

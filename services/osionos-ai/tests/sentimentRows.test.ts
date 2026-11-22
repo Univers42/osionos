@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import { createSentimentHandler } from '../src/sentiment/handler.ts';
 import type { Job } from '../src/jobs/queue.ts';

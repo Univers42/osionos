@@ -3,7 +3,7 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 import type { Pool } from 'pg';
 import { memberTokenFor as tokenFor, startHarness } from './harness.ts';
 import { startMockEmbedder } from './mockEmbed.ts';
-import { Seeds, USER_A, USER_B, USER_C, WORKSPACE_A, WORKSPACE_B, vectorOf } from './retrievalSeed.ts';
+import { Seeds, USER_A, USER_B, WORKSPACE_A, WORKSPACE_B, vectorOf } from './retrievalSeed.ts';
 
 // The embedding service of the retrieval: the mock, at the address the
 // service reads when it embeds a question.
@@ -33,7 +33,7 @@ after(async () => {
 
 const SIX_KEYS = ['blockId', 'headingPath', 'pageId', 'score', 'snippet', 'title'].sort();
 
-async function postSources(token: string | null, body: unknown): Promise<{ status: number; body: any }> {
+async function postSources(token: string | null, body: unknown): Promise<{ status: number; body: { sources?: Record<string, unknown>[] } | null }> {
 	const headers: Record<string, string> = { 'content-type': 'application/json' };
 	if (token) headers.authorization = `Bearer ${token}`;
 	const response = await fetch(`${harness.base}/api/ai/sources`, {
@@ -42,7 +42,7 @@ async function postSources(token: string | null, body: unknown): Promise<{ statu
 		body: JSON.stringify(body),
 	});
 	const text = await response.text();
-	let parsed: any = null;
+	let parsed: { sources?: Record<string, unknown>[] } | null = null;
 	try {
 		parsed = text ? JSON.parse(text) : null;
 	} catch {

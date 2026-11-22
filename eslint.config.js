@@ -215,6 +215,50 @@ export default [
     },
   },
   {
+    // The AI service (services/osionos-ai) runs under plain node 22 with its own
+    // lockfile; `make quality` lints it from the root config since #310.
+    // Caveat: the globals are a hand-kept list of what the service uses, so a
+    // browser global used there fails as no-undef rather than passing silently.
+    files: ["services/osionos-ai/**/*.{ts,mjs,js}"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true },
+      ],
+    },
+    languageOptions: {
+      globals: {
+        AbortController: "readonly",
+        AbortSignal: "readonly",
+        Blob: "readonly",
+        Buffer: "readonly",
+        Headers: "readonly",
+        Request: "readonly",
+        Response: "readonly",
+        TextDecoder: "readonly",
+        TextEncoder: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        clearInterval: "readonly",
+        clearTimeout: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+        performance: "readonly",
+        process: "readonly",
+        queueMicrotask: "readonly",
+        setImmediate: "readonly",
+        setInterval: "readonly",
+        setTimeout: "readonly",
+        structuredClone: "readonly",
+      },
+    },
+  },
+  {
+    // These strip C0/C1 control characters from model and web text on purpose (#310).
+    files: ["services/osionos-ai/src/summary/summarize.ts", "services/osionos-ai/src/web/tools.ts"],
+    rules: { "no-control-regex": "off" },
+  },
+  {
     // The Playwright drivers and benches hand callbacks to page.evaluate(); those
     // bodies run in the page. The bridge and IDE modules stay node-only.
     // Caveat: a browser global used outside an evaluate callback in a driver lints

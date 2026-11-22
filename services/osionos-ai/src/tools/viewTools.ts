@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { BUILTIN_AGENT_IDS } from '../agents/builtins.ts';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import { canReadPageWithRules } from '../retrieval/shareRules.ts';
-import type { AnyViewTool, ReadToolContext, ToolResult, ViewTool } from './types.ts';
+import type { AnyViewTool, ViewTool } from './types.ts';
 
 /** The shape of a uuid. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

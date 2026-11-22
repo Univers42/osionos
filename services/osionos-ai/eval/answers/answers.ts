@@ -19,14 +19,11 @@
 import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Pool } from 'pg';
-import { Embedder } from '../../src/indexer/embedder.ts';
 import { retrieve } from '../../src/retrieval/search.ts';
-import { sourceBlock, quotedData, SOURCE_INSTRUCTION, ABSTAIN_INSTRUCTION } from '../../src/runs/sources.ts';
+import { sourceBlock, SOURCE_INSTRUCTION, ABSTAIN_INSTRUCTION } from '../../src/runs/sources.ts';
 import { SYSTEM_PROMPT } from '../../src/runs/prompt.ts';
 import { startStack } from '../../eval/stack.ts';
 import { readGolden } from '../../eval/lib.mjs';
-import { readCorpus } from '../../eval/lib.mjs';
 import { judge } from './judge.ts';
 import { judgeClaims } from './claimJudge.ts';
 import { openCheckpoint, appendCheckpoint } from './checkpoint.ts';
@@ -137,15 +134,13 @@ async function main() {
 		console.log(`[answers] resuming: ${checkpoint.size} of ${questions.length} already done`);
 	}
 
-	const { stack, index } = await startStack({
+	const { stack } = await startStack({
 		databaseUrl,
 		embedUrl,
 		embedModel,
 		indexTimeoutMs: 600_000,
 		skipAclFilter: false,
 	});
-
-	const embedder = new Embedder({ baseUrl: embedUrl, model: embedModel });
 
 	const labeledAnswers: LabeledAnswer[] = [];
 	const labelsData: LabelData[] = [];
@@ -163,8 +158,6 @@ async function main() {
 			continue;
 		}
 
-		const asker = stack.authUser(question.asker);
-		const workspaces = stack.workspaces.get(question.asker) ?? [];
 		const retrievalUser = stack.retrievalUser(question);
 
 		// Retrieve

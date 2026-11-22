@@ -12,7 +12,7 @@ import type { QueryConfig, QueryResult, QueryResultRow } from 'pg';
  * function serves the pool and a client of the pool.
  */
 export interface QueryRunner {
-	query<R extends QueryResultRow = any, I = any[]>(
+	query<R extends QueryResultRow = QueryResultRow, I = unknown[]>(
 		queryTextOrConfig: string | QueryConfig<I>,
 		values?: I,
 	): Promise<QueryResult<R>>;

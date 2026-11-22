@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-	GOOD_HASH, PAGE_PUBLIC, WS_PRIVATE, AUTHOR, comment, events, handler, installHooks, job, logs, mock, pool, ready, row, sha, signal,
+	GOOD_HASH, WS_PRIVATE, AUTHOR, comment, events, handler, installHooks, job, logs, mock, pool, ready, row, sha, signal,
 } from './moderationHarness.ts';
 
 /** The decisions of the L1 handler: what the audit row says and what the comment becomes. */

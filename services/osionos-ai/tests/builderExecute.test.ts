@@ -212,7 +212,7 @@ describe('builder execute', () => {
 			return r.rows[0].args;
 		})();
 		const rv = revalidateStoredPlan(stored);
-		const plan = (rv as { ok: true; plan: any }).plan!;
+		const plan = (rv as { ok: true; plan: Parameters<typeof flattenPlan>[0] }).plan!;
 		const flat = flattenPlan(plan);
 		const item = flat[0]!;
 		const w1 = writeOf(plan, item, { userId: USER_A, now: '2026-01-01T00:00:00.000Z' });
@@ -226,7 +226,7 @@ describe('builder execute', () => {
 		const d = asked(ev)[0].data as { approvalId: string };
 		const r = await app.db.query('select args from public.ai_approvals where id = $1', [d.approvalId]);
 		const rv = revalidateStoredPlan(r.rows[0].args);
-		const flat = flattenPlan((rv as { ok: true; plan: any }).plan!);
+		const flat = flattenPlan((rv as { ok: true; plan: Parameters<typeof flattenPlan>[0] }).plan!);
 		const approved = approvedKeys(flat, ['deals']);
 		assert.deepEqual(approved, ['deals']);
 		const approved2 = approvedKeys(flat, ['home']);

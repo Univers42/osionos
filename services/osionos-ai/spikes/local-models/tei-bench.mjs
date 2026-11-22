@@ -23,7 +23,6 @@ const CONC = Number(process.env.CONC || 4);
 const CONC16 = Number(process.env.CONC16 || 16);
 
 // ---------------------------------------------------------------- helpers
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function mulberry32(a) {
   return function () {

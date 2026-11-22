@@ -50,16 +50,16 @@ beforeEach(async () => {
 });
 
 /** The approval rows of a token, oldest first. */
-async function rowsOf(tokenId: string): Promise<Record<string, any>[]> {
+async function rowsOf(tokenId: string): Promise<Record<string, unknown>[]> {
 	const result = await app.db.query(
 		'select * from public.ai_approvals where token_id = $1::uuid order by created_at, id',
 		[tokenId],
 	);
-	return result.rows as Record<string, any>[];
+	return result.rows as Record<string, unknown>[];
 }
 
 /** The one approval a token left waiting. */
-async function onlyApproval(tokenId: string): Promise<Record<string, any>> {
+async function onlyApproval(tokenId: string): Promise<Record<string, unknown>> {
 	const rows = await rowsOf(tokenId);
 	assert.equal(rows.length, 1, 'one approval is waiting');
 	return rows[0]!;
@@ -187,7 +187,7 @@ describe('the question of an agent waits longer (G4b-3)', () => {
 		});
 		assert.equal(call.isError, false, call.text);
 		const mcpRow = await onlyApproval(token.id);
-		const mcpMinutes = (new Date(mcpRow.expires_at).getTime() - Date.now()) / 60_000;
+		const mcpMinutes = (new Date(mcpRow.expires_at as string | Date).getTime() - Date.now()) / 60_000;
 		assert.ok(
 			Math.abs(mcpMinutes - 60) <= 1,
 			`the MCP row waits about 60 minutes, not ${mcpMinutes.toFixed(1)}`,

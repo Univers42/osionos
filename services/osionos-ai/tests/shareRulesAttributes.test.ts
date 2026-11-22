@@ -18,14 +18,13 @@ function userAs(userId: string): AuthUser {
 }
 
 describe('shareRules attributes', () => {
-	let warn: { mock: { callCount(): number } };
-	beforeEach(() => { warn = mock.method(console, 'warn', () => undefined); });
+	beforeEach(() => { mock.method(console, 'warn', () => undefined); });
 	afterEach(() => mock.restoreAll());
 
 	it('skips the attribute read when no rule names an attribute', async () => {
 		const calls: string[] = [];
 		const db = {
-			async query(sql: string, params?: unknown[]) {
+			async query(sql: string) {
 				calls.push(sql);
 				if (sql.includes('osionos_share_rules')) return { rows: [{ id: 'r1', workspace_id: WS1, resource_type: 'page', resource_id: PAGE_A, target: { type: 'user', userId: USER }, permission: 'can_view', explicit: true }] } as never;
 				if (sql.includes('osionos_workspace_members')) return { rows: [{ workspace_id: WS1, role: 'member', permissions: ['read'] }] } as never;
@@ -41,7 +40,7 @@ describe('shareRules attributes', () => {
 	it('returns null attributes when the read exceeds 500 rows', async () => {
 		const many = Array.from({ length: 501 }, (_, i) => ({ name: `n${i}`, value: 'v' }));
 		const db = {
-			async query(sql: string, params?: unknown[]) {
+			async query(sql: string) {
 				if (sql.includes('osionos_share_rules')) return { rows: [{ id: 'r1', workspace_id: WS1, resource_type: 'page', resource_id: PAGE_A, target: { type: 'attribute', name: 'role', value: 'admin' }, permission: 'can_view', explicit: true }] } as never;
 				if (sql.includes('osionos_workspace_members')) return { rows: [{ workspace_id: WS1, role: 'member', permissions: ['read'] }] } as never;
 				if (sql.includes('osionos_workspaces')) return { rows: [{ id: WS1, owner_id: WS_OWNER }] } as never;
@@ -60,7 +59,7 @@ describe('shareRules attributes', () => {
 		// smoke: attribute read is invoked when a rule names an attribute
 		const calls: string[] = [];
 		const db = {
-			async query(sql: string, params?: unknown[]) {
+			async query(sql: string) {
 				calls.push(sql);
 				if (sql.includes('osionos_share_rules')) return { rows: [{ id: 'r1', workspace_id: WS1, resource_type: 'page', resource_id: PAGE_A, target: { type: 'attribute', name: 'role', value: 'admin' }, permission: 'can_view', explicit: true }] } as never;
 				if (sql.includes('osionos_workspace_members')) return { rows: [{ workspace_id: WS1, role: 'member', permissions: ['read'] }] } as never;

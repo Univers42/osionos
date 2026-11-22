@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage } from 'node:http';
 
 /**
  * The mock of the prompt guard: llama-server's OpenAI-compatible endpoint,
