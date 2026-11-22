@@ -786,7 +786,7 @@ async function postTyping(deps, session, request, channelId, response, config) {
 	await publishRealtime({
 		topic: chatTopic(channel),
 		eventType: 'typing',
-		payload: await typingPayload(request, channel, session.userId, deps.env),
+		payload: await typingPayload(request, channel, session.userId, deps, config),
 		fetchImpl: deps.fetchImpl,
 		env: deps.env,
 	});

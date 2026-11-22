@@ -72,12 +72,36 @@ export async function setChannelAutopost(deps, session, request, channelId, resp
 }
 
 /**
+ * Whether `userId` has a thread run streaming in `channelId`: one indexed
+ * read (ai_runs by owner) per honoured signal, which the client sends at most
+ * every 2.5 s while it drafts.
+ *
+ * Caveat: a run whose process died reads 'running' until the service's stale
+ * sweep (10 min) gives it up, so the signal stays honoured that long; and the
+ * client's first signal, sent as its run starts, can arrive before the run
+ * row exists and then goes out as the plain typing event.
+ */
+async function hasRunInFlight(deps, config, userId, channelId) {
+	try {
+		const rows = await rest(config, deps.fetchImpl,
+			`ai_runs?owner_id=eq.${userId}&status=eq.running&surface=eq.channel&surface_ref->>channelId=eq.${channelId}&select=id&limit=1`);
+		return Array.isArray(rows) && rows.length > 0;
+	} catch (error) {
+		console.warn(JSON.stringify({ event: 'ai_typing_run_check_failed', channelId, error: error instanceof Error ? error.message : String(error) }));
+		return false;
+	}
+}
+
+/**
  * OB12: in an opted-in channel the asker's client announces that osio is
  * answering. The event carries no text and no userId, so an older client,
  * which shows a typer by userId, ignores it rather than naming the asker.
+ * Only a caller with a thread run in flight in this channel may send it:
+ * any other member's {ai:true} is their own plain typing event.
  */
-export async function typingPayload(request, channel, userId, env) {
+export async function typingPayload(request, channel, userId, deps, config) {
 	const body = request ? await readJsonBody(request).catch(() => ({})) : {};
-	if (body?.ai === true && autopostEnabled(env) && channelAutopost(channel)) return { channelId: channel.id, ai: true };
+	const asksAi = body?.ai === true && autopostEnabled(deps.env) && channelAutopost(channel);
+	if (asksAi && (await hasRunInFlight(deps, config, userId, channel.id))) return { channelId: channel.id, ai: true };
 	return { channelId: channel.id, userId };
 }
