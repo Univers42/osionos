@@ -97,6 +97,11 @@ async function openCodeFile(page, baseURL, name, body) {
   await page.getByRole("textbox", { name: "Code editor" }).waitFor({ state: "attached", timeout: 90_000 });
 }
 
+// With no policy at all (CSP_MODE=none, r314/logs/nocsp-webkit-report.log) Playwright's WebKit build dies
+// before these surfaces on the same steps that pass on Chromium and Firefox, so a policy verdict there
+// would be a verdict on nothing. They stay on the untested list for WebKit; a pass is never faked.
+const WEBKIT_UNREACHED = "surface unreachable on Playwright WebKit with no policy served";
+
 export const SURFACES = [
   { name: "boot signed out", run: async ({ page, baseURL }) => openApp(page, baseURL, {}) },
   { name: "boot signed in", run: async ({ page, baseURL }) => openApp(page, baseURL, { signedIn: true }) },
@@ -108,7 +113,9 @@ export const SURFACES = [
       await page.keyboard.type(" more text /head");
       await expect(page.getByTestId("slash-command-menu")).toBeVisible();
       await expect(slashCommandEntry(page, "Heading 1").first()).toBeVisible();
-      await expect(editor).toContainText("more text");
+      // Firefox at 390x844 drops a typed space about once in four runs (seen "moretext"): the sweep asks
+      // whether the editor takes input under the policy, not whether keyboard.type is lossless.
+      await expect(editor).toContainText(/more ?text/);
     },
   },
   {
@@ -125,6 +132,7 @@ export const SURFACES = [
   },
   {
     name: "code file: Monaco and markdown preview worker",
+    engineSkip: { webkit: WEBKIT_UNREACHED },
     worker: true,
     timeout: 240_000,
     run: async ({ page, baseURL }) => {
@@ -136,6 +144,7 @@ export const SURFACES = [
   },
   {
     name: "theme JSON editor (json.worker)",
+    engineSkip: { webkit: WEBKIT_UNREACHED },
     worker: true,
     timeout: 240_000,
     run: async ({ page, baseURL }) => {
@@ -153,6 +162,7 @@ export const SURFACES = [
   },
   {
     name: "page export zip (jszip)",
+    engineSkip: { webkit: WEBKIT_UNREACHED },
     run: async ({ page, baseURL }) => {
       await openPageNamed(page, baseURL, "Sweep editor");
       // A child made through the UI: a seeded one is not seen by the exporter (it gave a lone .md).
@@ -170,6 +180,7 @@ export const SURFACES = [
   },
   {
     name: "database inline with a formula column (wasm)",
+    engineSkip: { webkit: WEBKIT_UNREACHED },
     run: async ({ page, baseURL }) => {
       const editor = await openEditor(page, baseURL);
       await page.keyboard.press("End");
@@ -189,6 +200,7 @@ export const SURFACES = [
   },
   {
     name: "chart view and PNG export",
+    engineSkip: { webkit: WEBKIT_UNREACHED },
     run: async ({ page, baseURL }) => {
       await openDatabaseHome(page, baseURL);
       await addChartOnTheme(page);
@@ -218,6 +230,7 @@ export const SURFACES = [
   },
   {
     name: "chat: direct message and attachment",
+    engineSkip: { webkit: WEBKIT_UNREACHED },
     run: async ({ page, baseURL }) => {
       await openApp(page, baseURL, { signedIn: true, respond: directMessageAnswer() });
       await openProfileFromPalette(page, "Bob");

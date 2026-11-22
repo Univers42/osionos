@@ -28,6 +28,9 @@ import { countControls, recordCsp } from "../support/cspSweep.mjs";
 import { SURFACES } from "../support/cspSurfaces.mjs";
 
 const ENFORCED = process.env.CSP_MODE === "enforce";
+// CSP_MODE=none serves no policy: a surface that still dies reaches nothing on that engine, so its
+// death under a policy is not the policy's doing. Only the reach is asserted then.
+const BASELINE = process.env.CSP_MODE === "none";
 const VIEWPORTS = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
 const POLICY = readPolicy(readFileSync(new URL("../../../docker/services/node/nginx.conf", import.meta.url), "utf8"));
 
@@ -45,6 +48,7 @@ for (const viewport of VIEWPORTS) {
     });
 
     test("the document carries the policy the web image sends", async ({ page, baseURL }) => {
+      test.skip(BASELINE, "baseline run: no policy is served");
       const response = await page.goto(baseURL, { waitUntil: "domcontentloaded" });
       const headers = response.headers();
       const name = ENFORCED ? "content-security-policy" : "content-security-policy-report-only";
@@ -53,16 +57,23 @@ for (const viewport of VIEWPORTS) {
     });
 
     for (const surface of SURFACES) {
-      test(`surface: ${surface.name}`, async ({ page, browser, baseURL }) => {
+      test(`surface: ${surface.name}`, async ({ page, browser, baseURL, browserName }) => {
+        test.skip(Boolean(surface.engineSkip?.[browserName]), surface.engineSkip?.[browserName]);
         test.setTimeout(surface.timeout ?? 120_000);
         const counted = await countControls(browser, baseURL, viewport);
-        test.skip(!counted.inline, "the inline-script control was not counted");
-        test.skip(surface.worker && !counted.worker, "the worker control was not counted on this engine");
+        test.skip(!BASELINE && !counted.inline, "the inline-script control was not counted");
+        test.skip(!BASELINE && surface.worker && !counted.worker, "the worker control was not counted on this engine");
         const skipReason = surface.skip?.(viewport);
         test.skip(Boolean(skipReason), skipReason);
         const csp = await recordCsp(page);
-        await surface.run({ page, baseURL, viewport });
-        await expectNoViolation(csp);
+        try {
+          await surface.run({ page, baseURL, viewport });
+        } catch (error) {
+          // A surface that died before its end still says what the policy saw: told apart from a policy fault.
+          console.log(`[csp] ${surface.name} died; policy saw ${JSON.stringify(await csp.report())}`);
+          throw error;
+        }
+        if (!BASELINE) await expectNoViolation(csp);
       });
     }
   });
