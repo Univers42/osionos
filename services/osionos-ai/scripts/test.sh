@@ -95,10 +95,10 @@ MODELS_MOUNT=$(CDPATH= cd -- "${MODELS_DIR:-$(dirname -- "$FIRST_MIGRATION")}" &
 # so that one test then fails with ENOENT instead of being skipped.
 GROOT_COMPOSE_MOUNT=""
 if [ -f "$MODELS_MOUNT/../docker-compose.public.yml" ]; then
-	GROOT_COMPOSE_MOUNT="-v $MODELS_MOUNT/../docker-compose.public.yml:/groot/docker-compose.public.yml:ro"
+	GROOT_COMPOSE_MOUNT="--volume=$MODELS_MOUNT/../docker-compose.public.yml:/groot/docker-compose.public.yml:ro"
 fi
 
-docker run --rm --network "$NETWORK" $GROOT_COMPOSE_MOUNT \
+docker run --rm --network "$NETWORK" ${GROOT_COMPOSE_MOUNT:+"$GROOT_COMPOSE_MOUNT"} \
 	-v "$REPO_ROOT:/app" -v "$MODELS_MOUNT:/models:ro" -w /app/services/osionos-ai \
 	-e OSIONOS_AI_MODELS_DIR=/models \
 	-e OSIONOS_AI_PORT=0 \

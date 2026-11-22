@@ -16,6 +16,8 @@ export interface ModesConfig {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Caveat: 100_000 is a sanity ceiling against a typo, not a measured limit; a
+// legitimate cap above it needs a code change here.
 const CAP_MAX = 100_000;
 
 function parseUsers(raw: string | undefined): ReadonlySet<string> {
@@ -39,6 +41,9 @@ function parseCap(env: NodeJS.ProcessEnv, name: string, fallback: number, max: n
 	return value;
 }
 
+// Caveat: the defaults 25 per turn, 200 per day, 30 per minute and 10 per step
+// are unmeasured starting values. Override with OSIONOS_AI_AUTO_PER_TURN,
+// OSIONOS_AI_AUTO_PER_DAY, OSIONOS_AI_AUTO_PER_MINUTE, OSIONOS_AI_AUTO_PER_STEP.
 export function parseModesConfig(env: NodeJS.ProcessEnv): ModesConfig {
 	return {
 		modesEnabled: env.OSIONOS_AI_MODES === 'on',
