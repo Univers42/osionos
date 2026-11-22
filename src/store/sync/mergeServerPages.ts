@@ -27,6 +27,8 @@ import type { SyncLedger } from "@osionos/outbox-ledger";
 import type { PageEntry } from "@/entities/page";
 import { readCoverFields, type CoverFields } from "@/entities/page/model/coverFields";
 import { isPersistedPageId } from "@/store/pageStore.helpers";
+import { mergePageContent } from "./mergePageContent";
+import { baseFor, type PageBase } from "./pageBase";
 import { pageStamp } from "./pageStamp";
 
 /** The local copy holds nothing the server lacks: its stamp is the last one the server confirmed.
@@ -134,32 +136,78 @@ function fetchedCoverFields(current: PageEntry, server: PageEntry, takeServer: b
   return takesPosition && coverPosition !== undefined ? { ...size, coverPosition } : size;
 }
 
+// What a content fetch does to the body. "take": nothing unpublished (or no body loaded),
+// the server's copy stands. "merge": the server moved past the base under unpublished
+// keystrokes, so base, local and server merge three ways and neither side is lost.
+// "keep": the server holds nothing past the base (or the base content is unknown, after a
+// reload): the local body stays and so does the base, so the next save is refused with a
+// 409 and the conflict path merges or copies it (C25), never a blind overwrite (AM15).
+type FetchPlan = "take" | "merge" | "keep";
+
+// Caveat: staleness is read from content versions only. Against a bridge without the version
+// column (both null) a fetch that left before the client's own save landed looks fresh, and
+// the merge can drop the blocks that save added: the legacy last-writer-wins case AM16 retires.
+const isStale = (server: PageEntry, base: PageBase) =>
+  typeof server.contentVersion === "number" && typeof base.version === "number"
+  && server.contentVersion <= base.version;
+
+function fetchPlan(current: PageEntry, server: PageEntry, base: PageBase, clean: boolean): FetchPlan {
+  if (clean || current.content === undefined) return "take";
+  if (server.content === undefined || base.content === null || isStale(server, base)) return "keep";
+  return "merge";
+}
+
+/**
+ * The base a content fetch leaves, or null when it must stay where it is: the base moves to
+ * the server's copy only once the local body holds that copy (taken or merged). Moving it
+ * over unpublished keystrokes would let the next save pass the version check and erase what
+ * the server added (devil ruling AM15). O(1).
+ */
+export function fetchedBase(
+  current: PageEntry,
+  server: PageEntry,
+  ledger: SyncLedger,
+  canPublish: boolean,
+  base: PageBase = baseFor(current),
+): PageBase | null {
+  if (fetchPlan(current, server, base, isPageClean(current, ledger, canPublish)) === "keep") return null;
+  return { version: server.contentVersion ?? null, content: server.content ?? null };
+}
+
+function fetchedContent(current: PageEntry, server: PageEntry, base: PageBase, clean: boolean) {
+  const plan = fetchPlan(current, server, base, clean);
+  if (plan === "keep") return current.content;
+  if (plan === "take") return server.content ?? current.content;
+  return mergePageContent(base.content, current.content ?? [], server.content ?? []).content;
+}
+
 /**
  * The page after a content fetch, or null when the server copy changes nothing (no store write,
  * no cache write). A clean page (nothing unpublished) takes the server copy whatever the
  * timestamps say (except coverPosition, fetchedCoverFields): that also heals a cache an older
  * merge left as {newer updatedAt, older body}.
- * A page with an unpublished change takes it only when the server's updatedAt is newer.
+ * A page with an unpublished change takes the server's metadata only when the server copy is
+ * newer, and its body is the 3-way merge of base, local and server (fetchedContent), whatever
+ * the timestamps say: the keystrokes and the server's blocks both stay.
  * `recordSynced`: the page was clean, so its new stamp is the server's and the outbox must not
  * PATCH that body back. Called on the store's CURRENT page (after the await): an edit typed
  * during the request makes it unclean, and it still publishes.
- * Ponytail: a keystroke typed into a cached body before this fetch returns makes the page
- * unclean, so a newer body from another device that kept the same updatedAt is not taken and
- * the edit publishes over it — the concurrent-edit case, as in mergeServerPage. O(content).
+ * O(content), plus the merge when the page holds unpublished keystrokes.
  */
 export function resolveFetchedPage(
   current: PageEntry,
   server: PageEntry,
   ledger: SyncLedger,
   canPublish: boolean,
+  base: PageBase = baseFor(current),
 ): { page: PageEntry; recordSynced: boolean } | null {
   const clean = isPageClean(current, ledger, canPublish);
   const takeServer = clean || isNewer(server, current);
-  const fillsContent = current.content === undefined && server.content !== undefined;
-  if (!takeServer && !fillsContent) return null;
+  const content = fetchedContent(current, server, base, clean);
+  if (!takeServer && content === current.content) return null;
   const page: PageEntry = {
     ...current,
-    content: server.content ?? current.content,
+    content,
     title: takeServer ? (server.title ?? current.title) : current.title,
     icon: takeServer ? (server.icon ?? current.icon) : current.icon,
     cover: takeServer ? (server.cover ?? current.cover) : current.cover,
