@@ -12,7 +12,7 @@ import { exportPageHtml } from "@/features/page-export/model/exportHtml";
 import { exportPageMarkdown } from "@/features/page-export/model/exportMarkdown";
 import { fileToPage, pageToFile } from "@/features/page-file/model/pageFileCodec";
 import { PRIVATE_MEDIA_NOTE } from "@/shared/lib/media/exportMediaNote";
-import { serializeSelectionToClipboard } from "@/services/page-actions/blockClipboardSerialize";
+import { parseMarkdownClipboard, serializeSelectionToClipboard } from "@/services/page-actions/blockClipboardSerialize";
 import { serializePageToMarkdown } from "@/services/page-actions";
 
 const UPLOAD = `/api/media/uploads/11111111-1111-4111-8111-111111111111/${"a".repeat(64)}.png`;
@@ -59,4 +59,11 @@ test("copy as markdown (blocks and whole page): the note, no signature anywhere 
   assertSilent(serializeSelectionToClipboard(withoutUpload).markdown, "clipboard markdown");
   assertSays(serializePageToMarkdown(page(withUpload)), "page markdown");
   assertSilent(serializePageToMarkdown(page(withoutUpload)), "page markdown");
+});
+
+test("pasting copied markdown back into a page drops the note, keeps the user's own quotes", () => {
+  const pasted = JSON.stringify(parseMarkdownClipboard(serializeSelectionToClipboard(withUpload).markdown));
+  assert.ok(!pasted.includes(PRIVATE_MEDIA_NOTE), "the note was pasted as a block");
+  assert.ok(pasted.includes(UPLOAD), "the paste lost the upload");
+  assert.match(JSON.stringify(parseMarkdownClipboard("> my own quote")), /my own quote/);
 });
