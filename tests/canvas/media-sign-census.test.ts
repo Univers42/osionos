@@ -21,6 +21,7 @@ type Row =
 
 const KIT = "src/shared/notion-database-sys/src/";
 const RENDERS = "tests/canvas/media-render-sites.test.ts";
+const EXPORTS = "tests/canvas/media-export-note.test.ts";
 const SUBMODULE_FOLLOW_UP = "osionos#233 submodule follow-up (resolver seam in HostAdapters + pin bump; D233-15 before enforce)";
 
 const MEDIA_CENSUS: Row[] = [
@@ -44,9 +45,15 @@ const MEDIA_CENSUS: Row[] = [
   { site: "Issues panel screenshot (signed in the issues GET answer, D233-8)", status: "resolved", uses: "issueScreenshotSrc",
     files: ["src/features/issues/ui/IssuesPanel.tsx"],
     proof: ["tests/canvas/issues-screenshot-src.test.ts", "the signed link wins when the bridge sent one"] },
-  { site: "Exports: HTML, Markdown (D233-9)", status: "pending", issue: "osionos#233 D233-9 (this branch)",
-    files: ["src/features/page-export/model/exportHtml.ts", "src/services/page-actions/pageMarkdownEscape.ts",
-      "src/services/page-actions/pageMarkdownSerialize.ts"] },
+  { site: "Exports: HTML and .omd (D233-9)", status: "resolved", uses: "exportedMedia",
+    files: ["src/features/page-export/model/exportHtml.ts", "src/features/page-file/model/pageFileCodec.ts"],
+    proof: [EXPORTS, "HTML export: the note, no signature; no note without an upload"] },
+  { site: "Exports: Markdown, copy as markdown (D233-9)", status: "resolved", uses: "markdownWithMediaNote",
+    files: ["src/features/page-export/model/exportMarkdown.ts", "src/services/page-actions/blockClipboardSerialize.ts",
+      "src/services/page-actions/index.ts"],
+    proof: [EXPORTS, "copy as markdown (blocks and whole page): the note, no signature anywhere on the clipboard"] },
+  { site: "Markdown serializer", status: "not-upload", why: "its output leaves osionos only through the export rows",
+    files: ["src/services/page-actions/pageMarkdownEscape.ts", "src/services/page-actions/pageMarkdownSerialize.ts"] },
   { site: "DB views: gallery, board, feed, media block, file cells, markdown renderers", status: "pending", issue: SUBMODULE_FOLLOW_UP,
     files: [`${KIT}components/views/gallery/GalleryView.tsx`, `${KIT}components/views/board/BoardCardHelpers.tsx`,
       `${KIT}components/views/feed/FeedView.tsx`, `${KIT}components/views/feed/FeedReaderOverlay.tsx`,
