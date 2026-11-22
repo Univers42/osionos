@@ -49,6 +49,39 @@ export function verifyMediaSignature(keys, path, params, nowSec = Math.floor(Dat
 	return timingSafeEqual(Buffer.from(digest(key.secret, path, exp), 'hex'), Buffer.from(sig, 'hex'));
 }
 
+// osionos#233 D233-1: the plain-node copy of src/shared/lib/media/mediaSignature.ts, so a page
+// write never stores a link that dies within 2 h. tests/canvas/media-signature-drift.test.ts fails
+// when the two disagree.
+// Caveat: text-shape match, like the client's — a percent-encoded or split signed link is stored as-is.
+const SIGNED_UPLOAD = /(\/api\/media\/uploads\/[0-9a-f-]{36}\/[0-9a-f]{64}\.[a-z0-9]{1,8})\?([^\s"'<>()\\#]*)/gi;
+const SIGNATURE_PARAM = /^(?:amp;)?(?:exp|kid|sig)=/i;
+
+function keptQuery(query) {
+	const kept = query.split('&').filter((param) => param !== '' && !SIGNATURE_PARAM.test(param));
+	if (kept.length === 0) return '';
+	return `?${kept.map((param) => param.replace(/^amp;/, '')).join(query.includes('&amp;') ? '&amp;' : '&')}`;
+}
+
+/** `text` with exp/kid/sig removed from every bridge-upload URL in it; otherwise byte-identical. */
+export function stripMediaSignature(text) {
+	if (!text.includes('sig=')) return text;
+	return text.replace(SIGNED_UPLOAD, (match, path, query) =>
+		query.split('&').some((param) => SIGNATURE_PARAM.test(param)) ? `${path}${keptQuery(query)}` : match);
+}
+
+/** `value` with every string stripped; the same reference when nothing held a signature. */
+export function stripMediaSignatures(value) {
+	if (typeof value === 'string') return stripMediaSignature(value);
+	if (value === null || typeof value !== 'object') return value;
+	let out = null;
+	for (const key of Object.keys(value)) {
+		const stripped = stripMediaSignatures(value[key]);
+		if (stripped !== value[key]) out ??= Array.isArray(value) ? [...value] : { ...value };
+		if (out) out[key] = stripped;
+	}
+	return out ?? value;
+}
+
 /**
  * Counts bare (unsigned, sessionless) reads and logs one line a minute while there are any, so the
  * switch to MEDIA_URL_ENFORCE can wait until nothing unknown still reads them.

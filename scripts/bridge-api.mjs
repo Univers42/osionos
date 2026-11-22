@@ -98,6 +98,7 @@ import { createBaasTransport } from './bridge-baas-transport.mjs';
 import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 import { createEmbedHandler } from './bridge-embed.mjs';
 import { validatedDatabaseState, validatedPageContent } from './bridge-content-validation.mjs';
+import { stripMediaSignatures } from './bridge-media-sign.mjs';
 import { linkedTablesSchema } from './bridge-schemaless-tables.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -839,7 +840,7 @@ function pageCreateRowFromPayload(payload, authContext) {
 		owner_id: authContext.userId,
 		title: safeText(payload.title, 200) || 'Untitled',
 		icon: hasOwn(payload, 'icon') ? (safeText(payload.icon, 80) || null) : null,
-		cover: hasOwn(payload, 'cover') ? (safeText(payload.cover, 1024) || null) : null,
+		cover: hasOwn(payload, 'cover') ? stripMediaSignatures(safeText(payload.cover, 1024) || null) : null,
 		database_id: databaseId,
 		surface,
 		visibility,
@@ -889,7 +890,7 @@ function pageUpdateRowFromPayload(payload) {
 	assignPayloadValue(row, payload, 'sortOrder', 'sort_order', (value) => typeof value === 'number' ? value : null);
 	assignPayloadValue(row, payload, 'title', 'title', (value) => safeText(value, 200) || 'Untitled');
 	assignPayloadValue(row, payload, 'icon', 'icon', (value) => textOrNull(value, 80));
-	assignPayloadValue(row, payload, 'cover', 'cover', (value) => textOrNull(value, 1024));
+	assignPayloadValue(row, payload, 'cover', 'cover', (value) => stripMediaSignatures(textOrNull(value, 1024)));
 	assignPayloadValue(row, payload, 'coverPosition', 'cover_position', (value) => typeof value === 'number' ? Math.max(0, Math.min(100, value)) : null);
 	assignPayloadValue(row, payload, 'databaseId', 'database_id', (value) => value === null ? null : textOrNull(value, 160));
 	assignPayloadValue(row, payload, 'surface', 'surface', (value) => PAGE_SURFACE_VALUES.has(value) ? value : null);
