@@ -69,12 +69,10 @@ export function failureCode(error: unknown): string {
   return typeof code === "string" ? code : "internal";
 }
 
-const UPSTREAM_FAILED = () => "The AI service failed — try again";
-
 /**
- * Every code the service sends, and the sentence the pane says for it. The
- * finer classes of a provider failure keep the sentence of `upstream_error`:
- * they tell the logs and the reader of a frame, not the person, for now.
+ * Every code the service sends, and the sentence the pane says for it. Only
+ * `rate_limited` carries a delay on the wire (`retryAfterSeconds`), so the
+ * four provider classes name a next step but never promise seconds.
  */
 const MESSAGES: Record<string, (retryAfter: number | null) => string> = {
   rate_limited: (retryAfter) => `Too many requests — try again in ${retryAfter ?? 60} s`,
@@ -84,10 +82,10 @@ const MESSAGES: Record<string, (retryAfter: number | null) => string> = {
   unsupported_file: () => "This file type can't be read yet — text, Markdown, CSV, JSON, code and images work",
   attachment_not_found: () => "An attachment could not be found",
   upstream_unavailable: () => "The AI service is unavailable — try again",
-  upstream_error: UPSTREAM_FAILED,
-  quota_exhausted: UPSTREAM_FAILED,
-  provider_unavailable: UPSTREAM_FAILED,
-  context_too_long: UPSTREAM_FAILED,
+  upstream_error: () => "The AI service failed — try again",
+  quota_exhausted: () => "The free AI quota is used up for now — try again later or pick another model",
+  provider_unavailable: () => "The AI provider is down right now — try again in a few minutes",
+  context_too_long: () => "That conversation is too long for this model — shorten your message or start a new chat",
   network_error: () => "Connection lost — resuming",
   cancelled: () => "The run was cancelled",
   timeout: () => "The model took too long — try again",
@@ -119,7 +117,6 @@ const RETRYABLE = new Set([
   "upstream_error",
   "quota_exhausted",
   "provider_unavailable",
-  "context_too_long",
   "network_error",
 ]);
 

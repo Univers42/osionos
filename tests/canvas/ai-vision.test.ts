@@ -110,12 +110,24 @@ test("a rate limit without a header waits a minute", () => {
   assert.equal(info.text, "Too many requests — try again in 60 s");
 });
 
-test("the finer classes of a provider failure read as upstream_error did", () => {
-  const today = runError("upstream_error");
-  for (const code of ["quota_exhausted", "provider_unavailable", "context_too_long"]) {
-    assert.deepEqual(runError(code), today, code);
-    assert.equal(errorWords(code), errorWords("upstream_error"), code);
+test("each provider failure class has its own sentence and next step", () => {
+  const cases: Array<[string, RegExp, boolean]> = [
+    ["upstream_error", /service failed/, true],
+    ["quota_exhausted", /quota is used up.*another model/, true],
+    ["provider_unavailable", /provider is down.*few minutes/, true],
+    ["context_too_long", /too long.*shorten/, false],
+  ];
+  const seen = new Set<string>();
+  for (const [code, words, retry] of cases) {
+    const info = runError(code);
+    assert.match(info.text, words, code);
+    assert.equal(info.retry, retry, code);
+    assert.equal(info.retryAfter, null, code);
+    assert.doesNotMatch(info.text, /\d+ s\b/, code);
+    if (code !== "upstream_error") assert.notEqual(errorWords(code), errorWords("upstream_error"), code);
+    seen.add(info.text);
   }
+  assert.equal(seen.size, cases.length);
 });
 
 test("the Retry-After of a refusal is read from its headers", () => {
