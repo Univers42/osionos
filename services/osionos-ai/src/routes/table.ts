@@ -14,19 +14,13 @@ import { handleImages } from './images.ts';
 import { handleMediaDescribe } from './mediaDescribe.ts';
 import { handleRunCancel, handleRunEvents, handleRuns } from './runs.ts';
 import { handleThreadRuns } from './threadRuns.ts';
-import {
-	handleConnectionDelete,
-	handleConnections,
-	handleConnectionTest,
-	handleOAuthComplete,
-	handleOAuthStart,
-	handleProviders,
-} from './connections.ts';
+import { handleConnectionDelete, handleConnections, handleConnectionTest, handleOAuthComplete, handleOAuthStart, handleProviders } from './connections.ts';
 import { handleUsage } from './usage.ts';
 import { handleCapabilities } from './capabilities.ts';
 import { handleRelated } from './related.ts';
 import { handleSources } from './sources.ts';
-import { handleApprovalDecision, handleApprovalGet, handleApprovalList, handleApprovalResume, handleApprovalUndo } from './approvals.ts';
+import { APPROVAL_ROUTES } from './tableApprovals.ts';
+import { handleConversationMode } from './conversationMode.ts';
 import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
 import { handleSentimentRows } from './sentimentRows.ts';
 import { handleSentimentSettings } from './sentimentSettings.ts';
@@ -74,6 +68,8 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/conversations/:id/summary',
 		handle: handleConversationSummary,
 	},
+	// Assist mode of a conversation (AM10, AM18): flag off, the handler answers 404.
+	{ methods: ['GET', 'PATCH'], pattern: /^\/api\/ai\/conversations\/([^/]+)\/mode$/, label: '/api/ai/conversations/:id/mode', handle: handleConversationMode },
 	{
 		methods: ['PATCH', 'DELETE'],
 		pattern: /^\/api\/ai\/conversations\/([^/]+)$/,
@@ -158,41 +154,12 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/runs/:id/cancel',
 		handle: handleRunCancel,
 	},
-	{
-		methods: ['GET'],
-		pattern: /^\/api\/ai\/approvals$/,
-		label: '/api/ai/approvals',
-		handle: handleApprovalList,
-	},
-	{
-		methods: ['GET'],
-		pattern: /^\/api\/ai\/approvals\/([^/]+)$/,
-		label: '/api/ai/approvals/:id',
-		handle: handleApprovalGet,
-	},
-	{
-		methods: ['POST'],
-		pattern: /^\/api\/ai\/approvals\/([^/]+)$/,
-		label: '/api/ai/approvals/:id',
-		handle: handleApprovalDecision,
-	},
+	...APPROVAL_ROUTES,
 	{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/memories$/, label: '/api/ai/workspaces/:ws/memories', handle: handleMemoriesList },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/approve$/, label: '/api/ai/memories/:id/approve', handle: handleMemoryApprove },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/reject$/, label: '/api/ai/memories/:id/reject', handle: handleMemoryReject },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/archive$/, label: '/api/ai/memories/:id/archive', handle: handleMemoryArchive },
 	{ methods: ['PATCH'], pattern: /^\/api\/ai\/memories\/([^/]+)$/, label: '/api/ai/memories/:id', handle: handleMemoryEdit },
-	{
-		methods: ['POST'],
-		pattern: /^\/api\/ai\/approvals\/([^/]+)\/resume$/,
-		label: '/api/ai/approvals/:id/resume',
-		handle: handleApprovalResume,
-	},
-	{
-		methods: ['POST'],
-		pattern: /^\/api\/ai\/approvals\/([^/]+)\/undo$/,
-		label: '/api/ai/approvals/:id/undo',
-		handle: handleApprovalUndo,
-	},
 	{
 		methods: [],
 		pattern: /^\/api\/ai\/workspaces\/([^/]+)\/sentiment\/settings$/,
