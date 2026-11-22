@@ -17,6 +17,7 @@
 // serializer itself is untouched — export owns its dialect deltas.
 
 import type { Block } from "@/entities/block";
+import { markdownWithMediaNote } from "@/shared/lib/media/exportMediaNote";
 // Deep import (not the barrel) so the node strip-types canvas runner never
 // meets the api client's parameter properties.
 import { serializeBlocksToMarkdown } from "@/services/page-actions/pageMarkdownSerialize";
@@ -89,5 +90,5 @@ export function exportPageMarkdown(
   databaseRef: (block: Block) => string | null,
 ): string {
   const body = serializeBlocksToMarkdown(transformBlocksForExport(blocks, options, databaseRef));
-  return `# ${title || "Untitled"}\n\n${body}\n`;
+  return markdownWithMediaNote(`# ${title || "Untitled"}\n\n${body}\n`);
 }

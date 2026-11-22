@@ -15,6 +15,7 @@
 // toggles as native <details>. Kept deliberately printable.
 
 import type { Block } from "@/entities/block";
+import { PRIVATE_MEDIA_NOTE, exportedMedia } from "@/shared/lib/media/exportMediaNote";
 import { isDatabaseBlock } from "./databaseExportSource";
 import { escapeHtml } from "./htmlEscape";
 import { inlineTagsToHtml } from "./inlineDialect";
@@ -175,7 +176,8 @@ export function exportPageHtml(
   theme?: ExportTheme | null,
 ): string {
   const safeTitle = escapeHtml(title || "Untitled");
-  const body = renderBlocksHtml(blocks, options, databaseHtml);
+  const media = exportedMedia(renderBlocksHtml(blocks, options, databaseHtml));
+  const note = media.holdsUpload ? `\n<p class="osionos-media-note">${escapeHtml(PRIVATE_MEDIA_NOTE)}</p>` : "";
   const style = options.styling === "raw"
     ? ""
     : `\n<style>${DOC_CSS}${theme ? themeCss(theme) : ""}</style>`;
@@ -188,7 +190,7 @@ export function exportPageHtml(
 </head>
 <body>
 <h1>${safeTitle}</h1>
-${body}
+${media.text}${note}
 </body>
 </html>
 `;

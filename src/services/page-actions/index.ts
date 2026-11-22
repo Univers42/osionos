@@ -15,6 +15,7 @@ import type { Block } from "@/entities/block";
 import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import type { PageEntry } from "@/entities/page";
 import type { PageConfig } from "@/shared/config/pageConfigStore";
+import { markdownWithMediaNote } from "@/shared/lib/media/exportMediaNote";
 import { serializeBlocksToMarkdown } from "./pageMarkdownSerialize";
 
 export { serializeBlocksToMarkdown, blockToMarkdown } from "./pageMarkdownSerialize";
@@ -117,7 +118,7 @@ function safeFileName(value: string): string {
 
 export function serializePageToMarkdown(page: PageEntry): string {
   const body = serializeBlocksToMarkdown(page.content ?? []);
-  return `# ${page.title || "Untitled"}\n\n${body}`.trim();
+  return markdownWithMediaNote(`# ${page.title || "Untitled"}\n\n${body}`.trim());
 }
 
 export async function copyPageLink(pageId: string, workspaceId?: string | null): Promise<string> {

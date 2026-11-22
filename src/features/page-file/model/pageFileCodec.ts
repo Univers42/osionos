@@ -20,7 +20,8 @@ import { reconcileBlocks } from "@/features/raw-mode/model/reconcileBlocks";
 
 import { EXTRA_BLOCK_KEYS, SCOPED_OVERLAY_KEYS, applyOverlay, collectOverlay } from "./blockOverlay";
 import { resolveContainerAttributes } from "./containerStyle";
-import { joinFrontMatter, splitFrontMatter } from "./frontMatter";
+import { PRIVATE_MEDIA_NOTE, exportedMedia } from "@/shared/lib/media/exportMediaNote";
+import { joinFrontMatter, splitFrontMatter, type FrontMatterMeta } from "./frontMatter";
 import { metaFromPage, patchFromMeta } from "./pageFileMeta";
 import { kindOfPage } from "./pagePaths";
 import {
@@ -104,13 +105,20 @@ export function pageToFile(page: PageEntry): string {
   const kind = kindOfPage(page);
   if (kind === "code") return codeBlockOf(page)?.content ?? "";
   const meta = metaFromPage(page);
-  if (kind === "dir") return joinFrontMatter({ ...meta }, "");
+  if (kind === "dir") return omdText({ ...meta }, "");
   const content = page.content ?? [];
-  if (content.length === 0) return joinFrontMatter({ ...meta }, "");
-  return joinFrontMatter(
+  if (content.length === 0) return omdText({ ...meta }, "");
+  return omdText(
     { ...meta, blocks: collectOverlay(content, [...new Set([...OVERLAY_KEYS, ...SCOPED_OVERLAY_KEYS])]) },
     serializeBlocksToMarkdown(content, { keepEmptyParagraphs: true }),
   );
+}
+
+/** D233-9: no signature in the file; `media_note` (never read back) when it links an upload. */
+function omdText(meta: FrontMatterMeta, body: string): string {
+  const media = exportedMedia(joinFrontMatter(meta, body));
+  if (!media.holdsUpload) return media.text;
+  return exportedMedia(joinFrontMatter({ ...meta, media_note: PRIVATE_MEDIA_NOTE }, body)).text;
 }
 
 /**

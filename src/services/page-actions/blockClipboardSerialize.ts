@@ -3,6 +3,8 @@ import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 // Narrow import (the parser only) — the markengine barrel also pulls the JSX React
 // renderers, which we don't need here and which the node test loader can't strip.
 import { parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
+import { markdownWithMediaNote, withoutMediaNote } from "@/shared/lib/media/exportMediaNote";
+import { stripMediaSignature } from "@/shared/lib/media/mediaSignature";
 import { serializeBlocksToMarkdown } from "./pageMarkdownSerialize";
 
 /** Lossless internal block payload MIME (for a future cross-tab clipboard write). */
@@ -52,9 +54,9 @@ export function lastSelectionRootId(blocks: Block[], idSet: Set<string>): string
 
 export function serializeSelectionToClipboard(blocks: Block[]): ClipboardPayload {
   return {
-    text: blocksToPlainText(blocks),
-    markdown: serializeBlocksToMarkdown(blocks),
-    json: JSON.stringify({ v: 1, kind: "osionos-blocks", blocks }),
+    text: stripMediaSignature(blocksToPlainText(blocks)),
+    markdown: markdownWithMediaNote(serializeBlocksToMarkdown(blocks)),
+    json: stripMediaSignature(JSON.stringify({ v: 1, kind: "osionos-blocks", blocks })),
   };
 }
 
@@ -72,7 +74,7 @@ export function parseBlocksJson(json: string | null): Block[] | null {
 
 /** Markdown → blocks (the formatted-paste path; `# x` becomes a heading). */
 export function parseMarkdownClipboard(markdown: string): Block[] {
-  return sanitizeLinkBlockFields(parseMarkdownToBlocks(markdown));
+  return sanitizeLinkBlockFields(parseMarkdownToBlocks(withoutMediaNote(markdown)));
 }
 
 /**
