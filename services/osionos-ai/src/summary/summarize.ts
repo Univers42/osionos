@@ -100,6 +100,9 @@ async function callSummariser(target: ResolvedTarget, prompt: string): Promise<{
 		abortSignal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
 		maxRetries: 0,
 		experimental_download: refuseDownload,
+		// The SDK's default logs the error, and a provider's error carries its body.
+		// The same error still reaches the loop below as an 'error' part.
+		onError: () => undefined,
 	});
 	let text = '';
 	let usage: LanguageModelUsage | undefined;
