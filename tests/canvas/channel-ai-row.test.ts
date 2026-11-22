@@ -102,3 +102,20 @@ test("OB6: a report names the message, and no person as its subject (C439)", asy
   };
   assert.deepEqual(rules.aiAnswerReport?.("m1"), { subjectKind: "message", subjectId: "m1", category: "ai_answer" });
 });
+
+test("OB4: an AI answer that reaches the open thread live keeps isAi, so it renders as plain text", async () => {
+  const thread = (await import("@/widgets/channel-messages/model/useThread")) as {
+    applyThreadFrame?: (messages: ChatMessage[], frame: unknown, rootId: string, channelId: string) => ChatMessage[];
+  };
+  const apply = thread.applyThreadFrame as NonNullable<typeof thread.applyThreadFrame>;
+  assert.equal(typeof apply, "function");
+  const payload = {
+    messageId: "m2", channelId: "c1", threadRootId: "m1", authorId: "", authorName: "AI",
+    content: `see ${LINK} ${IMAGE}`, attachments: [{ type: "url", url: LINK }], isAi: true, aiRequestedBy: { id: ANA },
+  };
+  const [answer] = apply([], { event_type: "message_created", payload }, "m1", "c1");
+  assert.deepEqual([answer?.isAi, answer?.aiRequestedBy], [true, ANA]);
+  assert.doesNotMatch(row(answer), LOADS);
+  const [person] = apply([], { event_type: "message_created", payload: { ...payload, isAi: false } }, "m1", "c1");
+  assert.match(row(person), LOADS, "control: the same frame from a person shows the card and the image");
+});
