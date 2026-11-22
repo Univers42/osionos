@@ -22,6 +22,7 @@ import { X } from 'lucide-react';
 import type { ChatMessage } from '@/shared/chat/messageApi';
 import { MessageRow } from './MessageRow';
 import { MessageComposer } from './composer/MessageComposer';
+import { canDeleteMessage } from '../model/aiAnswerRow';
 import { useThread } from '../model/useThread';
 import type { SendOutcome } from '../model/channelWrites';
 import type { ComposerSend } from './composer/useComposerWarning';
@@ -32,6 +33,8 @@ interface ThreadPanelProps {
   workspaceId: string;
   userId: string;
   canInteract: boolean;
+  /** A channel owner or admin: may delete an AI answer, as in the timeline (OB6). */
+  canModerate?: boolean;
   onReply: (message: ChatMessage) => void;
   /** Saves an edit. The answer is typed: a warning is not a failure. */
   onEdit: (
@@ -43,10 +46,11 @@ interface ThreadPanelProps {
   onReact: (id: string, emoji: string, add: boolean) => void;
   onSend: ComposerSend;
   onClose: () => void;
+  onReport?: (message: ChatMessage) => void;
 }
 
 export const ThreadPanel: React.FC<ThreadPanelProps> = ({
-  root, channelId, workspaceId, userId, canInteract, onReply, onEdit, onDelete, onReact, onSend, onClose,
+  root, channelId, workspaceId, userId, canInteract, canModerate = false, onReply, onEdit, onDelete, onReact, onSend, onClose, onReport,
 }) => {
   const { messages, loading } = useThread(root.id, channelId, workspaceId);
   const list = messages.length ? messages : [root];
@@ -64,13 +68,14 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
             <MessageRow
               key={message.id}
               message={message}
-              isAuthor={message.authorId === userId}
+              isAuthor={canDeleteMessage(message, userId, canModerate)}
               canInteract={canInteract}
               userId={userId}
               onEdit={onEdit}
               onDelete={onDelete}
               onReact={onReact}
               onReply={onReply}
+              onReport={onReport}
             />
           ))}
         </div>

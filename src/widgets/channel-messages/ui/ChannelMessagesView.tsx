@@ -385,12 +385,14 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
           workspaceId={liveWorkspaceId || channel?.workspaceId || workspaceId}
           userId={activeUserId}
           canInteract={history.mode === "bridge"}
+          canModerate={canModerate}
           onReply={setReplyTarget}
           onEdit={(id, content, options) => actions.edit(id, content, options)}
           onDelete={(id) => { void actions.remove(id).catch(() => undefined); }}
           onReact={(id, emoji, add) => { void actions.react(id, emoji, add).catch(() => undefined); }}
           onSend={(text, attachments, options) => actions.send(text, attachments, threadRoot.id, options)}
           onClose={() => setThreadRoot(null)}
+          onReport={reportAiAnswer}
         />
       )}
     </div>
