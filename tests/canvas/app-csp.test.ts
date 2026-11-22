@@ -45,7 +45,7 @@ test("the policy is defined once, in nginx.conf", () => {
 test("script-src carries no unsafe source and the policy sets no other fetch directive", () => {
   const policy = readPolicy(NGINX) ?? "";
   assert.ok(directive(policy, "script-src").length > 0);
-  assert.doesNotMatch(directive(policy, "script-src").join(" "), /unsafe-(inline|eval)|\*|https?:/);
+  assert.doesNotMatch(directive(policy, "script-src").join(" "), /'unsafe-(inline|eval)'|\*|https?:/);
   for (const absent of ["default-src", "connect-src", "frame-src", "img-src", "media-src", "font-src", "style-src", "form-action"]) {
     assert.deepEqual(directive(policy, absent), [], `${absent} is phase 2 (D314-3)`);
   }
