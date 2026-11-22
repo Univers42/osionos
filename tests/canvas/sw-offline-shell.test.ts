@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/30 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/30 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -33,11 +33,13 @@ const keyOf = (request: string | FakeRequest) => new URL(typeof request === "str
 function boot() {
   const handlers: Record<string, Handler> = {};
   const store = new Map<string, Response>();
-  const world = { online: true, link: true, tookOver: false, fetched: [] as string[] };
+  const world = { online: true, link: true, tookOver: false, fetched: [] as string[], answers: new Map<string, () => Response>() };
   const network = async (request: string | FakeRequest) => {
     const url = keyOf(request);
     world.fetched.push(url);
     if (!world.online) throw new TypeError("Failed to fetch");
+    const scripted = world.answers.get(new URL(url).pathname);
+    if (scripted) return scripted();
     // Like the deployed app: every app path answers with the shell, a file with itself.
     if (!new URL(url).pathname.includes(".")) return new Response(SHELL, { headers: { "content-type": "text/html" } });
     return new Response(`file ${url}`, { headers: { "content-type": "application/octet-stream" } });
@@ -143,4 +145,33 @@ test("the page links a web app manifest that names the app, its start and its ic
   assert.equal(manifest.start_url, "/");
   assert.equal(manifest.display, "standalone");
   assert.ok(manifest.icons.some((icon: { src: string }) => icon.src === "/favicon.svg"));
+});
+
+// #313: a proxy or an old nginx answered a missing font with the app page (200 text/html); kept
+// as the font, it stayed broken in that browser for good.
+const appPage = () => new Response(SHELL, { headers: { "content-type": "text/html" } });
+
+test("a build file answered with the app page is passed through and not kept", async () => {
+  const { handlers, store, world } = boot();
+  world.answers.set("/assets/x-1.ttf", appPage);
+  assert.equal(await (await fire(handlers.fetch, file("/assets/x-1.ttf")))?.text(), SHELL);
+  assert.equal(store.has(`${ORIGIN}/assets/x-1.ttf`), false);
+  world.fetched.length = 0;
+  await fire(handlers.fetch, file("/assets/x-1.ttf"));
+  assert.deepEqual(world.fetched, [`${ORIGIN}/assets/x-1.ttf`], "the second request goes to the network");
+});
+
+test("a missing build file is passed through as a 404 and not kept", async () => {
+  const { handlers, store, world } = boot();
+  world.answers.set("/assets/x-2.js", () => new Response("not found", { status: 404, headers: { "content-type": "text/html" } }));
+  assert.equal((await fire(handlers.fetch, file("/assets/x-2.js")))?.status, 404);
+  assert.equal(store.has(`${ORIGIN}/assets/x-2.js`), false);
+});
+
+test("an app page kept under a build file name is dropped and fetched again", async () => {
+  const { handlers, store, world } = boot();
+  store.set(`${ORIGIN}/assets/x-3.ttf`, appPage());
+  assert.equal(await (await fire(handlers.fetch, file("/assets/x-3.ttf")))?.text(), `file ${ORIGIN}/assets/x-3.ttf`);
+  assert.deepEqual(world.fetched, [`${ORIGIN}/assets/x-3.ttf`]);
+  assert.equal(await store.get(`${ORIGIN}/assets/x-3.ttf`)?.text(), `file ${ORIGIN}/assets/x-3.ttf`);
 });
