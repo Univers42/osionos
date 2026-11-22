@@ -29,7 +29,9 @@ export type Behaviour =
 	/** One chunk of text, then the socket dies. */
 	| 'text_then_break'
 	/** A tool call (finish: tool_calls), the answer of the NEXT request is the next entry. */
-	| 'tool';
+	| 'tool'
+	/** A 200 stream whose whole SSE text is the `body`, as written: what a model wrote, verbatim. */
+	| 'sse';
 
 export interface Scripted {
 	behaviour: Behaviour;
@@ -115,6 +117,11 @@ export async function startFailingUpstream(): Promise<FailingUpstream> {
 			return;
 		}
 		if (behaviour === 'reset') return void response.socket?.destroy();
+		if (behaviour === 'sse') {
+			response.writeHead(200, { 'content-type': 'text/event-stream' });
+			response.end(body ?? '');
+			return;
+		}
 		if (behaviour === 'text_then_break') {
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
 			response.write(serializeChunk('partial ', false, false, null));

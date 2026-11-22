@@ -86,6 +86,9 @@ const MESSAGES: Record<string, (retryAfter: number | null) => string> = {
   quota_exhausted: () => "The free AI quota is used up for now — try again later or pick another model",
   provider_unavailable: () => "The AI provider is down right now — try again in a few minutes",
   context_too_long: () => "That conversation is too long for this model — shorten your message or start a new chat",
+  answer_cut_off: () => "The model spent its whole answer thinking and wrote nothing — try again or pick another model",
+  answer_filtered: () => "The provider's filter blocked this answer — rephrase your message or pick another model",
+  empty_answer: () => "The model ended without an answer — try again or pick another model",
   network_error: () => "Connection lost — resuming",
   cancelled: () => "The run was cancelled",
   timeout: () => "The model took too long — try again",
@@ -118,6 +121,9 @@ const RETRYABLE = new Set([
   "quota_exhausted",
   "provider_unavailable",
   "network_error",
+  "answer_cut_off",
+  "answer_filtered",
+  "empty_answer",
 ]);
 
 /**

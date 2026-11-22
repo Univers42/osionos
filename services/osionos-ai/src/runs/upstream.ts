@@ -34,6 +34,7 @@ import { scheduleSummary } from '../summary/summarize.ts';
 import { THREAD_SYSTEM_PROMPT, ThreadAccessLost } from '../threads/context.ts';
 import { setRunAnswer } from './repo.ts';
 import { typedTurnsOnly, webToolsOnly } from './privacyGate.ts';
+import { EmptyAnswer, emptyAnswerCode } from './emptyAnswer.ts';
 
 /**
  * The upstream of a run: the model call, the events, the settlement.
@@ -310,6 +311,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// The run asked the user for the right to write: it ends with that
 		// reason, and the approval row is what waits for the answer.
 		if (runTools.awaitingApproval) finishReason = 'awaiting_approval';
+		const empty = emptyAnswerCode(answer, finishReason);
+		if (empty) throw new EmptyAnswer(empty);
 
 		// The usage the upstream reported, or the estimate of what it did not.
 		settled = usageForSettlement(runId, usage, {
@@ -381,7 +384,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	} catch (error) {
 		const closed = error instanceof ThreadAccessLost
 			? 'access_revoked'
-			: abortCode(current.controller.signal) ?? (isDataPolicyRefusal(error) ? 'vision_unavailable' : null);
+			: error instanceof EmptyAnswer
+				? error.code
+				: abortCode(current.controller.signal) ?? (isDataPolicyRefusal(error) ? 'vision_unavailable' : null);
 		const failed = closed ? { code: closed } : classifyRunFailure(error, failure);
 		const { code } = failed;
 		// A cancelled or failed run settles what the upstream reported, or

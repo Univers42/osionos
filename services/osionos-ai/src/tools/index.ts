@@ -291,7 +291,7 @@ export function readToolSet(
 						ok: false,
 						error: result.error,
 					});
-					return pool.draw(result.error);
+					return pool.draw('hint' in result && result.hint ? `${result.error}. ${result.hint}` : result.error);
 				}
 				// The numbering and the commit of it are ONE stretch with no
 				// await: the calls of a step interleave at the awaits only, so

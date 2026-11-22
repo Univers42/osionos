@@ -7,6 +7,7 @@ import { markOwnError } from './failover.ts';
 import { stepHasTools } from './loopBudget.ts';
 import type { LoopBudget, StepUsage } from './loopBudget.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
+import { withTextToolCalls } from './textToolCallMiddleware.ts';
 import { createStreamClock, firstPartWindowMs, isContentPart, UpstreamTimeout } from './streamClock.ts';
 import type { TimeoutPhase } from './streamClock.ts';
 
@@ -220,7 +221,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 		totalTimer = setTimeout(() => onTimeout('total'), limits.deadlineMs ?? TOTAL_TIMEOUT_MS);
 
 		const result = streamText({
-			model,
+			model: tools ? withTextToolCalls(model) : model,
 			system,
 			messages,
 			maxOutputTokens: config.maxOutputTokens,

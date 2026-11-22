@@ -62,8 +62,12 @@ export interface ReadToolContext {
  */
 export type WriteToolContext = ReadToolContext;
 
-/** The answer of a tool: the data, or the reason there is none. */
-export type ToolResult<T> = { ok: true; data: T } | { ok: false; error: string };
+/**
+ * The answer of a tool: the data, or the reason there is none. `hint` is what
+ * the MODEL reads after the reason (the next call to make); the `tool.result`
+ * event carries the reason alone.
+ */
+export type ToolResult<T> = { ok: true; data: T } | { ok: false; error: string; hint?: string };
 
 /**
  * One tool the model may call.

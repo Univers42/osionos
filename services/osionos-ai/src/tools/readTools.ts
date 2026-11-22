@@ -31,6 +31,13 @@ const SNIPPET_CHARS = 400;
 /** The shape of a uuid: the ids that are not uuids can never be one. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * What the model reads after a refused read. Live 2026-11-22 a model sent the
+ * same non-uuid word four times: the bare refusal never said where an id is.
+ */
+const PAGE_ID_HINT =
+	'A page id is the id="…" of a <page> in the <workspace> block, or the page of a search passage. To find a page by its title or its words, call search_workspace, then read_page with that id';
+
 /** The most passages a search brings back. */
 const MAX_SEARCH_LIMIT = 20;
 
@@ -192,7 +199,7 @@ export const readPage: ReadTool<z.infer<typeof readPageArgs>, ReadPageData> = {
 	async run(ctx, args) {
 		const pageId = typeof args.pageId === 'string' ? args.pageId.trim() : '';
 		if (!UUID.test(pageId)) {
-			return { ok: false, error: 'the read needs the id of the page, a uuid' };
+			return { ok: false, error: 'the read needs the id of the page, a uuid', hint: PAGE_ID_HINT };
 		}
 		const workspaces = await liveMemberWorkspaces(ctx.db, ctx.user);
 		const result = await ctx.db.query<PageRow>(PAGE_SQL, [pageId, TOOL_PAGE_CHARS + 1]);
@@ -200,7 +207,7 @@ export const readPage: ReadTool<z.infer<typeof readPageArgs>, ReadPageData> = {
 		// A page that does not exist, and a page the caller may not read, are
 		// the same thing: the answer must not tell that it exists.
 		if (!row || !(await canReadPageWithRules(ctx.db, ctx.user.userId, row, workspaces))) {
-			return { ok: false, error: 'no page with that id in your workspaces' };
+			return { ok: false, error: 'no page with that id in your workspaces', hint: PAGE_ID_HINT };
 		}
 		const text = String(row.text ?? '');
 		const truncated = text.length > TOOL_PAGE_CHARS;
