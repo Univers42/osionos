@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import "./zodNoEval.ts";
 import { lazy, Profiler, StrictMode, Suspense, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
