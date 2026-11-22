@@ -28,7 +28,7 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
-import { pickRecentEntries, safeCardCover } from "./homeLiveEntries";
+import { pickRecentEntries, safeCardCover, signCardCovers } from "./homeLiveEntries";
 import { RECENTS_DB_ID, RECENTS_GALLERY_VIEW } from "./workspaceDatabaseConstants";
 
 const RECENT_TITLE = "home-recent-title";
@@ -97,7 +97,7 @@ function recentsState(): NotionState {
 class RecentsDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   private readonly subscribers = new Set<(event: ChangeEvent) => void>();
 
-  async loadState(): Promise<NotionState> { return recentsState(); }
+  async loadState(): Promise<NotionState> { return signCardCovers(recentsState()); }
 
   async findPages(query: PageQuery): Promise<Page[]> {
     const pages = Object.values(recentsState().pages);

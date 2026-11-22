@@ -18,6 +18,7 @@ import {
   type CoverPickerAsset,
 } from "@/shared/ui/assets/collectionMedia";
 import { mediaCrossOrigin } from "@/shared/lib/media/mediaCrossOrigin";
+import { useSignedMediaUrl } from "@/shared/lib/media/useSignedMediaUrl";
 
 export function isGradientValue(value: string): boolean {
   return value.startsWith("linear-gradient") || value.startsWith("radial-gradient");
@@ -45,6 +46,8 @@ export const CoverTile: React.FC<CoverTileProps> = ({ item, selected, video, onS
   const imageSrc = normalizeMediaSource(preview);
   const videoSrc = normalizeMediaSource(item.previewVideoUrl ?? item.ref);
   const [motion, setMotion] = React.useState(false);
+  const image = useSignedMediaUrl(isGradientValue(preview) ? null : imageSrc);
+  const clip = useSignedMediaUrl(video ? videoSrc : null);
   return (
     <button
       type="button"
@@ -66,7 +69,8 @@ export const CoverTile: React.FC<CoverTileProps> = ({ item, selected, video, onS
           <span className="block h-full w-full" style={{ background: preview }} />
         ) : (
           <img
-            src={imageSrc}
+            src={image.src}
+            onError={image.onError}
             crossOrigin={mediaCrossOrigin(imageSrc)}
             alt=""
             loading="lazy"
@@ -77,7 +81,8 @@ export const CoverTile: React.FC<CoverTileProps> = ({ item, selected, video, onS
         )}
         {video && motion ? (
           <video
-            src={videoSrc}
+            src={clip.src}
+            onError={clip.onError}
             crossOrigin={mediaCrossOrigin(videoSrc)}
             className="absolute inset-0 h-full w-full object-cover"
             muted

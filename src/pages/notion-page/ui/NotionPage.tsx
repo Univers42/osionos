@@ -34,6 +34,7 @@ import { PageHeader } from "./PageHeader";
 import { WikiPages } from "./WikiPages";
 import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
 import { anyJsDebugToolEnabled, usePageDebugStore } from "@/shared/debug/pageDebugStore";
+import { MediaPageContext } from "@/shared/lib/media/useSignedMediaUrl";
 
 import "./notionPage.css";
 import "@/app/styles/debug-tools.css";
@@ -159,60 +160,63 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
   };
 
   return (
-    <div
-      className={[
-        "osionos-page",
-        `osionos-page--font-${knownPageFont(pageConfig.font)}`,
-        pageConfig.smallText ? "osionos-page--small-text" : "",
-        pageConfig.fullWidth ? "osionos-page--full-width" : "",
-        pageConfig.showProperties ? "" : "osionos-page--hide-properties",
-        pageConfig.showConnections ? "" : "osionos-page--hide-connections",
-        hasFullPageLayout ? "osionos-page--layout-canvas" : "",
-        hasHeaderCanvas ? "osionos-page--header-canvas" : "",
-        hasHeaderBand ? "osionos-page--header-band" : "",
-        readOnly ? "osionos-page--locked" : "",
-        pageConfig.presentationMode ? "osionos-page--present" : "",
-      ].filter(Boolean).join(" ")}
-      style={pageStyle}
-      data-debug-outlines={debugTools.outlines ? "" : undefined}
-      data-debug-surfaces={debugTools.surfaces ? "" : undefined}
-      data-debug-grid={debugTools.grid ? "" : undefined}
-      data-debug-blockinfo={debugTools.blockInfo ? "" : undefined}
-      data-debug-overflow={debugTools.overflow ? "" : undefined}
-    >
-      {!hasFullPageLayout && pageConfig.showOutline && <PageOutlineRail pageId={pageId} />}
+    // osionos#233: a foreign upload on this page is signed with the page as its authority.
+    <MediaPageContext.Provider value={pageId}>
+      <div
+        className={[
+          "osionos-page",
+          `osionos-page--font-${knownPageFont(pageConfig.font)}`,
+          pageConfig.smallText ? "osionos-page--small-text" : "",
+          pageConfig.fullWidth ? "osionos-page--full-width" : "",
+          pageConfig.showProperties ? "" : "osionos-page--hide-properties",
+          pageConfig.showConnections ? "" : "osionos-page--hide-connections",
+          hasFullPageLayout ? "osionos-page--layout-canvas" : "",
+          hasHeaderCanvas ? "osionos-page--header-canvas" : "",
+          hasHeaderBand ? "osionos-page--header-band" : "",
+          readOnly ? "osionos-page--locked" : "",
+          pageConfig.presentationMode ? "osionos-page--present" : "",
+        ].filter(Boolean).join(" ")}
+        style={pageStyle}
+        data-debug-outlines={debugTools.outlines ? "" : undefined}
+        data-debug-surfaces={debugTools.surfaces ? "" : undefined}
+        data-debug-grid={debugTools.grid ? "" : undefined}
+        data-debug-blockinfo={debugTools.blockInfo ? "" : undefined}
+        data-debug-overflow={debugTools.overflow ? "" : undefined}
+      >
+        {!hasFullPageLayout && pageConfig.showOutline && <PageOutlineRail pageId={pageId} />}
 
-      {chrome === "bar" && <PageHeaderBar key={pageId} {...headerBarProps} />}
+        {chrome === "bar" && <PageHeaderBar key={pageId} {...headerBarProps} />}
 
-      <PageHeader
-        pageId={pageId}
-        activePage={activePage}
-        locked={readOnly}
-        commentsOpen={commentsOpen}
-        onToggleComments={() => setCommentsOpen((value) => !value)}
-        onCloseComments={() => setCommentsOpen(false)}
-      />
+        <PageHeader
+          pageId={pageId}
+          activePage={activePage}
+          locked={readOnly}
+          commentsOpen={commentsOpen}
+          onToggleComments={() => setCommentsOpen((value) => !value)}
+          onCloseComments={() => setCommentsOpen(false)}
+        />
 
-      {/* Surfaced sandbox divergence (ADR-001 §7). Code pages own theirs inside
-          CodeFileView, so only the block editor shows this one. */}
-      {body.state === "ready" && shell.surface !== "code" && <PageConflictBanner pageId={pageId} />}
-      {body.state === "ready" && <PageBody pageId={pageId} locked={readOnly} />}
-      {body.state === "loading" && <LoadingPane label="Loading page" className="py-16" />}
-      {(body.state === "failed" || body.state === "signed-out") && (
-        <PageBodyUnavailable signedIn={body.state === "failed"} onRetry={body.retry} />
-      )}
+        {/* Surfaced sandbox divergence (ADR-001 §7). Code pages own theirs inside
+            CodeFileView, so only the block editor shows this one. */}
+        {body.state === "ready" && shell.surface !== "code" && <PageConflictBanner pageId={pageId} />}
+        {body.state === "ready" && <PageBody pageId={pageId} locked={readOnly} />}
+        {body.state === "loading" && <LoadingPane label="Loading page" className="py-16" />}
+        {(body.state === "failed" || body.state === "signed-out") && (
+          <PageBodyUnavailable signedIn={body.state === "failed"} onRetry={body.retry} />
+        )}
 
-      {shell.isWiki && shell.workspaceId ? (
-        <div className="osionos-wiki-pages-wrap">
-          <WikiPages pageId={pageId} workspaceId={shell.workspaceId} locked={pageConfig.locked} />
-        </div>
-      ) : null}
+        {shell.isWiki && shell.workspaceId ? (
+          <div className="osionos-wiki-pages-wrap">
+            <WikiPages pageId={pageId} workspaceId={shell.workspaceId} locked={pageConfig.locked} />
+          </div>
+        ) : null}
 
-      {anyJsDebugToolEnabled(debugTools) && (
-        <Suspense fallback={null}>
-          <LazyPageDebugOverlay />
-        </Suspense>
-      )}
-    </div>
+        {anyJsDebugToolEnabled(debugTools) && (
+          <Suspense fallback={null}>
+            <LazyPageDebugOverlay />
+          </Suspense>
+        )}
+      </div>
+    </MediaPageContext.Provider>
   );
 };

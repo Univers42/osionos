@@ -28,7 +28,7 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
-import { dedupeById, safeCardCover } from "./homeLiveEntries";
+import { dedupeById, safeCardCover, signCardCovers } from "./homeLiveEntries";
 import { TEMPLATES_DB_ID, TEMPLATES_GALLERY_VIEW } from "./workspaceDatabaseConstants";
 import type { CatalogueCard } from "@/data/templates/catalogue/types";
 
@@ -137,7 +137,7 @@ function catalogueCards(): Promise<CatalogueCard[]> {
 class TemplatesDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   private readonly subscribers = new Set<(event: ChangeEvent) => void>();
 
-  async loadState(): Promise<NotionState> { return templatesState(await catalogueCards()); }
+  async loadState(): Promise<NotionState> { return signCardCovers(templatesState(await catalogueCards())); }
 
   async findPages(query: PageQuery): Promise<Page[]> {
     const pages = Object.values(templatesState(await catalogueCards()).pages);

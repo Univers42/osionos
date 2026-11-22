@@ -32,6 +32,7 @@ import { useAnimatedImagesMode } from "@/shared/config/useAppearance";
 import { mayBeProviderLink } from "../model/mediaProviderLinks";
 import { IMAGE_MIN_WIDTH } from "../model/blockSize";
 import { blockWidthStyle } from "@/shared/lib/dom/blockResize";
+import { useSignedMediaUrl } from "@/shared/lib/media/useSignedMediaUrl";
 
 // Lazy: the provider table and embed views load only for a link that may need them.
 const ProviderMediaEmbed = lazy(() =>
@@ -125,14 +126,16 @@ export const ImageBlockPicture: React.FC<{ block: Block; animation: ImageAnimati
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const resolved = resolveMediaBlockAsset(block);
   const url = resolved?.url;
+  const { src, onError } = useSignedMediaUrl(url);
   const alt = block.mediaAlt ?? resolved?.label ?? MEDIA_BLOCK_LABELS.image;
   // An explicit ratio crops to a fixed box; "original"/unset keeps the natural
   // shape but caps height so a tall image never dominates the page.
   const aspect = block.mediaAspect && block.mediaAspect !== "original" ? block.mediaAspect : undefined;
 
   useEffect(() => {
-    if (!url || !animation.still) return undefined;
+    if (!src || !animation.still) return undefined;
     const image = new Image();
+    image.onerror = onError;
     image.onload = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -140,11 +143,12 @@ export const ImageBlockPicture: React.FC<{ block: Block; animation: ImageAnimati
       canvas.height = image.naturalHeight || 1;
       canvas.getContext("2d")?.drawImage(image, 0, 0);
     };
-    image.src = url;
+    image.src = src;
     return () => {
       image.onload = null;
+      image.onerror = null;
     };
-  }, [url, animation.still]);
+  }, [src, onError, animation.still]);
 
   if (!url) return <Placeholder kind="image" />;
 
@@ -160,7 +164,8 @@ export const ImageBlockPicture: React.FC<{ block: Block; animation: ImageAnimati
   if (!animation.still) {
     return (
       <img
-        src={url}
+        src={src}
+        onError={onError}
         alt={alt}
         loading="lazy"
         decoding="async"

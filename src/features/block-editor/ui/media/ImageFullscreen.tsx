@@ -10,15 +10,33 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+
+import { useSignedMediaUrl } from "@/shared/lib/media/useSignedMediaUrl";
 
 interface ImageFullscreenProps {
   url: string;
   alt: string;
   onClose: () => void;
 }
+
+const stopClick = (event: React.MouseEvent) => event.stopPropagation();
+
+/** The picture itself, drawn from the signed link (osionos#233); a click on it never closes. */
+export const FullscreenPicture: React.FC<{ url: string; alt: string }> = ({ url, alt }) => {
+  const { src, onError } = useSignedMediaUrl(url);
+  return (
+    <img
+      src={src}
+      onError={onError}
+      alt={alt}
+      onClick={stopClick}
+      className="max-h-[92vh] max-w-[92vw] rounded-lg object-contain shadow-osio-e5"
+    />
+  );
+};
 
 /** Dark-scrim portal overlay: Esc / scrim-click closes, focus stays trapped. */
 export const ImageFullscreen: React.FC<ImageFullscreenProps> = ({ url, alt, onClose }) => {
@@ -52,8 +70,6 @@ export const ImageFullscreen: React.FC<ImageFullscreenProps> = ({ url, alt, onCl
     };
   }, [onClose]);
 
-  const stop = useCallback((event: React.MouseEvent) => event.stopPropagation(), []);
-
   return createPortal(
     <div
       role="dialog"
@@ -75,12 +91,7 @@ export const ImageFullscreen: React.FC<ImageFullscreenProps> = ({ url, alt, onCl
       >
         <X size={18} />
       </button>
-      <img
-        src={url}
-        alt={alt}
-        onClick={stop}
-        className="max-h-[92vh] max-w-[92vw] rounded-lg object-contain shadow-osio-e5"
-      />
+      <FullscreenPicture url={url} alt={alt} />
     </div>,
     document.body,
   );

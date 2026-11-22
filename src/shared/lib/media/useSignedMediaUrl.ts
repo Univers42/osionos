@@ -16,6 +16,8 @@ import type { MediaSigner } from "@/shared/lib/media/mediaSigner";
 
 /** The page a foreign upload renders in: the authority the bridge checks it against (D233-2). */
 export const MediaPageContext = createContext<string | null>(null);
+/** The signer every media element asks; tests hand in their own. */
+export const MediaSignerContext = createContext<MediaSigner>(appMediaSigner);
 
 const uploadOf = (url: string | null | undefined) => (url ? signableMedia(url, API_BASE, KNOWN_MEDIA_BRIDGES) : null);
 
@@ -37,7 +39,13 @@ export async function retriedMediaSrc(url: string | null | undefined, pageId: st
   return signed ? `${media.origin}${signed}` : (url ?? null);
 }
 
-async function signedOnMount(url: string, pageId: string | null, signer: MediaSigner): Promise<string> {
+/** The URL to open or download now: the cached signed link, else the stored URL. */
+export function currentMediaUrl(url: string, pageId: string | null, signer: MediaSigner = appMediaSigner): string {
+  return mountedMediaSrc(url, pageId, signer) ?? url;
+}
+
+/** The signed URL of an upload (asking the bridge when needed), else the stored URL. */
+export async function signedMediaUrl(url: string, pageId: string | null, signer: MediaSigner = appMediaSigner): Promise<string> {
   const media = uploadOf(url);
   const signed = media ? await signer.sign(media.path, pageId) : null;
   return media && signed ? `${media.origin}${signed}` : url;
@@ -51,9 +59,11 @@ export interface SignedMediaUrl {
   onError: () => void;
 }
 
-export function useSignedMediaUrl(url: string | null | undefined, pageId?: string | null, signer: MediaSigner = appMediaSigner): SignedMediaUrl {
+export function useSignedMediaUrl(url: string | null | undefined, pageId?: string | null, signerOverride?: MediaSigner): SignedMediaUrl {
   const contextPage = useContext(MediaPageContext);
+  const contextSigner = useContext(MediaSignerContext);
   const page = pageId ?? contextPage;
+  const signer = signerOverride ?? contextSigner;
   const [state, setState] = useState<MediaSrcState>(() => ({ url, src: mountedMediaSrc(url, page, signer), retried: false }));
   const current = state.url === url ? state : { url, src: mountedMediaSrc(url, page, signer), retried: false };
   if (current !== state) setState(current);
@@ -71,7 +81,7 @@ function useSignWhilePending(current: MediaSrcState, page: string | null, signer
   useEffect(() => {
     if (!url || src !== undefined) return undefined;
     let live = true;
-    void signedOnMount(url, page, signer).then((signed) => {
+    void signedMediaUrl(url, page, signer).then((signed) => {
       if (live) setState((prev) => (prev.url === url && prev.src === undefined ? { ...prev, src: signed } : prev));
     });
     return () => {

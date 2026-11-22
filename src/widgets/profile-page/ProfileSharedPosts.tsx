@@ -18,6 +18,7 @@
 
 import React from 'react';
 
+import { useSignedMediaUrl } from '@/shared/lib/media/useSignedMediaUrl';
 import { genId, type WorkspaceTab } from '@/widgets/workspace-grid/model/layoutTree';
 import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
 import { useProfileShares, type ProfileShare } from './useProfileShares';
@@ -36,6 +37,30 @@ function openShared(share: ProfileShare): void {
   useWorkspaceLayout.getState().openTab(tab);
 }
 
+function coverStyle(cover: string | null, image: string | undefined): React.CSSProperties | undefined {
+  if (isImage(cover)) return image ? { backgroundImage: `url(${image})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined;
+  return cover ? { background: cover } : undefined;
+}
+
+/** One shared post. Its cover is signed with the shared page as the authority (osionos#233). */
+export const SharedPostCard: React.FC<{ share: ProfileShare }> = ({ share }) => {
+  const image = useSignedMediaUrl(isImage(share.cover) ? share.cover : null, share.pageId);
+  return (
+    <button
+      type="button"
+      onClick={() => openShared(share)}
+      className="group flex w-full flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] text-left transition-shadow hover:shadow-osio-e2"
+    >
+      <span className="flex aspect-[16/9] items-center justify-center bg-[var(--osio-bg-subtle)] text-2xl" style={coverStyle(share.cover, image.src)}>
+        {!isImage(share.cover) ? (share.icon ?? '📄') : null}
+      </span>
+      <span className="truncate px-3 py-2 text-sm font-medium text-[var(--osio-fg-default)]">
+        {share.title}
+      </span>
+    </button>
+  );
+};
+
 export const ProfileSharedPosts: React.FC<{ userId: string }> = ({ userId }) => {
   const shares = useProfileShares(userId);
   if (shares.length === 0) return null;
@@ -46,23 +71,7 @@ export const ProfileSharedPosts: React.FC<{ userId: string }> = ({ userId }) => 
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {shares.map((share) => (
           <li key={share.pageId}>
-            <button
-              type="button"
-              onClick={() => openShared(share)}
-              className="group flex w-full flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] text-left transition-shadow hover:shadow-osio-e2"
-            >
-              <span
-                className="flex aspect-[16/9] items-center justify-center bg-[var(--osio-bg-subtle)] text-2xl"
-                style={isImage(share.cover)
-                  ? { backgroundImage: `url(${share.cover})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-                  : share.cover ? { background: share.cover } : undefined}
-              >
-                {!isImage(share.cover) ? (share.icon ?? '📄') : null}
-              </span>
-              <span className="truncate px-3 py-2 text-sm font-medium text-[var(--osio-fg-default)]">
-                {share.title}
-              </span>
-            </button>
+            <SharedPostCard share={share} />
           </li>
         ))}
       </ul>

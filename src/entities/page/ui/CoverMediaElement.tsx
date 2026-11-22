@@ -15,6 +15,7 @@ import { Pause, Play } from "lucide-react";
 
 import { useAnimatedImagesMode } from "@/shared/config/useAppearance";
 import { mediaCrossOrigin } from "@/shared/lib/media/mediaCrossOrigin";
+import { useSignedMediaUrl } from "@/shared/lib/media/useSignedMediaUrl";
 import { animatedMediaMayPlay, isVideoCoverSource, usePrefersReducedMotion } from "./coverMedia";
 
 interface CoverPointerHandlers {
@@ -38,7 +39,9 @@ interface CoverMediaElementProps {
 }
 
 interface VideoCoverProps {
-  src: string;
+  /** The signed (or stored) link; undefined while the first signature is on its way. */
+  src: string | undefined;
+  onError: () => void;
   style: React.CSSProperties;
   /** Whether the cover may animate on its own. */
   mayPlay: boolean;
@@ -52,7 +55,7 @@ interface VideoCoverProps {
  * chose "still", or the OS asks for reduced motion), it shows its first frame
  * and offers a play/pause button instead, so the motion is theirs to start.
  */
-const VideoCover: React.FC<VideoCoverProps> = ({ src, style, mayPlay, attachMedia, handlers }) => {
+const VideoCover: React.FC<VideoCoverProps> = ({ src, onError, style, mayPlay, attachMedia, handlers }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
 
@@ -79,6 +82,7 @@ const VideoCover: React.FC<VideoCoverProps> = ({ src, style, mayPlay, attachMedi
       <video
         ref={attachVideo}
         src={src}
+        onError={onError}
         crossOrigin={mediaCrossOrigin(src)}
         data-testid="page-cover-video"
         className="osionos-page-cover-img"
@@ -125,6 +129,8 @@ export const CoverMediaElement: React.FC<CoverMediaElementProps> = ({
 }) => {
   const animatedImages = useAnimatedImagesMode();
   const reducedMotion = usePrefersReducedMotion();
+  // osionos#233: the element draws the signed link; the kind is read from the stored URL.
+  const signed = useSignedMediaUrl(isGradient ? null : src);
 
   if (isGradient) {
     return (
@@ -141,7 +147,8 @@ export const CoverMediaElement: React.FC<CoverMediaElementProps> = ({
   if (src && isVideoCoverSource(src)) {
     return (
       <VideoCover
-        src={src}
+        src={signed.src}
+        onError={signed.onError}
         style={style}
         mayPlay={animatedMediaMayPlay(animatedImages, reducedMotion)}
         attachMedia={attachMedia}
@@ -153,7 +160,8 @@ export const CoverMediaElement: React.FC<CoverMediaElementProps> = ({
   return (
     <img
       ref={attachMedia}
-      src={src}
+      src={signed.src}
+      onError={signed.onError}
       crossOrigin={mediaCrossOrigin(src)}
       alt=""
       data-testid="page-cover-image"

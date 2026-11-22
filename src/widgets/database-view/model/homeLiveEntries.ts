@@ -3,9 +3,14 @@
  * "Featured templates" carousels. Kept free of store imports so the rules
  * (dedupe by id, hide the Home page itself, never hand a non-image cover to the
  * gallery) are testable and shared by both read-only adapters and the empty state.
+ * The adapters also sign the cards' upload covers here (osionos#233).
  */
 
+import type { NotionState } from "@notion-db/object-database";
 import type { ActivePage, PageEntry } from "@/entities/page";
+import type { MediaSigner } from "@/shared/lib/media/mediaSigner";
+import { appMediaSigner } from "@/shared/lib/media/appMediaSigner";
+import { signedMediaUrl } from "@/shared/lib/media/useSignedMediaUrl";
 
 /** Gallery cards render `cover` as a CSS gradient or an <img src>; anything else
  *  (a bare token, an emoji) is a broken image, so it is dropped to the placeholder.
@@ -36,4 +41,16 @@ export function pickRecentEntries(
     out.push(entry);
   }
   return dedupeById(out);
+}
+
+/**
+ * The gallery draws `cover` as it is, so each card's upload cover is signed here, with the card's
+ * page as the authority; any other cover is kept as it is.
+ * Caveat: a cover is signed when the gallery loads its state. A gallery left open past the link's
+ * lifetime (1-2 h) with no page or recents change shows a broken cover until the next reload.
+ */
+export async function signCardCovers(state: NotionState, signer: MediaSigner = appMediaSigner): Promise<NotionState> {
+  const pages = await Promise.all(Object.entries(state.pages).map(async ([id, page]) =>
+    [id, page.cover ? { ...page, cover: await signedMediaUrl(page.cover, page.id, signer) } : page] as const));
+  return { ...state, pages: Object.fromEntries(pages) };
 }

@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { useCallback } from "react";
+import { useCallback, useContext } from "react";
 import { usePageStore } from "@/store/usePageStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { API_BASE } from "@/shared/api/client";
@@ -18,6 +18,7 @@ import { mediaPathOfAsset, useAssistantHandoff } from "@/features/chat/model/ass
 import { chatTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { duplicateBlockInTree } from "../../model/blockContextMenu.helpers";
+import { MediaSignerContext, currentMediaUrl, signedMediaUrl } from "@/shared/lib/media/useSignedMediaUrl";
 
 export interface ImageBlockActions {
   download: () => void;
@@ -38,6 +39,10 @@ export interface ImageBlockActions {
  * Real, capability-backed actions for an image block's toolbar/menu.
  * Ones with no backend (moveTo/addLink/suggestEdits) surface an
  * honest "coming soon" toast rather than a silent no-op.
+ *
+ * osionos#233: open, download and copy-image use the signed link (open and download must act
+ * inside the click, so they take the cached one); "Copy link" copies the stored URL, which never
+ * carries a signature.
  */
 export function useImageBlockActions(
   pageId: string,
@@ -50,17 +55,18 @@ export function useImageBlockActions(
   const updatePageContent = usePageStore((s) => s.updatePageContent);
   const pageById = usePageStore((s) => s.pageById);
   const pushToast = useToastStore((s) => s.push);
+  const signer = useContext(MediaSignerContext);
 
   const download = useCallback(() => {
     if (!url) return;
     const link = document.createElement("a");
-    link.href = url;
+    link.href = currentMediaUrl(url, pageId, signer);
     link.download = altText || "image";
     link.rel = "noopener";
     document.body.appendChild(link);
     link.click();
     link.remove();
-  }, [altText, url]);
+  }, [altText, pageId, signer, url]);
 
   const copyText = useCallback(
     (text: string, title: string) => {
@@ -87,12 +93,13 @@ export function useImageBlockActions(
       copyImageUrl();
       return;
     }
-    fetch(url)
+    signedMediaUrl(url, pageId, signer)
+      .then((source) => fetch(source))
       .then((res) => res.blob())
       .then((blob) => navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]))
       .then(() => pushToast({ kind: "success", title: "Image copied" }))
       .catch(() => copyImageUrl());
-  }, [copyImageUrl, pushToast, url]);
+  }, [copyImageUrl, pageId, pushToast, signer, url]);
 
   const duplicate = useCallback(() => {
     const page = pageById(pageId);
@@ -109,8 +116,8 @@ export function useImageBlockActions(
   }, [blockId, pageId]);
 
   const viewOriginal = useCallback(() => {
-    if (url) globalThis.open(url, "_blank", "noopener,noreferrer");
-  }, [url]);
+    if (url) globalThis.open(currentMediaUrl(url, pageId, signer), "_blank", "noopener,noreferrer");
+  }, [pageId, signer, url]);
 
   const comingSoon = useCallback(
     (title: string) => pushToast({ kind: "info", title, description: "Coming soon." }),
