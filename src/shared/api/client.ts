@@ -73,6 +73,21 @@ export function getActivePageJwt(): string | null {
   });
 }
 
+/**
+ * The page JWT's `sub`, lower-cased: the user id the bridge's session check answers, so it keys
+ * the objectdb topic and tells the caller's own uploads apart. Decoded, never verified.
+ */
+export function getActivePageUserId(): string | null {
+  const segment = getActivePageJwt()?.split('.')[1];
+  if (!segment || typeof atob !== 'function') return null;
+  try {
+    const payload = JSON.parse(atob(segment.replace(/-/g, '+').replace(/_/g, '/'))) as { sub?: unknown };
+    return typeof payload.sub === 'string' ? payload.sub.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The id of the workspace in use, when a session has one. */
 export function getActiveWorkspaceId(): string | null {
   return userStore((state) => {

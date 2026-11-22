@@ -25,7 +25,7 @@
 
 import { LiveRealtimeSocket, type LiveRealtimeEventFrame } from '@/shared/notion-database-sys/src/store/live/liveRealtimeSocket';
 import { resolveLiveRealtimeToken, liveRealtimeUrl } from '@/shared/notion-database-sys/src/store/live/liveRealtime';
-import { getActivePageJwt } from '@/shared/api/client';
+import { getActivePageUserId } from '@/shared/api/client';
 import { chatWsEnabled, subscribeTopic } from '@/services/realtime-messages/wsTransport';
 import { resumeSignal } from '@/services/realtime-messages/topicFanOut';
 
@@ -34,20 +34,6 @@ const COALESCE_MS = 300; // collapse a burst of remote edits into one re-hydrate
 /** The live subscription, whatever opened it (a direct socket or a shared one). */
 let unsubscribe: (() => void) | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
-
-/** Owner id = the app-session token `sub` — the exact key the bridge publishes
- *  on (`objectdb:<authContext.userId>`, which lower-cases the subject), so
- *  publish and subscribe topics match. */
-function ownerIdFromJwt(): string | null {
-  const segment = getActivePageJwt()?.split('.')[1];
-  if (!segment || typeof atob !== 'function') return null;
-  try {
-    const payload = JSON.parse(atob(segment.replace(/-/g, '+').replace(/_/g, '/'))) as { sub?: unknown };
-    return typeof payload.sub === 'string' ? payload.sub.toLowerCase() : null;
-  } catch {
-    return null;
-  }
-}
 
 function newWriterId(): string {
   const bytes = globalThis.crypto.getRandomValues(new Uint8Array(12));
@@ -79,7 +65,8 @@ export function objectDbNudgeHandler(rehydrate: () => void): (frame: LiveRealtim
  *  hydration attempt. */
 export function startObjectDatabaseRealtime(rehydrate: () => void): void {
   if (unsubscribe) return; // already live — one socket per owner
-  const owner = ownerIdFromJwt();
+  // The bridge publishes on objectdb:<lower-cased sub>, so the topics match.
+  const owner = getActivePageUserId();
   const url = liveRealtimeUrl();
   if (!owner || !url) return; // no gateway → hydrate-once only
   const topic = `objectdb:${owner}`;
