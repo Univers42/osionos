@@ -52,6 +52,7 @@ export function aiDraftWorld(options: WorldOptions = {}) {
     posts: [] as { channelId: string; runId: string }[],
     consents: [] as { userId: string; mode: ConsentMode }[],
     posted: [] as ChatMessage[],
+    answering: [] as string[],
   };
   let ids = 0;
   const deps: AiDraftDeps = {
@@ -74,6 +75,9 @@ export function aiDraftWorld(options: WorldOptions = {}) {
       calls.consents.push({ userId, mode: modeOf(autopost) });
     },
     newId: () => `run-${(ids += 1)}`,
+    answering: (channelId: string) => {
+      calls.answering.push(channelId);
+    },
   };
   const store = createAiDraftStore(deps);
   const ask = (autopost: boolean) =>
