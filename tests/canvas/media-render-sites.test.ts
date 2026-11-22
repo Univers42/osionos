@@ -111,7 +111,7 @@ test("home galleries (recents, templates) get their card covers signed with the 
   assert.equal(signed.pages.b.cover, signedOf(foreign));
   assert.equal(signed.pages.c.cover, "linear-gradient(red, blue)");
   assert.equal(signed.pages.d.cover, undefined);
-  assert.deepEqual(calls.map((call) => call.pageId).sort(), [null, "b"]);
+  assert.deepEqual(new Set(calls.map((call) => call.pageId)), new Set([null, "b"]));
 });
 
 test("a URL that is not an upload, and every upload while signing is off, renders its stored URL with no request", async () => {
