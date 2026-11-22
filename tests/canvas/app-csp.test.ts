@@ -23,6 +23,7 @@ import {
   blocksWithAddHeader,
   inlineScriptSources,
   ownAddHeaders,
+  previewHeaders,
   POLICY_VARIABLE,
   readPolicy,
 } from "../../scripts/vite/appCsp.ts";
@@ -83,4 +84,16 @@ test("the block finder reports a location that forgot the policy (negative contr
   const conf = `server {\n  add_header A 1;\n  location /x {\n    add_header B 2;\n  }\n  location /y {\n    return 204;\n  }\n}`;
   assert.deepEqual(blocksWithAddHeader(conf).map((block) => block.header), ["server", "location /x"]);
   assert.deepEqual(ownAddHeaders(blocksWithAddHeader(conf)[0]).map((line) => line.trim()), ["add_header A 1;"]);
+});
+
+test("vite preview sends the nginx policy byte for byte, Report-Only by default (D314-8)", () => {
+  const policy = readPolicy(NGINX);
+  assert.deepEqual(previewHeaders(NGINX, false), { "Content-Security-Policy-Report-Only": policy });
+  assert.deepEqual(previewHeaders(NGINX, true), { "Content-Security-Policy": policy });
+  assert.throws(() => previewHeaders("server {}", false), /no app_csp_report_only map/);
+});
+
+test("vite.config.ts feeds preview.headers from previewHeaders, selected by PLAYWRIGHT_CSP=enforce", () => {
+  const config = readFileSync(new URL("../../vite.config.ts", import.meta.url), "utf8");
+  assert.match(config, /previewHeaders\(\s*readFileSync\([^)]*nginx\.conf[^)]*\),\s*process\.env\.PLAYWRIGHT_CSP === ["']enforce["']\s*\)/);
 });
