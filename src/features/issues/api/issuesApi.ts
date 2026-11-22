@@ -27,6 +27,8 @@ export interface IssueRow {
   user_agent: string | null;
   errors: string[];
   screenshot_path: string | null;
+  /** The screenshot signed by the issues GET (osionos#233); absent while signing is off. */
+  screenshot_url?: string;
   status: IssueStatus;
   github_url: string | null;
   created_at: string;

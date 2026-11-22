@@ -15,6 +15,7 @@ import { useIsAdmin } from "@/features/auth/model/useIsAdmin";
 import { useIssueReportRequest } from "@/features/issues/model/issueReportRequest";
 import { listIssues, updateIssue, type IssueRow, type IssueStatus } from "@/features/issues/api/issuesApi";
 import { buildGithubIssueUrl } from "@/features/issues/model/githubIssueUrl";
+import { issueScreenshotSrc } from "@/features/issues/model/issueScreenshot";
 import { API_BASE } from "@/shared/api/client";
 
 const GITHUB_URL_RE = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/[0-9]+$/;
@@ -66,6 +67,7 @@ export const IssuesPanel: React.FC = () => {
   }, [load]);
 
   const selected = issues.find((row) => row.id === selectedId) ?? null;
+  const screenshotSrc = selected ? issueScreenshotSrc(selected, API_BASE) : null;
 
   const openGithub = () => {
     if (!selected) return;
@@ -192,14 +194,14 @@ export const IssuesPanel: React.FC = () => {
               {selected.errors.length > 0 ? (
                 <pre className="max-h-40 overflow-auto rounded-md border p-2 text-xs">{selected.errors.join("\n")}</pre>
               ) : null}
-              {selected.screenshot_path ? (
+              {screenshotSrc ? (
                 <div className="flex flex-col gap-2">
                   <img
-                    src={`${API_BASE}${selected.screenshot_path}`}
+                    src={screenshotSrc}
                     alt="Screenshot attached to the report"
                     className="max-h-64 rounded-md border"
                   />
-                  <a href={`${API_BASE}${selected.screenshot_path}`} download className="text-sm text-[var(--osio-accent)]">
+                  <a href={screenshotSrc} download className="text-sm text-[var(--osio-accent)]">
                     Download screenshot
                   </a>
                 </div>

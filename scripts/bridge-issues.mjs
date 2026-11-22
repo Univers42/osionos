@@ -13,6 +13,7 @@
 import { requireAdmin } from './bridge-admin-check.mjs';
 import { inFilter } from './bridge-paging.mjs';
 import { redactIssueText } from './bridge-issue-redact.mjs';
+import { mediaKeysFromEnv, signMediaPath } from './bridge-media-sign.mjs';
 import {
 	UUID_REGEX,
 	bearerToken,
@@ -45,6 +46,14 @@ const allowedPostKeys = new Set([
 	'title', 'body', 'routeKind', 'appVersion', 'userAgent', 'errors',
 	'screenshotPath', 'workspaceId',
 ]);
+
+// osionos#233 D233-8: the GET already authorizes every row it returns (mine = reporter, all =
+// admin), so it signs the screenshots itself; signPaths gets no issue rule. No key, no field.
+function withScreenshotUrl(row, keys, nowSec) {
+	const path = row?.screenshot_path;
+	if (keys.length === 0 || typeof path !== 'string' || !SCREENSHOT_RE.test(path)) return row;
+	return { ...row, screenshot_url: signMediaPath(keys, path, nowSec) };
+}
 
 function messageOf(error) {
 	return error instanceof Error ? error.message : 'unknown error';
@@ -119,6 +128,7 @@ function parsePostBody(body, callerId) {
 
 export function createIssuesHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
 	const deps = { fetchImpl, env };
+	const mediaKeys = mediaKeysFromEnv(env);
 	return async function handleIssuesRoute(url, request, response, requestConfig = config) {
 		if (url.pathname !== '/api/issues' && !/^\/api\/issues\/[^/]+$/.test(url.pathname)) return false;
 		const method = (request.method || 'GET').toUpperCase();
@@ -198,7 +208,8 @@ export function createIssuesHandler({ config, verifySession, fetchImpl = fetch, 
 					if (filters.length > 0) path += filters.join('&') + '&';
 					path += `select=*&order=created_at.desc&limit=${limit}`;
 					const rows = await rest(requestConfig, deps.fetchImpl, path);
-					const list = Array.isArray(rows) ? rows : [];
+					const nowSec = Math.floor(Date.now() / 1000);
+					const list = (Array.isArray(rows) ? rows : []).map((row) => withScreenshotUrl(row, mediaKeys, nowSec));
 					if (scope === 'all') {
 						const ids = [...new Set(list.map((row) => row.reporter_id).filter(Boolean))];
 						let nameMap = new Map();
