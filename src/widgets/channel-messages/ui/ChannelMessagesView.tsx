@@ -386,6 +386,7 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
           userId={activeUserId}
           canInteract={history.mode === "bridge"}
           canModerate={canModerate}
+          authorNames={authorNames}
           onReply={setReplyTarget}
           onEdit={(id, content, options) => actions.edit(id, content, options)}
           onDelete={(id) => { void actions.remove(id).catch(() => undefined); }}

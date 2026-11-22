@@ -47,10 +47,12 @@ interface ThreadPanelProps {
   onSend: ComposerSend;
   onClose: () => void;
   onReport?: (message: ChatMessage) => void;
+  /** Display names by user id, so an AI answer says who asked for it (OB6). */
+  authorNames?: Record<string, string>;
 }
 
 export const ThreadPanel: React.FC<ThreadPanelProps> = ({
-  root, channelId, workspaceId, userId, canInteract, canModerate = false, onReply, onEdit, onDelete, onReact, onSend, onClose, onReport,
+  root, channelId, workspaceId, userId, canInteract, canModerate = false, onReply, onEdit, onDelete, onReact, onSend, onClose, onReport, authorNames,
 }) => {
   const { messages, loading } = useThread(root.id, channelId, workspaceId);
   const list = messages.length ? messages : [root];
@@ -76,6 +78,7 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
               onReact={onReact}
               onReply={onReply}
               onReport={onReport}
+              askerName={message.aiRequestedBy ? authorNames?.[message.aiRequestedBy] : undefined}
             />
           ))}
         </div>
