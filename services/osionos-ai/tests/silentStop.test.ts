@@ -66,6 +66,7 @@ describe('a tool call the model wrote as text', () => {
 	it('on the step that may not call a tool, the markup is dropped and the reader is told', async () => {
 		failing.script(MODEL, 'tool', 'tool', 'tool', 'tool', { behaviour: 'sse', body: sse({ content: glmCall(randomUUID()) }, 'stop') });
 		const { events } = await runToEnd({ model: MODEL });
+		assert.equal(typed(events, 'tool.called').length, 4, 'the 4 scripted calls, and none from the markup');
 		assert.ok(!/tool_call|arg_key/.test(shownText(events)), 'no markup reaches the reader');
 		assert.deepEqual(lastData(events), { code: 'empty_answer' });
 	});
@@ -78,6 +79,22 @@ describe('a run that ends without an answer says so', () => {
 		failing.script(MODEL, { behaviour: 'sse', body: sse({ reasoning_content: 'thinking…' }, 'length') });
 		const { events } = await runToEnd({ model: MODEL });
 		assert.deepEqual(lastData(events), { code: 'answer_cut_off' });
+	});
+
+	it('a model cut off before a word of answer hands the run to the next model of the chain', async () => {
+		failing.script(MODEL, { behaviour: 'sse', body: sse({ reasoning_content: 'thinking…' }, 'length') });
+		const { events } = await runToEnd({ model: MODEL, fallbacks: [{ model: 'mock-platform' }] });
+		assert.deepEqual(typed(events, 'route').map((event) => event.data), [{ from: MODEL, to: 'mock-platform', reason: 'upstream_error' }]);
+		assert.ok(shownText(events).length > 0);
+		assert.equal(lastOf(events).event, 'done');
+	});
+
+	it('a run whose only work was a view tool is not an empty answer', async () => {
+		const openPanel = { tool_calls: [{ index: 0, id: 'call_panel', type: 'function', function: { name: 'open_panel', arguments: '{"panel":"files"}' } }] };
+		failing.script(MODEL, { behaviour: 'sse', body: sse(openPanel, 'tool_calls') }, { behaviour: 'sse', body: sse({ content: '' }, 'stop') });
+		const { events } = await runToEnd({ model: MODEL });
+		assert.deepEqual(typed(events, 'tool.result').map((event) => (event.data as { view?: unknown }).view), [{ action: 'open_panel', panel: 'files' }]);
+		assert.equal(lastOf(events).event, 'done');
 	});
 
 	it('an empty answer with finish stop is empty_answer', async () => {

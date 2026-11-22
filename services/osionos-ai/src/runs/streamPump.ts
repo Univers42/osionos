@@ -135,6 +135,8 @@ export interface PumpOutcome {
 	error?: unknown;
 	/** Anything reached the callbacks, or a step finished: a run may not move to another model. */
 	emitted: boolean;
+	/** A tool was called: another model would call it again. */
+	toolCalled?: boolean;
 }
 
 /**
@@ -171,6 +173,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 	let stepEnded = false;
 	// Set BEFORE a callback is awaited: one that throws has still shown something.
 	let emitted = false;
+	let toolCalled = false;
 	let stepsFinished = 0;
 
 	// The one clock of the loop: the steps. The money never stops it: a step
@@ -221,7 +224,8 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 		totalTimer = setTimeout(() => onTimeout('total'), limits.deadlineMs ?? TOTAL_TIMEOUT_MS);
 
 		const result = streamText({
-			model: tools ? withTextToolCalls(model) : model,
+			// Every run, with tools or not: markup is never shown, and text it holds keeps the idle clock alive.
+			model: withTextToolCalls(model, () => clock.onPart('text-delta')),
 			system,
 			messages,
 			maxOutputTokens: config.maxOutputTokens,
@@ -262,6 +266,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 				await onReasoning(part.text);
 			} else if (part.type === 'tool-call') {
 				emitted = true;
+				toolCalled = true;
 				await onToolCall?.({ toolCallId: part.toolCallId, toolName: part.toolName, input: part.input });
 			} else if (part.type === 'tool-error') {
 				emitted = true;
@@ -281,9 +286,9 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 				throw new Error('aborted');
 			}
 		}
-		return { answer, reasoning, usage, finishReason, reserved: budget?.reserved ?? 0, emitted };
+		return { answer, reasoning, usage, finishReason, reserved: budget?.reserved ?? 0, emitted, toolCalled };
 	} catch (error) {
-		return { answer, reasoning, usage, finishReason, reserved: budget?.reserved ?? 0, error, emitted };
+		return { answer, reasoning, usage, finishReason, reserved: budget?.reserved ?? 0, error, emitted, toolCalled };
 	} finally {
 		clearTimers();
 	}

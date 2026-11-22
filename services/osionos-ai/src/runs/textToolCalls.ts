@@ -8,13 +8,19 @@
  * and ended the run with no answer (live run 2026-11-22, model
  * `openrouter/free`). Parsed here, it becomes the call the model meant.
  *
+ * Parsed: a closed `<tool_call>…</tool_call>` block in the GLM or the Hermes
+ * form, naming a tool of `allowed`. The caller decides `allowed`: the
+ * middleware (textToolCallMiddleware.ts) passes only the workspace reads, so
+ * web, view, memory, MCP and write tools are never run from text.
+ *
  * Caveat: only the `<tool_call>` wrapper is recognised. Mistral's
  * `[TOOL_CALLS]`, Llama's `<|python_tag|>` or a bare JSON object stay text.
  * A GLM value is JSON-decoded when it parses (the template dumps non-strings
  * as JSON), so a string value that happens to be valid JSON (`"12"`, `true`)
  * reaches the tool as a number or a boolean: the tool schemas are loose and
- * answer a wrong type with their own refusal. At most MAX_TEXT_CALLS calls of
- * MAX_CALL_CHARS characters each are read per step; the rest is dropped.
+ * answer a wrong type with their own refusal. A block over MAX_CALL_CHARS
+ * characters is dropped; at most MAX_TEXT_CALLS calls are read per text (the
+ * middleware holds the same bound per step); the rest is dropped.
  */
 
 export const TOOL_CALL_OPEN = '<tool_call>';

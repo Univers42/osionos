@@ -11,6 +11,7 @@ import { extendRunReservation } from './extend.ts';
 import { clock } from '../tools/limits.ts';
 import type { RunLimits } from '../tools/limits.ts';
 import type { LoopBudget } from './loopBudget.ts';
+import { EmptyAnswer } from './emptyAnswer.ts';
 import { abortCode } from './streamPump.ts';
 import type { PumpOutcome } from './streamPump.ts';
 
@@ -109,8 +110,11 @@ export function failoverClassOf(
 	state: { hasNext: boolean; attempts: number; runSignal: AbortSignal; attemptSignal: AbortSignal },
 ): FailoverClass | null {
 	if (!state.hasNext || state.attempts >= MAX_ATTEMPTS) return null;
-	if (outcome.error === undefined || outcome.emitted) return null;
-	if (state.runSignal.aborted) return null;
+	if (outcome.error === undefined || state.runSignal.aborted) return null;
+	// Cut off before a word or a tool (cutOffAsFailure): only reasoning reached
+	// the client and nothing would run twice, so the run may still move.
+	if (outcome.error instanceof EmptyAnswer) return { reason: 'upstream_error', billing: 'estimate' };
+	if (outcome.emitted) return null;
 	// The clock of THIS attempt ran out before a word came: the model is stuck,
 	// and the next one has a fresh clock (devil C249, C252). The upstream never
 	// said whether it worked, so the attempt is booked at the estimate.

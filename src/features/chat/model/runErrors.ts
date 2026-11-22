@@ -122,7 +122,6 @@ const RETRYABLE = new Set([
   "provider_unavailable",
   "network_error",
   "answer_cut_off",
-  "answer_filtered",
   "empty_answer",
 ]);
 

@@ -55,6 +55,8 @@ export interface RunTools {
 	readonly cited: RetrievedChunk[];
 	/** Whether the run asked the user for the right to write. */
 	awaitingApproval: boolean;
+	/** Whether a tool did something the user sees: a view opened, a memory proposed. */
+	hadEffect: boolean;
 	/**
 	 * The writes the run asked for: one card each.
 	 *
@@ -135,7 +137,7 @@ export function buildRunTools(input: {
 	const skillIndex = input.skillIndex ?? buildSkillIndex(agent?.skills ?? [], []);
 	const cited: RetrievedChunk[] = [...sources];
 	const permissions: PermissionAsked[] = [];
-	const run: RunTools = { tools: undefined, cited, awaitingApproval: false, permissions };
+	const run: RunTools = { tools: undefined, cited, awaitingApproval: false, hadEffect: false, permissions };
 
 	const hooks = {
 		citedSources: sources,
@@ -157,6 +159,7 @@ export function buildRunTools(input: {
 			}
 		},
 		onResult: async (outcome: ToolOutcome) => {
+			if (outcome.ok && (outcome.view || outcome.memoryId)) run.hadEffect = true;
 			await emit('tool.result', outcome);
 			// C42: a proposal is announced so a client can show the chip.
 			if (outcome.memoryId && outcome.memoryBody) {

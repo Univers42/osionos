@@ -34,7 +34,7 @@ import { scheduleSummary } from '../summary/summarize.ts';
 import { THREAD_SYSTEM_PROMPT, ThreadAccessLost } from '../threads/context.ts';
 import { setRunAnswer } from './repo.ts';
 import { typedTurnsOnly, webToolsOnly } from './privacyGate.ts';
-import { EmptyAnswer, emptyAnswerCode } from './emptyAnswer.ts';
+import { cutOffAsFailure, EmptyAnswer, emptyAnswerCode } from './emptyAnswer.ts';
 
 /**
  * The upstream of a run: the model call, the events, the settlement.
@@ -276,7 +276,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			});
 			// Held-back text goes out before the run ends, or fails over.
 			await research?.flush();
-			return pumped;
+			return cutOffAsFailure(pumped);
 		};
 		let outcome = await callModel(current);
 		while (outcome.error !== undefined) {
@@ -311,7 +311,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// The run asked the user for the right to write: it ends with that
 		// reason, and the approval row is what waits for the answer.
 		if (runTools.awaitingApproval) finishReason = 'awaiting_approval';
-		const empty = emptyAnswerCode(answer, finishReason);
+		const empty = emptyAnswerCode(answer, finishReason, runTools.hadEffect);
 		if (empty) throw new EmptyAnswer(empty);
 
 		// The usage the upstream reported, or the estimate of what it did not.
