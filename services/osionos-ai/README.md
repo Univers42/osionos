@@ -313,7 +313,8 @@ Optional: `OSIONOS_AI_PORT` (4300), `OSIONOS_ALLOWED_ORIGIN` (the app URL),
 (`off` turns the cut-off check off), `OSIONOS_AI_UPSTREAM_API_KEY` (a local runtime
 needs none), `OSIONOS_AI_MAX_OUTPUT_TOKENS` (1024), `OSIONOS_AI_USER_DAILY_MICROUSD`
 (200000), `OSIONOS_AI_PLATFORM_DAILY_MICROUSD` (20000000), `OSIONOS_AI_RUNS_PER_MINUTE`
-(20), `OSIONOS_AI_EMBED_URL` and `OSIONOS_AI_EMBED_MODEL`
+(20), `OSIONOS_AI_THREAD_RUNS_PER_DAY` (8: "@ai" channel runs a day over every
+workspace, unmeasured until the shared free allowance is measured), `OSIONOS_AI_EMBED_URL` and `OSIONOS_AI_EMBED_MODEL`
 (`intfloat/multilingual-e5-small`) — the embedding service of the search of a
 workspace, the one the indexer writes its vectors with too when it has no
 bulk service of its own; without it the service has no search.

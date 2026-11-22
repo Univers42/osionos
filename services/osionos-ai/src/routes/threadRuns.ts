@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import { readJson, sendError, sendSseHeaders, writeSseFrame } from '../http.ts';
-import { resolveTarget } from '../gateway/resolve.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
 import { getRun } from '../runs/repo.ts';
 import { startRun } from '../runs/runner.ts';
-import { admitThreadRun, channelWorkspace, loadThreadWindow, threadPrompt, triggerRefusal } from '../threads/context.ts';
+import { admitThread, threadTargets } from '../threads/admission.ts';
+import type { Refused } from '../threads/admission.ts';
+import { channelWorkspace, loadThreadWindow, threadPrompt, triggerRefusal } from '../threads/context.ts';
+import type { ThreadMessage } from '../threads/context.ts';
+import type { ResolvedTarget } from '../gateway/resolve.ts';
 import { replayRun, startPing } from './runs.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
@@ -15,9 +18,10 @@ import type { RouteContext } from './types.ts';
  * on (C450).
  *
  * The body names the run, the asker's conversation and the trigger, and
- * nothing else (C433): the text is the trigger row's, the model is the
- * platform default with no fallback (C434), and the run has no tool, page,
- * source, attachment, agent or memory.
+ * nothing else (C433): the text is the trigger row's, the model is the head
+ * of the no-train Auto chain and its failover the rest of it (C434 as amended
+ * by osio-bot OB9), and the run has no tool, page, source, attachment, agent
+ * or memory. A new run is admitted before startRun (OB8, OB10, C449).
  */
 const threadRunSchema = z.object({
 	runId: z.string().regex(UUID, 'runId must be a uuid'),
@@ -28,51 +32,65 @@ const threadRunSchema = z.object({
 
 const TRIGGER_STATUS = { not_found: 404, no_mention: 400, trigger_stale: 409 } as const;
 
+type Scope = { channelId: string; userId: string; messageId: string };
+type Targets = { target: ResolvedTarget; fallbacks: ResolvedTarget[] };
+
 export async function handleThreadRuns(ctx: RouteContext): Promise<number> {
 	const user = requireUser(ctx);
 	if (!user) return 401;
 	const body = await readJson(ctx.request, threadRunSchema);
 	const { db, redis } = ctx.deps;
-	const refuse = (status: number, code: string, retryAfterSeconds?: number): number => {
+	const refuse = refuser(ctx);
+	const targets = await threadTargets(db, redis, user);
+	if (targets.kind === 'refused') return refuse(targets);
+	const read = await readTrigger(ctx, user.userId, body);
+	if ('refused' in read) return refuse(read.refused);
+	const { scope, window, workspaceId } = read;
+	// A run id already started re-attaches to that run: replaying it spends no bucket and takes no lock.
+	let release = async (): Promise<void> => {};
+	if (!(await getRun(db, body.runId))) {
+		const admitted = await admitThread(redis, { channelId: body.channelId, workspaceId, userId: user.userId, runId: body.runId });
+		if (admitted.kind === 'refused') return refuse(admitted);
+		release = admitted.release;
+	}
+	try {
+		return await runThread(ctx, { ...body, scope, window, targets });
+	} finally {
+		await release();
+	}
+}
+
+/** The asker's conversation, the trigger's window and the channel's workspace, or the refusal (C448, C452). */
+async function readTrigger(
+	ctx: RouteContext,
+	userId: string,
+	body: { conversationId: string; channelId: string; messageId: string },
+): Promise<{ refused: { status: number; code: string } } | { scope: Scope; window: ThreadMessage[]; workspaceId: string }> {
+	const { db } = ctx.deps;
+	const notFound = { refused: { status: 404, code: 'not_found' } };
+	if (!(await getOwnedConversation(db, { id: body.conversationId, ownerId: userId }))) return notFound;
+	const scope = { channelId: body.channelId, userId, messageId: body.messageId };
+	const window = await loadThreadWindow(db, scope);
+	const refusal = triggerRefusal(window);
+	if (refusal) return { refused: { status: TRIGGER_STATUS[refusal], code: refusal } };
+	const workspaceId = await channelWorkspace(db, body.channelId);
+	return workspaceId ? { scope, window, workspaceId } : notFound;
+}
+
+function refuser(ctx: RouteContext): (refused: Pick<Refused, 'status' | 'code' | 'retryAfterSeconds'>) => number {
+	return ({ status, code, retryAfterSeconds }) => {
 		if (retryAfterSeconds !== undefined) ctx.response.setHeader('retry-after', String(retryAfterSeconds));
 		sendError(ctx.response, status, code);
 		return status;
 	};
-	const resolved = await resolveTarget(db, redis, user, undefined);
-	if (resolved.kind === 'refused') return refuse(resolved.status, resolved.code);
-	const conversation = await getOwnedConversation(db, { id: body.conversationId, ownerId: user.userId });
-	if (!conversation) return refuse(404, 'not_found');
-	const scope = { channelId: body.channelId, userId: user.userId, messageId: body.messageId };
-	const window = await loadThreadWindow(db, scope);
-	const refusal = triggerRefusal(window);
-	if (refusal) return refuse(TRIGGER_STATUS[refusal], refusal);
-	const workspaceId = await channelWorkspace(db, body.channelId);
-	if (!workspaceId) return refuse(404, 'not_found');
-	// A run id already started re-attaches to that run below: replaying it spends no bucket.
-	if (!(await getRun(db, body.runId))) {
-		const admitted = await admitThreadRun(redis, { channelId: body.channelId, workspaceId, userId: user.userId });
-		if (admitted.kind === 'refused') return refuse(admitted.status, admitted.code, admitted.retryAfterSeconds);
-	}
+}
 
-	const outcome = await startRun({
-		db,
-		redis,
-		runId: body.runId,
-		conversationId: body.conversationId,
-		ownerId: user.userId,
-		text: window[window.length - 1].content,
-		target: resolved.target,
-		thread: {
-			prompt: threadPrompt(window),
-			channelId: body.channelId,
-			messageId: body.messageId,
-			readAt: window[window.length - 1].readAt,
-			stillAllowed: async () => (await loadThreadWindow(db, scope)).length > 0,
-		},
-		emit: (event) => writeSseFrame(ctx.response, event),
-	});
-	if (outcome.kind === 'refused') return refuse(outcome.status, outcome.code, outcome.retryAfterSeconds);
-	if (outcome.kind === 'reattach') return replayRun(ctx, body.runId);
+type ThreadRunPlan = { runId: string; conversationId: string; scope: Scope; window: ThreadMessage[]; targets: Targets };
+
+async function runThread(ctx: RouteContext, run: ThreadRunPlan): Promise<number> {
+	const outcome = await startRun(threadRunInput(ctx, run));
+	if (outcome.kind === 'refused') return refuser(ctx)(outcome);
+	if (outcome.kind === 'reattach') return replayRun(ctx, run.runId);
 	sendSseHeaders(ctx.response);
 	const stopPing = startPing(ctx.response);
 	try {
@@ -82,4 +100,29 @@ export async function handleThreadRuns(ctx: RouteContext): Promise<number> {
 		if (!ctx.response.writableEnded && !ctx.response.destroyed) ctx.response.end();
 	}
 	return 200;
+}
+
+function threadRunInput(ctx: RouteContext, { runId, conversationId, scope, window, targets }: ThreadRunPlan): Parameters<typeof startRun>[0] {
+	const { db, redis } = ctx.deps;
+	const trigger = window[window.length - 1];
+	return {
+		db,
+		redis,
+		runId,
+		conversationId,
+		ownerId: scope.userId,
+		text: trigger.content,
+		target: targets.target,
+		fallbacks: targets.fallbacks,
+		// The chain was built from the rests already (autoChainFor).
+		restFiltered: true,
+		thread: {
+			prompt: threadPrompt(window),
+			channelId: scope.channelId,
+			messageId: scope.messageId,
+			readAt: trigger.readAt,
+			stillAllowed: async () => (await loadThreadWindow(db, scope)).length > 0,
+		},
+		emit: (event) => writeSseFrame(ctx.response, event),
+	};
 }

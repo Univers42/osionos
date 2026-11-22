@@ -18,7 +18,7 @@ import { classifyFailure } from './failover.ts';
 import type { RunEvent, UpstreamRunInput } from './upstreamInput.ts';
 import { citationData, sourceChars } from './sources.ts';
 import { createToolPool } from '../tools/index.ts';
-import { clock, RESEARCH_LIMITS, RESEARCH_WEB_CAPS } from '../tools/limits.ts';
+import { clock, RESEARCH_LIMITS, RESEARCH_WEB_CAPS, runLimitsFor } from '../tools/limits.ts';
 import { createResearchSession } from '../research/session.ts';
 import type { ResearchSession } from '../research/session.ts';
 import { buildRunTools } from './toolSet.ts';
@@ -125,6 +125,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const steps = [{ target, amount: reserved }, ...(input.fallbacks ?? [])];
 	const records: AttemptRecord[] = [];
 	const limits = input.research ? RESEARCH_LIMITS : undefined;
+	const stepLimits = runLimitsFor(input);
 	const startedAt = clock.now();
 	const runState = {
 		signal: runController.signal,
@@ -132,7 +133,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		userId: ownerId,
 		day,
 		promptChars,
-		...(limits ? { limits, startedAt } : {}),
+		...(stepLimits ? { limits: stepLimits, startedAt } : {}),
 	};
 	let index = 0;
 	let current = startAttempt(db, runState, steps[0]);

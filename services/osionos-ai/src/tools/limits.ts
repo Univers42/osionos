@@ -43,6 +43,22 @@ export const RESEARCH_LIMITS: RunLimits = {
 	deadlineMs: 8 * 60_000,
 };
 
+/**
+ * A thread run (osio-bot OB10): at most 3 steps, so a channel answer spends
+ * few calls of the shared free account once thread runs have tools. Today a
+ * thread run has none, and its one step is the answer.
+ */
+export const THREAD_LIMITS: RunLimits = { ...DEFAULT_RUN_LIMITS, maxSteps: 3 };
+
+/**
+ * The loop bounds of a run. Only the step loop reads this: the research
+ * session, its pool and its web caps follow `research` alone.
+ */
+export function runLimitsFor(run: { research?: boolean; thread?: unknown }): RunLimits | undefined {
+	if (run.research) return RESEARCH_LIMITS;
+	return run.thread ? THREAD_LIMITS : undefined;
+}
+
 /** The searches and the fetches of a research run (C400). */
 export const RESEARCH_WEB_CAPS = { searches: 16, fetches: 24 } as const;
 
