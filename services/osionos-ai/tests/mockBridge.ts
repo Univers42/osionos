@@ -39,8 +39,8 @@ export interface MockBridge {
 	 * block id (an unknown one appends at the end), a repeated idempotency key appends
 	 * nothing, and every append bumps the version.
 	 */
-	seedPage(pageId: string, content: unknown[], version?: number, title?: string): void;
-	pageContent(pageId: string): { version: number; content: unknown[]; title: string; archivedAt: string | null } | undefined;
+	seedPage(pageId: string, content: unknown[], version?: number | null, title?: string): void;
+	pageContent(pageId: string): { version: number | null; content: unknown[]; title: string; archivedAt: string | null } | undefined;
 	/** The next n appends are applied, then the connection is destroyed: the caller sees no answer. */
 	dropNextAppendAnswers(n: number): void;
 	reset(): void;
@@ -66,7 +66,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 	let loseNextCount = 0;
 	const seenPages = new Map<string, string>(); // id -> workspaceId
 	const seenDbs = new Set<string>();
-	const pages = new Map<string, { version: number; content: unknown[]; title: string; archivedAt: string | null }>();
+	const pages = new Map<string, { version: number | null; content: unknown[]; title: string; archivedAt: string | null }>();
 	const appendKeys = new Map<string, number>(); // `${pageId}/${key}` -> version it produced
 	let dropAppendCount = 0;
 
@@ -105,7 +105,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 			appendKeys.clear();
 			dropAppendCount = 0;
 		},
-		seedPage(pageId: string, content: unknown[], version = 1, title = 'Page'): void {
+		seedPage(pageId: string, content: unknown[], version: number | null = 1, title = 'Page'): void {
 			pages.set(pageId, { version, content: [...content], title, archivedAt: null });
 		},
 		pageContent(pageId: string) {
@@ -185,7 +185,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 					);
 					const cut = at === -1 ? page.content.length : at + 1;
 					page.content = [...page.content.slice(0, cut), ...blocks, ...page.content.slice(cut)];
-					page.version += 1;
+					page.version = (page.version ?? 0) + 1;
 					appendKeys.set(ledgerKey, page.version);
 				}
 				if (dropAppendCount > 0) {
@@ -208,7 +208,15 @@ export async function startMockBridge(): Promise<MockBridge> {
 				const seeded = pages.get(pid);
 				if (seeded) {
 					response.writeHead(200, { 'content-type': 'application/json' });
-					response.end(JSON.stringify({ id: pid, ...seeded }));
+					// The shape of the bridge's pageRowToEntry (scripts/bridge-api.mjs): `_id`, an empty
+					// title reads 'Untitled', and contentVersion is absent while the page has no version.
+					response.end(JSON.stringify({
+						_id: pid,
+						title: seeded.title ? seeded.title : 'Untitled',
+						content: seeded.content,
+						archivedAt: seeded.archivedAt,
+						...(seeded.version === null ? {} : { contentVersion: seeded.version }),
+					}));
 					return;
 				}
 				if (seenPages.has(pid)) {
@@ -347,7 +355,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 					if (Array.isArray(patch.content)) stored.content = patch.content;
 					if (typeof patch.title === 'string') stored.title = patch.title;
 					if (typeof patch.archivedAt === 'string') stored.archivedAt = patch.archivedAt;
-					stored.version += 1;
+					if (stored.version !== null) stored.version += 1;
 				}
 				response.writeHead(200, { 'content-type': 'application/json' });
 				response.end(JSON.stringify({ ok: true }));

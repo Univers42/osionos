@@ -11,10 +11,11 @@ import type { BridgeWrite } from './bridge.ts';
  */
 const READ_MAX_CHARS = 8_000_000;
 
-export type Refusal = { ok: false; code: 'changed_since' | 'failed' };
+export type Refusal = { ok: false; code: 'changed_since' | 'failed' | 'not_undoable' };
 
 export interface PageRead {
-	version: number;
+	/** The page's `contentVersion`; null while the database has no version column. */
+	version: number | null;
 	title: string;
 	content: { id?: unknown; type?: unknown; content?: unknown; children?: unknown }[];
 }
@@ -24,9 +25,10 @@ export async function readPage(a: { bridgeUrl: string; sessionToken: string; pag
 	const answer = await bridgeRead({ url: a.bridgeUrl, token: a.sessionToken, path: `/api/pages/${a.pageId}`, maxBodyChars: READ_MAX_CHARS });
 	if (!answer.ok) return { ok: false, code: answer.status === 404 ? 'changed_since' : 'failed' };
 	try {
-		const page = JSON.parse(answer.body) as { version?: unknown; title?: unknown; content?: unknown };
-		if (!Number.isSafeInteger(page.version) || !Array.isArray(page.content)) return { ok: false, code: 'failed' };
-		return { version: Number(page.version), title: typeof page.title === 'string' ? page.title : '', content: page.content };
+		const page = JSON.parse(answer.body) as { contentVersion?: unknown; title?: unknown; content?: unknown };
+		if (!Array.isArray(page.content)) return { ok: false, code: 'failed' };
+		const version = Number.isSafeInteger(page.contentVersion) ? Number(page.contentVersion) : null;
+		return { version, title: typeof page.title === 'string' ? page.title : '', content: page.content };
 	} catch {
 		return { ok: false, code: 'failed' };
 	}
@@ -44,6 +46,10 @@ function untouched(page: PageRead, recorded: AddedBlock): boolean {
  * The PATCH that removes the recorded blocks, or the refusal. It carries the
  * version it read, so a human edit in between is the bridge's 409.
  *
+ * Caveat: undo of an append needs the page version column. The bridge omits
+ * `contentVersion` while the database has none; the undo then refuses
+ * ('not_undoable': the state will not change on a retry) rather than PATCH
+ * without a baseVersion and clobber a concurrent human edit.
  * Caveat (R5): a block the user edited is a conflict copy with a new id, so
  * the recorded id is missing and undo refuses, leaving the AI text in place.
  * Caveat: a page that no longer shows the id at the top level (moved into a
@@ -54,6 +60,7 @@ export async function planBlocksUndo(
 ): Promise<BridgeWrite | Refusal> {
 	const page = await readPage(a);
 	if (!('content' in page)) return page;
+	if (page.version === null) return { ok: false, code: 'not_undoable' };
 	if (!a.blocks.every((recorded) => untouched(page, recorded))) return { ok: false, code: 'changed_since' };
 	const ids = new Set(a.blocks.map((block) => block.id));
 	const content = page.content.filter((block) => !ids.has(String(block?.id)));

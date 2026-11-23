@@ -46,7 +46,8 @@ async function planRename(a: UndoApplied, recorded: Extract<AppliedResult, { too
 	if (recorded.previousTitle === null) return null;
 	const page = await readPage({ ...a, pageId: recorded.pageId });
 	if (!('content' in page)) return page;
-	if (page.title !== recorded.appliedTitle) return { ok: false, code: 'changed_since' };
+	// The bridge reads an empty title as 'Untitled'; the recorded title may be the empty one.
+	if (page.title !== (recorded.appliedTitle || 'Untitled')) return { ok: false, code: 'changed_since' };
 	return { method: 'PATCH', path: `/api/pages/${recorded.pageId}`, body: { title: recorded.previousTitle } };
 }
 

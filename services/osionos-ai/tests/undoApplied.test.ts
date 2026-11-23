@@ -112,7 +112,7 @@ describe('add_blocks undo', () => {
 		const pageId = await page([HUMAN, AI]);
 		bridge.onPatch = () => {
 			const stored = bridge.pageContent(pageId);
-			if (stored) stored.version += 1;
+			if (stored) stored.version = (stored.version ?? 0) + 1;
 		};
 		const approval = await blocksRow(pageId);
 		assert.deepEqual(await undo(approval), { ok: false, code: 'changed_since' });
@@ -121,6 +121,16 @@ describe('add_blocks undo', () => {
 		assert.deepEqual(bridge.pageContent(pageId)?.content, [HUMAN, AI]);
 		// The refusal released the claim: the retry can go.
 		assert.deepEqual(await undo((await getOwnedApproval(app.db, { id: approval.id, ownerId: USER_A }))!), { ok: true });
+	});
+
+	it('a page with no contentVersion is not_undoable and nothing is sent', async () => {
+		const pageId = await page([HUMAN, AI]);
+		bridge.seedPage(pageId, [HUMAN, AI], null);
+		const approval = await blocksRow(pageId);
+		assert.deepEqual(await undo(approval), { ok: false, code: 'not_undoable' });
+		assert.equal(writes().length, 0);
+		const row = await getOwnedApproval(app.db, { id: approval.id, ownerId: USER_A });
+		assert.equal((row!.result as { undoneAt?: unknown }).undoneAt, undefined);
 	});
 
 	it('a second undo is already_undone', async () => {
@@ -147,6 +157,19 @@ describe('rename_page and create_page undo', () => {
 		const approval = await executed('rename_page', { pageId, title: 'New name' }, { pageId, previousTitle: 'Old name', appliedTitle: 'New name' });
 		assert.deepEqual(await undo(approval), { ok: true });
 		assert.equal(bridge.pageContent(pageId)?.title, 'Old name');
+	});
+
+	it('rename_page applied with an empty title still matches the bridge\'s Untitled', async () => {
+		const pageId = await page([], '');
+		const approval = await executed('rename_page', { pageId, title: '' }, { pageId, previousTitle: 'Old name', appliedTitle: '' });
+		assert.deepEqual(await undo(approval), { ok: true });
+		assert.equal(bridge.pageContent(pageId)?.title, 'Old name');
+	});
+
+	it('rename_page applied as "Untitled" matches too', async () => {
+		const pageId = await page([], 'Untitled');
+		const approval = await executed('rename_page', { pageId, title: 'Untitled' }, { pageId, previousTitle: 'Old name', appliedTitle: 'Untitled' });
+		assert.deepEqual(await undo(approval), { ok: true });
 	});
 
 	it('rename_page refuses when the title changed since', async () => {
