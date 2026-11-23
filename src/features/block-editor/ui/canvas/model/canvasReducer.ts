@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { isLayoutModesEnabled } from "@/shared/config/featureFlags";
+
 import { applyCellRegion } from "./cellRegion";
 import {
   duplicateCellHandler,
@@ -78,6 +80,8 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
       return { ...state, cells };
     }
     case "setCellRegion":
+      // TD18: region writers go live one promotion after their readers (groot ADR 0067 RD6).
+      if (!isLayoutModesEnabled()) return state;
       return updateCellHandler(state, action.id, (cell) => applyCellRegion(cell, action), withHistory);
     case "removeCell":
       return canvasReducer(state, { type: "removeCells", ids: [action.id] });

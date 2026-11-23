@@ -17,6 +17,7 @@
 import React from "react";
 
 import { normalizeRegion, normalizeStackAt } from "@/entities/block/model/layoutRegion";
+import { useLayoutModes } from "@/entities/block/ui/layoutModes";
 import type { CanvasAction, CanvasCell } from "../model/types";
 import { CanvasSegmented } from "./CanvasInspectorControls";
 
@@ -27,6 +28,8 @@ function setCellRegionAction(cell: CanvasCell, patch: { region?: unknown; stackA
 
 export const CellRegionControls: React.FC<{ cell: CanvasCell; dispatch: (action: CanvasAction) => void }> = ({ cell, dispatch }) => {
   const region = normalizeRegion(cell.region);
+  // TD18: the region writer is off with osio.layout.modes, so its controls are too (ADR 0067 RD7).
+  if (!useLayoutModes()) return null;
   return (
     <>
       <CanvasSegmented

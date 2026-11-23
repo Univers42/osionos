@@ -11,7 +11,9 @@
 /* ************************************************************************** */
 
 // The setCellRegion writer (T1b): values normalize against the fixed enums, an
-// unknown value erases the field it names, and the change is one undo step.
+// unknown value erases the field it names, and the change is one undo step. The
+// writer exists only with osio.layout.modes on (groot ADR 0067 RD6), so this file
+// runs as a dev/test build with the tester's override set.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -20,6 +22,9 @@ import type { LayoutCell } from "../../src/entities/block/model/types.ts";
 import { canvasReducer } from "../../src/features/block-editor/ui/canvas/model/canvasReducer.ts";
 import { createCanvasStateFromLegacy } from "../../src/features/block-editor/ui/canvas/model/migration.ts";
 import type { CanvasCell, CanvasState } from "../../src/features/block-editor/ui/canvas/model/types.ts";
+import { setLayoutModesOverride } from "./support/layout-modes-flag.ts";
+
+setLayoutModesOverride("1");
 
 const cell = (extra: Partial<LayoutCell> = {}): LayoutCell => ({
   id: "cell", colStart: 1, colSpan: 3, rowStart: 1, rowSpan: 1, blocks: [], ...extra,

@@ -29,6 +29,12 @@ import {
 } from "../../browser/core/app.mjs";
 
 const WCAG_AA = ["wcag2a", "wcag2aa"];
+
+// The panel and its catalogue exist only with osio.layout.modes on (groot ADR 0067 RD7).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("osio.layout.modes", "1"));
+});
+
 const panel = (page) => page.locator('[data-sidebar-panel="templates"]');
 const crmCard = (page) => panel(page).locator('[data-template-id="tpl:crm-pipeline"]');
 const dialog = (page) => page.getByRole("dialog");

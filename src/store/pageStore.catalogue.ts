@@ -12,6 +12,7 @@
 
 import type { Block } from "@/entities/block";
 import type { PageEntry, PageStore } from "@/entities/page";
+import { isLayoutModesEnabled } from "@/shared/config/featureFlags";
 import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
 import { notifyTemplateFailure } from "./pageCreateFeedback";
 
@@ -26,6 +27,8 @@ export async function createFromCatalogue(
   parentPageId?: string,
   options?: { open?: boolean },
 ): Promise<PageEntry | null> {
+  // Catalogue templates carry region cells: TD18 keeps them off until osio.layout.modes (ADR 0067 RD6).
+  if (!isLayoutModesEnabled()) return null;
   const origin = captureOpenOrigin(options?.open !== false);
   let prepared: Prepared | null;
   try {

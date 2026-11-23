@@ -58,7 +58,7 @@ export function isFeatureFlagEnabled(name: FeatureFlagName, fallback = false): b
 export function isEnvOnlyFlagEnabled(
   name: FeatureFlagName,
   fallback = false,
-  env: Record<string, unknown> = import.meta.env ?? {},
+  env: Record<string, unknown> = import.meta.env,
 ): boolean {
   const value = env[envKeyForFlag(name)];
   return typeof value === "string" ? flagValueToBoolean(value, fallback) : fallback;
@@ -254,10 +254,13 @@ export function isThemesEnabled(): boolean {
 }
 
 /** Container modes on column lists and the data-s-* attributes of a block's
- *  stored style (ADR 0064 PS10). Off by default: beta turns it on with
- *  `VITE_OSIO_LAYOUT_MODES=1`; off renders today's markup, styled lists as plain
- *  columns. */
+ *  stored style (ADR 0064 PS10), plus the cell-region and catalogue writers (TD18).
+ *  Off by default: beta turns it on with `VITE_OSIO_LAYOUT_MODES=1`; off renders
+ *  today's markup, styled lists as plain columns. A production build reads only that
+ *  env value (groot ADR 0067 RD5); dev and test builds keep the URL and localStorage
+ *  overrides. MODE, not PROD: the e2e harness builds `--mode test`, PROD true. */
 export function isLayoutModesEnabled(): boolean {
+  if (import.meta.env.MODE === "production") return isEnvOnlyFlagEnabled("osio.layout.modes");
   return isFeatureFlagEnabled("osio.layout.modes", false);
 }
 

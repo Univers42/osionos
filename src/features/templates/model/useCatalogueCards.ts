@@ -13,13 +13,13 @@
 import { useEffect, useState } from "react";
 
 import type { CatalogueCard } from "@/data/templates/catalogue/types";
+import { listEnabledCatalogue } from "./catalogueGate";
 
 export function useCatalogueCards(): CatalogueCard[] | null {
   const [cards, setCards] = useState<CatalogueCard[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void import("@/data/templates/catalogue")
-      .then(({ listCatalogue }) => listCatalogue())
+    void listEnabledCatalogue()
       .then((catalogue) => {
         if (!cancelled) setCards(catalogue);
       })
