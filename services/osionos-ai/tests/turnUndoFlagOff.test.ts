@@ -53,4 +53,12 @@ describe('undo routes, flag off', () => {
 		assert.equal((answer.body as { code?: string }).code, 'not_a_plan');
 		assert.equal(bridge.calls.filter((c) => c.method !== 'GET').length, 0);
 	});
+
+	// AM-L14: the card must not offer an Undo the route refuses.
+	it('GET /approvals/:id says undoable false for a row the undo route answers not_a_plan', async () => {
+		const { approvalId } = await seedApplied();
+		const answer = await call(`/api/ai/approvals/${approvalId}`, { token });
+		assert.equal(answer.status, 200);
+		assert.equal((answer.body as { undoable?: unknown }).undoable, false);
+	});
 });

@@ -158,6 +158,8 @@ function summaryOf(result: unknown): string | null {
 }
 
 /** What the card knows of the decision: who made it, and whether it was undone or can be. */
+// With the modes flag off the undo route answers every non-plan row 'not_a_plan'
+// (undoRefusal), so the card must not offer that Undo (AM-L14).
 function decisionOf(row: ApprovalRow): Pick<ApprovalDescription, 'decidedBy' | 'undoneAt' | 'undoable'> {
-	return { decidedBy: row.decided_by ?? null, undoneAt: undoneAtOf(row), undoable: isUndoable(row) };
+	return { decidedBy: row.decided_by ?? null, undoneAt: undoneAtOf(row), undoable: config.modesEnabled && isUndoable(row) };
 }
