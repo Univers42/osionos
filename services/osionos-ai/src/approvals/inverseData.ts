@@ -19,16 +19,31 @@ export type AppliedResult =
 	| { tool: 'rename_page'; pageId: string; previousTitle: string | null; appliedTitle: string }
 	| { tool: 'create_page'; createdPageId: string | null; parentPageId: string | null };
 
+/** JSON with the keys of every object sorted, so the key order of a value does not change its text. */
+function canonicalJson(value: unknown): string {
+	if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item ?? null)).join(',')}]`;
+	if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+	const entries = Object.entries(value as Record<string, unknown>)
+		.filter(([, item]) => item !== undefined)
+		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+	return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
+}
+
 /**
- * The digest of a block's type and content, as sent.
+ * The digest of a block's type and content.
  *
- * Caveat: it hashes the content as the write sent it. If the bridge normalises
- * the content, the digest never matches what the page holds and undo refuses
- * to remove the block (the safe direction). `language` is not in the hash: a
- * code block whose language changed still matches.
+ * Both the record (the block as sent) and the undo (the block the bridge reads
+ * back from a JSONB column, which reorders object keys) use it, so it hashes
+ * the canonical form: object keys sorted, recursively.
+ *
+ * Caveat: it is insensitive to object key order only; array order still
+ * matters. If the bridge normalises content any other way, the digest never
+ * matches and undo refuses to remove the block (the safe direction).
+ * `language` is not in the hash: a code block whose language changed still
+ * matches.
  */
 export function blockDigest(block: { type: string; content: unknown }): string {
-	return createHash('sha256').update(JSON.stringify([block.type, block.content])).digest('hex');
+	return createHash('sha256').update(canonicalJson([block.type, block.content])).digest('hex');
 }
 
 /**

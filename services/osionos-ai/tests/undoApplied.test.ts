@@ -48,14 +48,14 @@ async function page(content: unknown[], title = 'Notes', parent: string | null =
 }
 
 /** An executed row of the run, as the apply core records it. */
-async function executed(tool: string, args: Record<string, unknown>, result: Record<string, unknown>, ageDays = 0) {
+async function executed(tool: string, args: Record<string, unknown>, result: Record<string, unknown>, ageDays = 0, mcpTokenId: string | null = null) {
 	const id = randomUUID();
 	await app.db.query(
 		`insert into public.ai_approvals
-		   (id, run_id, conversation_id, owner_id, workspace_id, tool, args, args_sha256, status, result, decided_by, created_at, decided_at, expires_at)
-		 values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, 'executed', $9::jsonb, 'auto:auto',
+		   (id, origin, token_id, run_id, conversation_id, owner_id, workspace_id, tool, args, args_sha256, status, result, decided_by, created_at, decided_at, expires_at)
+		 values ($1, $11, $12::uuid, $2, $3, $4, $5, $6, $7::jsonb, $8, 'executed', $9::jsonb, 'auto:auto',
 		         now() - ($10::int * interval '1 day'), now() - ($10::int * interval '1 day'), now() + interval '10 minutes')`,
-		[id, run.runId, run.conversationId, USER_A, WORKSPACE_A, tool, JSON.stringify(args), id, JSON.stringify({ ok: true, tool, ...result }), ageDays],
+		[id, mcpTokenId ? null : run.runId, mcpTokenId ? null : run.conversationId, USER_A, WORKSPACE_A, tool, JSON.stringify(args), id, JSON.stringify({ ok: true, tool, ...result }), ageDays, mcpTokenId ? 'mcp' : 'run', mcpTokenId],
 	);
 	const row = await getOwnedApproval(app.db, { id, ownerId: USER_A });
 	assert.ok(row);
@@ -65,7 +65,7 @@ async function executed(tool: string, args: Record<string, unknown>, result: Rec
 const undo = async (approval: Awaited<ReturnType<typeof executed>>) =>
 	undoApplied({ db: app.db, bridgeUrl: bridge.baseUrl, sessionToken: TOKEN, approval });
 
-const recordedBlock = (block: { id: string; type: string; content: string }) => ({ id: block.id, parentId: null, index: 0, sha256: blockDigest(block) });
+const recordedBlock = (block: { id: string; type: string; content: unknown }) => ({ id: block.id, parentId: null, index: 0, sha256: blockDigest(block) });
 
 async function blocksRow(pageId: string, ageDays = 0) {
 	return executed('add_blocks', { pageId }, { pageId, version: 3, blocks: [recordedBlock(AI)], summary: 's' }, ageDays);
@@ -203,6 +203,84 @@ describe('rename_page and create_page undo', () => {
 	});
 });
 
+describe('add_blocks undo against a JSONB page', () => {
+	it('still undoes a block whose content keys the database stores in another order', async () => {
+		const rich = { id: 'rich', type: 'paragraph', content: { text: 'hi', marks: [], align: 'left', z: 1 } };
+		const pageId = await page([HUMAN, rich]);
+		const row = await executed('add_blocks', { pageId }, { pageId, version: 3, blocks: [recordedBlock(rich)], summary: 's' });
+		assert.deepEqual(await undo(row), { ok: true });
+		assert.deepEqual(bridge.pageContent(pageId)?.content, [HUMAN]);
+	});
+});
+
+describe('a lost answer to the undo write', () => {
+	it('add_blocks: the write landed, so the claim is kept and the undo is ok', async () => {
+		const pageId = await page([HUMAN, AI]);
+		const approval = await blocksRow(pageId);
+		bridge.dropNextPatchAnswers(1, { apply: true });
+		assert.deepEqual(await undo(approval), { ok: true });
+		const row = await getOwnedApproval(app.db, { id: approval.id, ownerId: USER_A });
+		assert.ok((row!.result as { undoneAt?: unknown }).undoneAt, 'the claim stays');
+		assert.deepEqual(bridge.pageContent(pageId)?.content, [HUMAN]);
+	});
+
+	it('add_blocks: the write did not land, so the claim is released', async () => {
+		const pageId = await page([HUMAN, AI]);
+		const approval = await blocksRow(pageId);
+		bridge.dropNextPatchAnswers(1, { apply: false });
+		assert.deepEqual(await undo(approval), { ok: false, code: 'failed' });
+		const row = await getOwnedApproval(app.db, { id: approval.id, ownerId: USER_A });
+		assert.equal((row!.result as { undoneAt?: unknown }).undoneAt, undefined);
+		assert.deepEqual(await undo(row!), { ok: true });
+	});
+
+	it('rename_page: the write landed, so the claim is kept', async () => {
+		const pageId = await page([], 'New name');
+		const approval = await executed('rename_page', { pageId, title: 'New name' }, { pageId, previousTitle: 'Old name', appliedTitle: 'New name' });
+		bridge.dropNextPatchAnswers(1, { apply: true });
+		assert.deepEqual(await undo(approval), { ok: true });
+		const row = await getOwnedApproval(app.db, { id: approval.id, ownerId: USER_A });
+		assert.ok((row!.result as { undoneAt?: unknown }).undoneAt);
+	});
+
+	it('create_page: the archive landed, so the claim is kept', async () => {
+		const pageId = await page([], 'Made by AI');
+		const approval = await executed('create_page', { title: 'Made by AI' }, { createdPageId: pageId, parentPageId: null });
+		bridge.dropNextPatchAnswers(1, { apply: true });
+		assert.deepEqual(await undo(approval), { ok: true });
+		const row = await getOwnedApproval(app.db, { id: approval.id, ownerId: USER_A });
+		assert.ok((row!.result as { undoneAt?: unknown }).undoneAt);
+	});
+});
+
+describe('create_page undo scope', () => {
+	it('an outside-agent row never treats another agent row\'s page as its own child', async () => {
+		const token = randomUUID();
+		await app.db.query(
+			`insert into public.ai_access_tokens (id, user_id, name, token_sha256, last4, scopes, workspace_ids, expires_at)
+			 values ($1, $2, 'agent', $3, 'abcd', array['write_approval'], array[$4::uuid], now() + interval '30 days')`,
+			[token, USER_A, randomUUID().replaceAll('-', '').repeat(2), WORKSPACE_A],
+		);
+		const parent = await page([], 'Agent page');
+		const child = await page([], 'Other agent page', parent);
+		await executed('create_page', { title: 'Other agent page' }, { createdPageId: child, parentPageId: parent }, 0, token);
+		const approval = await executed('create_page', { title: 'Agent page' }, { createdPageId: parent, parentPageId: null }, 0, token);
+		assert.deepEqual(await undo(approval), { ok: false, code: 'changed_since' });
+		assert.equal(writes().length, 0);
+	});
+
+	it('a human page under a grandchild blocks the undo (the archive cascades)', async () => {
+		run = await aRun();
+		const parent = await page([], 'P');
+		const child = await page([], 'C', parent);
+		await page([], 'H, a human page', child);
+		await executed('create_page', { title: 'C' }, { createdPageId: child, parentPageId: parent });
+		const approval = await executed('create_page', { title: 'P' }, { createdPageId: parent, parentPageId: null });
+		assert.deepEqual(await undo(approval), { ok: false, code: 'changed_since' });
+		assert.equal(writes().length, 0);
+	});
+});
+
 describe('refusals of any tool', () => {
 	it('archive_page is not_undoable', async () => {
 		const pageId = await page([]);
@@ -225,16 +303,17 @@ describe('POST /api/ai/runs/:id/undo-writes', () => {
 		const pageId = await page([HUMAN, AI], 'T');
 		const first = await executed('rename_page', { pageId, title: 'T' }, { pageId, previousTitle: 'Before', appliedTitle: 'T' });
 		const second = await executed('add_blocks', { pageId }, { pageId, version: 3, blocks: [recordedBlock(AI)], summary: 's' });
-		const third = await executed('archive_page', { pageId: randomUUID() }, { pageId: randomUUID() });
+		const made = await page([], 'Made');
+		const third = await executed('create_page', { title: 'Made' }, { createdPageId: made, parentPageId: null });
 		await app.db.query(`update public.ai_approvals set created_at = now() - interval '3 minutes' where id = $1`, [first.id]);
 		await app.db.query(`update public.ai_approvals set created_at = now() - interval '2 minutes' where id = $1`, [second.id]);
 		await app.db.query(`update public.ai_approvals set created_at = now() - interval '1 minutes' where id = $1`, [third.id]);
 		const answer = await post(run.runId);
 		const body = answer.body as { results: { approvalId: string; ok: boolean; code?: string }[] };
 		assert.equal(answer.status, 200);
-		assert.deepEqual(body.results.map((r) => r.approvalId), [second.id, first.id]);
+		assert.deepEqual(body.results.map((r) => r.approvalId), [third.id, second.id, first.id]);
 		assert.ok(body.results.every((r) => r.ok));
-		assert.deepEqual(writes().map((c) => Object.keys(c.body as object).sort()), [['baseVersion', 'content'], ['title']]);
+		assert.deepEqual(writes().map((c) => Object.keys(c.body as object).sort()), [['archivedAt'], ['baseVersion', 'content'], ['title']]);
 	});
 
 	it('stops at the first refusal and says which row', async () => {

@@ -17,6 +17,7 @@ export interface PageRead {
 	/** The page's `contentVersion`; null while the database has no version column. */
 	version: number | null;
 	title: string;
+	archived: boolean;
 	content: { id?: unknown; type?: unknown; content?: unknown; children?: unknown }[];
 }
 
@@ -25,10 +26,10 @@ export async function readPage(a: { bridgeUrl: string; sessionToken: string; pag
 	const answer = await bridgeRead({ url: a.bridgeUrl, token: a.sessionToken, path: `/api/pages/${a.pageId}`, maxBodyChars: READ_MAX_CHARS });
 	if (!answer.ok) return { ok: false, code: answer.status === 404 ? 'changed_since' : 'failed' };
 	try {
-		const page = JSON.parse(answer.body) as { contentVersion?: unknown; title?: unknown; content?: unknown };
+		const page = JSON.parse(answer.body) as { contentVersion?: unknown; title?: unknown; content?: unknown; archivedAt?: unknown };
 		if (!Array.isArray(page.content)) return { ok: false, code: 'failed' };
 		const version = Number.isSafeInteger(page.contentVersion) ? Number(page.contentVersion) : null;
-		return { version, title: typeof page.title === 'string' ? page.title : '', content: page.content };
+		return { version, title: typeof page.title === 'string' ? page.title : '', archived: Boolean(page.archivedAt), content: page.content };
 	} catch {
 		return { ok: false, code: 'failed' };
 	}

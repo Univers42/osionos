@@ -4,6 +4,8 @@ import type { BridgeWrite } from './bridge.ts';
 import type { AppliedResult } from './inverseData.ts';
 import { claimUndo, releaseUndo } from './repo.ts';
 import { APPROVAL_RETENTION_DAYS } from './repo.ts';
+import { archiveWrite } from '../builders/undo.ts';
+import { inverseLanded } from './undoProbe.ts';
 import { planBlocksUndo, readPage } from './undoBlocks.ts';
 import type { Refusal } from './undoBlocks.ts';
 import type { ApprovalRow } from './types.ts';
@@ -52,26 +54,43 @@ async function planRename(a: UndoApplied, recorded: Extract<AppliedResult, { too
 }
 
 /**
- * A created page is archived only while it holds no live child but the pages
- * AI rows of the same turn created (the bridge's archive cascades).
+ * The most descendant levels the child check looks at. Deeper than this the
+ * undo refuses: a tree that deep is not one the AI built in a turn.
+ */
+const DESCENDANT_DEPTH_MAX = 32;
+
+/**
+ * A created page is archived only while it has no live descendant but the
+ * pages AI rows of the same turn created: the bridge's archive cascades to
+ * every descendant, so a human page under an AI child would go too.
+ *
+ * "Same turn" is the run's rows of this owner; an outside-agent row has no run,
+ * so its set is empty and any live descendant refuses.
  *
  * Caveat: the child check reads the database, not the bridge, so a child
  * made in the last moments before the replica catches up is not seen.
  */
 async function planCreate(a: UndoApplied, recorded: Extract<AppliedResult, { tool: 'create_page' }>): Promise<BridgeWrite | Refusal | null> {
 	if (!recorded.createdPageId) return null;
-	const ours = await a.db.query<{ id: string }>(
-		`select result->>'createdPageId' as id from public.ai_approvals
-		  where run_id is not distinct from $1 and tool = 'create_page' and result->>'createdPageId' is not null`,
-		[a.approval.run_id],
-	);
+	const { run_id: runId, owner_id: ownerId } = a.approval;
+	const ours = runId
+		? await a.db.query<{ id: string }>(
+				`select result->>'createdPageId' as id from public.ai_approvals
+				  where run_id = $1 and owner_id = $2 and tool = 'create_page' and result->>'createdPageId' is not null`,
+				[runId, ownerId],
+			)
+		: { rows: [] };
 	const foreign = await a.db.query(
-		`select 1 from public.osionos_pages
-		  where parent_page_id::text = $1 and archived_at is null and not (id::text = any($2::text[])) limit 1`,
-		[recorded.createdPageId, ours.rows.map((row) => row.id)],
+		`with recursive d(id, live, depth) as (
+		   select id, archived_at is null, 1 from public.osionos_pages where parent_page_id::text = $1
+		   union all
+		   select p.id, p.archived_at is null, d.depth + 1
+		     from public.osionos_pages p join d on p.parent_page_id = d.id where d.depth < $3)
+		 select 1 from d where (live and not (id::text = any($2::text[]))) or depth >= $3 limit 1`,
+		[recorded.createdPageId, ours.rows.map((row) => row.id), DESCENDANT_DEPTH_MAX],
 	);
 	if ((foreign.rowCount ?? 0) > 0) return { ok: false, code: 'changed_since' };
-	return { method: 'PATCH', path: `/api/pages/${recorded.createdPageId}`, body: { archivedAt: new Date().toISOString() } };
+	return archiveWrite(recorded.createdPageId);
 }
 
 async function plan(a: UndoApplied, recorded: AppliedResult): Promise<BridgeWrite | Refusal | null> {
@@ -95,6 +114,8 @@ async function writeClaimed(a: UndoApplied, write: BridgeWrite): Promise<UndoRes
 	if (!(await claimUndo(a.db, a.approval.id, a.approval.owner_id))) return { ok: false, code: 'already_undone' };
 	const answer = await bridgeWrite({ url: a.bridgeUrl, token: a.sessionToken, write });
 	if (answer.ok) return { ok: true };
+	// A lost answer (status 0) may still have applied the write: keep the claim then.
+	if (answer.status === 0 && (await inverseLanded(a, recordedOf(a.approval) as AppliedResult, write.body.baseVersion))) return { ok: true };
 	await releaseUndo(a.db, a.approval.id);
 	return { ok: false, code: answer.status === 409 ? 'changed_since' : 'failed' };
 }

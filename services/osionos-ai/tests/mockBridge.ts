@@ -43,6 +43,8 @@ export interface MockBridge {
 	pageContent(pageId: string): { version: number | null; content: unknown[]; title: string; archivedAt: string | null } | undefined;
 	/** The next n appends are applied, then the connection is destroyed: the caller sees no answer. */
 	dropNextAppendAnswers(n: number): void;
+	/** The next n page PATCHes lose their answer: applied first (`apply`) or not at all, then the connection is destroyed. */
+	dropNextPatchAnswers(n: number, options: { apply: boolean }): void;
 	reset(): void;
 	close(): Promise<void>;
 }
@@ -54,6 +56,17 @@ function readBody(request: IncomingMessage): Promise<Buffer> {
 		request.on('end', () => resolve(Buffer.concat(chunks)));
 		request.on('error', () => resolve(Buffer.alloc(0)));
 	});
+}
+
+/**
+ * A Postgres JSONB column returns object keys shorter first, then bytewise: the
+ * page the bridge reads back is not byte-identical to the blocks that were sent.
+ */
+function jsonbOrder(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(jsonbOrder);
+	if (value === null || typeof value !== 'object') return value;
+	const keys = Object.keys(value).sort((a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0));
+	return Object.fromEntries(keys.map((key) => [key, jsonbOrder((value as Record<string, unknown>)[key])]));
 }
 
 export const MOCK_MEDIA_OWNER = '00000000-0000-4000-8000-0000000000aa';
@@ -69,6 +82,8 @@ export async function startMockBridge(): Promise<MockBridge> {
 	const pages = new Map<string, { version: number | null; content: unknown[]; title: string; archivedAt: string | null }>();
 	const appendKeys = new Map<string, number>(); // `${pageId}/${key}` -> version it produced
 	let dropAppendCount = 0;
+	let dropPatchCount = 0;
+	let dropPatchApplies = true;
 
 	const mock: MockBridge = {
 		baseUrl: '',
@@ -104,6 +119,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 			pages.clear();
 			appendKeys.clear();
 			dropAppendCount = 0;
+			dropPatchCount = 0;
 		},
 		seedPage(pageId: string, content: unknown[], version: number | null = 1, title = 'Page'): void {
 			pages.set(pageId, { version, content: [...content], title, archivedAt: null });
@@ -113,6 +129,10 @@ export async function startMockBridge(): Promise<MockBridge> {
 		},
 		dropNextAppendAnswers(n: number): void {
 			dropAppendCount = n;
+		},
+		dropNextPatchAnswers(n: number, options: { apply: boolean }): void {
+			dropPatchCount = n;
+			dropPatchApplies = options.apply;
 		},
 		async close(): Promise<void> {
 			await new Promise<void>((resolve) => {
@@ -213,7 +233,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 					response.end(JSON.stringify({
 						_id: pid,
 						title: seeded.title ? seeded.title : 'Untitled',
-						content: seeded.content,
+						content: jsonbOrder(seeded.content),
 						archivedAt: seeded.archivedAt,
 						...(seeded.version === null ? {} : { contentVersion: seeded.version }),
 					}));
@@ -337,6 +357,12 @@ export async function startMockBridge(): Promise<MockBridge> {
 					response.end(JSON.stringify({ error: 'failed' }));
 					return;
 				}
+				const dropped = dropPatchCount > 0;
+				if (dropped) dropPatchCount--;
+				if (dropped && !dropPatchApplies) {
+					request.socket.destroy();
+					return;
+				}
 				try {
 					await mock.onPatch?.({ path, body });
 				} catch {
@@ -356,6 +382,10 @@ export async function startMockBridge(): Promise<MockBridge> {
 					if (typeof patch.title === 'string') stored.title = patch.title;
 					if (typeof patch.archivedAt === 'string') stored.archivedAt = patch.archivedAt;
 					if (stored.version !== null) stored.version += 1;
+				}
+				if (dropped) {
+					request.socket.destroy();
+					return;
 				}
 				response.writeHead(200, { 'content-type': 'application/json' });
 				response.end(JSON.stringify({ ok: true }));

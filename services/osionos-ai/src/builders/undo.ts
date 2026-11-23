@@ -64,7 +64,7 @@ async function liveChildCount(db: Pool, approvalId: string, pageId: string): Pro
 }
 
 /** The archive the bridge is asked for: a stamp, never a delete. */
-function archiveWrite(pageId: string): { method: 'PATCH'; path: string; body: Record<string, unknown> } {
+export function archiveWrite(pageId: string): { method: 'PATCH'; path: string; body: Record<string, unknown> } {
 	return {
 		method: 'PATCH',
 		path: `/api/pages/${pageId}`,
