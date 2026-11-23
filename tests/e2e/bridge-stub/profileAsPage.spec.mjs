@@ -45,6 +45,29 @@ async function openBob(page, baseURL, on) {
   await expect(heading(page, "Bob Jones")).toBeVisible();
 }
 
+// The signed-in owner's own profile. `readmePageId` set links a README that is archived.
+async function openOwnProfile(page, baseURL, { readmePageId }) {
+  await flagged(page, true);
+  const created = [];
+  let mine = "";
+  await stubBridge(page, (url, request) => {
+    if (url.pathname === "/api/pages" && request.method() === "POST") created.push(url.pathname);
+    if (url.pathname === `/api/pages/${README_ID}`) return { json: { _id: README_ID, workspaceId: "w-archived", title: "README", archivedAt: "2026-11-01T00:00:00.000Z" } };
+    if (url.pathname === `/api/profile/${mine}`) return { json: profileBody(mine, "me-user", "Me Myself") };
+    if (url.pathname === "/api/users/me-user") return { json: { ...BOB_PUBLIC, userId: mine, username: "me-user", displayName: "Me Myself" } };
+    if (url.pathname === "/api/account/profile") return { json: { userId: mine, version: 1, readmePageId } };
+    if (url.pathname === "/api/directory/search") return { json: { people: [person(mine, "Me Myself", "me-user")] } };
+    return undefined;
+  });
+  await openSignedIn(page, baseURL);
+  mine = await page.evaluate(() => {
+    const state = globalThis.__playgroundUserStore.getState();
+    return state.activeUserId || Object.keys(state.sessions)[0];
+  });
+  await openProfileFromPalette(page, "Me Myself");
+  return { created };
+}
+
 test.describe("profile = a page (osio.profile.page)", () => {
   test("flag on: a visitor sees the README page with the banner as its cover", async ({ page, baseURL }) => {
     await openBob(page, baseURL, true);
@@ -67,28 +90,22 @@ test.describe("profile = a page (osio.profile.page)", () => {
   });
 
   test("flag on: the owner without a README is offered one, and viewing creates nothing", async ({ page, baseURL }) => {
-    await flagged(page, true);
-    const created = [];
-    let mine = "";
-    await stubBridge(page, (url, request) => {
-      if (url.pathname === "/api/pages" && request.method() === "POST") created.push(url.pathname);
-      if (url.pathname === `/api/profile/${mine}`) return { json: profileBody(mine, "me-user", "Me Myself") };
-      if (url.pathname === "/api/users/me-user") return { json: { ...BOB_PUBLIC, userId: mine, username: "me-user", displayName: "Me Myself" } };
-      if (url.pathname === "/api/account/profile") return { json: { userId: mine, version: 1, readmePageId: null } };
-      if (url.pathname === "/api/directory/search") return { json: { people: [person(mine, "Me Myself", "me-user")] } };
-      return undefined;
-    });
-    await openSignedIn(page, baseURL);
-    mine = await page.evaluate(() => {
-      const state = globalThis.__playgroundUserStore.getState();
-      return state.activeUserId || Object.keys(state.sessions)[0];
-    });
-    await openProfileFromPalette(page, "Me Myself");
+    const { created } = await openOwnProfile(page, baseURL, { readmePageId: null });
     const offer = page.getByRole("region", { name: "Profile page" });
     await expect(offer.getByRole("button", { name: "Create profile page" })).toBeVisible();
     await expect(page.getByTestId("profile-banner")).toHaveCount(0);
     // Caveat: "nothing created" is checked once the offer is drawn, after the view's effects ran;
     // a write delayed past that point would not be seen here.
     expect(created).toEqual([]);
+  });
+
+  test("flag on: an archived README is said, then a second click replaces it", async ({ page, baseURL }) => {
+    const { created } = await openOwnProfile(page, baseURL, { readmePageId: README_ID });
+    const offer = page.getByRole("region", { name: "Profile page" });
+    await offer.getByRole("button", { name: "Create profile page" }).click();
+    await expect(offer.getByRole("alert")).toContainText("deleted or archived");
+    expect(created).toEqual([]);
+    await offer.getByRole("button", { name: "Create a new profile page" }).click();
+    await expect.poll(() => created.length).toBe(1);
   });
 });
