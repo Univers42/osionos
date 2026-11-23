@@ -66,8 +66,9 @@ export function isEnvOnlyFlagEnabled(
 }
 
 /** Profile = a page (ADR 0064 PS32–PS38), off by default. A production build reads only
- *  `VITE_OSIO_PROFILE_PAGE` (beta sets it, live leaves it unset: ADR 0067 PH1/PH2); dev and
- *  test builds keep the overrides the e2e specs use. MODE, as isLayoutModesEnabled explains. */
+ *  `VITE_OSIO_PROFILE_PAGE`, the Dockerfile.prod build arg (empty, so off, unless a build
+ *  passes it: ADR 0067 PH1/PH2; no build passes it yet); dev and test builds keep the
+ *  overrides the e2e specs use. MODE, as isLayoutModesEnabled explains. */
 export function isProfilePageEnabled(): boolean {
   if (import.meta.env.MODE === "production") return isEnvOnlyFlagEnabled("osio.profile.page");
   return isFeatureFlagEnabled("osio.profile.page", false);

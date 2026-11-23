@@ -21,6 +21,14 @@ test("a production build with the env unset ignores the URL and localStorage ove
   assert.equal((await build({ MODE: "production" }))(), false);
 });
 
+// Dockerfile.prod declares the build arg with an empty default, so a build that does not pass
+// it bakes "" rather than leaving it unset.
+test("a production build with the build arg's empty default is off, override or not", async () => {
+  setFlagOverride(FLAG, "1");
+  assert.equal((await build({ MODE: "production", VITE_OSIO_PROFILE_PAGE: "" }))(), false);
+  setFlagOverride(FLAG, null);
+});
+
 test("a production build with VITE_OSIO_PROFILE_PAGE=1 is on, and an override cannot turn it off", async () => {
   setFlagOverride(FLAG, null);
   assert.equal((await build({ MODE: "production", VITE_OSIO_PROFILE_PAGE: "1" }))(), true);

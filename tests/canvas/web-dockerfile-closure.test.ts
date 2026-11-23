@@ -54,3 +54,12 @@ test("every file src/ imports from outside src/ is copied into the web build ima
   }
   assert.deepEqual([...missing], [], "add a COPY for each to docker/services/node/Dockerfile.prod");
 });
+
+// groot ADR 0067 PH1/PH2: osio.profile.page is decided by the build env alone, so the web image
+// takes it as a build arg; empty by default, so a build that does not opt in is off.
+test("the web build takes VITE_OSIO_PROFILE_PAGE as a build arg, empty by default", () => {
+  const dockerfile = readFileSync(join(APP_ROOT, "docker/services/node/Dockerfile.prod"), "utf8");
+  const builder = dockerfile.split(/^FROM .* AS runtime$/m)[0];
+  assert.match(builder, /^ARG VITE_OSIO_PROFILE_PAGE=""$/m);
+  assert.match(builder, /^ENV VITE_OSIO_PROFILE_PAGE=\$VITE_OSIO_PROFILE_PAGE$/m);
+});

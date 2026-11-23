@@ -33,12 +33,16 @@ ARG VITE_BAAS_ENABLED="false"
 ARG VITE_BAAS_URL=""
 ARG VITE_BAAS_ANON_KEY=""
 ARG VITE_LEGACY_SECOND_BRAIN=""
+# Profile = a page (groot ADR 0067 PH1/PH2): a production build reads only this, so empty (off)
+# unless a beta build passes --build-arg VITE_OSIO_PROFILE_PAGE=1.
+ARG VITE_OSIO_PROFILE_PAGE=""
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_APP_VERSION=$VITE_APP_VERSION
 ENV VITE_BAAS_ENABLED=$VITE_BAAS_ENABLED
 ENV VITE_BAAS_URL=$VITE_BAAS_URL
 ENV VITE_BAAS_ANON_KEY=$VITE_BAAS_ANON_KEY
 ENV VITE_LEGACY_SECOND_BRAIN=$VITE_LEGACY_SECOND_BRAIN
+ENV VITE_OSIO_PROFILE_PAGE=$VITE_OSIO_PROFILE_PAGE
 
 # Build, then strip source maps from the shipped image (they tripled its size
 # and leak source) and precompress static assets so nginx's gzip_static
