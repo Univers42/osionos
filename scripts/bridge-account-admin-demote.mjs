@@ -29,7 +29,9 @@
  * "flag already false"). The 200 waits for a read-back that finds none of the three rows.
  *
  * Caveat: the lock release is a plain `del` (kv has no compare-and-delete): a run that outlives
- * the lock's TTL can delete the lock a later run took, letting a third run in.
+ * the lock's TTL can delete the lock a later run took, letting a third run in. The caller's flag
+ * is re-read right before the clear, which narrows a mutual demotion past the TTL to the one
+ * round trip between that read and the clear; it does not close it.
  * Caveat: only the addresses the bridge knows are checked: the GoTrue primary and the verified
  * secondaries. An address added to OSIONOS_ADMIN_EMAILS later still promotes the account at its
  * next verified sign-in, by design (ADR 0005); so does a gateway address that is neither (U4).
@@ -189,6 +191,9 @@ async function demoteLocked(ctx, targetId) {
 	await assertNotLastAdmin(client, targetId);
 	const roleId = await adminRoleId(client);
 	await writeAudit(ctx.pg, { session, meta: ctx.meta, eventType: 'admin_role_change', details: { targetUserId: targetId, action: 'demote' } });
+	// A run stalled past the lock's TTL lets a second demotion in, which may have demoted the
+	// caller since the re-read above: two admins would then clear each other down to zero.
+	await requireAdmin({ fetchImpl: ctx.fetchImpl }, config, session);
 	const run = await runSteps(ctx, targetId, roleId);
 	if (!run.complete) return run;
 	return { ...run, complete: !(await hasLeftovers(client, targetId, roleId)) };

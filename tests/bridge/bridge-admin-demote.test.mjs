@@ -172,6 +172,24 @@ describe('refusals, in the D343-2 order, each before any audit row or write', ()
 		assertNothingWritten(world, answer);
 	});
 
+	it('a stalled run whose caller lost the flag after the lock check: 403 before the clear, no write after the audit row', async (t) => {
+		let world;
+		world = await startDemoteWorld(t, {
+			wrap: (next) => async (url, init) => {
+				const answer = await next(url, init);
+				if (init?.method === 'POST' && String(url).includes(`/${AUDIT}`)) world.store.rows(IDENTITIES)[0].is_admin = false;
+				return answer;
+			},
+		});
+		const answer = await world.demote(USER_B);
+		assert.equal(answer.status, 403, answer.text);
+		assert.equal(answer.body.code, 'admin_required');
+		assert.deepEqual(world.writes().map((call) => `${call.method} ${call.table}`), [`POST ${AUDIT}`]);
+		assert.equal(flagged(world.store, USER_B).length, 3);
+		assert.equal(adminGrants(world.store, USER_B).length, 2);
+		assert.equal(world.kv.values.has(LOCK), false, 'the lock is released');
+	});
+
 	it('a flag read that fails, at the gate or inside the lock: 503, nothing written', async (t) => {
 		let reads = 0;
 		const world = await startDemoteWorld(t, { failReads: (table) => table === IDENTITIES && ++reads >= 2 });
