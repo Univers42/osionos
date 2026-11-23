@@ -29,7 +29,7 @@
  * a +1-step code refuses the current-step code for up to 30 s.
  */
 
-import { writeSessionCutoff } from './bridge-session-cutoff.mjs';
+import { cutOffSessions } from './bridge-session-cutoff.mjs';
 import { revokeAllPats } from './bridge-pat-store.mjs';
 import { accountError, callerSession, clientMetaOf, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
@@ -50,11 +50,6 @@ async function guardedWrite(operation) {
 	} catch (error) {
 		throw mfaUnavailable(error);
 	}
-}
-
-async function cutAllSessions({ config, fetchImpl }, userId, atMs) {
-	await writeSessionCutoff(config, fetchImpl, userId, atMs);
-	config.sessionCutoffs?.applyLocal(userId, atMs * 1000);
 }
 
 /**
@@ -118,7 +113,7 @@ async function enroll(ctx, request, response) {
 async function confirm(ctx, request, session, step, meta) {
 	const atMs = ctx.clock();
 	await writeAudit(ctx.pg, { session, meta, eventType: 'account.2fa.confirm', details: { method: 'totp' } });
-	await cutAllSessions(ctx, session.userId, atMs);
+	await cutOffSessions(ctx.config, ctx.fetchImpl, session.userId, atMs);
 	// Before the flip: a personal access token minted before the factor existed must not outlive the change, and a failure here leaves the factor pending.
 	await guardedWrite(() => revokeAllPats({ pg: ctx.pg, userId: session.userId, now: new Date(atMs).toISOString() }));
 	const flipped = await guardedWrite(() => ctx.pg.asService().patch(
@@ -168,7 +163,7 @@ async function disable(ctx, request, response) {
 	await requireSudo(ctx.kv, session);
 	const atMs = ctx.clock();
 	await writeAudit(ctx.pg, { session, meta: clientMetaOf(request, ctx.config), eventType: 'account.2fa.disable', details: { method: 'totp' } });
-	await cutAllSessions(ctx, session.userId, atMs);
+	await cutOffSessions(ctx.config, ctx.fetchImpl, session.userId, atMs);
 	await guardedWrite(async () => {
 		// Codes first: a failure between the two leaves a factor without codes, never codes without a factor.
 		await ctx.pg.asService().del(`${CODES_TABLE}?${rowFilter(session.userId)}`);

@@ -190,6 +190,16 @@ export function startSessionCutoffPoller(tracker, source, { intervalMs = POLL_IN
 }
 
 /**
+ * Signs the user out everywhere: the durable cut-off, then this process's copy at once, so the
+ * next request on this replica is refused without waiting for the poller. Sign-out, password
+ * change, step-up and the admin demotion share it.
+ */
+export async function cutOffSessions(config, fetchImpl, userId, atMs) {
+	await writeSessionCutoff(config, fetchImpl, userId, atMs);
+	config.sessionCutoffs?.applyLocal(userId, atMs * 1000);
+}
+
+/**
  * Records that every token issued before `writtenAtMs` stops verifying. The timestamp is
  * explicit (a column DEFAULT would leave an existing row untouched on conflict). Moved here
  * from bridge-api.mjs so the sign-out and the password change share one write.

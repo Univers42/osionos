@@ -54,7 +54,7 @@
 
 import { accountError, accountAddress, callerSession, clientMetaOf, noContent, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { grantSudo, rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
-import { writeSessionCutoff } from './bridge-session-cutoff.mjs';
+import { cutOffSessions } from './bridge-session-cutoff.mjs';
 import { revokeOtherFamilies, sessionClock, sessionRowOf } from './bridge-sessions.mjs';
 
 const PATH = '/api/account/password';
@@ -100,8 +100,7 @@ async function writePassword({ config, fetchImpl }, userId, password) {
 
 async function signEveryoneOut({ config, fetchImpl }, userId, response) {
 	const atMs = sessionClock(config);
-	await writeSessionCutoff(config, fetchImpl, userId, atMs);
-	config.sessionCutoffs?.applyLocal(userId, atMs * 1000);
+	await cutOffSessions(config, fetchImpl, userId, atMs);
 	response.setHeader('x-session-revoked', 'all');
 	response.setHeader('access-control-expose-headers', 'x-session-revoked');
 }

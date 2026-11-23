@@ -74,6 +74,16 @@ export function claimPlatformRole(platformRole, isAdmin = false) {
 }
 
 /**
+ * True when `address` is one of OSIONOS_ADMIN_EMAILS, under the one normalization the sign-in
+ * promotion uses (the list is trimmed and lowercased at load, the address lowercased here). The
+ * demote route asks the same question, so an address the sign-in would promote is never one the
+ * demotion lets through.
+ */
+export function isAdminAddress(adminEmails, address) {
+	return adminEmails.includes(String(address ?? '').toLowerCase());
+}
+
+/**
  * The service reader the role read needs, or null when this bridge cannot read the
  * catalogue. A missing service key is no role rather than a crash: the answer is the same
  * as a user without a grant, and the sign-in still signs them in.

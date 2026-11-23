@@ -36,7 +36,7 @@ import { idChunks, inFilter } from './bridge-paging.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge-auth-exchange.mjs';
 import { resolveTurnstileToken, turnstileBootLine, turnstileSettingsFromEnv } from './bridge-turnstile.mjs';
-import { sessionCutoffsFromConfig, startSessionCutoffPoller, writeSessionCutoff } from './bridge-session-cutoff.mjs';
+import { cutOffSessions, sessionCutoffsFromConfig, startSessionCutoffPoller } from './bridge-session-cutoff.mjs';
 import { startSessionRevocationPoller } from './bridge-session-revocations.mjs';
 import { startModerationRetractPoller } from './bridge-moderation-retract.mjs';
 import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, deliveredAnswer, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
@@ -47,7 +47,7 @@ import { createKv } from './bridge-kv.mjs';
 import { createPg } from './bridge-pg.mjs';
 import { createPatGate, patWritePayload } from './bridge-pat-middleware.mjs';
 import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
-import { claimPlatformRole, platformRoleReader, readPlatformRole } from './bridge-roles.mjs';
+import { claimPlatformRole, isAdminAddress, platformRoleReader, readPlatformRole } from './bridge-roles.mjs';
 import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 // Re-exported so every existing caller (bridge-chat, bridge-rtc, db-isolation-suite, the tests)
 // keeps importing the token helpers from here, as before the move.
@@ -2061,7 +2061,7 @@ export async function memberWorkspaceEntries(userId, excludeIds, config, fetchIm
 }
 
 function isEnvAdminEmail(payload, config) {
-	return payload.emailVerified === true && config.adminEmails.includes(String(payload.email ?? '').toLowerCase());
+	return payload.emailVerified === true && isAdminAddress(config.adminEmails, payload.email);
 }
 
 /**
@@ -5403,8 +5403,7 @@ async function handleBridgeLogout(request, response, config, fetchImpl) {
 	const session = verifyAppSessionToken(bearerToken(request), config, clock(), { allowPendingMfa: true });
 	await requireEmptyBody(request);
 	const writtenAtMs = Math.floor(clock());
-	await writeSessionCutoff(config, fetchImpl, session.userId, writtenAtMs);
-	config.sessionCutoffs?.applyLocal(session.userId, writtenAtMs * 1000);
+	await cutOffSessions(config, fetchImpl, session.userId, writtenAtMs);
 	response.writeHead(204, {
 		'cache-control': 'no-store',
 		'access-control-allow-origin': config.allowedOrigin,
