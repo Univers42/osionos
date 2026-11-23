@@ -93,6 +93,18 @@ test("the identity header is a labelled section, not a header element", () => {
   assert.doesNotMatch(html, /<header/);
 });
 
+const EDIT_PAGE = /<button[^>]*type="button"[^>]*>(?:<[^>]+>)*Edit page</;
+
+test("the owner of a profile page gets Edit page (it opens the README); a visitor does not", () => {
+  storePage({});
+  const owner = asPage({ isOwner: true });
+  assert.match(owner, EDIT_PAGE);
+  assert.match(owner, /Edit profile/);
+  assert.doesNotMatch(asPage({}), /Edit page|Edit profile/);
+  const creating = asPage({ isOwner: true, mode: "create", profile: profile({ readme: null }) });
+  assert.doesNotMatch(creating, /Edit page|>Customize</, "no README yet: only the create action makes one");
+});
+
 test("PS35: a cover the shared rule refuses is not drawn", () => {
   const html = asPage({ profile: profile({ bannerUrl: "javascript:alert(1)" }) });
   assert.ok(!html.includes('data-testid="page-cover"'), html.slice(0, 300));

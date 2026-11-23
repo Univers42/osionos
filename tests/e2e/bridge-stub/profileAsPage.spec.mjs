@@ -78,6 +78,7 @@ test.describe("profile = a page (osio.profile.page)", () => {
     await expect(asPage.getByRole("heading", { level: 1, name: "Bob Jones" })).toBeVisible();
     await expect(asPage.getByTestId("profile-identity")).toContainText("Draws things");
     await expect(page.getByTestId("profile-banner")).toHaveCount(0);
+    await expect(asPage.getByRole("button", { name: "Edit page" })).toHaveCount(0);
   });
 
   test("flag off: the same profile is today's, banner and README", async ({ page, baseURL }) => {
