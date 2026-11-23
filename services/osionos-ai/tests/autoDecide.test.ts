@@ -23,7 +23,7 @@ const { app, mock, bridge, createConversation } = await startHarness();
 const { autoVerdict } = await import('../src/approvals/autoVerdict.ts');
 const { autoDecide } = await import('../src/approvals/autoDecide.ts');
 const { makeRunCredential } = await import('../src/modes/credential.ts');
-const { makeWriteBudget } = await import('../src/modes/writeBudget.ts');
+const { makeWriteBudget, CLAIM_MARGIN_MS } = await import('../src/modes/writeBudget.ts');
 const { makeStepCounter, checkAutoWriteRate } = await import('../src/modes/autoLimits.ts');
 const { writeConversationMode } = await import('../src/modes/mode.ts');
 const { config } = await import('../src/config.ts');
@@ -169,6 +169,16 @@ describe('autoVerdict: one card reason each, every earlier check passing', () =>
 			app.db.query("update public.ai_conversations set provenance_tainted_at = now(), provenance_reason = 'shared_page' where id = $1", [k.conversationId]));
 		k.gate.reads.add(slowTaint);
 		assert.equal(await reasonOf(k, await row(k, 'add_blocks', append(await page()))), 'tainted');
+	});
+
+	it('a sibling read that outlasts the run-budget margin makes the verdict refuse, not claim on a stale clock', async () => {
+		const budget = makeWriteBudget({ startedAtMs: Date.now(), totalMs: CLAIM_MARGIN_MS + 300, signal: new AbortController().signal });
+		const k = await kit(AUTO, AUTO, { budget });
+		const r = await row(k, 'add_blocks', append(await page()));
+		assert.equal(budget.canClaim(Date.now()), true, 'room at the start');
+		k.gate.reads.add(new Promise<void>((resolve) => setTimeout(resolve, 600)));
+		const verdict = await autoVerdict(k.gate, r, Date.now());
+		assert.deepEqual(verdict, { kind: 'card', reason: 'budget_low' });
 	});
 
 	it('an unknown write tool is tool_not_eligible even in auto (AM17)', async () => {

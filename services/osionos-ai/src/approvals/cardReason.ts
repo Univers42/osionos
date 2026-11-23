@@ -20,7 +20,7 @@ export const CARD_REASON_WORDS: Record<CardReason, string> = {
 	budget_low: 'the run is about to end',
 };
 
-/** The sentence the model reads for a card. */
+/** The sentence the model reads for a card; it ends the turn like the plain waiting text does. */
 export function cardSentence(reason: CardReason): string {
-	return `Sent to the user for approval (${CARD_REASON_WORDS[reason]}).`;
+	return `Sent to the user for approval (${CARD_REASON_WORDS[reason]}): say so and stop.`;
 }

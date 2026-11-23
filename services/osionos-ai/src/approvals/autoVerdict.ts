@@ -44,8 +44,17 @@ const liveMode: Check = async (g, _row, run) => {
 	return null;
 };
 
-const untainted: Check = async (g) => {
+/**
+ * Waits for the sibling reads, then re-reads the clock: the margins of the
+ * later checks must be measured after the wait, not before it.
+ *
+ * Caveat: the wait is bounded only by each tool's own timeout (a web_fetch can
+ * take about 15 s), so the clock moves a lot here; the fresh time makes a
+ * margin that the wait ate refuse the write rather than claim it late.
+ */
+const untainted: Check = async (g, _row, run) => {
 	await Promise.allSettled([...g.reads]);
+	run.nowMs = Date.now();
 	return (await conversationTaint(g.db, g.conversationId)).tainted ? 'tainted' : null;
 };
 

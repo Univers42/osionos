@@ -102,15 +102,28 @@ describe('auto writes in a run', () => {
 		assert.deepEqual(askedReasons(await run(widen)), ['mode_manual']);
 	});
 
-	it('an anchor moved mid-run gives outside_anchor (AM11)', async () => {
-		const [anchor, other] = [await page(), await page()];
+	it('a page moved out of the anchor mid-run gives outside_anchor (AM11)', async () => {
+		const anchor = await page();
 		const child = await page(WORKSPACE_A, anchor);
 		const id = await createConversation();
 		assert.equal((await patchMode(id, { mode: 'accept_edits', anchorPageId: anchor })).status, 200);
-		script([add(child, 'in'), add(other, 'out')]);
+		script([add(child, 'in'), add(child, 'again')], async (step) => {
+			if (step === 2) await app.db.query('update public.osionos_pages set parent_page_id = null where id = $1', [child]);
+		});
 		const events = await run(id);
 		assert.deepEqual(askedReasons(events), ['outside_anchor']);
 		assert.deepEqual((await rowsOf(id)).map((r) => [r.status, r.decided_by]), [['executed', 'auto:accept_edits'], ['pending', null]]);
+	});
+
+	it('a card tells the model to say so and stop, and the run makes no further tool step', async () => {
+		const id = await createConversation();
+		script([add(await page(), 'x')]);
+		const before = mock.bodies.length;
+		await run(id);
+		const last = JSON.stringify(mock.bodies[mock.bodies.length - 1]);
+		assert.ok(/Sent to the user for approval \(this conversation asks the user[^)]*\): say so and stop\./.test(last), 'card sentence ends with the stop instruction');
+		assert.equal(mock.bodies.length - before, 2, 'one step to ask, one to answer');
+		assert.equal((await rowsOf(id)).length, 1, 'no second write');
 	});
 
 	it('a create_page whose parent is in another workspace is a card, never applied (AM12)', async () => {
