@@ -90,7 +90,8 @@ test("each refusal of the service becomes a code and a sentence", async () => {
   const answer = (status: number, error: string) => setAiTransport(async () => Response.json({ error }, { status }));
   const cases: Array<[number, string, string]> = [
     [403, "reauth_required", "reauth_required"],
-    [403, "modes_not_enabled", "modes_not_enabled"],
+    // M9: the flag is on but this account is not listed — a pick says so; only a 404 hides the menu.
+    [403, "modes_not_enabled", "not_for_account"],
     [404, "not_found", "modes_not_enabled"],
     [422, "anchor_invalid", "anchor_invalid"],
     [500, "boom", "error"],
@@ -105,6 +106,7 @@ test("each refusal of the service becomes a code and a sentence", async () => {
   assert.equal(modeFeedback("reauth_required").error, "Sign in again to allow automatic edits");
   assert.equal(modeFeedback("modes_not_enabled").hidden, true);
   assert.equal(modeFeedback("anchor_invalid").hidden, false);
+  assert.deepEqual(modeFeedback("not_for_account"), { error: "Modes are not available for this account", hidden: false }, "M9");
 });
 
 test("patchMode sends only the schema's keys and getMode reads the stored mode", async () => {

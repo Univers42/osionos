@@ -14,7 +14,7 @@ import { AiError } from "@/features/ai/api/aiContract";
 import { requestJson } from "@/features/ai/api/aiClient";
 
 export type AssistMode = "manual" | "plan" | "accept_edits" | "auto";
-export type ModeFailure = "reauth_required" | "modes_not_enabled" | "anchor_invalid" | "error";
+export type ModeFailure = "reauth_required" | "modes_not_enabled" | "not_for_account" | "anchor_invalid" | "error";
 
 export const ASSIST_MODES: ReadonlyArray<{ mode: AssistMode; label: string }> = [
   { mode: "manual", label: "Manual" },
@@ -54,13 +54,17 @@ export async function patchMode(
     await requestJson("PATCH", path(conversationId), body);
     return { ok: true };
   } catch (cause) {
-    return { ok: false, code: refusedAnchor(cause, body.mode) ? "anchor_invalid" : failureOf(cause) };
+    if (refusedAnchor(cause, body.mode)) return { ok: false, code: "anchor_invalid" };
+    // A 403 here is the flag on but this account off its list (M9): the read showed the menu, so a pick says why it failed.
+    const code = failureOf(cause);
+    return { ok: false, code: code === "modes_not_enabled" && (cause as AiError).status === 403 ? "not_for_account" : code };
   }
 }
 
 const SENTENCES: Record<ModeFailure, string> = {
   reauth_required: "Sign in again to allow automatic edits",
   modes_not_enabled: "",
+  not_for_account: "Modes are not available for this account",
   anchor_invalid: "This page cannot be used as the anchor",
   error: "The mode could not be changed",
 };
