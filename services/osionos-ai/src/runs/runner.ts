@@ -8,6 +8,8 @@ import { appendUserTurn, deleteMessagesFromRun, hasMessagesOfRun, touchConversat
 import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
+import { effectiveMode, type RunKind } from '../modes/effectiveMode.ts';
+import type { RunCredential } from '../modes/credential.ts';
 import { createRunTimer } from './runTiming.ts';
 import type { RunTimer } from './runTiming.ts';
 import { loadMcpTools, mcpToolChars } from '../mcpClient/runTools.ts';
@@ -151,6 +153,12 @@ export interface StartRunInput {
 	 * or its error is what the user reads.
 	 */
 	continuation?: boolean;
+	/** Who started the run (AM13); absent is the unattended continuation. */
+	runKind?: RunKind;
+	/** The session the run holds for later writes (AM1). */
+	credential?: RunCredential | null;
+	/** The user turn the run belongs to; absent, the run's own id. */
+	turnId?: string;
 }
 
 export type StartRunOutcome =
@@ -237,6 +245,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		agentVersion: isCustomAgent(agent) ? null : (agent?.version ?? null),
 		customAgentId: isCustomAgent(agent) ? agent.id : null,
 		customAgentVersion: isCustomAgent(agent) ? agent.version : null,
+		...(input.turnId ? { turnId: input.turnId } : {}),
 		...(input.thread ? { surface: { channelId: input.thread.channelId, messageId: input.thread.messageId, readAt: input.thread.readAt } } : {}),
 	});
 	if (inserted.kind === 'conflict') {
@@ -450,6 +459,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	}
 	await touchConversation(db, conversationId);
 
+	const mode = await effectiveMode(db, { user: input.user ?? null, conversationId, runKind: input.runKind ?? 'continuation', credential: input.credential ?? null });
 	const execute = async (): Promise<void> => {
 		await runUpstream({
 			db,
@@ -460,6 +470,9 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			text,
 			timer,
 			target,
+			mode,
+			credential: input.credential ?? null,
+			...(input.turnId ? { turnId: input.turnId } : {}),
 			...(input.effort ? { effort: input.effort } : {}),
 			emit: input.emit,
 			day,

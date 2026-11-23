@@ -120,6 +120,8 @@ function threadRunInput(ctx: RouteContext, { runId, conversationId, scope, windo
 		fallbacks: targets.fallbacks,
 		// The chain was built from the rests already (autoChainFor).
 		restFiltered: true,
+		runKind: 'thread',
+		credential: null,
 		thread: {
 			prompt: threadPrompt(window),
 			channelId: scope.channelId,

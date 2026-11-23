@@ -5,6 +5,7 @@ import { resolveTarget } from '../gateway/resolve.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
 import { getOwnedRun } from '../runs/repo.ts';
 import { bearerToken } from '../auth.ts';
+import { makeRunCredential } from '../modes/credential.ts';
 import { MEDIA_CAPABILITY_PATH } from '../vision/fetchAttachment.ts';
 import { startRun } from '../runs/runner.ts';
 import { BUILTIN_AGENT_IDS, findBuiltinAgent } from '../agents/builtins.ts';
@@ -262,6 +263,8 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		searchWorkspace,
 		attachments: body.attachments,
 		sessionToken,
+		runKind: 'request',
+		credential: makeRunCredential(sessionToken, user.expiresAtMs),
 		agent,
 		workspaceId: conversation.workspace_id,
 		account: body.context?.account,

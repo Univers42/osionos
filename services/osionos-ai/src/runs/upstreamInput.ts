@@ -14,6 +14,8 @@ import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import type { ChainStep } from './attempt.ts';
 import type { Effort } from './effort.ts';
+import type { ModeSnapshot } from '../modes/effectiveMode.ts';
+import type { RunCredential } from '../modes/credential.ts';
 
 /** The input of the upstream of a run, and the event it emits. */
 
@@ -122,4 +124,10 @@ export interface UpstreamRunInput {
 	summarizeFrom?: { oldestKeptId: string };
 	/** A thread run (C429): the model reads the channel window instead of the user turn. */
 	thread?: ThreadRun;
+	/** The mode of the run, read once at its start (AM13). */
+	mode?: ModeSnapshot;
+	/** The session the run may write with after the turn ends (AM1); never stored. */
+	credential?: RunCredential | null;
+	/** The user turn the run belongs to (AM3). */
+	turnId?: string;
 }

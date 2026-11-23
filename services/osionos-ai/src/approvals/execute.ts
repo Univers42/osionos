@@ -14,6 +14,7 @@ import type { ApprovalRow } from './types.ts';
 import { runApprovedMcpCall } from '../mcpClient/decide.ts';
 import { applyClaimed } from './apply.ts';
 import { continueRun } from './continuation.ts';
+import { makeRunCredential } from '../modes/credential.ts';
 
 export { bridgeWriteOf } from './apply.ts';
 export { appendOutcome } from './applyAppend.ts';
@@ -127,9 +128,14 @@ async function approveRefusal({ db, redis, user }: Decision, row: ApprovalRow): 
 	return daily.allowed ? null : { kind: 'refused', status: 429, code: 'build_limit_reached' };
 }
 
+/** The credential of the decide request, for the continuation it starts (AM1): never stored. */
+function credentialOf({ sessionToken, user }: Decision) {
+	return makeRunCredential(sessionToken, user.expiresAtMs);
+}
+
 /** A failed outcome of an already-recorded row, continued. */
 async function failedDecision(input: Decision, claimed: ApprovalRow, error: string): Promise<DecisionOutcome> {
-	const continuationRunId = await continueRun(input.db, input.redis, input.user, claimed, 'failed', error);
+	const continuationRunId = await continueRun(input.db, input.redis, input.user, claimed, 'failed', error, credentialOf(input));
 	return { kind: 'decided', status: 'failed', approval: claimed, continuationRunId };
 }
 
@@ -168,7 +174,7 @@ async function decideBuildPlan(input: Decision, claimed: ApprovalRow): Promise<D
 	const result = { ...c, created: execResult.created, counts: c };
 	await recordOutcome(db, { id: claimed.id, status, result });
 	const detail = `the plan "${rv.plan.title}" was built: ${c.done} created, ${c.failed} failed, ${c.pending} left to resume`;
-	const continuationRunId = await continueRun(db, redis, user, claimed, status === 'failed' ? 'failed' : 'executed', detail);
+	const continuationRunId = await continueRun(db, redis, user, claimed, status === 'failed' ? 'failed' : 'executed', detail, credentialOf(input));
 	return { kind: 'decided', status, approval: claimed, result, continuationRunId };
 }
 
@@ -182,7 +188,7 @@ async function decideMcpCall(input: Decision, claimed: ApprovalRow): Promise<Dec
 	// The row keeps a summary, never the output: the output is data of one run.
 	const result = { ok: true, summary: done.summary };
 	await recordOutcome(db, { id: claimed.id, status: 'executed', result });
-	const continuationRunId = await continueRun(db, redis, user, claimed, 'executed', done.detail);
+	const continuationRunId = await continueRun(db, redis, user, claimed, 'executed', done.detail, credentialOf(input));
 	return { kind: 'decided', status: 'executed', approval: claimed, result, continuationRunId };
 }
 
@@ -190,10 +196,10 @@ async function decideWrite(input: Decision, claimed: ApprovalRow): Promise<Decis
 	const { db, redis, user, sessionToken } = input;
 	const applied = await applyClaimed({ db, bridgeUrl: config.bridgeUrl ?? '', token: sessionToken }, claimed);
 	if (applied.status !== 'executed') {
-		const continuationRunId = await continueRun(db, redis, user, claimed, 'failed', applied.error);
+		const continuationRunId = await continueRun(db, redis, user, claimed, 'failed', applied.error, credentialOf(input));
 		return { kind: 'decided', status: applied.status, approval: claimed, continuationRunId };
 	}
-	const continuationRunId = await continueRun(db, redis, user, claimed, 'executed', applied.detail);
+	const continuationRunId = await continueRun(db, redis, user, claimed, 'executed', applied.detail, credentialOf(input));
 	return { kind: 'decided', status: 'executed', approval: claimed, result: applied.recorded, continuationRunId };
 }
 
@@ -212,7 +218,7 @@ export async function decideApproval(input: Decision): Promise<DecisionOutcome> 
 	if (decision === 'decline') {
 		const declined = await claimApproval(db, { id: approvalId, ownerId: user.userId, next: 'declined', decidedBy: 'user' });
 		if (!declined) return { kind: 'refused', status: 409, code: 'approval_not_pending' };
-		const continuationRunId = await continueRun(db, redis, user, declined, 'declined');
+		const continuationRunId = await continueRun(db, redis, user, declined, 'declined', '', credentialOf(input));
 		return { kind: 'decided', status: 'declined', approval: declined, continuationRunId };
 	}
 
