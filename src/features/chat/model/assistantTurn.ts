@@ -36,6 +36,8 @@ import { withHandoff } from "./agentHandoff";
 import type { HandoffPart } from "./agentHandoff";
 import { withResearch, type ResearchFrame } from "./researchParts";
 import type { RunEventActions } from "./runEventDispatch";
+import { useAppliedWrites } from "./appliedWrites";
+import { reloadWrittenPage } from "./reloadWrittenPage";
 
 /** What a turn needs from the store. */
 export interface TurnStore {
@@ -145,6 +147,13 @@ export function assistantTurn(
 
     noteResearch(frame: ResearchFrame) {
       patchParts((current) => withResearch(current, frame));
+    },
+
+    noteApplied(data: Record<string, unknown>) {
+      const runId = store.messages().find((message) => message.id === assistantId)?.runId ?? "";
+      useAppliedWrites.getState().add(data, { messageId: assistantId, runId });
+      // The write happened on the server: the open page reads its new version (merge-safe).
+      reloadWrittenPage(typeof data.tool === "string" ? data.tool : "", typeof data.target === "string" ? data.target : "");
     },
 
     finish() {

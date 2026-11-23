@@ -65,6 +65,8 @@ export interface RunEventActions {
   suggestAgent(handoff: HandoffPart): void;
   /** Where a research run stands. Optional: a turn that shows no card ignores it. */
   noteResearch?(frame: ResearchFrame): void;
+  /** An auto mode applied a write: the row with its Undo. Optional: a turn that shows none ignores it. */
+  noteApplied?(data: Record<string, unknown>): void;
 }
 
 const ROUTE_REASONS = ["rate_limited", "upstream_error", "unavailable"] as const;
@@ -195,6 +197,10 @@ export function dispatchRunEvent(
   if (event === "research.plan" || event === "research.progress") {
     const frame = event === "research.plan" ? researchPlanFromEvent(data) : researchProgressFromEvent(data);
     if (frame) actions.noteResearch?.(frame);
+    return;
+  }
+  if (event === "write.applied") {
+    actions.noteApplied?.(data);
     return;
   }
   if (event === "resume.gap") {

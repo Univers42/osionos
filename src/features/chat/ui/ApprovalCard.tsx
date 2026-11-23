@@ -52,6 +52,7 @@ import {
 import { fetchApproval, type ApprovalChoice, type ApprovalDescription, type PlanItemProgress } from "../model/approvals";
 import { followPlanProgress, planItemStateWords, planProgressWords } from "../model/planProgress";
 import { reloadWrittenPage } from "../model/reloadWrittenPage";
+import { cardReasonText } from "../model/cardReason";
 import { decisionItems, keptKeys, planTree, type PlanNode } from "../model/planTree";
 
 export interface ApprovalCardProps {
@@ -65,6 +66,8 @@ export interface ApprovalCardProps {
   provenanceTitles?: readonly string[];
   /** What outside content shaped the request: `web:<domain>` or `mcp:<label>`. */
   influencedBy?: readonly string[];
+  /** Why the write is a card (AM4); shown only with `osio.ai.modes` on. */
+  cardReason?: string;
   /** Opens the page the write touches. */
   onOpenPage?: (pageId: string) => void;
   /** The follow-up of the write: the assistant's answer after it. */
@@ -185,6 +188,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     approvedInRunWords(approval?.approvedInRun ?? 0)
       ? noteLine(approvedInRunWords(approval?.approvedInRun ?? 0))
       : null,
+    noteLine(cardReasonText(props.cardReason) ?? ""),
     approval ? noteLine(expiryWords(approval.expiresAt)) : null,
     busy
       ? stateLine((isPlanCard && planProgressWords(approval?.progress)) || "Writing…", true)

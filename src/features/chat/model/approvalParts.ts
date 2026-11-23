@@ -44,6 +44,8 @@ export interface PermissionPart {
   expiresAt?: string;
   /** What outside content shaped the request: `mcp:<label>` or `web:<domain>`. */
   influencedBy?: string[];
+  /** Why this write is a card and not applied by an auto mode; absent with the modes off. */
+  cardReason?: string;
 }
 
 /**
@@ -70,6 +72,7 @@ export function permissionFromEvent(data: Record<string, unknown>): PermissionPa
     ...(pageIds.length > 0 ? { provenancePageIds: pageIds } : {}),
     ...(expiresAt ? { expiresAt } : {}),
     ...(influencedBy.length > 0 ? { influencedBy } : {}),
+    ...(typeof data.cardReason === "string" && data.cardReason ? { cardReason: data.cardReason } : {}),
   };
 }
 

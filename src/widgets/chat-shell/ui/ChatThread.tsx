@@ -41,6 +41,7 @@ import { RunErrorNotice } from "@/features/chat/model/runErrorNotice";
 import { askAgent } from "@/features/chat/model/askAgent";
 import { agentName, handoffFromParts, otherAgents, questionBefore } from "@/features/chat/model/agentHandoff";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
+import { AppliedWrites, AppliedWritesLoader } from "@/features/chat/ui/AppliedWrites";
 import { AgentAvatar } from "./AgentAvatar";
 import { AgentHandoffChip } from "./AgentHandoffChip";
 import { AskAnotherAgent } from "./AskAnotherAgent";
@@ -83,12 +84,14 @@ const AssistantAnswer = React.memo(function AssistantAnswer({
   parts,
   conversationId,
   messageId,
+  runId,
 }: {
   content: string;
   status?: ChatMessage["status"];
   parts?: ChatMessage["parts"];
   conversationId: string;
   messageId: string;
+  runId?: string;
 }) {
   const citations = useMemo(() => citationsFromParts(parts), [parts]);
   const activities = useMemo(() => toolActivitiesFromParts(parts), [parts]);
@@ -113,12 +116,14 @@ const AssistantAnswer = React.memo(function AssistantAnswer({
           approvalId={permission.approvalId}
           provenanceTitles={provenanceTitles(permission.provenancePageIds, citations)}
           influencedBy={permission.influencedBy}
+          cardReason={permission.cardReason}
           onOpenPage={(pageId) => openCitation({ n: 0, collection: "page", pageId, title: "", snippet: "" })}
           onContinuation={(runId) => {
             void useChatStore.getState().followUp(conversationId, runId);
           }}
         />
       ))}
+      <AppliedWrites messageId={messageId} runId={runId} />
       {proposals.map((proposal) => (
         <MemoryProposalChip
           key={proposal.memoryId}
@@ -211,6 +216,9 @@ function modelLabel(model: string): string {
 export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
   const endRef = useRef<HTMLDivElement>(null);
   const agents = useChatStore((s) => s.agents);
+  const serverConversationId = useChatStore(
+    (s) => s.conversations.find((c) => c.id === messages[0]?.conversationId)?.serverConversationId,
+  );
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages.length]);
 
   // An edit would race a run in flight: the Edit button waits for it.
@@ -219,6 +227,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-8" data-testid="chat-thread">
       {messages[0] ? <SummaryNotice conversationId={messages[0].conversationId} /> : null}
+      <AppliedWritesLoader serverConversationId={serverConversationId} />
       <MessageWindow items={messages}>
         {(visible, offset) => visible.map((m, visibleIndex) => {
         const index = offset + visibleIndex;
@@ -252,7 +261,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                   onSave={m.status === "done" && m.content ? () => saveResearchPage({ report: m.content, question, parts: m.parts }) : undefined}
                 />
               ) : null}
-              <AssistantAnswer content={m.content} status={m.status} parts={m.parts} conversationId={m.conversationId} messageId={m.id} />
+              <AssistantAnswer content={m.content} status={m.status} parts={m.parts} conversationId={m.conversationId} messageId={m.id} runId={m.runId} />
               {!streamingNow && handoff && question !== null ? (
                 <AgentHandoffChip agent={handoff.agent} reason={handoff.reason} disabled={busy} onAsk={() => void askAgent(m.conversationId, question, handoff.agent.id)} />
               ) : null}
