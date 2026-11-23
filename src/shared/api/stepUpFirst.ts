@@ -46,6 +46,7 @@ export const STEP_UP_GATED: readonly StepUpGatedRoute[] = [
   route('POST', '/api/account/password'),
   route('POST', '/api/account/username'),
   route('POST', '/api/account/deletion'),
+  route('POST', '/api/account/admin/users', `/${UUID}/demote`),
   route('POST', '/api/account/tokens'),
   route('DELETE', '/api/account/tokens'),
   route('POST', '/api/machines', '/pair/(claim|approve)'),

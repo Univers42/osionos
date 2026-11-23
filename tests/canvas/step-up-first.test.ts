@@ -59,6 +59,12 @@ test("the IDE token is gated only for a machine (scope node)", () => {
   assert.equal(isStepUpGated("POST", "/api/ide/token", undefined), false);
 });
 
+test("an admin demotion is gated, the other admin routes are not", () => {
+  const user = "/api/account/admin/users/0f8fad5b-d9cb-469f-a165-70867728950e";
+  assert.equal(isStepUpGated("POST", `${user}/demote`), true);
+  assert.equal(isStepUpGated("POST", `${user}/promote`), false);
+});
+
 // Caveat: a coarse cross-check. Every bridge file that calls requireSudo and names a route must
 // have at least one client entry whose path prefix appears in it. A new gated route in an
 // already-listed file, or behind a helper that names no route (bridge-account-email-flow.mjs), is
