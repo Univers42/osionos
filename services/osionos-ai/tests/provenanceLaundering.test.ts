@@ -11,7 +11,7 @@ import { SseStream, collect } from './sse.ts';
 process.env.OSIONOS_AI_MODES = 'on';
 process.env.OSIONOS_AI_MODES_USERS = '11111111-1111-4111-8111-111111111111';
 const { startHarness, USER_A, USER_B, WORKSPACE_A } = await import('./harness.ts');
-const { app, mock, bridge, postRun, tokenFor, createConversation } = await startHarness();
+const { app, mock, bridge, postRun, tokenFor, createConversation, call } = await startHarness();
 
 after(async () => {
 	await app.close();
@@ -33,43 +33,84 @@ async function reasonOf(conversationId: string): Promise<string | null> {
 	return row.rows[0].provenance_reason;
 }
 
-/** One conversation: the model reads `pageId`, and the run is drained. Returns the conversation. */
-async function conversationReading(pageId: string): Promise<string> {
-	const conversationId = await createConversation();
-	mock.setOptions({ toolCall: { name: 'read_page', arguments: { pageId } } });
-	const response = await postRun(conversationId, randomUUID(), 'read it', undefined, tokenFor(USER_A, WORKSPACE_A));
-	await collect(new SseStream(response));
-	return conversationId;
+const HOSTILE_BLOCK = 'HOSTILE-INSTRUCTION-BLOCK';
+
+async function resetMock(toolCall: unknown): Promise<void> {
+	mock.setOptions({ preDelayMs: 0, chunkCount: 2, chunkGapMs: 0, fail: false, toolCall: toolCall as never, toolCallTrigger: null, toolCallEveryStep: false, parallelToolCalls: 1, usage: null });
 }
 
-/**
- * C1 reads a hostile shared page; then, after the step-1 write is settled
- * (declined or approved by a click; nothing here depends on which), a new
- * conversation C2 reads the user's private page P.
- */
-async function launderingSequence(): Promise<{ c1: string | null; c2: string | null }> {
+async function drained(conversationId: string): Promise<{ events: Awaited<ReturnType<typeof collect>> }> {
+	const response = await postRun(conversationId, randomUUID(), 'do it', undefined, tokenFor(USER_A, WORKSPACE_A));
+	return { events: await collect(new SseStream(response)) };
+}
+
+/** Step 1: C1 reads the hostile shared page and asks add_blocks on P: a pending card. */
+async function hostileReadThenWrite(hostile: string, privateP: string): Promise<{ c1: string; approvalId: string }> {
+	await resetMock({
+		name: 'read_page',
+		arguments: { pageId: hostile },
+		also: [{ name: 'add_blocks', arguments: { pageId: privateP, blocks: [{ type: 'paragraph', content: HOSTILE_BLOCK }] } }],
+	});
+	const c1 = await createConversation();
+	const { events } = await drained(c1);
+	const asked = events.filter((event) => event.event === 'permission.asked');
+	assert.equal(asked.length, 1, 'step 1 asked for one card');
+	return { c1, approvalId: String((asked[0].data as { approvalId: string }).approvalId) };
+}
+
+/** Steps 2 and 4: the user settles the card through the approval route. */
+async function decide(approvalId: string, decision: 'approve' | 'decline'): Promise<string> {
+	const answer = await call(`/api/ai/approvals/${approvalId}`, { method: 'POST', token: tokenFor(USER_A, WORKSPACE_A), body: { decision } });
+	assert.equal(answer.status, 200);
+	return String((answer.body as { status: string }).status);
+}
+
+/** Step 3: a new conversation C2 reads P. */
+async function readPInFreshConversation(privateP: string): Promise<string> {
+	await resetMock({ name: 'read_page', arguments: { pageId: privateP } });
+	const c2 = await createConversation();
+	await drained(c2);
+	return c2;
+}
+
+function blocksOf(pageId: string): string[] {
+	return (bridge.pageContent(pageId)?.content ?? []).map((block) => String((block as { content?: unknown }).content));
+}
+
+async function setup(): Promise<{ hostile: string; privateP: string }> {
+	bridge.reset();
 	const hostile = await page('shared', USER_B);
 	const privateP = await page('private', USER_A);
-	const c1 = await conversationReading(hostile);
-	const c2 = await conversationReading(privateP);
-	return { c1: await reasonOf(c1), c2: await reasonOf(c2) };
+	bridge.seedPage(privateP, [], 3);
+	return { hostile, privateP };
 }
 
 describe('laundering sequence (taint state)', () => {
 	beforeEach(async () => {
+		await app.db.query('delete from public.ai_approvals');
 		await app.db.query('delete from public.osionos_workspace_members where workspace_id = $1', [WORKSPACE_A]);
 		await app.db.query('delete from public.osionos_share_rules where workspace_id = $1', [WORKSPACE_A]);
 		await app.db.query('delete from public.osionos_pages where workspace_id = $1', [WORKSPACE_A]);
 	});
 
-	it('the step-1 write is declined: C1 is tainted shared_page and C2 stays untainted', async () => {
-		assert.deepEqual(await launderingSequence(), { c1: 'shared_page', c2: null });
+	it('declined: C1 is tainted shared_page, P holds nothing of step 1, C2 stays untainted', async () => {
+		const { hostile, privateP } = await setup();
+		const { c1, approvalId } = await hostileReadThenWrite(hostile, privateP);
+		assert.equal(await reasonOf(c1), 'shared_page');
+		assert.equal(await decide(approvalId, 'decline'), 'declined');
+		assert.deepEqual(blocksOf(privateP), []);
+		assert.equal(await reasonOf(await readPInFreshConversation(privateP)), null);
 	});
 
-	it('the step-1 card is approved by a click: C2 still stays untainted', async () => {
-		// The human-click case of Task 10's Caveat: an approved write lands the
-		// hostile text in P, and a new conversation reading P is trusted, since
-		// P is the user's own private page. The test pins this; it does not hide it.
-		assert.deepEqual(await launderingSequence(), { c1: 'shared_page', c2: null });
+	it('approved by a click: P holds the step-1 blocks and C2 still stays untainted', async () => {
+		// The human-click case of Task 10's Caveat: the approved write lands the
+		// hostile text in P, and a new conversation reading P is trusted, because
+		// P is the user's own private page. Pinned here, not hidden.
+		const { hostile, privateP } = await setup();
+		const { c1, approvalId } = await hostileReadThenWrite(hostile, privateP);
+		assert.equal(await reasonOf(c1), 'shared_page');
+		assert.equal(await decide(approvalId, 'approve'), 'executed');
+		assert.deepEqual(blocksOf(privateP), [HOSTILE_BLOCK]);
+		assert.equal(await reasonOf(await readPInFreshConversation(privateP)), null);
 	});
 });

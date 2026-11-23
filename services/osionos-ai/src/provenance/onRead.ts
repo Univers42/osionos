@@ -48,6 +48,13 @@ export function makeOnRead(db: Pool, user: AuthUser, conversationId: string): (t
 			logTaintFailure(error);
 			reason = 'legacy';
 		}
-		if (reason) await markProvenanceTaint(db, conversationId, reason);
+		if (!reason) return;
+		try {
+			await markProvenanceTaint(db, conversationId, reason);
+		} catch (error) {
+			// The SDK shows a thrown message to the model: it gets a fixed one, never the driver's.
+			logTaintFailure(error);
+			throw new Error('provenance_unavailable');
+		}
 	};
 }

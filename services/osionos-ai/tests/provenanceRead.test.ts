@@ -93,6 +93,8 @@ describe('read-time provenance', () => {
 
 	it('an unknown tool, or a known one with a shape it does not know, is untrusted_tool', async () => {
 		assert.equal(await reasonAfter('brand_new_tool', { x: 1 }), 'untrusted_tool');
+		// Deliberate: its output quotes workspace-written names and descriptions.
+		assert.equal(await reasonAfter('list_my_context', { items: [] }), 'untrusted_tool');
 		assert.equal(await reasonAfter('read_page', { nothing: 1 }), 'untrusted_tool');
 		assert.equal(await reasonAfter('read_page', null), 'untrusted_tool');
 	});
@@ -148,5 +150,38 @@ describe('read-time provenance', () => {
 		assert.deepEqual(callsAtMark, [before + 1]);
 		assert.ok(mock.calls >= before + 2);
 		assert.equal(await reasonOf(conversationId), 'shared_page');
+	});
+
+	it('a failing taint write never gives the model the data, and logs no data', async () => {
+		const secret = `HOSTILE-${randomUUID()}`;
+		const shared = randomUUID();
+		await app.db.query(
+			`insert into public.osionos_pages (id, workspace_id, owner_id, title, visibility, content) values ($1, $2, $3, 't', 'shared', $4::jsonb)`,
+			[shared, WORKSPACE_A, USER_B, JSON.stringify([{ content: secret }])],
+		);
+		const conversationId = await createConversation();
+		const logged: string[] = [];
+		const sinks = ['log', 'warn', 'error'] as const;
+		const saved = sinks.map((name) => console[name]);
+		for (const name of sinks) console[name] = (...args: unknown[]) => { logged.push(args.map(String).join(' ')); };
+		const original = app.db.query.bind(app.db);
+		(app.db as { query: unknown }).query = (...args: unknown[]) =>
+			typeof args[0] === 'string' && /update public\.ai_conversations[^;]*provenance_tainted_at/.test(args[0])
+				? Promise.reject(Object.assign(new Error(`write failed ${secret}`), { code: 'XX000' }))
+				: (original as (...a: unknown[]) => unknown)(...args);
+		const before = mock.calls;
+		mock.setOptions({ toolCall: { name: 'read_page', arguments: { pageId: shared } } });
+		try {
+			await collect(new SseStream(await postRun(conversationId, randomUUID(), 'read it', undefined, tokenFor(USER_A, WORKSPACE_A))));
+		} finally {
+			(app.db as { query: unknown }).query = original;
+			sinks.forEach((name, index) => { console[name] = saved[index] as never; });
+		}
+		assert.ok(mock.calls >= before + 2, 'the model got a second request');
+		const next = JSON.stringify(mock.bodies[before + 1]);
+		assert.ok(!next.includes(secret), 'the data is not in the next request');
+		assert.ok(next.includes('provenance_unavailable'), 'the model got a tool error instead');
+		assert.ok(!logged.join('\n').includes(secret), 'nothing of the data is logged');
+		assert.ok(!logged.join('\n').includes(tokenFor(USER_A, WORKSPACE_A)), 'no token is logged');
 	});
 });

@@ -50,5 +50,6 @@ export function readContent(tool: string, data: unknown): ReadContent {
 	if (tool === 'graph_neighbors') return pages(idsOf(field(data, 'nodes'), ['pageId', 'via']));
 	if (tool === 'read_page') return typeof field(data, 'pageId') === 'string' ? { pageIds: [field(data, 'pageId') as string] } : 'untrusted';
 	if (tool === 'load_skill') return readSkill(data);
+	// list_my_context lands here on purpose: its output quotes names and descriptions others wrote.
 	return 'untrusted';
 }
