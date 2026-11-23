@@ -61,6 +61,17 @@ describe('two admins demoting each other at once', () => {
 		assert.ok(lock.ttl >= lock.calls * BAAS_FETCH_TIMEOUT_MS, `TTL ${lock.ttl} ms under ${lock.calls} calls of ${BAAS_FETCH_TIMEOUT_MS} ms`);
 	});
 
+	it('a lock release that fails is warned once, with no id or address, and the answer stands', async (t) => {
+		const world = await startDemoteWorld(t);
+		const warn = t.mock.method(console, 'warn', () => {});
+		const { del } = world.kv;
+		world.kv.del = (key) => (key === 'admin-demote' ? Promise.reject(new Error('kv down at 10.0.0.9')) : del(key));
+		assert.equal((await world.demote(USER_B)).status, 200);
+		const lines = warn.mock.calls.map((call) => call.arguments.join(' '));
+		assert.equal(lines.filter((line) => line.includes('lock')).length, 1, lines.join(' | '));
+		assert.doesNotMatch(lines.join(' '), new RegExp(`${USER_A}|${USER_B}|10\\.0\\.0\\.9|example\\.test`, 'i'));
+	});
+
 	it('the loser retrying after the winner is refused 403: its own flag is gone', async (t) => {
 		const world = await startDemoteWorld(t);
 		const fromB = await sudoAdminToken(world.config, world.kv, USER_B);

@@ -117,7 +117,9 @@ async function withLock(ctx, run) {
 	try {
 		return await run();
 	} finally {
-		await ctx.kv.del(LOCK_KEY).catch(() => {});
+		// The answer stands either way; the warning says why the next demotion may read demote_busy
+		// until the TTL. The kv error is not logged: it can carry the store's address.
+		await ctx.kv.del(LOCK_KEY).catch(() => console.warn('[osionos-bridge] admin demote: releasing the lock failed; it expires with its TTL'));
 	}
 }
 
