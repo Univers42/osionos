@@ -50,6 +50,7 @@ import {
 export { POLL_INTERVAL_MS, RETRY_AFTER_SECONDS, STALE_AFTER_MS, timestampMicros };
 
 const NOT_READY = publicSentence('The session revocation check is not ready; try again shortly.');
+const SIGN_OUT_UNRECORDED = publicSentence('Sign-out could not be recorded; try again shortly.');
 
 /**
  * The cut-off tracker of one process: the whole table lives in a Map that the
@@ -230,6 +231,6 @@ export async function writeSessionCutoff(config, fetchImpl, userId, writtenAtMs)
 		if (error?.upstreamStatus === 409 && /23503/.test(error.upstreamText ?? '')) {
 			throw Object.assign(new Error('No account matches this session.'), { status: 409, code: 'user_not_found' });
 		}
-		throw Object.assign(new Error('Sign-out could not be recorded; try again shortly.'), { status: 503, code: 'session_cutoffs_unavailable', retryAfterSeconds: 5 });
+		throw Object.assign(new Error(SIGN_OUT_UNRECORDED), { status: 503, code: 'session_cutoffs_unavailable', retryAfterSeconds: 5 });
 	}
 }

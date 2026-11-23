@@ -113,6 +113,19 @@ describe('RTC token room is derived only from the checked channel', () => {
 		assert.ok(!body?.token);
 	});
 
+	it('T4b a lookup 5xx answers the fixed sentence, never the upstream text', async (t) => {
+		const errors = t.mock.method(console, 'error', () => {});
+		const res = await fetch(`http://127.0.0.1:${port}/api/rtc/token`, {
+			method: 'POST',
+			headers: { authorization: 'Bearer good-token', 'content-type': 'application/json' },
+			body: JSON.stringify({ channelId: FAIL_CHANNEL, workspaceId: OWN_WS }),
+		});
+		const text = await res.text();
+		assert.ok(res.status >= 500, text);
+		assert.deepEqual(JSON.parse(text), { ok: false, message: 'The service is unavailable; try again.' });
+		assert.ok(errors.mock.calls.some((call) => /answer:/.test(String(call.arguments[0]))));
+	});
+
 	it('T6 a UUID spelled with spaces cannot be sanitised into another channel\'s room -> 422, no token', async () => {
 		const disguised = OTHER_CHANNEL.replaceAll('-', ' ');
 		const { status, body } = await postToken({ channelId: disguised, workspaceId: OWN_WS });

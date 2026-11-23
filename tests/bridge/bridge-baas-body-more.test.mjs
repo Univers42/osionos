@@ -271,6 +271,16 @@ describe('the query-router readers answer 502 on a broken body, and keep their e
 		});
 	});
 
+	it('keeps a 5xx non-JSON table answer (a proxy error page) out of the body and logs it', async (t) => {
+		const errors = t.mock.method(console, 'error', () => {});
+		const page = () => new Response('<html><center>nginx/1.25.3 502 Bad Gateway</center></html>', { status: 502 });
+		await routerBridge(TABLES_PATH, page, async (base) => {
+			const answer = await send(base, `/api/databases/${DB}/tables/tasks`, asA, post({ op: 'list' }));
+			assert.deepEqual([answer.status, answer.body], [502, { ok: false, message: 'The service is unavailable; try again.' }]);
+			assert.ok(logged(errors, /nginx\/1\.25\.3/), answer.text);
+		});
+	});
+
 	it('passes a 409 whose body read failed through as 409, never as 502', async () => {
 		await routerBridge(TABLES_PATH, conflictCutResponse, async (base) => {
 			const answer = await send(base, `/api/databases/${DB}/tables/tasks`, asA, post({ op: 'list' }));

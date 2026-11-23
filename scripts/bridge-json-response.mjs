@@ -22,6 +22,8 @@
  * compressed, which keeps every token and session answer plain; the bridge's
  * credential is a bearer header a cross-site page cannot attach, so it cannot
  * replay the large reads either.
+ * A 5xx answer's message is replaced by a fixed sentence and the original logged
+ * (bridge-error-sentences.mjs), unless the route declared that sentence public.
  */
 
 import { pipeline } from 'node:stream';
@@ -48,7 +50,9 @@ function logStreamError(error) {
 	if (error && error.code !== 'ERR_STREAM_PREMATURE_CLOSE') console.error(`bridge: gzip answer failed: ${error.message}`);
 }
 
-// Every JSON answer passes here, so this is where a 5xx message is held to a fixed sentence.
+// Every answer written through here has its 5xx message held to a fixed sentence. The rtc, runner
+// and IDE sandbox writers call publicAnswerBody; agent, connector, oauth, perms, ide-http-edge and
+// the SSE streams write around both.
 export function writeJsonResponse(response, status, headers, body) {
 	const payload = JSON.stringify(publicAnswerBody(status, body));
 	if (typeof payload !== 'string' || payload.length < GZIP_MIN_CHARS) {

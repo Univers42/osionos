@@ -21,7 +21,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
 import { writeJsonResponse } from './bridge-json-response.mjs';
-import { publicSentence } from './bridge-error-sentences.mjs';
+import { fixedMessage, logUpstream, publicSentence } from './bridge-error-sentences.mjs';
 import { readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
@@ -649,9 +649,14 @@ async function baasQueryPassthrough(config, fetchImpl, path, body, method = 'POS
 	if (readFailed && response.ok) return { status: 502, body: { ok: false, message: 'BaaS response body could not be read (query-router).' } };
 	// Ponytail: a non-JSON answer is passed through verbatim and capped at 300 bytes, so a
 	// longer answer reaches the write client truncated (and can split a multi-byte char).
+	// A 5xx one is a proxy's error page or a stack trace, so it is logged, never forwarded.
 	let parsed = null;
 	if (text) {
 		try { parsed = JSON.parse(text); } catch { parsed = { raw: text.slice(0, 300) }; }
+	}
+	if (response.status >= 500 && parsed?.raw !== undefined) {
+		logUpstream(response.status, parsed.raw);
+		parsed = { ok: false, message: fixedMessage(response.status) };
 	}
 	return { status: response.status, body: parsed };
 }
@@ -681,15 +686,14 @@ export async function baasRegistryGet(config, fetchImpl, path, tenantId, timeout
 }
 
 const MOUNTS_RATE_LIMITED = publicSentence('The tenant mount list is rate limited — retry shortly.');
+// Names grobase's contract route, not the configured URL, so a Kong prefix stays server-side.
+const MOUNTS_ROUTE_MISSING = publicSentence('grobase does not serve GET /v1/tenants/me/mounts — its tenant-control predates the self-serve mount list.');
 
 /** What the caller gets when grobase refuses the tenant mount list. Each refusal reads as an
  *  outage, never as an empty list: a 404 is a tenant-control without the route, and a 429 is
  *  the self-serve bucket that every Funnel client shares. */
-function tenantMountsFailure(status, url) {
-	if (status === 404) {
-		// The path is the bridge's own configured URL, never grobase's answer, so it may be declared here.
-		return { status: 503, message: publicSentence(`grobase does not serve GET ${new URL(url).pathname} — its tenant-control predates the self-serve mount list.`) };
-	}
+function tenantMountsFailure(status) {
+	if (status === 404) return { status: 503, message: MOUNTS_ROUTE_MISSING };
 	if (status === 401 || status === 403) return { status: 403, message: 'grobase refused the tenant api key on the mount list.' };
 	if (status === 429) return { status: 503, message: MOUNTS_RATE_LIMITED };
 	return { status: 502, message: `The tenant mount list failed with ${status}.` };
@@ -708,7 +712,7 @@ export async function baasTenantMountsGet(config, fetchImpl, timeoutMs = BAAS_FE
 	}, timeoutMs), timeoutMs, 'The tenant mount list');
 	if (!response.ok) {
 		await response.body?.cancel().catch(() => {});
-		const failure = tenantMountsFailure(response.status, config.tenantMountsUrl);
+		const failure = tenantMountsFailure(response.status);
 		throw Object.assign(new Error(failure.message), { status: failure.status });
 	}
 	const body = await readJsonBody(response, { service: 'tenant mount list', empty: [], failureStatus: responseStatusForBaasFailure });
@@ -733,7 +737,7 @@ async function baasTenantDescriptorGet(config, fetchImpl, dbId, timeoutMs = BAAS
 	}
 	if (!response.ok) {
 		await response.body?.cancel().catch(() => {});
-		const failure = tenantMountsFailure(response.status, url);
+		const failure = tenantMountsFailure(response.status);
 		throw Object.assign(new Error(failure.message), { status: failure.status });
 	}
 	return readJsonBody(response, { service: 'mount descriptor', empty: {}, failureStatus: responseStatusForBaasFailure });

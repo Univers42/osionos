@@ -1,3 +1,14 @@
+/**
+ * What an error answer may say. A route's message can quote upstream text (PostgREST names
+ * the table, column or constraint that failed), and the routes copy `error.message` into
+ * their bodies through a dozen helpers, so every answer written through writeJsonResponse
+ * holds a 5xx message to a fixed sentence and logs the original. The rtc, runner and IDE
+ * sandbox writers end their own response and call publicAnswerBody themselves; the agent,
+ * connector, oauth, perms and ide-http-edge writers, the SSE streams and every 4xx answer
+ * are not covered. A bridge-authored 5xx sentence keeps its
+ * words only when declared through publicSentence: the opt-in is by exact text, so no
+ * upstream message can ever match one.
+ */
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
@@ -39,15 +50,26 @@ export function publicSentence(text) {
 	return text;
 }
 
-// Caveat: the log mask is a pattern. It hides a `user@host` pair (an email, a DSN's
-// credentials) but not a bare token or password the message quotes without an `@`.
-const USER_AT_HOST = /[^\s"'@/]+@[^\s"'@:/]+/g;
+// Caveat: the log mask is a pattern. It hides the credentials of a `scheme://…@` URL whole
+// and a `user@host` pair (an email), but not a bare token, a signed URL's query string, or
+// the row values PostgREST quotes in `details` — those reach the server log as written.
+const SECRET_SHAPES = /(\w+:\/\/)[^\s@]*@|[^\s"'@/]+@[^\s"'@:/]+/g;
+// The mask is quadratic on a long text with no `@` (944 ms at 50 kB), and a CR/LF would
+// split one answer across log lines, so the text is capped and flattened first.
+const LOG_CHARS = 500;
+
+/** Logs what an upstream said behind a 5xx answer, as one capped, masked line. */
+export function logUpstream(status, text) {
+	const line = String(text).slice(0, LOG_CHARS).replace(/[\r\n]+/g, ' ')
+		.replace(SECRET_SHAPES, (_found, scheme) => (scheme ? `${scheme}[redacted]@` : '[redacted]'));
+	console.error(`bridge: ${status} answer: ${line}`);
+}
 
 /** The body a client may read: a status under 500 is returned as the same object. */
 export function publicAnswerBody(status, body) {
 	if (status < 500 || body === null || typeof body !== 'object' || typeof body.message !== 'string') return body;
 	if (PUBLIC_SENTENCES.has(body.message)) return body;
 	const sentence = fixedMessage(status);
-	if (body.message !== sentence) console.error(`bridge: ${status} answer: ${body.message.replaceAll(USER_AT_HOST, '[redacted]')}`);
+	if (body.message !== sentence) logUpstream(status, body.message);
 	return { ...body, message: sentence };
 }

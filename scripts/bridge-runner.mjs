@@ -34,6 +34,7 @@
 
 import { bearerToken, readJsonBody, safeText } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { publicAnswerBody } from './bridge-error-sentences.mjs';
 import { requireIdeSubject } from './ide-sandbox-spec.mjs';
 
 const RUN_BODY_LIMIT = 256 * 1024;
@@ -67,7 +68,7 @@ function jsonReply(response, status, body, config) {
     'access-control-allow-credentials': 'true',
     vary: 'Origin',
   });
-  response.end(JSON.stringify(body));
+  response.end(JSON.stringify(publicAnswerBody(status, body)));
 }
 
 function writeSseHead(response, config) {
@@ -137,6 +138,8 @@ export function createRunnerHandler({ config, verifySession, fetchImpl = fetch, 
           signal: AbortSignal.timeout(RUNNER_UPSTREAM_TIMEOUT_MS),
         });
         const text = await upstream.text();
+        // A runner 5xx body is a stack trace: jsonReply logs it and answers the fixed sentence.
+        if (upstream.status >= 500) { jsonReply(response, upstream.status, { ok: false, message: text }, requestConfig); return true; }
         response.writeHead(upstream.status, {
           'content-type': 'application/json; charset=utf-8',
           'cache-control': 'no-store',

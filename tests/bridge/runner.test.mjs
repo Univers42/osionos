@@ -113,4 +113,18 @@ describe('bridge-runner — auth + double-gate + limits + SSE passthrough', () =
 		assert.match(sentUrl, /\/format$/);
 		assert.match(res.chunks.join(''), /"formatted":"x = 1/);
 	});
+
+	it('answers a runner 5xx on /api/ide/format with its status and the fixed sentence, logging the upstream text', async (t) => {
+		const errors = t.mock.method(console, 'error', () => {});
+		const handler = createRunnerHandler({
+			config, verifySession: okAuth,
+			fetchImpl: async () => ({ ok: false, status: 500, text: async () => 'Traceback: /srv/runner/fmt.py line 9' }),
+			env: RUNNER_ENV,
+		});
+		const res = mockResponse();
+		await handler(new URL('http://app/api/ide/format'), mockRequest('POST', { body: { language: 'python', source: 'x=1' } }), res, config);
+		assert.equal(res.statusCode, 500);
+		assert.deepEqual(JSON.parse(res.chunks.join('')), { ok: false, message: 'The service is unavailable; try again.' });
+		assert.ok(errors.mock.calls.some((call) => String(call.arguments[0]).includes('/srv/runner/fmt.py')));
+	});
 });

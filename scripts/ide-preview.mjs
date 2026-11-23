@@ -16,9 +16,12 @@
 import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { jsonReply } from './bridge-ide-sandbox.mjs';
+import { publicSentence } from './bridge-error-sentences.mjs';
 import { tunnelUpstream } from './bridge-ide-ops.mjs';
 import { requireSandboxIdentity, deriveNames } from './ide-sandbox-spec.mjs';
 import { ideTokenSecret, signPreviewCap, verifyPreviewCap } from './ide-token.mjs';
+
+const PREVIEW_NOT_CONFIGURED = publicSentence('Preview is not configured.');
 
 // The browser's origin check compares text, so a value with a path or trailing slash would never
 // match; it is refused instead of silently locking every browser out. One rule for the allowed
@@ -104,8 +107,7 @@ async function mintPreviewLink(request, requestConfig, { verifySession, env }) {
   const port = payload?.port;
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw Object.assign(new Error('port must be an integer between 1 and 65535.'), { status: 400 });
   takeToken(`ide-preview-mint:${userId}`, { capacity: 20, refillPerSec: 0.5 });
-  const notConfigured = 'Preview is not configured.';
-  const base = parseExactOrigin(env.OSIONOS_IDE_PUBLIC_URL, notConfigured);
+  const base = parseExactOrigin(env.OSIONOS_IDE_PUBLIC_URL, PREVIEW_NOT_CONFIGURED);
   const { cap } = signPreviewCap({ userId, workspaceId, port, secret: ideTokenSecret(env), parentExp: session.exp });
   return { ok: true, url: `${base}/p/${cap}/` };
 }

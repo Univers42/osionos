@@ -29,6 +29,7 @@
 
 import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { publicAnswerBody } from './bridge-error-sentences.mjs';
 import { createDockerClient } from './ide-docker.mjs';
 import { requireSandboxIdentity, deriveNames, deriveHomeVolume, buildContainerSpec, buildKeySyncSpec } from './ide-sandbox-spec.mjs';
 import { HOME_REPAIR, runVolumeInit } from './ide-volume-init.mjs';
@@ -46,7 +47,7 @@ export function jsonReply(response, status, body, config, extraHeaders = {}) {
     'access-control-allow-credentials': 'true',
     vary: 'Origin',
   });
-  response.end(JSON.stringify(body));
+  response.end(JSON.stringify(publicAnswerBody(status, body)));
 }
 
 /** A running box with no terminal attached for this long is stopped. 20 min replaces the old 30 min

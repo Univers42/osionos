@@ -37,9 +37,11 @@ import {
 	startPolledSessionPoller,
 	timestampMicros,
 } from './bridge-session-tracker.mjs';
+import { publicSentence } from './bridge-error-sentences.mjs';
 
 export { POLL_INTERVAL_MS, RETRY_AFTER_SECONDS, STALE_AFTER_MS };
 
+const NOT_READY = publicSentence('The per-session revocation check is not ready; try again shortly.');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TABLE_HINT = 'public.osionos_sessions must exist and be readable by the service role (apply models/osionos-account-foundation-migration.sql)';
 
@@ -89,7 +91,7 @@ export function assertSessionNotRevoked(tracker, sessionId) {
 	const state = tracker.status();
 	if (state === 'off') return;
 	if (state !== 'fresh') {
-		throw Object.assign(httpError('The per-session revocation check is not ready; try again shortly.', 503, 'session_revocations_unavailable'), { retryAfterSeconds: RETRY_AFTER_SECONDS });
+		throw Object.assign(httpError(NOT_READY, 503, 'session_revocations_unavailable'), { retryAfterSeconds: RETRY_AFTER_SECONDS });
 	}
 	if (tracker.isRevoked(sessionId)) {
 		throw httpError('App session was revoked.', 401, 'session_revoked');

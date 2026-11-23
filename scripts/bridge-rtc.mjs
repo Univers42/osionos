@@ -47,6 +47,7 @@
 
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readBaasJson } from './bridge-baas-body.mjs';
+import { publicAnswerBody } from './bridge-error-sentences.mjs';
 import { requireChannelAccess } from './bridge-chat.mjs';
 
 const MAX_TOKEN_TTL_SECONDS = 6 * 60 * 60; // LiveKit grants are capped at 6h here
@@ -195,7 +196,7 @@ function sendJson(response, status, body, config) {
 		'access-control-allow-credentials': 'true',
 		vary: 'Origin',
 	});
-	response.end(JSON.stringify(body));
+	response.end(JSON.stringify(publicAnswerBody(status, body)));
 }
 
 function bearerTokenFromRequest(request) {

@@ -36,10 +36,26 @@ describe('publicAnswerBody', () => {
 		assert.equal(logged.mock.callCount(), 0);
 	});
 
-	it('masks user@host pairs in the log line', (t) => {
+	it('masks DSN credentials and user@host pairs in the log line', (t) => {
 		const logged = t.mock.method(console, 'error', () => {});
 		publicAnswerBody(500, { message: 'dial postgres://app:pw@db:5432 for a@example.com' });
-		assert.equal(logged.mock.calls[0].arguments[0], 'bridge: 500 answer: dial postgres://[redacted]:5432 for [redacted]');
+		assert.equal(logged.mock.calls[0].arguments[0], 'bridge: 500 answer: dial postgres://[redacted]@db:5432 for [redacted]');
+	});
+
+	it('masks a DSN whose password holds a slash or a quote without leaking its prefix', (t) => {
+		const logged = t.mock.method(console, 'error', () => {});
+		publicAnswerBody(500, { message: 'dial postgres://app:pa/ss"wd@db:5432/x failed' });
+		assert.equal(logged.mock.calls[0].arguments[0], 'bridge: 500 answer: dial postgres://[redacted]@db:5432/x failed');
+	});
+
+	it('logs a 50 kB message with CR/LF as one line capped near 500 characters', (t) => {
+		const logged = t.mock.method(console, 'error', () => {});
+		publicAnswerBody(502, { message: `first\r\nsecond\n${'x'.repeat(50_000)}` });
+		assert.equal(logged.mock.callCount(), 1);
+		const line = logged.mock.calls[0].arguments[0];
+		assert.doesNotMatch(line, /[\r\n]/);
+		assert.ok(line.startsWith('bridge: 502 answer: first second x'), line.slice(0, 60));
+		assert.ok(line.length <= 540, `${line.length} chars`);
 	});
 
 	it('leaves a body without a string message alone', () => {

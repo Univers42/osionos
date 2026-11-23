@@ -122,13 +122,13 @@ describe('tenant mount list through Kong', () => {
 	const env = { ...baseEnv, OSIONOS_TENANT_MOUNTS_URL: mountsUrl, OSIONOS_ADAPTER_REGISTRY_URL: 'http://mini-baas-kong:8000/admin/v1' };
 
 	/** The bridge in front of a mount route that answers `status`; records every upstream URL. */
-	async function listWithMountRouteAnswering(status) {
-		const config = configFromEnv(env);
+	async function listWithMountRouteAnswering(status, routeUrl = mountsUrl) {
+		const config = configFromEnv({ ...env, OSIONOS_TENANT_MOUNTS_URL: routeUrl });
 		const seen = [];
 		const fetchImpl = async (input) => {
 			const url = String(input);
 			seen.push(url);
-			if (url === mountsUrl) return new Response('{"error":"refused"}', { status });
+			if (url === routeUrl) return new Response('{"error":"refused"}', { status });
 			return Response.json([{ id: 'd21fec9c-7404-406a-8d4c-a8c25c6451c3', workspace_id: workspaceId, db_id: dbId, engine: 'mssql', label: 'Finance · MSSQL' }]);
 		};
 		const server = createBridgeServer({ config, fetchImpl });
@@ -166,6 +166,13 @@ describe('tenant mount list through Kong', () => {
 		assert.match(body.message, /\/v1\/tenants\/me\/mounts/);
 		assert.equal(body.databases, undefined);
 		assert.equal(seen.filter((url) => url.includes('/admin/v1')).length, 0);
+	});
+
+	it('names the contract route on a 404, never the prefix the bridge is configured with', async () => {
+		const { status, body } = await listWithMountRouteAnswering(404, 'http://mini-baas-kong:8000/internal-edge/v1/tenants/me/mounts');
+		assert.equal(status, 503);
+		assert.match(body.message, /GET \/v1\/tenants\/me\/mounts /);
+		assert.doesNotMatch(body.message, /internal-edge/);
 	});
 
 	for (const refused of [401, 403]) {

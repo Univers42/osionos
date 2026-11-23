@@ -173,6 +173,17 @@ describe('logout reports what the BaaS did', () => {
 		});
 	});
 
+	it('keeps its own sign-out 503 sentence and logs no answer line for it', async (t) => {
+		const stub = backend();
+		stub.writeAnswer = () => { throw new Error('connect ECONNREFUSED'); };
+		await withLogout(stub, async (base, config) => {
+			const errors = t.mock.method(console, 'error', () => {});
+			const result = await logout(base, bearer(config, T - 1000));
+			assert.deepEqual([result.status, result.body.message], [503, 'Sign-out could not be recorded; try again shortly.']);
+			assert.equal(errors.mock.calls.filter((call) => /answer:/.test(String(call.arguments[0]))).length, 0);
+		});
+	});
+
 	it('answers 409 user_not_found on a foreign-key violation', async () => {
 		const stub = backend();
 		stub.writeAnswer = () => new Response('{"code":"23503","message":"violates foreign key constraint"}', { status: 409, headers: { 'content-type': 'application/json' } });

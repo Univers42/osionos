@@ -119,6 +119,24 @@ describe('a revoke ends one session, not the user', () => {
 		assert.equal(never.body.code, 'session_revocations_unavailable');
 	});
 
+	// A stale table answers every authenticated request with this sentence: declared, it is
+	// neither replaced nor logged once per request.
+	it('keeps its own 503 sentence and logs no answer line for it', async (t) => {
+		const clock = { at: Date.now() };
+		const config = sessionConfig({ now: () => clock.at });
+		const { base } = await startSessionBridge({
+			t,
+			config,
+			clock,
+			fail: (call) => (call.method === 'GET' && call.table === 'osionos_sessions' ? { status: 500, body: { message: 'boom' } } : null),
+		});
+		const session = await sessionFor(t, base, USER_A);
+		const errors = t.mock.method(console, 'error', () => {});
+		const never = await sendJson(base, '/api/favorites', { headers: { authorization: `Bearer ${session.accessToken}` } });
+		assert.deepEqual([never.status, never.body.message], [503, 'The per-session revocation check is not ready; try again shortly.']);
+		assert.equal(errors.mock.calls.filter((call) => /answer:/.test(String(call.arguments[0]))).length, 0);
+	});
+
 	it('keeps a revoke that raced a reload that was already in flight', () => {
 		const tracker = new SessionRevocations({ enforced: true, now: () => CLOCK.at, log: { info() {}, warn() {} } });
 		const started = tracker.beginLoad();

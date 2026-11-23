@@ -12,6 +12,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { Readable } from "node:stream";
 
 import { createIdeOpsHandler, parseRipgrepJson } from "../../scripts/bridge-ide-ops.mjs";
 
@@ -62,4 +64,29 @@ test("ops rejects non-POST + disowns foreign paths", async () => {
   await handler(new URL("http://x/api/ide/git"), { method: "GET", headers: {} }, res, CONFIG);
   assert.equal(res.statusCode, 405);
   assert.equal(await handler(new URL("http://x/api/other"), { method: "POST", headers: {} }, fakeRes(), CONFIG), false);
+});
+
+// A docker failure inside an op used to reach the client as the docker error text at 500.
+test("an op the docker daemon fails answers 500 with the fixed sentence and logs the docker error", async (t) => {
+  const daemon = createServer((req, res) => {
+    req.resume();
+    req.on("end", () => {
+      const running = req.method === "GET" && /^\/containers\/[^/]+\/json$/.test(req.url.split("?")[0]);
+      res.writeHead(running ? 200 : 500, { "content-type": "application/json" });
+      res.end(JSON.stringify(running ? { State: { Running: true } } : { message: "OCI runtime exec failed" }));
+    });
+  });
+  await new Promise((resolve) => daemon.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => daemon.close(resolve)));
+  const errors = t.mock.method(console, "error", () => {});
+  const env = { ...ENABLED, OSIONOS_IDE_DOCKER_HOST: `127.0.0.1:${daemon.address().port}` };
+  const handler = createIdeOpsHandler({ config: CONFIG, verifySession: () => ({ userId: U, workspaceIds: [W] }), env });
+  const request = Readable.from([JSON.stringify({ workspaceId: W })]);
+  Object.assign(request, { method: "POST", headers: { authorization: "Bearer t" } });
+  const chunks = [];
+  const res = { statusCode: 0, writeHead(s) { this.statusCode = s; }, end(c) { if (c) chunks.push(String(c)); } };
+  await handler(new URL("http://x/api/ide/ports"), request, res, CONFIG);
+  assert.equal(res.statusCode, 500);
+  assert.deepEqual(JSON.parse(chunks.join("")), { ok: false, message: "The service is unavailable; try again." });
+  assert.ok(errors.mock.calls.some((call) => /exec create failed/.test(String(call.arguments[0]))));
 });
