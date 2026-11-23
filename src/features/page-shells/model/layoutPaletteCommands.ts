@@ -15,7 +15,7 @@
 // keeps the command behaviour testable without stores or the UI toast stack.
 
 import { buildSection, SECTIONS } from "@/data/templates/sections/sectionIndex";
-import { loadShell, SHELLS } from "@/data/templates/shells/shellIndex";
+import { SHELLS } from "@/data/templates/catalogue/shells/shellIndex";
 import { findBlockInTree, type Block } from "@/entities/block";
 import { cloneBlock } from "@/features/block-editor/model/blockContextMenu.helpers";
 import { useBlockSelection } from "@/features/block-editor/model/blockSelectionStore";
@@ -53,7 +53,7 @@ export function liveDeps(): PaletteDeps {
       return { sourceKey: state.activeSourceKey, ids: state.ids };
     },
     loadSection: buildSection,
-    loadShell,
+    loadShell: async (id) => (await import("@/data/templates/catalogue/shells/shellBuilders")).SHELL_BUILDERS[id]?.() ?? null,
     notify: (title) => useToastStore.getState().push({ kind: "info", title }),
   };
 }

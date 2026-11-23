@@ -38,7 +38,7 @@ registerHooks({
 const { applyLayoutPreset, applyShellCommand, insertSection, isBlankPage, layoutPaletteCommands } =
   await import("@/features/page-shells/model/layoutPaletteCommands");
 const { SECTIONS } = await import("@/data/templates/sections/sectionIndex");
-const { SHELLS } = await import("@/data/templates/shells/shellIndex");
+const { SHELLS } = await import("@/data/templates/catalogue/shells/shellIndex");
 const { applyLayoutChoice } = await import("@/features/block-editor/model/layoutInspector");
 
 const paragraph = (id: string, content = ""): Block => ({ id, type: "paragraph", content });
