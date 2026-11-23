@@ -139,6 +139,10 @@ describe('POST /api/pages/from-markdown: limits (M240-2, M240-3)', () => {
 			assert.equal(answer.status, 201, answer.text);
 			assert.equal(created.title, title);
 		}
+		// The stored title drops control characters, so a tab does not count against the limit.
+		const tabbed = await create({ workspaceId: IDS.team, title: `${'x'.repeat(199)}\ty`, markdown: 'a' });
+		assert.equal(tabbed.answer.status, 201, tabbed.answer.text);
+		assert.equal(tabbed.created.title, `${'x'.repeat(199)}y`);
 		for (const title of ['t'.repeat(201), `${'😀'.repeat(100)}a`, 42]) {
 			const { answer, mock } = await create({ workspaceId: IDS.team, title, markdown: 'a' });
 			assert.equal(answer.status, 400, answer.text);

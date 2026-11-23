@@ -10,8 +10,9 @@ import { readRawBody } from './bridge-chat-media.mjs';
 import { markdownImportBlocks } from './bridge-markdown-engine.mjs';
 import { patWritePayload } from './bridge-pat-middleware.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
-import { bearerToken, httpError, safeText } from './bridge-social-core.mjs';
-import { verifyAppSessionToken } from './bridge-session-token.mjs';
+import { bearerToken, httpError } from './bridge-social-core.mjs';
+// The safeText pageCreateRowFromPayload stores the title with, so the check counts what is stored.
+import { safeText, verifyAppSessionToken } from './bridge-session-token.mjs';
 
 export const FROM_MARKDOWN_PATH = '/api/pages/from-markdown';
 export const MARKDOWN_MAX_BYTES = 64 * 1024;
