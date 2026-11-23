@@ -220,7 +220,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			...(web ? { web } : {}),
 			...(webTaint ? { webTaint } : {}),
 			...(input.research ? { research: true } : {}),
-			...(input.mode ? { mode: input.mode } : {}),
+			...(input.mode?.mode === 'plan' ? { planMode: true } : {}),
 			emit: (type, data) => emit(type, data),
 		});
 		const tools = input.mayTrain ? webToolsOnly(runTools.tools) : runTools.tools;

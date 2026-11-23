@@ -22,7 +22,7 @@ after(async () => {
 	await bridge.close();
 });
 
-const WRITES = ['create_page', 'rename_page', 'archive_page', 'add_blocks', 'build_plan'];
+const WRITES = [...writeTools(true).map((tool) => tool.name), 'build_plan'];
 const body = () => mock.lastBody() as { tools?: { function: { name: string } }[]; messages: { role: string; content: string }[] };
 const toolNames = (): string[] => (body().tools ?? []).map((tool) => tool.function.name);
 const systemText = (): string => body().messages.find((message) => message.role === 'system')?.content ?? '';
