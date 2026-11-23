@@ -145,7 +145,10 @@ test("PS36: the README cover wins over the banner, and drawing either writes not
   assert.deepEqual(cover.writes, []);
 });
 
-test("PS34: the owner without a README gets an explicit create button and nothing is created", () => {
+// Caveat: server rendering runs no effects, so "nothing created" here covers the render only; a
+// create issued from an effect after mount is covered by the owner test in
+// tests/e2e/bridge-stub/profileAsPage.spec.mjs, which counts POST /api/pages in a browser.
+test("PS34: the owner without a README gets an explicit create button, and drawing it creates nothing", () => {
   let created = 0;
   const addPage = usePageStore.getState().addPage;
   usePageStore.setState({ addPage: async () => { created += 1; return null; } } as never);
