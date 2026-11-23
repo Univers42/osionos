@@ -41,6 +41,7 @@ export async function conversationTaint(db: Pool, conversationId: string): Promi
 	if (stored?.tainted_at) why.push(stored.reason ?? 'legacy');
 	const labels = await influencedBy(db, conversationId);
 	why.push(...labels);
-	if (config.webEnabled && !labels.some((label) => label.startsWith('web:')) && (await readWebTaint(db, conversationId)).tainted) why.push('web');
+	const webListed = labels.some((label) => label.startsWith('web:'));
+	if (config.webEnabled && !webListed && (await readWebTaint(db, conversationId)).tainted) why.push('web');
 	return { tainted: why.length > 0, why };
 }

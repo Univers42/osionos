@@ -463,11 +463,16 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 
 	const mode = await effectiveMode(db, { user: input.user ?? null, conversationId, runKind: input.runKind ?? 'continuation', credential: input.credential ?? null });
 	// AM3: taint the conversation before the model sees what this run hands it.
-	await markRunStart(db, {
+	const marked = await markRunStart(db, {
 		conversationId, user: input.user, contextPages: context.pages, sources, overview,
 		viewTabs: input.view?.tabs ?? [], attachmentCount: attachments.length, imageCount: images.length,
 		skillIndex: skillIndex.entries, customAgentId: isCustomAgent(agent) ? agent.id : null, thread: input.thread !== undefined,
-	});
+	}).then(() => true, () => false);
+	if (!marked) {
+		await settleTarget(db, target, { userId: ownerId, day, reserved: amount, actual: 0 });
+		await markRun(db, runId, 'failed', 'provenance_unavailable');
+		return { kind: 'refused', status: 503, code: 'provenance_unavailable' };
+	}
 	const execute = async (): Promise<void> => {
 		await runUpstream({
 			db,

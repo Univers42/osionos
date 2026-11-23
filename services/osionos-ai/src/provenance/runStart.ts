@@ -1,4 +1,6 @@
 import type { Pool } from 'pg';
+import { config } from '../config.ts';
+import { modesAllowed } from '../modes/modesConfig.ts';
 import type { AuthUser } from '../auth.ts';
 import type { RunViewTab } from '../runs/prompt.ts';
 import type { SkillIndexEntry } from '../skills/runSkills.ts';
@@ -37,7 +39,10 @@ function agentIsForeign(agent: RunStartCustomAgent, userId: string): boolean {
 }
 
 async function hasForeignSkill(db: Pool, userId: string, skills: readonly SkillIndexEntry[]): Promise<boolean> {
-	const ids = skills.flatMap((skill) => (skill.source === 'workspace' && skill.skillId ? [skill.skillId] : []));
+	const workspaceSkills = skills.filter((skill) => skill.source === 'workspace');
+	// A workspace skill with no row id cannot be looked up, so it is not vouched for.
+	if (workspaceSkills.some((skill) => !skill.skillId)) return true;
+	const ids = workspaceSkills.flatMap((skill) => (skill.skillId ? [skill.skillId] : []));
 	if (ids.length === 0) return false;
 	const rows = await db.query<{ created_by: string; updated_by: string }>(
 		'select created_by::text, updated_by::text from public.ai_skills where id = any($1::uuid[])',
@@ -92,9 +97,6 @@ export type RunStartRaw = Omit<RunStartInputs, 'customAgent' | 'user' | 'context
 	overview: { tree: readonly { id: string }[]; recent: readonly { id: string }[] } | null;
 };
 
-/** A caller-less run (a thread): no id equals it, and no page is looked up for it. */
-const NOBODY = '00000000-0000-0000-0000-000000000000';
-
 async function customAgentOf(db: Pool, agentId: string | null): Promise<RunStartCustomAgent | null> {
 	if (!agentId) return null;
 	const row = await db.query<{ scope: 'user' | 'workspace'; owner_id: string | null; created_by: string; updated_by: string }>(
@@ -108,9 +110,12 @@ async function customAgentOf(db: Pool, agentId: string | null): Promise<RunStart
 		: { scope: 'workspace', ownerId: null, createdBy: '', updatedBy: '' };
 }
 
-/** The runner's call: completes the inputs from the database, then marks. */
-export async function markRunStart(db: Pool, raw: RunStartRaw): Promise<TaintReason | null> {
-	const { user, customAgentId, contextPages, sources, overview, ...rest } = raw;
+function logTaintFailure(error: unknown): void {
+	console.warn(JSON.stringify({ event: 'provenance_check_failed', code: (error as { code?: unknown }).code ?? (error as Error).name }));
+}
+
+async function checkRunStart(db: Pool, raw: RunStartRaw, user: AuthUser): Promise<TaintReason | null> {
+	const { customAgentId, contextPages, sources, overview, ...rest } = raw;
 	const customAgent = await customAgentOf(db, customAgentId);
 	const pages = {
 		contextPageIds: contextPages.map((page) => page.id),
@@ -118,7 +123,31 @@ export async function markRunStart(db: Pool, raw: RunStartRaw): Promise<TaintRea
 		sourcePageIds: sources.map((source) => source.pageId).filter((id) => id !== ''),
 		overviewPageIds: overview ? [...overview.tree, ...overview.recent].map((entry) => entry.id) : [],
 	};
-	if (user) return markRunStartProvenance(db, { ...rest, ...pages, user, customAgent });
-	const nobody: AuthUser = { userId: NOBODY, workspaceId: NOBODY, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0, expiresAtMs: null };
-	return markRunStartProvenance(db, { ...rest, user: nobody, customAgent, contextPageIds: [], sourcePageIds: [], overviewPageIds: [], viewTabs: [] });
+	return markRunStartProvenance(db, { ...rest, ...pages, user, customAgent });
+}
+
+/**
+ * The runner's call: completes the inputs from the database, then marks.
+ *
+ * Fail closed: a caller who may not use modes (or no caller) gets one UPDATE
+ * with reason 'legacy' and no other read; a check that throws taints 'legacy'
+ * and is logged by code. Only a failing taint write propagates.
+ *
+ * Caveat: 'legacy' over-reports (a conversation that only failed its check is
+ * never auto-written to); the escape hatch is a new conversation.
+ */
+export async function markRunStart(db: Pool, raw: RunStartRaw): Promise<TaintReason | null> {
+	const { user } = raw;
+	if (!user || !modesAllowed(config, user.userId)) {
+		// flag off: one UPDATE, the cheapest fail-closed — not 'no query'.
+		await markProvenanceTaint(db, raw.conversationId, 'legacy');
+		return 'legacy';
+	}
+	try {
+		return await checkRunStart(db, raw, user);
+	} catch (error) {
+		logTaintFailure(error);
+		await markProvenanceTaint(db, raw.conversationId, 'legacy');
+		return 'legacy';
+	}
 }

@@ -35,11 +35,13 @@ where not exists (select 1 from public.osionos_pages p where p.id = u.id)
 	select 1 from chain c, shared_workspace w
 	where c.start_id = u.id
 	  and (w.untrusted
-	    or c.workspace_id <> $2::uuid
+	    or c.workspace_id is distinct from $2::uuid
 	    or c.owner_id is distinct from $3::uuid
 	    or c.visibility in ('shared', 'public')
 	    or cardinality(public.ai_collaborator_ids(c.collaborators)) > 0
-	    or (c.depth = ${MAX_DEPTH} and c.parent_page_id is not null)))`;
+	    or (c.depth = ${MAX_DEPTH} and c.parent_page_id is not null)
+	    or (c.parent_page_id is not null
+	        and not exists (select 1 from public.osionos_pages q where q.id = c.parent_page_id))))`;
 
 /**
  * The pages, among `pageIds`, whose content the user cannot vouch for, in the

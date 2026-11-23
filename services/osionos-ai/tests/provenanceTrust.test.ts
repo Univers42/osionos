@@ -122,6 +122,25 @@ describe('page trust', () => {
 		assert.deepEqual(await untrustedPageIds(app.db, user, [missing, own, shared]), [missing, shared]);
 	});
 
+	it('a dangling parent is untrusted', async () => {
+		// The foreign key would null the parent; replica mode lets the test write the row it forbids.
+		const child = randomUUID();
+		const client = await app.db.connect();
+		try {
+			await client.query('begin');
+			await client.query('set local session_replication_role = replica');
+			await client.query(
+				`insert into public.osionos_pages (id, workspace_id, owner_id, title, visibility, parent_page_id, content)
+				 values ($1, $2, $3, 't', 'private', $4, '[]'::jsonb)`,
+				[child, WORKSPACE_A, USER_A, randomUUID()],
+			);
+			await client.query('commit');
+		} finally {
+			client.release();
+		}
+		assert.deepEqual(await untrustedPageIds(app.db, user, [child]), [child]);
+	});
+
 	it('a chain deeper than the bound is untrusted', async () => {
 		let parent: string | null = null;
 		let leaf = '';

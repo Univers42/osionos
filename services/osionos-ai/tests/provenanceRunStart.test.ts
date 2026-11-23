@@ -6,13 +6,16 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
-import { startHarness, USER_A, USER_B, WORKSPACE_A } from './harness.ts';
 import { SseStream, collect } from './sse.ts';
 import type { AuthUser } from '../src/auth.ts';
 
+// The modes flag on, and only USER_A allowlisted: the full check runs for A, a legacy mark for B.
+process.env.OSIONOS_AI_MODES = 'on';
+process.env.OSIONOS_AI_MODES_USERS = '11111111-1111-4111-8111-111111111111';
+const { startHarness, USER_A, USER_B, WORKSPACE_A } = await import('./harness.ts');
 const { app, mock, bridge, postRun, tokenFor, createConversation } = await startHarness();
 const { conversationTaint, markProvenanceTaint } = await import('../src/provenance/repo.ts');
-const { markRunStartProvenance } = await import('../src/provenance/runStart.ts');
+const { markRunStartProvenance, markRunStart } = await import('../src/provenance/runStart.ts');
 type Inputs = Parameters<typeof markRunStartProvenance>[1];
 
 after(async () => {
@@ -156,5 +159,81 @@ describe('run-start provenance', () => {
 		assert.deepEqual(callsAtMark, [before]);
 		assert.ok(mock.calls > before);
 		assert.equal(await reasonOf(conversationId), 'shared_page');
+	});
+
+	/** Runs `body` with every query of the pool recorded, and those matching `fail` rejected. */
+	async function spied<T>(fail: RegExp | null, body: (seen: string[]) => Promise<T>): Promise<T> {
+		const seen: string[] = [];
+		const original = app.db.query.bind(app.db);
+		(app.db as { query: unknown }).query = (...args: unknown[]) => {
+			const sql = typeof args[0] === 'string' ? args[0] : '';
+			seen.push(sql);
+			if (fail?.test(sql)) return Promise.reject(Object.assign(new Error('boom'), { code: 'XX000' }));
+			return (original as (...a: unknown[]) => unknown)(...args);
+		};
+		try {
+			return await body(seen);
+		} finally {
+			(app.db as { query: unknown }).query = original;
+		}
+	}
+
+	const raw = (conversationId: string, userOf: AuthUser | undefined, over: object = {}) => ({
+		conversationId, user: userOf, contextPages: [], sources: [], overview: null, viewTabs: [],
+		attachmentCount: 0, imageCount: 0, skillIndex: [], customAgentId: null, thread: false, ...over,
+	});
+
+	it('a user outside the allowlist, or no user, gets one legacy mark and no other read', async () => {
+		for (const who of [{ ...user, userId: USER_B }, undefined]) {
+			const conversationId = await createConversation();
+			const agentId = randomUUID();
+			const seen = await spied(null, async (log) => {
+				assert.equal(await markRunStart(app.db, raw(conversationId, who, { customAgentId: agentId })), 'legacy');
+				return log;
+			});
+			assert.equal(seen.length, 1);
+			assert.match(seen[0], /update public\.ai_conversations/);
+			assert.equal(await reasonOf(conversationId), 'legacy');
+		}
+	});
+
+	it('a failing check taints legacy and logs only a code', async () => {
+		const conversationId = await createConversation();
+		const warned: string[] = [];
+		const warn = console.warn;
+		console.warn = (line: unknown) => { warned.push(String(line)); };
+		try {
+			await spied(/ai_agents/, async () => {
+				assert.equal(await markRunStart(app.db, raw(conversationId, user, { customAgentId: randomUUID() })), 'legacy');
+			});
+		} finally {
+			console.warn = warn;
+		}
+		assert.equal(await reasonOf(conversationId), 'legacy');
+		assert.deepEqual(warned, ['{"event":"provenance_check_failed","code":"XX000"}']);
+	});
+
+	it('a failing taint write propagates', async () => {
+		const conversationId = await createConversation();
+		await spied(/ai_agents|update public\.ai_conversations/, async () => {
+			await assert.rejects(markRunStart(app.db, raw(conversationId, user, { customAgentId: randomUUID() })));
+		});
+	});
+
+	it('a workspace skill with no skillId is foreign_skill', async () => {
+		const entry = { id: 's', version: 1, source: 'workspace' as const, description: 'd' };
+		assert.equal((await run({ skillIndex: [entry] })).stored, 'foreign_skill');
+	});
+
+	it('a run whose provenance cannot be written is refused, settled and marked failed', async () => {
+		const shared = await page('shared', USER_B);
+		const conversationId = await createConversation();
+		const runId = randomUUID();
+		const response = await spied(/update public\.ai_conversations[^;]*provenance_tainted_at/, () =>
+			postRun(conversationId, runId, 'hello', undefined, tokenFor(USER_A, WORKSPACE_A), [shared]));
+		assert.equal(response.status, 503);
+		const row = (await app.db.query('select status, error, reserved_microusd from public.ai_runs where id = $1', [runId])).rows[0];
+		assert.equal(row.status, 'failed');
+		assert.equal(row.error, 'provenance_unavailable');
 	});
 });
