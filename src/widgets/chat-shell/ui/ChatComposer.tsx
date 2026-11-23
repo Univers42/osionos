@@ -21,6 +21,8 @@ import { AttachButton } from "./AttachButton";
 import { ResearchToggle, WebToggle } from "./WebToggle";
 import { AgentChip } from "./AgentChip";
 import { ComposerPlus } from "./ComposerPlus";
+import { ConnectedModeMenu } from "./ModeMenu";
+import { isFeatureFlagEnabled } from "@/shared/config/featureFlags";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import { WORKSPACE_CHIP, type ContextChip } from "@/features/ai/model/aiContext";
@@ -273,6 +275,7 @@ export const ChatComposer: React.FC<Props> = ({
         </div>
         {agents.length > 0 ? <AgentChip agents={agents} agentId={agentId} onChange={onAgentChange} panel={panel} onPanelChange={onPanelChange} /> : null}
         {onPanelChange && panelMembers.length >= PANEL_MIN ? <AgentPanelRow members={panelMembers} onClear={() => onPanelChange([])} /> : null}
+        {isFeatureFlagEnabled("osio.ai.modes") ? <ConnectedModeMenu /> : null}
         {webAvailable ? <WebToggle /> : null}
         {webAvailable && researchAvailable ? <ResearchToggle /> : null}
         {value.trim() ? (

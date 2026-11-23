@@ -40,7 +40,8 @@ export type FeatureFlagName =
   | "osio.themes"
   | "osio.layout.modes"
   | "osio.publish.containers"
-  | "osio.profile.page";
+  | "osio.profile.page"
+  | "osio.ai.modes";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
