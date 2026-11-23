@@ -46,9 +46,11 @@ async function saveAndSync(patch: AccountProfilePatch, version: number) {
   return outcome;
 }
 
-function readmeDeps(jwt: string): CustomizeDeps {
+export function readmeDeps(jwt: string): CustomizeDeps {
   const store = usePageStore.getState();
+  const startedBy = useUserStore.getState().activeUserId;
   return {
+    accountChanged: () => useUserStore.getState().activeUserId !== startedBy,
     loadProfile: fetchAccountProfile,
     saveProfile: saveAndSync,
     openLinked: (pageId) => openLinked(pageId, jwt),

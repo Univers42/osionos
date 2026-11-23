@@ -25,6 +25,8 @@ export interface CustomizeDeps {
   saveProfile: (patch: AccountProfilePatch, version: number) => Promise<AccountProfileOutcome>;
   openLinked: (pageId: string) => Promise<LinkedPage>;
   createPage: (workspaceId: string) => Promise<PageEntry | null>;
+  /** True once the session that started the action is no longer the active one. */
+  accountChanged?: () => boolean;
 }
 
 export interface LinkedPageIo {
@@ -68,13 +70,21 @@ export function pickReadmeWorkspace(
   return owned.find((workspace) => workspace._id === activeWorkspaceId)?._id ?? owned[0]?._id ?? null;
 }
 
+type LinkOutcome = "linked" | "failed" | "account-changed";
+const ACCOUNT_CHANGED = "The account changed; nothing was linked.";
+
 // Caveat: one retry on a 412. A second concurrent edit loses and reports a failure; a page
 // created before the link fails is left behind (an ordinary private page).
-async function linkPage(deps: CustomizeDeps, pageId: string, version: number): Promise<boolean> {
+// The save signs with the session active when it is sent, so each PATCH is preceded by a check
+// that the account which clicked is still the active one: a switch would link onto the other row.
+// The account client reads its token before its first await, so check and send share one tick.
+async function linkPage(deps: CustomizeDeps, pageId: string, version: number): Promise<LinkOutcome> {
+  if (deps.accountChanged?.()) return "account-changed";
   const first = await deps.saveProfile({ readmePageId: pageId }, version);
-  if (first.ok) return true;
-  if (first.reason !== "conflict" || first.version === null) return false;
-  return (await deps.saveProfile({ readmePageId: pageId }, first.version)).ok;
+  if (first.ok) return "linked";
+  if (first.reason !== "conflict" || first.version === null) return "failed";
+  if (deps.accountChanged?.()) return "account-changed";
+  return (await deps.saveProfile({ readmePageId: pageId }, first.version)).ok ? "linked" : "failed";
 }
 
 export async function customizeReadme(
@@ -86,6 +96,7 @@ export async function customizeReadme(
   if (!loaded.ok) {
     return { ok: false, message: loaded.reason === "unavailable" ? "Profiles are not available on this server." : "Could not load your profile. Try again." };
   }
+  if (deps.accountChanged?.()) return { ok: false, message: ACCOUNT_CHANGED };
   const linkedId = loaded.profile.readmePageId;
   if (linkedId && !replaceLinked) {
     const linked = await deps.openLinked(linkedId);
@@ -98,7 +109,12 @@ export async function customizeReadme(
   if (!workspaceId) return { ok: false, message: "You need a workspace of your own to keep a README in." };
   const page = await deps.createPage(workspaceId);
   if (!page) return { ok: false, message: "Could not create your README. Try again." };
-  if (!(await linkPage(deps, page._id, loaded.version))) {
+  const linked = await linkPage(deps, page._id, loaded.version);
+  if (linked === "account-changed") {
+    // The page stays where it was made, an ordinary private page of the account that clicked.
+    return { ok: false, message: `${ACCOUNT_CHANGED} The README page already created stays in the other account as a private page.` };
+  }
+  if (linked === "failed") {
     return { ok: false, message: "Your README was created but could not be linked to your profile. Try again." };
   }
   return { ok: true, page };
