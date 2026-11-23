@@ -1,7 +1,8 @@
-// ADR 0064 PS35: a profile cover shown to anyone but its owner passes one validator, shared
-// with the bridge: an image through the image-source rule, a gradient through a strict grammar
-// that has no url(), var() or anything that leaves one CSS value. The profile reads
-// the page cover when it is usable, else the banner (PS36), and draws nothing when neither is.
+// ADR 0064 PS35: a profile cover shown to anyone but its owner passes one validator (the
+// bridge does not import it yet): an image through the image-source rule, a gradient through
+// a strict grammar that has no url(), var() or anything that leaves one CSS value. The
+// profile reads the page cover when it is usable, else the banner (PS36), and draws nothing
+// when neither is.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

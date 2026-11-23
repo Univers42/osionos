@@ -1,9 +1,13 @@
 /**
  * Whether a page cover may be drawn for someone other than its owner (groot ADR 0064 PS35):
- * an image goes through the caller's image-source rule (the app passes isSafeImageSource, the
- * bridge would pass isProfileImageSource from scripts/bridge-image-source.mjs), a gradient through the strict grammar
- * below, which has no url(), var(), quote, comment, escape or declaration break, and allows
- * one level of rgb/rgba/hsl/hsla with numeric arguments. Browser-safe: no imports, no Node API.
+ * an image goes through the caller's image-source rule (the app passes isSafeImageSource), a
+ * gradient through the strict grammar below, which has no url(), var(), quote, comment, escape
+ * or declaration break, and allows one level of rgb/rgba/hsl/hsla with numeric arguments.
+ * Browser-safe: no imports, no Node API. It sits beside bridge-theme-rules.mjs so the bridge can
+ * import it, but only the app does today: the bridge projects no cover to visitors yet.
+ * A future bridge projection of a cover to visitors must pass an image rule that accepts only
+ * the bridge's own uploads, not any https host: a third-party URL drawn for every visitor is a
+ * tracking pixel.
  *
  * Caveat: the grammar refuses valid CSS outside it (named colours but `transparent`,
  * `hsl(0 0% 0% / 50%)` slash syntax, repeating/conic gradients, calc()) and an image URL that
