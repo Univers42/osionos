@@ -72,7 +72,8 @@ async function stubService(page, state) {
 async function openModesChat(page, baseURL, { flag = true } = {}) {
   await seedPages(page, [{ _id: PAGE_ID, title: "Modes page", content: BLOCKS }]);
   await page.addInitScript(([key, chat, on]) => {
-    localStorage.setItem(key, JSON.stringify(chat));
+    // Seed once: a reload keeps the chat the first load persisted, messages and run ids included.
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(chat));
     if (on) localStorage.setItem("osio.ai.modes", "1");
   }, [CHAT_KEY, seedChat(), flag]);
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
@@ -98,35 +99,59 @@ test("the mode menu offers four modes and never bypass", async ({ page, baseURL 
   await page.screenshot({ path: testInfo.outputPath("mode-menu.png") });
 });
 
-test("accept_edits applies three writes as rows, no card, and Undo all undoes the turn", async ({ page, baseURL }, testInfo) => {
-  const state = { frames: APPROVALS.map((id, i) => applied(id, i + 1)) };
-  const seen = await stubService(page, state);
-  await openModesChat(page, baseURL);
+/** Chooses accept_edits and sends: the mode lives on the conversation, so the PATCH must precede POST /runs. */
+async function chooseAcceptEditsAndSend(page, seen) {
   await expect(menu(page)).toBeEnabled();
   await menu(page).selectOption("accept_edits");
   await expect.poll(() => seen.filter((s) => s.call.startsWith("PATCH")).map((s) => JSON.parse(s.body).mode)).toEqual(["accept_edits"]);
-
   await send(page, "Add three blocks");
   const rows = page.getByTestId("chat-applied-write");
   await expect(rows).toHaveCount(3);
+  // The client sends no assist mode on the run (StartRunInput has only mode "research"); the server reads the stored one.
+  const calls = seen.map((s) => s.call);
+  expect(calls.indexOf(`PATCH /conversations/${SERVER_ID}/mode`)).toBeLessThan(calls.indexOf("POST /runs"));
+}
+
+async function expectAppliedRows(page, testInfo) {
+  const rows = page.getByTestId("chat-applied-write");
   await expect(rows.first()).toContainText("Applied automatically (accept edits)");
   await expect(rows.first()).toContainText("Undo is available for 7 days");
   await expect(page.getByTestId("chat-approval-card")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("applied-rows.png") });
+}
 
+async function undoAll(page, seen, testInfo) {
+  const rows = page.getByTestId("chat-applied-write");
   await page.getByRole("button", { name: "Undo all" }).click();
   await expect(rows.locator("p", { hasText: /^Undone$/ })).toHaveCount(3);
   expect(seen.some((s) => s.call === `POST /runs/${RUN_ID}/undo-writes`)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("undone-rows.png") });
+}
 
-  // A reload reads the list back: the service says all three are undone.
+/** After a reload the list is read back: three rows say "Undone" and offer no Undo. */
+async function reloadAndExpectUndone(page, seen) {
+  const reads = () => seen.filter((s) => s.call === `GET /conversations/${SERVER_ID}/applied`).length;
+  const before = reads();
   await page.reload({ waitUntil: "domcontentloaded" });
   // The Assistant tab comes back open: pick the conversation from its own history.
   await page.getByRole("navigation", { name: "Chat history" }).getByRole("button", { name: TITLE }).click();
   await expect(menu(page)).toBeEnabled();
+  const rows = page.getByTestId("chat-applied-write").filter({ visible: true });
+  await expect(rows).toHaveCount(3);
+  await expect(rows.locator("p", { hasText: /^Undone$/ })).toHaveCount(3);
   await expect(page.getByRole("button", { name: "Undo all" })).toHaveCount(0);
-  await expect(page.getByTestId("chat-applied-write").filter({ visible: true })).toHaveCount(0);
-  expect(seen.filter((s) => s.call === `GET /conversations/${SERVER_ID}/applied`).length).toBeGreaterThan(1);
+  await expect(page.getByRole("button", { name: /^Undo$/ })).toHaveCount(0);
+  expect(reads()).toBeGreaterThan(before);
+}
+
+test("accept_edits applies three writes as rows, no card, and Undo all undoes the turn", async ({ page, baseURL }, testInfo) => {
+  const state = { frames: APPROVALS.map((id, i) => applied(id, i + 1)) };
+  const seen = await stubService(page, state);
+  await openModesChat(page, baseURL);
+  await chooseAcceptEditsAndSend(page, seen);
+  await expectAppliedRows(page, testInfo);
+  await undoAll(page, seen, testInfo);
+  await reloadAndExpectUndone(page, seen);
 });
 
 test("a tainted turn stays a card and says why", async ({ page, baseURL }, testInfo) => {
