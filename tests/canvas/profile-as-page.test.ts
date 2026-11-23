@@ -79,6 +79,12 @@ test("PS32: a visitor sees the README as a page under the banner cover, not toda
   assert.ok(!html.includes("page-cover-toggle-picker"), "the cover is read-only here");
 });
 
+test("the bound name is the page's level-1 heading, and a missing name draws no empty heading", () => {
+  assert.match(asPage({}), /<div role="heading" aria-level="1">(?:<[^>]+>)*Sam Lee</);
+  const record = { id: A, username: "sam" } as never;
+  assert.doesNotMatch(renderToStaticMarkup(React.createElement(ProfileIdentityHeader, { record })), /role="heading"/);
+});
+
 test("PS35: a cover the shared rule refuses is not drawn", () => {
   const html = asPage({ profile: profile({ bannerUrl: "javascript:alert(1)" }) });
   assert.ok(!html.includes('data-testid="page-cover"'), html.slice(0, 300));
