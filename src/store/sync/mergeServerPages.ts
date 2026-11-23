@@ -146,9 +146,10 @@ function fetchedCoverFields(current: PageEntry, server: PageEntry, takeServer: b
 type FetchPlan = "take" | "merge" | "keep";
 
 // Caveat: the order of two copies is read from content versions only. Against a bridge
-// without the version column (both null) a fetch that left before the client's own save
-// landed looks fresh, and is taken or merged as one: the legacy last-writer-wins case AM16
-// retires. O(1).
+// without the version column, or a cache from before it (null), a fetch that left before the
+// client's own save landed looks fresh, and is taken or merged as one; with no base content
+// either, updatedAt decides and a newer server copy replaces unpublished keystrokes: the
+// legacy last-writer-wins case AM16 retires. O(1).
 function versionOrder(server: PageEntry, base: PageBase): number | null {
   if (typeof server.contentVersion !== "number" || typeof base.version !== "number") return null;
   return Math.sign(server.contentVersion - base.version);
@@ -168,9 +169,13 @@ function isStaleAnswer(current: PageEntry, server: PageEntry, base: PageBase): b
   return current.content !== undefined && base.content !== null && versionOrder(server, base) === -1;
 }
 
+// No version orders the copies and no base content can merge them (a cache from before
+// content versions): updatedAt decides, as it did before AM15. Keeping the local body here
+// would also be unsafe: its save carries no baseVersion, so nothing refuses it.
 function fetchPlan(current: PageEntry, server: PageEntry, base: PageBase, clean: boolean): FetchPlan {
   if (clean || current.content === undefined) return "take";
   const order = versionOrder(server, base);
+  if (order === null && base.content === null) return isNewer(server, current) ? "take" : "keep";
   if (order === 0 || order === -1 || server.content === undefined || base.content === null) return "keep";
   return "merge";
 }
