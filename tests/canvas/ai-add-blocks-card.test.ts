@@ -25,6 +25,7 @@ import { approvalArgs, decideApprovalCard, stateWords } from "@/features/chat/mo
 import { setApprovalTransport, type ApprovalDescription } from "@/features/chat/model/approvals";
 import { reloadWrittenPage } from "@/features/chat/model/reloadWrittenPage";
 import { ApprovalCard } from "@/features/chat/ui/ApprovalCard";
+import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 
 const SUMMARY = "2 blocks were added after the block shown on the card (page version 4).";
@@ -126,5 +127,29 @@ test("the page add_blocks wrote is read again, and only that write reloads (C239
     assert.deepEqual(reads, [["page-1", "token-1"]]);
   } finally {
     usePageStore.setState({ fetchPageContent: original });
+  }
+});
+
+test("M14: a write that changes the page list pulls the active workspace's list again", () => {
+  const original = usePageStore.getState().fetchPages;
+  const originalWorkspace = useUserStore.getState().activeWorkspace;
+  const pulls: [string, string, boolean | undefined][] = [];
+  usePageStore.setState({
+    fetchPages: async (workspaceId: string, jwt: string, force?: boolean) => {
+      pulls.push([workspaceId, jwt, force]);
+    },
+  });
+  useUserStore.setState({ activeWorkspace: () => ({ _id: "workspace-1" }) as ReturnType<typeof originalWorkspace> });
+  try {
+    for (const tool of ["create_page", "rename_page", "archive_page", "update_page_settings", "build_plan"]) {
+      reloadWrittenPage(tool, "", "token-1");
+    }
+    reloadWrittenPage("add_blocks", "page-1", "token-1");
+    reloadWrittenPage("rename_page", "page-1", null);
+    assert.equal(pulls.length, 5, "each list-changing write pulls once; add_blocks and no session pull nothing");
+    assert.deepEqual(pulls[0], ["workspace-1", "token-1", true], "forced past the 30 s freshness window");
+  } finally {
+    usePageStore.setState({ fetchPages: original });
+    useUserStore.setState({ activeWorkspace: originalWorkspace });
   }
 });

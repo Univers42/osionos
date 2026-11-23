@@ -134,8 +134,8 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
         .then((found) => setApproval(withProgress(found.progress)))
         .catch(() => undefined); // the state line already says how the build ended
     }
-    const writtenPageId = approval?.target.pageId;
-    if (outcome.status === "executed" && approval && writtenPageId) reloadWrittenPage(approval.tool, writtenPageId);
+    // A created page has no target page yet; the list still has to show it (M14).
+    if (outcome.status === "executed" && approval) reloadWrittenPage(approval.tool, approval.target.pageId ?? "");
     if (outcome.continuationRunId) onContinuation?.(outcome.continuationRunId);
   };
 
