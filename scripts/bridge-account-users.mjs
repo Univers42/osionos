@@ -44,6 +44,7 @@
  */
 
 import { demoteAdmin } from './bridge-account-admin-demote.mjs';
+import { grantRows, readRoleId } from './bridge-admin-rights.mjs';
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { decodeCursor, keyset, pageOf } from './bridge-paging.mjs';
 import { pgError } from './bridge-pg.mjs';
@@ -201,8 +202,7 @@ async function changeRole(ctx, request, userId, response) {
 	const { role, action } = await readBody(request);
 	if (!isPlatformRole(role) || !ACTIONS.has(action)) throw adminError(422, 'invalid_role', 'The role or the action is not one the platform knows.');
 	if (action === 'revoke' && role === 'admin') await assertAdminRevocable(client, session, userId);
-	const found = await client.get(`roles?name=eq.${role}&select=id&limit=1`);
-	const roleId = Array.isArray(found) ? found[0]?.id : null;
+	const roleId = await readRoleId(client, role);
 	// The four rows are seeded by grobase's migrations: a missing one is a broken install.
 	if (!roleId) throw pgError(503, 'platform_roles_unavailable');
 	await writeAudit(pg, {
@@ -214,7 +214,7 @@ async function changeRole(ctx, request, userId, response) {
 	if (action === 'grant') {
 		await client.post('user_roles?on_conflict=user_id,role_id', { user_id: userId, role_id: roleId }, { prefer: 'resolution=merge-duplicates,return=minimal' });
 	} else {
-		await client.del(`user_roles?user_id=eq.${userId}&role_id=eq.${roleId}`, { prefer: 'return=minimal' });
+		await client.del(grantRows(userId, roleId), { prefer: 'return=minimal' });
 	}
 	const { names } = await readPlatformRole(client, userId);
 	return sendJson(response, 200, { ok: true, roles: names }, config);

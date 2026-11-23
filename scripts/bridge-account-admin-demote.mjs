@@ -41,10 +41,9 @@
  * demotion that did not complete.
  */
 
-import { bumpAccessAfter } from './bridge-access-generation.mjs';
 import { createEmailRows, openAddress } from './bridge-account-email-rows.mjs';
 import { requireAdmin } from './bridge-admin-check.mjs';
-import { ADMIN_WORKSPACE_ID, flaggedRowsQuery } from './bridge-admin-rights.mjs';
+import { adminMembershipRows, deleteAdminMembership, flaggedRowsQuery, grantRows, readRoleId } from './bridge-admin-rights.mjs';
 import { BAAS_FETCH_TIMEOUT_MS } from './bridge-baas-body.mjs';
 import { readGotrueUser } from './bridge-gotrue-user.mjs';
 import { requireSudo, writeAudit } from './bridge-guard.mjs';
@@ -62,7 +61,6 @@ const LOCK_KEY = 'admin-demote';
 // the lock midway (the release Caveat in the header, and the re-read before the clear).
 const LOCKED_ROUNDS = 10;
 const LOCK_TTL_MS = (LOCKED_ROUNDS + 2) * BAAS_FETCH_TIMEOUT_MS;
-const MEMBERSHIP = `osionos_workspace_members?workspace_id=eq.${ADMIN_WORKSPACE_ID}`;
 const LISTED = 'This account is an admin by an address listed in OSIONOS_ADMIN_EMAILS, and its next sign-in would make it admin again. '
 	+ 'Remove the address from OSIONOS_ADMIN_EMAILS first, then demote it.';
 const INCOMPLETE = 'The demotion did not complete. Run it again to finish the remaining steps.';
@@ -136,8 +134,7 @@ async function assertNotLastAdmin(client, targetId) {
 }
 
 async function adminRoleId(client) {
-	const found = await client.get('roles?name=eq.admin&select=id&limit=1');
-	const roleId = Array.isArray(found) ? found[0]?.id : null;
+	const roleId = await readRoleId(client, 'admin');
 	// The four rows are seeded by grobase's migrations: a missing one is a broken install.
 	if (!roleId) throw pgError(503, 'platform_roles_unavailable');
 	return roleId;
@@ -146,10 +143,10 @@ async function adminRoleId(client) {
 /** The steps after the flag, in order. Each is tried even when an earlier one failed. */
 function laterSteps(ctx, targetId, roleId) {
 	const { client, config, fetchImpl } = ctx;
-	const minimal = { prefer: 'return=minimal' };
+	const del = (path) => client.del(path, { prefer: 'return=minimal' });
 	return [
-		['grant', () => client.del(`user_roles?user_id=eq.${targetId}&role_id=eq.${roleId}`, minimal)],
-		['membership', () => bumpAccessAfter(client.del(`${MEMBERSHIP}&user_id=eq.${targetId}`, minimal), { workspaceId: ADMIN_WORKSPACE_ID, userId: targetId })],
+		['grant', () => del(grantRows(targetId, roleId))],
+		['membership', () => deleteAdminMembership(del, targetId)],
 		// The clock is read after the clear returned. +1 ms: a token stamped in that same millisecond
 		// may carry claims read before the clear, and the verifier only refuses iat < cut-off.
 		// Caveat: a fresh sign-in stamped in that same millisecond is refused too; it signs in again.
@@ -182,8 +179,8 @@ async function hasLeftovers(client, targetId, roleId) {
 	try {
 		const found = await Promise.all([
 			client.get(flaggedRowsQuery(targetId)),
-			client.get(`user_roles?user_id=eq.${targetId}&role_id=eq.${roleId}&select=role_id`),
-			client.get(`${MEMBERSHIP}&user_id=eq.${targetId}&select=user_id`),
+			client.get(`${grantRows(targetId, roleId)}&select=role_id`),
+			client.get(`${adminMembershipRows(targetId)}&select=user_id`),
 		]);
 		return found.some((rows) => Array.isArray(rows) && rows.length > 0);
 	} catch {

@@ -37,13 +37,30 @@ import { bumpAccessAfter } from './bridge-access-generation.mjs';
 /** The dedicated admin workspace (seeded by osionos-admin-migration.sql). */
 export const ADMIN_WORKSPACE_ID = '0a4d1c2e-0000-4000-8000-000000000ad1';
 
-const MEMBERSHIP_KEY = `workspace_id=eq.${ADMIN_WORKSPACE_ID}`;
 const warn = (message) => console.warn(`[osionos-bridge] admin rights: ${message}`);
 
 /** The account's flag on either key a demotion clears: a row keyed by user_id or by subject. */
 export function flaggedRowsQuery(userId) {
 	return `osionos_bridge_identities?or=(user_id.eq.${userId},subject.eq.${userId})&is_admin=eq.true&select=is_admin,user_id`;
 }
+
+/** The id of a platform role by name (`client.get(path)` is a PostgREST read); null when the seeded row is missing. */
+export async function readRoleId(client, name) {
+	const rows = await client.get(`roles?name=eq.${name}&select=id&limit=1`);
+	return Array.isArray(rows) ? rows[0]?.id ?? null : null;
+}
+
+/** Every `user_roles` row of one user for one role, expired ones included. */
+export const grantRows = (userId, roleId) => `user_roles?user_id=eq.${userId}&role_id=eq.${roleId}`;
+
+export const adminMembershipRows = (userId) => `osionos_workspace_members?workspace_id=eq.${ADMIN_WORKSPACE_ID}&user_id=eq.${userId}`;
+
+/** `del(path)` is the caller's service-role DELETE; the bump follows it whatever it settles as. */
+export function deleteAdminMembership(del, userId) {
+	return bumpAccessAfter(del(adminMembershipRows(userId)), { workspaceId: ADMIN_WORKSPACE_ID, userId });
+}
+
+const restDelete = (rest) => (path) => rest(path, { method: 'DELETE', prefer: 'return=minimal' });
 
 async function writeMembership(userId, { rest }) {
 	const scope = { workspaceId: ADMIN_WORKSPACE_ID, userId };
@@ -57,14 +74,13 @@ async function writeMembership(userId, { rest }) {
 		warn('writing the admin-workspace membership failed');
 	}
 	// A write that timed out may still have landed: the undo is owed either way.
-	return () => bumpAccessAfter(rest(`osionos_workspace_members?${MEMBERSHIP_KEY}&user_id=eq.${userId}`, { method: 'DELETE', prefer: 'return=minimal' }), scope);
+	return () => deleteAdminMembership(restDelete(rest), userId);
 }
 
 async function writeGrant(userId, { rest }) {
 	let roleId = null;
 	try {
-		const roles = await rest('roles?name=eq.admin&select=id&limit=1');
-		roleId = Array.isArray(roles) ? roles[0]?.id ?? null : null;
+		roleId = await readRoleId({ get: rest }, 'admin');
 		if (!roleId) return null;
 		// `expires_at: null` renews an expired grant.
 		await rest('user_roles?on_conflict=user_id,role_id', {
@@ -76,7 +92,7 @@ async function writeGrant(userId, { rest }) {
 		warn('writing the admin grant failed');
 		if (!roleId) return null;
 	}
-	return () => rest(`user_roles?user_id=eq.${userId}&role_id=eq.${roleId}`, { method: 'DELETE', prefer: 'return=minimal' });
+	return () => restDelete(rest)(grantRows(userId, roleId));
 }
 
 /** False only when the flag reads cleared; a failed read is "still admin" (see the header Caveat). */
