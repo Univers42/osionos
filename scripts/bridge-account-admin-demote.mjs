@@ -35,8 +35,11 @@
  * Caveat: only the addresses the bridge knows are checked: the GoTrue primary and the verified
  * secondaries. An address added to OSIONOS_ADMIN_EMAILS later still promotes the account at its
  * next verified sign-in, by design (ADR 0005); so does a gateway address that is neither (U4).
- * Caveat: the target is signed out everywhere, not only from its admin sessions: the cut-off is
- * per user, and it is what kills the tokens whose admin claim was minted before the clear.
+ * Caveat: the cut-off ends every bridge session of the target, not only its admin ones: it is per
+ * user, and it is what kills the tokens whose admin claim was minted before the clear. The
+ * target's personal access tokens survive it: each PAT request mints a session with no admin
+ * claim and the workspaces the target is still a member of (bridge-pat-middleware.mjs), so a PAT
+ * keeps page access and never admin.
  * Caveat: the audit row records an attempt; a run that fails after it leaves a row for a
  * demotion that did not complete.
  */
@@ -68,6 +71,8 @@ const INCOMPLETE = 'The demotion did not complete. Run it again to finish the re
 const demoteError = (status, code, message) => Object.assign(new Error(message), { status, code });
 const jtiOf = (session) => String(session.raw?.jti ?? '').toLowerCase();
 
+// Caveat: a flagged identity whose GoTrue user is gone answers 404 here, so this route cannot
+// demote it; the escape hatch is an operator's SQL clearing osionos_bridge_identities.is_admin.
 async function primaryAddress(ctx, targetId) {
 	try {
 		const user = await readGotrueUser({ config: ctx.config, fetchImpl: ctx.fetchImpl }, targetId);
@@ -156,6 +161,8 @@ function laterSteps(ctx, targetId, roleId) {
 
 async function runSteps(ctx, targetId, roleId) {
 	const landed = [];
+	// Caveat: a clear that timed out may still have applied; it is reported as not landed and no
+	// later step runs. A re-run finds the flag false and finishes the rest.
 	try {
 		await ctx.client.patch(`osionos_bridge_identities?or=(user_id.eq.${targetId},subject.eq.${targetId})`, { is_admin: false }, { prefer: 'return=minimal' });
 	} catch {
