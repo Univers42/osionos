@@ -86,6 +86,13 @@ test("the bound name is the page's level-1 heading, and a missing name draws no 
   assert.doesNotMatch(renderToStaticMarkup(React.createElement(ProfileIdentityHeader, { record })), /role="heading"/);
 });
 
+// A <header> inside the page's <main> is not a banner landmark; a labelled section is a region.
+test("the identity header is a labelled section, not a header element", () => {
+  const html = asPage({});
+  assert.match(html, /<section aria-label="Profile" data-testid="profile-identity">/);
+  assert.doesNotMatch(html, /<header/);
+});
+
 test("PS35: a cover the shared rule refuses is not drawn", () => {
   const html = asPage({ profile: profile({ bannerUrl: "javascript:alert(1)" }) });
   assert.ok(!html.includes('data-testid="page-cover"'), html.slice(0, 300));

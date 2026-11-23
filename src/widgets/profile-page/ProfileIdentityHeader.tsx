@@ -21,7 +21,7 @@ export const IDENTITY_BLOCKS: readonly Block[] = [NAME_BLOCK, ...LINE_BLOCKS];
 // A bound heading block draws a styled span, so the role makes the name the page's heading
 // (an <h1> may not hold the renderer's block divs); no name, no empty heading.
 export const ProfileIdentityHeader: React.FC<{ record: BoundRecord | null }> = ({ record }) => (
-  <header aria-label="Profile" data-testid="profile-identity">
+  <section aria-label="Profile" data-testid="profile-identity">
     <BindingProvider record={record}>
       <BoundFieldEmptyText.Provider value={null}>
         {boundFieldText(record, "displayName") !== null && (
@@ -32,5 +32,5 @@ export const ProfileIdentityHeader: React.FC<{ record: BoundRecord | null }> = (
         <PageBlocksRenderer blocks={LINE_BLOCKS} />
       </BoundFieldEmptyText.Provider>
     </BindingProvider>
-  </header>
+  </section>
 );
