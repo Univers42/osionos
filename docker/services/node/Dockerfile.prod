@@ -23,8 +23,9 @@ COPY packages ./packages
 COPY vendor/hydrawn-board ./vendor/hydrawn-board
 COPY config ./config
 COPY scripts/vite ./scripts/vite
-# The theme rules are shared with the bridge, so they live in scripts/ (src imports them).
+# The theme and cover rules are shared with the bridge, so they live in scripts/ (src imports them).
 COPY scripts/bridge-theme-rules.mjs ./scripts/bridge-theme-rules.mjs
+COPY scripts/bridge-cover-rules.mjs ./scripts/bridge-cover-rules.mjs
 
 ARG VITE_API_URL=""
 ARG VITE_APP_VERSION="dev"
