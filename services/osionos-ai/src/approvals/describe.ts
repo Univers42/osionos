@@ -4,13 +4,14 @@ import { cardAgentOfRun } from '../agents/card.ts';
 import type { CardAgent } from '../agents/card.ts';
 import { getRun } from '../runs/repo.ts';
 import { countExecutedInRun } from './repo.ts';
-import type { ApprovalPlan, ApprovalRow, ApprovalTarget, McpCard } from './types.ts';
+import type { ApprovalPlan, ApprovalRow, DecidedBy, ApprovalTarget, McpCard } from './types.ts';
 import type { AuthUser } from '../auth.ts';
 import { config } from '../config.ts';
 import { cardOf, readStoredCall } from '../mcpClient/card.ts';
 import { getToolNow } from '../mcpClient/repo.ts';
 import { influencedBy } from '../mcpClient/taint.ts';
 import { allItems } from '../builders/items.ts';
+import { isUndoable, undoneAtOf } from './undoApplied.ts';
 
 /**
  * The description of an approval: what the card shows, rebuilt from the row.
@@ -45,6 +46,12 @@ export interface ApprovalDescription {
 	influencedBy?: string[];
 	/** The agent of the run, from its pin (C304); null for the general assistant. */
 	agent: CardAgent | null;
+	/** Who decided the write (AM19); null before the decision and on rows from before auto modes. */
+	decidedBy: DecidedBy | null;
+	/** When an undo claimed the write, or null. */
+	undoneAt: string | null;
+	/** Whether Undo may still be offered: the server's own check, window included. */
+	undoable: boolean;
 	/** A build plan's items, parents first, as execution records them (#79); absent before the decision. */
 	progress?: { key: string; kind: string; status: string }[];
 }
@@ -96,6 +103,7 @@ export async function describeApproval(
 		...(await taint(db, row)),
 		...(await progress(db, row)),
 		agent: await cardAgentOfRun(db, row.run_id ? await getRun(db, row.run_id) : null),
+		...decisionOf(row),
 	};
 }
 
@@ -139,6 +147,7 @@ async function describeMcp(db: Pool, row: ApprovalRow): Promise<ApprovalDescript
 		...(call ? { mcp: { ...cardOf(call), changed: !now || !now.enabled || now.snapshot_sha256 !== call.snapshotSha256 } } : {}),
 		...(await taint(db, row)),
 		agent: await cardAgentOfRun(db, row.run_id ? await getRun(db, row.run_id) : null),
+		...decisionOf(row),
 	};
 }
 
@@ -146,4 +155,9 @@ async function describeMcp(db: Pool, row: ApprovalRow): Promise<ApprovalDescript
 function summaryOf(result: unknown): string | null {
 	const summary = (result as { summary?: unknown } | null)?.summary;
 	return typeof summary === 'string' ? summary : null;
+}
+
+/** What the card knows of the decision: who made it, and whether it was undone or can be. */
+function decisionOf(row: ApprovalRow): Pick<ApprovalDescription, 'decidedBy' | 'undoneAt' | 'undoable'> {
+	return { decidedBy: row.decided_by ?? null, undoneAt: undoneAtOf(row), undoable: isUndoable(row) };
 }

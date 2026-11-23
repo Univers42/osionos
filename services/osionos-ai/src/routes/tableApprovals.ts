@@ -1,4 +1,5 @@
 import { handleApprovalDecision, handleApprovalGet, handleApprovalList, handleApprovalResume, handleApprovalUndo } from './approvals.ts';
+import { handleAppliedList } from './appliedList.ts';
 import { handleTurnUndo } from './turnUndo.ts';
 import type { RouteEntry } from './types.ts';
 
@@ -14,4 +15,6 @@ export const APPROVAL_ROUTES: RouteEntry[] = [
 	{ methods: ['POST'], pattern: /^\/api\/ai\/approvals\/([^/]+)\/resume$/, label: '/api/ai/approvals/:id/resume', handle: handleApprovalResume },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/approvals\/([^/]+)\/undo$/, label: '/api/ai/approvals/:id/undo', handle: handleApprovalUndo },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/runs\/([^/]+)\/undo-writes$/, label: '/api/ai/runs/:id/undo-writes', handle: handleTurnUndo },
+	// Auto-applied writes of a conversation (AM19): anchored, so `/conversations/:id` cannot answer it.
+	{ methods: ['GET'], pattern: /^\/api\/ai\/conversations\/([^/]+)\/applied$/, label: '/api/ai/conversations/:id/applied', handle: handleAppliedList },
 ];

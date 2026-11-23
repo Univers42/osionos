@@ -99,12 +99,47 @@ async function plan(a: UndoApplied, recorded: AppliedResult): Promise<BridgeWrit
 	return planCreate(a, recorded);
 }
 
+/**
+ * When the undo window of a row closes: its retention (7 days) from CREATION,
+ * not from the decision, so a client never advertises an Undo that `precheck`
+ * already refuses as `expired`.
+ *
+ * Caveat: a row the sweeper has not yet deleted is still refused after this
+ * instant, never undone late.
+ */
+export function undoWindowEnd(row: Pick<ApprovalRow, 'created_at'>): Date {
+	return new Date(new Date(row.created_at).getTime() + APPROVAL_RETENTION_DAYS * DAY_MS);
+}
+
+/** The instant an undo claimed the row, or null while it stands. */
+export function undoneAtOf(row: Pick<ApprovalRow, 'result'>): string | null {
+	const at = (row.result as { undoneAt?: unknown } | null)?.undoneAt;
+	if (typeof at !== 'string') return null;
+	const parsed = new Date(at);
+	return Number.isNaN(parsed.getTime()) ? at : parsed.toISOString();
+}
+
+/** Whether the recorded inverse is one that can be written at all (a created page the bridge never named has none). */
+function hasInverse(recorded: AppliedResult): boolean {
+	if (recorded.tool === 'create_page') return recorded.createdPageId !== null;
+	if (recorded.tool === 'rename_page') return recorded.previousTitle !== null;
+	return true;
+}
+
+/**
+ * What the client may offer as Undo: the same checks as `precheck`, as a
+ * boolean. Caveat: it cannot see the page, so a page changed since the write
+ * still answers true here and `changed_since` at the undo itself.
+ */
+export function isUndoable(row: ApprovalRow, now: Date = new Date()): boolean {
+	const recorded = row.status === 'executed' ? recordedOf(row) : null;
+	return recorded !== null && hasInverse(recorded) && now <= undoWindowEnd(row) && undoneAtOf(row) === null;
+}
+
 /** Why a row cannot be undone at all, before any page is read. */
 function precheck(approval: ApprovalRow): UndoResult | null {
 	if (approval.status !== 'executed' || !recordedOf(approval)) return { ok: false, code: 'not_undoable' };
-	// Caveat: the window is the row's retention (7 days from creation); a row
-	// the sweeper has not yet deleted is still refused here, never undone late.
-	if (Date.now() - new Date(approval.created_at).getTime() > APPROVAL_RETENTION_DAYS * DAY_MS) return { ok: false, code: 'expired' };
+	if (new Date() > undoWindowEnd(approval)) return { ok: false, code: 'expired' };
 	if ((approval.result as { undoneAt?: unknown }).undoneAt !== undefined) return { ok: false, code: 'already_undone' };
 	return null;
 }
