@@ -23,9 +23,11 @@ import {
   blocksWithAddHeader,
   inlineScriptSources,
   ownAddHeaders,
+  PHASE_ONE_DIRECTIVES,
   previewHeaders,
   POLICY_VARIABLE,
   readPolicy,
+  splitPolicy,
 } from "../../scripts/vite/appCsp.ts";
 
 const NGINX = readFileSync(new URL("../../docker/services/node/nginx.conf", import.meta.url), "utf8");
@@ -43,13 +45,33 @@ test("the policy is defined once, in nginx.conf", () => {
   assert.equal(NGINX.split(`$${POLICY_VARIABLE} {`).length - 1, 1);
 });
 
-test("script-src carries no unsafe source and the policy sets no other fetch directive", () => {
+test("script-src carries no unsafe source and the directives still out stay out (C342-26)", () => {
   const policy = readPolicy(NGINX) ?? "";
   assert.ok(directive(policy, "script-src").length > 0);
   assert.doesNotMatch(directive(policy, "script-src").join(" "), /'unsafe-(inline|eval)'|\*|https?:/);
-  for (const absent of ["default-src", "connect-src", "frame-src", "img-src", "media-src", "font-src", "style-src", "form-action"]) {
-    assert.deepEqual(directive(policy, absent), [], `${absent} is phase 2 (D314-3)`);
+  for (const absent of ["default-src", "connect-src", "media-src", "font-src", "form-action", "report-uri", "report-to"]) {
+    assert.deepEqual(directive(policy, absent), [], `${absent} is not ruled in (#342)`);
   }
+});
+
+test("phase 2 observes frames, images and styles with exactly the ruled sources (#342)", () => {
+  const policy = readPolicy(NGINX) ?? "";
+  assert.deepEqual(directive(policy, "frame-src"), ["'self'", "https:", "http://127.0.0.1:4100"]);
+  assert.deepEqual(directive(policy, "img-src"), ["'self'", "data:", "blob:", "https:"]);
+  assert.deepEqual(directive(policy, "style-src"), ["'self'", "'unsafe-inline'"]);
+});
+
+test("every directive is phase 1 or a known phase 2 one, and the two never mix (C342-9)", () => {
+  const { phaseOne, phaseTwo } = splitPolicy(readPolicy(NGINX) ?? "");
+  const names = (policy: string) => policy.split(";").map((part) => part.trim().split(/\s+/)[0]);
+  assert.deepEqual(names(phaseOne), PHASE_ONE_DIRECTIVES);
+  assert.deepEqual(names(phaseTwo), ["frame-src", "img-src", "style-src"]);
+});
+
+test("the enforced header is frame-ancestors alone, in every block (C342-9)", () => {
+  const enforced = NGINX.split("\n").map((line) => line.trim()).filter((line) => /^add_header\s+Content-Security-Policy\s/.test(line));
+  assert.equal(enforced.length, blocksWithAddHeader(NGINX).length);
+  assert.deepEqual([...new Set(enforced)], [`add_header Content-Security-Policy "frame-ancestors 'none'" always;`]);
 });
 
 test("script-src hashes equal the inline scripts of index.html (D314-5)", () => {
@@ -86,10 +108,12 @@ test("the block finder reports a location that forgot the policy (negative contr
   assert.deepEqual(ownAddHeaders(blocksWithAddHeader(conf)[0]).map((line) => line.trim()), ["add_header A 1;"]);
 });
 
-test("vite preview sends the nginx policy byte for byte, Report-Only by default (D314-8)", () => {
+test("vite preview sends the nginx policy byte for byte, and enforce mode enforces phase 1 only (D314-8, C342-9)", () => {
   const policy = readPolicy(NGINX);
   assert.deepEqual(previewHeaders(NGINX, false), { "Content-Security-Policy-Report-Only": policy });
-  assert.deepEqual(previewHeaders(NGINX, true), { "Content-Security-Policy": policy });
+  const { phaseOne, phaseTwo } = splitPolicy(policy ?? "");
+  assert.deepEqual(previewHeaders(NGINX, true), { "Content-Security-Policy": phaseOne, "Content-Security-Policy-Report-Only": phaseTwo });
+  assert.doesNotMatch(phaseOne, /frame-src|img-src|style-src/);
   assert.throws(() => previewHeaders("server {}", false), /no app_csp_report_only map/);
 });
 

@@ -12,7 +12,8 @@
 
 // #314: the app shell's script policy, swept. Every surface that loads its own chunk, worker or
 // WebAssembly runs on the production build served by `vite preview`, which sends the policy read
-// from nginx.conf (Report-Only, or enforced with PLAYWRIGHT_CSP=enforce; CSP_MODE says which). Pass =
+// from nginx.conf (Report-Only, or its phase 1 directives enforced with PLAYWRIGHT_CSP=enforce and the
+// phase 2 ones (#342) still Report-Only; CSP_MODE says which). Pass =
 // 0 violation events and 0 CSP console lines. Run it per engine (--browser) with retries 0.
 //
 // A test that died before its surface was visible is a failure, never a pass. Both negative
@@ -23,7 +24,7 @@ import { readFileSync } from "node:fs";
 
 import { expect, test } from "@playwright/test";
 
-import { readPolicy } from "../../../scripts/vite/appCsp.ts";
+import { readPolicy, splitPolicy } from "../../../scripts/vite/appCsp.ts";
 import { countControls, recordCsp } from "../support/cspSweep.mjs";
 import { SURFACES } from "../support/cspSurfaces.mjs";
 
@@ -51,9 +52,9 @@ for (const viewport of VIEWPORTS) {
       test.skip(BASELINE, "baseline run: no policy is served");
       const response = await page.goto(baseURL, { waitUntil: "domcontentloaded" });
       const headers = response.headers();
-      const name = ENFORCED ? "content-security-policy" : "content-security-policy-report-only";
-      expect(headers[name]).toBe(POLICY);
-      expect(headers[ENFORCED ? "content-security-policy-report-only" : "content-security-policy"]).toBeUndefined();
+      const { phaseOne, phaseTwo } = splitPolicy(POLICY);
+      expect(headers["content-security-policy"]).toBe(ENFORCED ? phaseOne : undefined);
+      expect(headers["content-security-policy-report-only"]).toBe(ENFORCED ? phaseTwo : POLICY);
     });
 
     for (const surface of SURFACES) {

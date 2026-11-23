@@ -80,10 +80,28 @@ export function inlineScriptSources(html: string): string[] {
   return [...html.matchAll(scripts)].map((m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`);
 }
 
+/** The directives phase 1 (#314) may enforce. Anything else in the policy is phase 2 (#342) and is
+ *  only ever observed, so enforcing phase 1 cannot carry a phase 2 directive with it. */
+export const PHASE_ONE_DIRECTIVES = ["script-src", "worker-src", "object-src", "base-uri"];
+
+function directiveName(part: string): string {
+  return part.trim().split(/\s+/)[0];
+}
+
+/** The policy split in two: the phase 1 directives, and every other one. */
+export function splitPolicy(policy: string): { phaseOne: string; phaseTwo: string } {
+  const parts = policy.split(";").map((part) => part.trim()).filter(Boolean);
+  const isPhaseOne = (part: string) => PHASE_ONE_DIRECTIVES.includes(directiveName(part));
+  return { phaseOne: parts.filter(isPhaseOne).join("; "), phaseTwo: parts.filter((part) => !isPhaseOne(part)).join("; ") };
+}
+
 /** The headers `vite preview` sends so a production-build e2e run checks a real policy: the nginx
- *  string itself, as Report-Only, or as the enforced header when `enforce` (PLAYWRIGHT_CSP=enforce). */
+ *  string itself as Report-Only, or, when `enforce` (PLAYWRIGHT_CSP=enforce), its phase 1 directives
+ *  enforced and its phase 2 directives still Report-Only. */
 export function previewHeaders(nginxConf: string, enforce: boolean): Record<string, string> {
   const policy = readPolicy(nginxConf);
   if (policy === null) throw new Error(`nginx.conf has no app_csp_report_only map`);
-  return { [enforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only"]: policy };
+  if (!enforce) return { "Content-Security-Policy-Report-Only": policy };
+  const { phaseOne, phaseTwo } = splitPolicy(policy);
+  return { "Content-Security-Policy": phaseOne, ...(phaseTwo ? { "Content-Security-Policy-Report-Only": phaseTwo } : {}) };
 }
