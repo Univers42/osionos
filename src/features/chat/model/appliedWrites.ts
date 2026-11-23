@@ -12,6 +12,8 @@ import { create } from "zustand";
 
 import { requestJson } from "@/features/ai/api/aiClient";
 import { AiError } from "@/features/ai/api/aiContract";
+import { useUserStore } from "@/features/auth";
+import { currentAccountEpoch } from "@/store/settings/accountEpoch";
 
 import { reloadWrittenPage } from "./reloadWrittenPage";
 
@@ -144,11 +146,14 @@ function reloadUndone(rows: AppliedRow[], undoneIds: string[]): void {
 }
 
 async function loadRows(set: SetState, serverConversationId: string): Promise<void> {
+  const epoch = currentAccountEpoch();
   try {
     const body = await requestJson<{ items?: Array<Record<string, unknown>> }>(
       "GET",
       `/conversations/${encodeURIComponent(serverConversationId)}/applied`,
     );
+    // A reply for the previous account must not land after a user switch (M12).
+    if (epoch !== currentAccountEpoch()) return;
     for (const item of body.items ?? []) merge(set, item);
   } catch {
     // Off, or not the owner: no rows is the honest answer.
@@ -162,6 +167,14 @@ export const useAppliedWrites = create<AppliedState>((set, get) => ({
   undoTurn: (runId, serverConversationId) => undoTurn(set, get, runId, serverConversationId),
   load: (serverConversationId) => loadRows(set, serverConversationId),
 }));
+
+// The rows belong to the account that ran the turns: a user switch in the same tab drops them (M12).
+let rowsOwner = useUserStore.getState().activeUserId;
+useUserStore.subscribe(({ activeUserId }) => {
+  if (activeUserId === rowsOwner) return;
+  rowsOwner = activeUserId;
+  useAppliedWrites.setState({ rows: [] });
+});
 
 interface TurnResult {
   approvalId: string;

@@ -23,6 +23,7 @@ import { permissionFromEvent } from "@/features/chat/model/approvalParts";
 import { AppliedWrites } from "@/features/chat/ui/AppliedWrites";
 import { AppliedWriteRow } from "@/features/chat/ui/AppliedWriteRow";
 import { TurnUndoBar } from "@/features/chat/ui/TurnUndoBar";
+import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 
 const EVENT = { approvalId: "a1", tool: "add_blocks", target: "p1", summary: "Added 2 blocks to Plan", decidedBy: "auto:auto", undoable: true };
@@ -250,4 +251,20 @@ test("an undone add_blocks reads its page again, once per page for a turn (I1)",
     usePageStore.setState({ fetchPageContent: original });
     delete (globalThis as { __playgroundUserStore?: unknown }).__playgroundUserStore;
   }
+});
+
+test("M12: a user switch empties the rows, and a list read answered after it is dropped", async () => {
+  useUserStore.setState({ activeUserId: "user-a" });
+  useAppliedWrites.setState({ rows: [turnRow("a1")] });
+  useUserStore.setState({ activeUserId: "user-b" });
+  assert.deepEqual(useAppliedWrites.getState().rows, []);
+  let answer: (res: Response) => void = () => {};
+  setAiTransport(() => new Promise<Response>((resolve) => { answer = resolve; }));
+  const loading = useAppliedWrites.getState().load("srv-1");
+  await new Promise((resolve) => setImmediate(resolve));
+  useUserStore.setState({ activeUserId: "user-c" });
+  answer(Response.json({ items: [fromRun()] }));
+  await loading;
+  assert.deepEqual(useAppliedWrites.getState().rows, []);
+  useUserStore.setState({ activeUserId: "" });
 });
