@@ -203,7 +203,7 @@ describe('list: the anchor cross-check', () => {
 			assert.equal(denied.status, 403);
 			assertNoPageIds(denied, world);
 		});
-		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => { await send(base, TEAM_ALL, asB()); assertGateReadProof(mock.calls); });
+		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => { assert.equal((await send(base, TEAM_ALL, asB())).status, 200); assertGateReadProof(mock.calls); });
 	});
 
 	for (const [label, row] of [

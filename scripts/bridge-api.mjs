@@ -31,7 +31,7 @@ import { liveReadableWorkspaces, privateWorkspaceOf } from './bridge-live-worksp
 import { bestShareLevel, shareDenies, shareGrantsRead, shareGrantsWrite } from './bridge-share-rules.mjs';
 import { pageAccessLevel, pageRuleLevel } from './bridge-page-access.mjs';
 import { createShareRuleStore } from './bridge-perms-rules.mjs';
-import { QUERY_ROUTER_TABLE, moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
+import { QUERY_ROUTER_TABLE, countFromRange, moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
 import { publishPageAccess } from './bridge-page-access-fanout.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
@@ -1811,12 +1811,6 @@ function pageListQuery(workspaceId, filters, select, { order = 'updated_at.desc'
 // The id tiebreak makes the flat list's order total; the embed it replaced never had one.
 const FULL_LIST_ORDER = 'updated_at.desc,id.asc';
 
-/** The total of a PostgREST Content-Range (`0-9/10`, `*\/0`), or NaN when it states none. */
-function contentRangeTotal(header) {
-	const match = /\/(\d+)$/.exec(header ?? '');
-	return match ? Number(match[1]) : Number.NaN;
-}
-
 /**
  * Every row of the workspace in ONE flat read: PostgREST casts each embed level to jsonb, so
  * the same rows embedded under the members row cost 196 ms against 55 ms flat (8,772 pages,
@@ -1831,7 +1825,7 @@ async function listFullPageRows(workspaceId, select, config, fetchImpl) {
 	const response = await baasRestResponse(config, fetchImpl, `osionos_pages?${query}`, { prefer: 'count=exact' });
 	const rows = await readBaasJson(response, { service: 'page list', empty: null, fail: baasFail });
 	if (!Array.isArray(rows)) throw baasFail('The page list answered no row array.');
-	if (contentRangeTotal(response.headers.get('content-range')) !== rows.length) throw baasFail(`The page list answered ${rows.length} rows, not its exact count.`);
+	if (countFromRange(response.headers.get('content-range')) !== rows.length) throw baasFail(`The page list answered ${rows.length} rows, not its exact count.`);
 	if (!rows.every((row) => sameId(row?.workspace_id, workspaceId))) throw baasFail('The page list answered a row of another workspace.');
 	return rows;
 }

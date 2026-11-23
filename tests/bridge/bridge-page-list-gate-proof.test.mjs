@@ -188,6 +188,15 @@ describe('/api/pages/all: a read that cannot prove itself complete and in-worksp
 			return { status: 200, body: rows, headers: range(rows, teamRows(world).length) };
 		}],
 		['a read without a Content-Range total', (world) => ({ status: 200, body: teamRows(world) })],
+		['a read whose count was not computed (`0-n/*`)', (world) => {
+			const rows = teamRows(world);
+			return { status: 200, body: rows, headers: { 'content-range': `0-${rows.length - 1}/*` } };
+		}],
+		// The total matches the rows: only the strict Content-Range grammar refuses this one.
+		['a malformed Content-Range (`junk/n`)', (world) => {
+			const rows = teamRows(world);
+			return { status: 200, body: rows, headers: { 'content-range': `junk/${rows.length}` } };
+		}],
 	];
 	for (const [label, answer] of cases) {
 		it(`${label} is a 502 with no page ids`, async () => {
