@@ -14,8 +14,10 @@
 // record read, session tokens for two members of one team workspace, and a server runner.
 // Every request is logged so a test can prove a call did — or did not — happen.
 // Ponytail: eq/in/gt compare case-insensitively (right for uuid columns, wrong for text
-// columns differing only by case); `order` is honoured only as `id.asc`, every other value
-// is ignored (insertion order); wfts is a substring match over title+content, not stemming.
+// columns differing only by case); `order` is honoured only as `id.asc`, `user_id.asc` and
+// the flat full list's `updated_at.desc,id.asc` (nulls first, ids as raw lowercase strings),
+// every other value is ignored (insertion order); wfts is a substring match over
+// title+content, not stemming. A `failWhen` answer may carry `headers` (a Content-Range).
 // Ponytail: every GET whose `select` contains an embed goes to the strict embed stub
 // (embed-postgrest.mjs), which honours `updated_at.desc` and throws on any other order.
 
@@ -137,10 +139,21 @@ function readRows(rows, params) {
 	// string order `gt.` uses, so the cursor and the page order agree the way Postgres' uuid
 	// order does. Every other `order` stays ignored, as before.
 	const orderKey = { 'id.asc': 'id', 'user_id.asc': 'user_id' }[params.get('order')];
-	const ordered = orderKey
-		? [...found].sort((left, right) => String(left[orderKey]).toLowerCase() < String(right[orderKey]).toLowerCase() ? -1 : String(left[orderKey]).toLowerCase() > String(right[orderKey]).toLowerCase() ? 1 : 0)
-		: found;
+	const byKey = (key) => (left, right) => String(left[key]).toLowerCase() < String(right[key]).toLowerCase() ? -1 : String(left[key]).toLowerCase() > String(right[key]).toLowerCase() ? 1 : 0;
+	let ordered = found;
+	if (orderKey) ordered = [...found].sort(byKey(orderKey));
+	if (params.get('order') === 'updated_at.desc,id.asc') ordered = [...found].sort((left, right) => newestFirst(left, right) || byKey('id')(left, right));
 	return params.has('limit') ? ordered.slice(0, Number(params.get('limit'))) : ordered;
+}
+
+/** `updated_at DESC` as Postgres orders it: nulls first, equal stamps left to the next key. */
+function newestFirst(left, right) {
+	const leftStamp = left.updated_at ?? null;
+	const rightStamp = right.updated_at ?? null;
+	if (leftStamp === rightStamp) return 0;
+	if (leftStamp === null) return -1;
+	if (rightStamp === null) return 1;
+	return String(leftStamp) > String(rightStamp) ? -1 : 1;
 }
 
 // The unique key a plain insert collides on when it names no on_conflict (real PostgREST
@@ -276,7 +289,7 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		const call = { method, table: name, params: parsed.searchParams, body, prefer, headers: init.headers ?? {} };
 		calls.push(call);
 		const failure = failWhen(call);
-		if (failure) return jsonResponse(failure.body, failure.status);
+		if (failure) return jsonResponse(failure.body, failure.status, failure.headers);
 		if (name === 'rpc/osionos_bridge_list_workspaces') {
 			return jsonResponse(realWorkspaceRpc ? workspaceMemberRpc(body, table) : workspaceRpc(body));
 		}

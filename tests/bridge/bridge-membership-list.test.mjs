@@ -10,15 +10,15 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// ADR 0004, list half: /api/pages and /api/pages/all read the caller's members row and the
-// workspace's pages in ONE statement, so a membership change is seen by the very next
-// request (no sleep anywhere below) and the list costs one BaaS round trip, not two.
+// ADR 0004, list half: /api/pages reads the members row and the pages in ONE statement per chunk;
+// /api/pages/all (osionos#243 D′, bridge-page-list-gate-proof.test.mjs) reads them flat between a
+// members-row gate and proof. A membership change is seen by the very next request (no sleep below).
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { IDS, send } from './support/bridge-harness.mjs';
 import {
-	ALL_PERMISSIONS, OTHER_PAGE, OTHER_WORKSPACE, asA, asB, asOutsider, assertNoPageIds, deleteWorkspace, inMembershipWorld,
+	ALL_PERMISSIONS, OTHER_PAGE, OTHER_WORKSPACE, asA, asB, asOutsider, assertGateReadProof, assertNoPageIds, deleteWorkspace, inMembershipWorld,
 	membershipWorld, removeMember, setMemberPermissions,
 } from './support/membership-world.mjs';
 
@@ -39,20 +39,21 @@ describe('list: membership and pages in one statement', () => {
 		});
 	});
 
-	it('/api/pages/all makes 3 BaaS calls: the list statement plus ONE rule read and the member', async () => {
+	it('/api/pages/all makes 5 BaaS calls: gate, flat read, proof, then ONE rule read and the member', async () => {
 		const lines = [];
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			const response = await fetch(`${base}${TEAM_ALL}`, { headers: asB() });
 			assert.equal(response.status, 200);
 			await response.arrayBuffer();
-			assert.equal(mock.calls.length, 3);
-			assert.equal(mock.calls[0].table, 'osionos_workspace_members');
+			assert.equal(mock.calls.length, 5);
+			assertGateReadProof(mock.calls);
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_workspace_members' && call.params.get('limit') === '1').length, 1, 'the access map reads the member itself');
 			assert.equal(mock.calls.filter((call) => call.table === 'osionos_share_rules').length, 1, 'one rules read');
 			assert.equal(mock.calls.filter((call) => call.table === 'osionos_pages' && call.params.get('select') === 'id,parent_page_id').length, 0, 'no rule, no parent map');
 			// The meter logs on the response's 'close', a tick after the client has the body.
 			for (let tries = 0; lines.length === 0 && tries < 50; tries++) await new Promise((resolve) => setTimeout(resolve, 10));
 			const line = JSON.parse(lines.find((entry) => entry.includes('/api/pages/all')));
-			assert.equal(line.baas_n, 3);
+			assert.equal(line.baas_n, 5);
 		}, { perf: true, perfLog: (entry) => lines.push(entry) });
 	});
 
@@ -194,14 +195,15 @@ describe('list: the anchor cross-check', () => {
 		});
 	});
 
-	it('the caller\'s own anchor row without its workspace embed is a 403', async () => {
+	it('the caller\'s own anchor row without its workspace embed is a 403 on the embedded list; /all\'s gate and proof ask for no embed', async () => {
 		const world = membershipWorld();
 		const failWhen = (call) => (call.table === 'osionos_workspace_members' ? { status: 200, body: [{ ...memberRow([]), workspace: null }] } : null);
 		await inMembershipWorld(world, { failWhen }, async (base) => {
-			const denied = await send(base, TEAM_ALL, asB());
+			const denied = await send(base, TEAM_LIST, asB());
 			assert.equal(denied.status, 403);
 			assertNoPageIds(denied, world);
 		});
+		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => { await send(base, TEAM_ALL, asB()); assertGateReadProof(mock.calls); });
 	});
 
 	for (const [label, row] of [
@@ -222,11 +224,11 @@ describe('list: the anchor cross-check', () => {
 	it('the anchor asks for the caller and the workspace, and for two rows at most', async () => {
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			await send(base, TEAM_ALL, asB());
-			const { params } = mock.calls[0];
-			assert.equal(params.get('user_id'), `eq.${IDS.userB}`);
-			assert.equal(params.get('workspace_id'), `eq.${IDS.team}`);
-			assert.equal(params.get('limit'), '2');
-			assert.match(params.get('select'), /^user_id,workspace_id,role,permissions,workspace:osionos_workspaces!workspace_id\(pages:osionos_pages!workspace_id\(/);
+			assertGateReadProof(mock.calls);
+			for (const { params } of [mock.calls[0], mock.calls[2]]) assert.deepEqual([params.get('user_id'), params.get('workspace_id'), params.get('limit')], [`eq.${IDS.userB}`, `eq.${IDS.team}`, '2']);
+			mock.calls.length = 0;
+			await send(base, TEAM_LIST, asB());
+			assert.match(mock.calls[0].params.get('select'), /^user_id,workspace_id,role,permissions,workspace:osionos_workspaces!workspace_id\(pages:osionos_pages!workspace_id\(/);
 		});
 	});
 });

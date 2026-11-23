@@ -80,7 +80,7 @@ const scanReads = (mock) => pageReads(mock).filter((call) => !call.params.has('s
 /** Ids in the order the chunk scan walks them: raw string order, like Postgres' uuid order. */
 const idOrder = (pages) => pages.map((page) => page.id).sort();
 
-/** `updated_at DESC`, nulls first as Postgres orders a DESC column; ties by id ASC is the stub's stable sort, production promises no order among equal updated_at. */
+/** `updated_at DESC`, nulls first as Postgres orders a DESC column, ties by id ASC: the flat /all read asks for that tiebreak; the chunk walk sorts the same way. */
 function expectedPageOrder(pages) {
 	return [...pages]
 		.sort((left, right) => {
@@ -296,8 +296,8 @@ describe('the page graph reads metadata only', () => {
 	});
 });
 
-describe('the /api/pages/all hydrate keeps one request', () => {
-	it('asks once for every metadata row, with no limit and no keyset cursor', async () => {
+describe('the /api/pages/all hydrate keeps one page request', () => {
+	it('asks once for every metadata row, with no limit and no keyset cursor, between the gate and the proof', async () => {
 		const pages = tiedPages(450);
 		const mock = createPostgrestMock(worldOf(pages));
 		await withBridge(config, mock.fetchImpl, async (base) => {
@@ -309,10 +309,13 @@ describe('the /api/pages/all hydrate keeps one request', () => {
 			assert.equal(reads.length, 1);
 			assert.equal(reads[0].params.has('limit'), false);
 			assert.equal(reads[0].params.has('id'), false);
-			assert.equal(reads[0].params.get('order'), 'updated_at.desc');
+			assert.equal(reads[0].params.get('order'), 'updated_at.desc,id.asc');
 			assert.equal(reads[0].params.get('select').includes('content'), false);
-			// The single request asks PostgREST for updated_at.desc and the embed stub applies it,
-			// so the list comes back in that order (nulls first, ties in seed order = id ascending, the stub's stable sort; production does not promise it).
+			const readAt = mock.calls.indexOf(reads[0]);
+			const anchors = mock.calls.flatMap((call, index) => (call.table === 'osionos_workspace_members' && call.params.get('limit') === '2' ? [index] : []));
+			assert.deepEqual(anchors, [readAt - 1, readAt + 1], 'gate right before the read, proof right after it');
+			// The read asks PostgREST for updated_at.desc,id.asc and the mock applies it, so the
+			// list comes back in that order: nulls first, equal stamps id ascending.
 			assert.equal(listed.body.length, 450);
 			assert.deepEqual(listed.body.map((entry) => entry._id), expectedPageOrder(pages));
 		});

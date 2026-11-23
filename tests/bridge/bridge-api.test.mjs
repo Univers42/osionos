@@ -199,9 +199,12 @@ function createMockBaasFetch() {
 
 			const rows = selectedRows(pages, ids, workspaceFilter);
 			// A page read that asks for the caller's member row gets it under `workspace`.
-			return jsonResponse(parsed.searchParams.get('select')?.includes('osionos_workspace_members')
+			const answer = jsonResponse(parsed.searchParams.get('select')?.includes('osionos_workspace_members')
 				? rows.map((row) => ({ ...row, workspace: { members: [ownerMember] } }))
 				: rows);
+			// PostgREST's exact count: the flat /api/pages/all read checks it against the rows it got.
+			if (String(init.headers?.Prefer ?? '').includes('count=exact')) answer.headers.set('content-range', rows.length ? `0-${rows.length - 1}/${rows.length}` : '*/0');
+			return answer;
 		},
 	};
 }

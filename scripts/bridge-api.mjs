@@ -520,7 +520,8 @@ function isBaasFailure(error) {
 	return Number.isInteger(error?.status) || error?.name === 'AbortError' || error instanceof TypeError;
 }
 
-async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer } = {}) {
+/** One service-role REST call answered 2xx, its body unread: for the reader that needs the headers too. */
+async function baasRestResponse(config, fetchImpl, path, { method = 'GET', body, prefer } = {}) {
 	requireBaasConfig(config);
 	const headers = {
 		Accept: 'application/json',
@@ -542,7 +543,11 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
 		const status = responseStatusForBaasFailure(response.status);
 		throw Object.assign(new Error(`BaaS request failed with ${response.status}: ${text.slice(0, 160)}`), { status, upstreamStatus: response.status, upstreamText: text.slice(0, 160) });
 	}
-	return readBaasJson(response, { service: 'service-role PostgREST', empty: null, fail: baasFail });
+	return response;
+}
+
+async function baasRest(config, fetchImpl, path, options) {
+	return readBaasJson(await baasRestResponse(config, fetchImpl, path, options), { service: 'service-role PostgREST', empty: null, fail: baasFail });
 }
 
 /**
@@ -1789,15 +1794,46 @@ function pageFilterParams(filters, idCursor) {
 
 /** One page read. `select` is explicit at every call site: `'*'` and the metadata list cost
  *  very different amounts, and only the caller knows which shape this read has to answer. */
-async function listPageRows(workspaceId, config, fetchImpl, filters = {}, select, { order = 'updated_at.desc', limit, idCursor } = {}) {
-	const query = postgrestQuery({
+async function listPageRows(workspaceId, config, fetchImpl, filters = {}, select, window = {}) {
+	return await baasRest(config, fetchImpl, `osionos_pages?${pageListQuery(workspaceId, filters, select, window)}`) ?? [];
+}
+
+function pageListQuery(workspaceId, filters, select, { order = 'updated_at.desc', limit, idCursor } = {}) {
+	return postgrestQuery({
 		workspace_id: `eq.${workspaceId}`,
 		...pageFilterParams(filters, idCursor),
 		select,
 		order,
 		limit: limit === undefined ? undefined : String(limit),
 	});
-	return await baasRest(config, fetchImpl, `osionos_pages?${query}`) ?? [];
+}
+
+// The id tiebreak makes the flat list's order total; the embed it replaced never had one.
+const FULL_LIST_ORDER = 'updated_at.desc,id.asc';
+
+/** The total of a PostgREST Content-Range (`0-9/10`, `*\/0`), or NaN when it states none. */
+function contentRangeTotal(header) {
+	const match = /\/(\d+)$/.exec(header ?? '');
+	return match ? Number(match[1]) : Number.NaN;
+}
+
+/**
+ * Every row of the workspace in ONE flat read: PostgREST casts each embed level to jsonb, so
+ * the same rows embedded under the members row cost 196 ms against 55 ms flat (8,772 pages,
+ * osionos#243). Flat, the read loses the embed's structure and has to prove itself instead:
+ * an array (a body-less 2xx is not "no pages"), every row of this workspace (a dropped filter
+ * would mix workspaces), and exactly the exact count (a db-max-rows cap truncates silently,
+ * and the client's authoritative merge deletes what a full list omits). Otherwise a 502.
+ * No `limit`: a limit without a refusal is the same silent truncation.
+ */
+async function listFullPageRows(workspaceId, select, config, fetchImpl) {
+	const query = pageListQuery(workspaceId, {}, select, { order: FULL_LIST_ORDER });
+	const response = await baasRestResponse(config, fetchImpl, `osionos_pages?${query}`, { prefer: 'count=exact' });
+	const rows = await readBaasJson(response, { service: 'page list', empty: null, fail: baasFail });
+	if (!Array.isArray(rows)) throw baasFail('The page list answered no row array.');
+	if (contentRangeTotal(response.headers.get('content-range')) !== rows.length) throw baasFail(`The page list answered ${rows.length} rows, not its exact count.`);
+	if (!rows.every((row) => sameId(row?.workspace_id, workspaceId))) throw baasFail('The page list answered a row of another workspace.');
+	return rows;
 }
 
 /**
@@ -1866,18 +1902,48 @@ function singleAnchorRow(rows, userId, workspaceId) {
  */
 async function listMemberPageRows(token, workspaceId, read, config, fetchImpl) {
 	const nested = (params) => Object.fromEntries(Object.entries(params).map(([key, value]) => [`workspace.pages.${key}`, value]));
-	const query = postgrestQuery({
-		user_id: `eq.${token.userId}`,
-		workspace_id: `eq.${workspaceId}`,
-		select: `user_id,workspace_id,role,permissions,workspace:osionos_workspaces!workspace_id(pages:osionos_pages!workspace_id(${read.select}))`,
-		...nested({ ...pageFilterParams(read.filters, read.idCursor), order: read.order, limit: read.limit === undefined ? undefined : String(read.limit) }),
-		// Two rows, not one: a second row is how a dropped user_id filter shows itself.
-		limit: '2',
-	});
-	const anchor = singleAnchorRow(await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`), token.userId, workspaceId);
+	const anchor = await readMemberAnchor(token, workspaceId, {
+		select: `,workspace:osionos_workspaces!workspace_id(pages:osionos_pages!workspace_id(${read.select}))`,
+		params: nested({ ...pageFilterParams(read.filters, read.idCursor), order: read.order, limit: read.limit === undefined ? undefined : String(read.limit) }),
+	}, config, fetchImpl);
 	const pages = anchor?.workspace?.pages;
 	workspaceAccessContext(token, workspaceId, Array.isArray(pages) ? anchor : null, 'read');
 	return pages;
+}
+
+/**
+ * The caller's members row in the workspace as singleAnchorRow vouches for it, or null.
+ * `embed` ({ select, params }) rides a page read on the same statement; null reads the row alone.
+ */
+async function readMemberAnchor(token, workspaceId, embed, config, fetchImpl) {
+	const query = postgrestQuery({
+		user_id: `eq.${token.userId}`,
+		workspace_id: `eq.${workspaceId}`,
+		select: `user_id,workspace_id,role,permissions${embed?.select ?? ''}`,
+		...embed?.params,
+		// Two rows, not one: a second row is how a dropped user_id filter shows itself.
+		limit: '2',
+	});
+	return singleAnchorRow(await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`), token.userId, workspaceId);
+}
+
+/** The gate and the proof of the flat list: the caller's 'read' from the members row alone, refused with the embedded list's 403. */
+async function requireMemberRead(token, workspaceId, config, fetchImpl) {
+	workspaceAccessContext(token, workspaceId, await readMemberAnchor(token, workspaceId, null, config, fetchImpl), 'read');
+}
+
+/**
+ * /api/pages/all's rows: gate, flat read, proof, strictly one after another (osionos#243 D′).
+ * The gate keeps a non-member from costing a page read: without it their 403 took ~45 ms of
+ * SQL against ~0.2 ms for an unknown workspace id, an oracle on the workspace's existence and
+ * size. The proof runs only after the read is parsed, so a membership revoked before it answers
+ * is a 403, never rows already read. Revoke-then-regrant inside the read is not seen.
+ */
+async function readFullPageList(token, workspaceId, select, config, fetchImpl) {
+	await requireMemberRead(token, workspaceId, config, fetchImpl);
+	const rows = await listFullPageRows(workspaceId, select, config, fetchImpl);
+	await requireMemberRead(token, workspaceId, config, fetchImpl);
+	return rows;
 }
 
 async function listWorkspacePageRefs(workspaceId, config, fetchImpl, withMeta = false) {
@@ -3001,15 +3067,14 @@ async function handlePageList(url, request, response, config, fetchImpl) {
 }
 
 /**
- * The page rows a list answers once the caller's 'read' on the workspace is proven: every
- * statement carries its own proof (listMemberPageRows), each chunk of the chunked list
- * included, so a membership lost mid-walk is a 403 and never a short list.
+ * The page rows a list answers once the caller's 'read' on the workspace is proven. Each chunk
+ * of the chunked list carries its own proof (listMemberPageRows); the full list is proven
+ * before and after its one flat read (readFullPageList). Either way a membership lost
+ * mid-read is a 403 and never a short list.
  */
 function readListedPages(token, workspaceId, { isFullList, filters, select }, config, fetchImpl) {
-	const readFrom = (window) => listMemberPageRows(token, workspaceId, { filters, select, ...window }, config, fetchImpl);
-	return isFullList
-		? readFrom({ order: 'updated_at.desc' })
-		: walkPageChunks((cursor) => readFrom({ order: 'id.asc', limit: PAGE_LIST_CHUNK, idCursor: cursor }));
+	if (isFullList) return readFullPageList(token, workspaceId, select, config, fetchImpl);
+	return walkPageChunks((cursor) => listMemberPageRows(token, workspaceId, { filters, select, order: 'id.asc', limit: PAGE_LIST_CHUNK, idCursor: cursor }, config, fetchImpl));
 }
 
 const PAGE_SEARCH_MAX = 25;

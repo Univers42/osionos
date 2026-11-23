@@ -42,6 +42,18 @@ export function assertNoPageIds(result, world) {
 	for (const id of pageIdsOf(world)) assert.ok(!result.text.includes(id), `denial body leaks page id ${id}: ${result.text}`);
 }
 
+/** The members-row read of /api/pages/all's gate and proof (limit 2), told apart from the access map's own member read (limit 1). */
+export const isAnchor = (call) => call.table === 'osionos_workspace_members' && call.params.get('limit') === '2';
+/** A page-list read, told apart from the access map's id → parent map. */
+export const isPageRead = (call) => call.table === 'osionos_pages' && String(call.params.get('select')).includes('title');
+const callKind = (call) => (isAnchor(call) ? 'anchor' : isPageRead(call) ? 'read' : call.table);
+
+/** /api/pages/all's first three calls are the gate, the flat read and the proof, in that order, and the gate and proof embed nothing. */
+export function assertGateReadProof(calls) {
+	assert.deepEqual(calls.slice(0, 3).map(callKind), ['anchor', 'read', 'anchor']);
+	for (const anchor of [calls[0], calls[2]]) assert.equal(anchor.params.get('select'), 'user_id,workspace_id,role,permissions');
+}
+
 export const asB = (memberWorkspaces = [IDS.team]) => sessionHeaders(config, IDS.userB, IDS.homeB, memberWorkspaces);
 export const asA = (memberWorkspaces = [IDS.team]) => sessionHeaders(config, IDS.userA, IDS.homeA, memberWorkspaces);
 export const asOutsider = (memberWorkspaces = []) => sessionHeaders(config, OUTSIDER.userId, OUTSIDER.home, memberWorkspaces);
