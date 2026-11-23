@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { config } from '../config.ts';
-import { reserveTarget, settleTarget } from '../gateway/resolve.ts';
+import { reserveTarget } from '../gateway/resolve.ts';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
 import { checkRunRateLimit } from '../rateLimit.ts';
 import { appendUserTurn, deleteMessagesFromRun, hasMessagesOfRun, touchConversation } from '../conversations/repo.ts';
