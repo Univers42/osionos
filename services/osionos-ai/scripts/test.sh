@@ -88,7 +88,7 @@ echo "[test] running the suite"
 # exports MODELS_DIR.
 FIRST_MIGRATION=${MIGRATIONS# }
 FIRST_MIGRATION=${FIRST_MIGRATION%% *}
-MODELS_MOUNT=$(CDPATH= cd -- "${MODELS_DIR:-$(dirname -- "$FIRST_MIGRATION")}" && pwd)
+MODELS_MOUNT=$(CDPATH='' cd -- "${MODELS_DIR:-$(dirname -- "$FIRST_MIGRATION")}" && pwd)
 
 # modesConfig.test.ts reads groot's docker-compose.public.yml, next to models/.
 # Caveat: a missing file is not mounted (docker would make a directory of it),

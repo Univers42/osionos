@@ -37,6 +37,15 @@ export function failureOf(cause: unknown): ModeFailure {
   return "error";
 }
 
+/**
+ * A 400 on an accept_edits pick is the schema refusing its anchor (M6), so the user
+ * reads the anchor sentence, not the generic one.
+ * Caveat: any 400 on that pick reads as the anchor; it is right while the body holds only
+ * a typed mode and the anchor, and wrong once another key could fail the schema.
+ */
+const refusedAnchor = (cause: unknown, mode: AssistMode): boolean =>
+  cause instanceof AiError && cause.status === 400 && mode === "accept_edits";
+
 export async function patchMode(
   conversationId: string,
   body: { mode: AssistMode; anchorPageId?: string },
@@ -45,7 +54,7 @@ export async function patchMode(
     await requestJson("PATCH", path(conversationId), body);
     return { ok: true };
   } catch (cause) {
-    return { ok: false, code: failureOf(cause) };
+    return { ok: false, code: refusedAnchor(cause, body.mode) ? "anchor_invalid" : failureOf(cause) };
   }
 }
 

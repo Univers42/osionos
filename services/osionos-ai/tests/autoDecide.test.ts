@@ -1,104 +1,16 @@
-/**
- * The auto verdict and the auto apply (AM4, AM10-AM12, AM17, AM18): one test
- * per card reason, each with every earlier check passing, then the apply and
- * its 401 path.
- */
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
-import { after, beforeEach, describe, it } from 'node:test';
-import type { AuthUser } from '../src/auth.ts';
+import { beforeEach, describe, it } from 'node:test';
 import type { ApprovalRow, CardReason } from '../src/approvals/types.ts';
-import type { AutoGate } from '../src/modes/autoGate.ts';
-import type { StoredMode } from '../src/modes/mode.ts';
-
-const USER_A = '11111111-1111-4111-8111-111111111111';
-const USER_B = '22222222-2222-4222-8222-222222222222';
-process.env.OSIONOS_AI_MODES = 'on';
-process.env.OSIONOS_AI_MODES_USERS = USER_A;
-process.env.OSIONOS_AI_AUTO_PER_TURN = '2';
-process.env.OSIONOS_AI_AUTO_PER_MINUTE = '3';
-
-const { startHarness, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
-const { app, mock, bridge, createConversation } = await startHarness();
-const { autoVerdict } = await import('../src/approvals/autoVerdict.ts');
-const { autoDecide } = await import('../src/approvals/autoDecide.ts');
-const { makeRunCredential } = await import('../src/modes/credential.ts');
-const { makeWriteBudget } = await import('../src/modes/writeBudget.ts');
-const { makeAppendCoalescer } = await import('../src/approvals/appendCoalescer.ts');
-const { makeStepCounter, checkAutoWriteRate } = await import('../src/modes/autoLimits.ts');
-const { writeConversationMode } = await import('../src/modes/mode.ts');
-const { config } = await import('../src/config.ts');
-
-after(async () => {
-	await app.close();
-	await mock.close();
-	await bridge.close();
-});
-
-const user: AuthUser = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now(), expiresAtMs: null };
-const AUTO: StoredMode = { mode: 'auto', anchorPageId: null };
-
-async function page(workspaceId = WORKSPACE_A, parent: string | null = null): Promise<string> {
-	const id = randomUUID();
-	await app.db.query(
-		`insert into public.osionos_pages (id, workspace_id, owner_id, title, visibility, parent_page_id, content)
-		 values ($1, $2, $3, 't', 'private', $4, '[]'::jsonb)`,
-		[id, workspaceId, USER_A, parent],
-	);
-	bridge.seedPage(id, [], 1);
-	return id;
-}
-
-interface Kit { gate: AutoGate; conversationId: string; runId: string; turnId: string }
-
-/** A run row, a conversation holding `live`, and a gate whose snapshot is `snapshot`. */
-async function kit(snapshot: StoredMode = AUTO, live: StoredMode = snapshot, over: Partial<AutoGate> = {}): Promise<Kit> {
-	const conversationId = await createConversation();
-	await writeConversationMode(app.db, conversationId, USER_A, live);
-	const runId = randomUUID();
-	const turnId = randomUUID();
-	await app.db.query(
-		`insert into public.ai_runs (id, conversation_id, owner_id, status, model, turn_id) values ($1, $2, $3, 'running', 'm', $4)`,
-		[runId, conversationId, USER_A, turnId],
-	);
-	const gate: AutoGate = {
-		db: app.db, redis: app.redis, user, conversationId, workspaceId: WORKSPACE_A, runId, turnId,
-		snapshot: { ...snapshot, runKind: 'request' },
-		credential: makeRunCredential('the-session-token', Date.now() + 3_600_000),
-		budget: makeWriteBudget({ startedAtMs: Date.now(), totalMs: 120_000, signal: new AbortController().signal }),
-		step: makeStepCounter(10),
-		coalescer: makeAppendCoalescer(),
-		reads: new Set(),
-		...over,
-	};
-	return { gate, conversationId, runId, turnId };
-}
-
-async function row(k: Kit, tool: string, args: Record<string, unknown>): Promise<ApprovalRow> {
-	const id = randomUUID();
-	const inserted = await app.db.query<ApprovalRow>(
-		`insert into public.ai_approvals (id, owner_id, workspace_id, tool, args, args_sha256, status, origin, conversation_id, run_id, expires_at)
-		 values ($1, $2, $3, $4, $5::jsonb, $6, 'pending', 'run', $7, $8, now() + interval '10 minutes') returning *`,
-		[id, USER_A, WORKSPACE_A, tool, JSON.stringify(args), `ad-${id}`, k.conversationId, k.runId],
-	);
-	return inserted.rows[0];
-}
+import type { Kit } from './autoDecideFixture.ts';
 
 /**
- * The rate window is the wall-clock minute and the day key the UTC date: a case
- * that fills one and then asks must not straddle a boundary, so it waits one out
- * when fewer than 5 s remain (a minute boundary includes midnight).
+ * The auto verdict (AM4, AM10-AM12, AM17, AM18): one test per card reason, each
+ * with every earlier check passing.
  */
-async function awayFromMinuteBoundary(): Promise<void> {
-	const left = 60_000 - (Date.now() % 60_000);
-	if (left < 5_000) await new Promise<void>((resolve) => setTimeout(resolve, left + 50));
-}
-
-const append = (pageId: string): Record<string, unknown> => ({ pageId, blocks: [{ type: 'paragraph', content: 'x' }] });
-const reasonOf = async (k: Kit, r: ApprovalRow): Promise<string> => {
-	const verdict = await autoVerdict(k.gate, r, Date.now());
-	return verdict.kind === 'card' ? verdict.reason : verdict.decidedBy;
-};
+const {
+	USER_A, USER_B, WORKSPACE_A, WORKSPACE_B, app, bridge, autoVerdict, makeRunCredential, makeWriteBudget, makeStepCounter,
+	checkAutoWriteRate, config, user, AUTO, page, kit, row, awayFromMinuteBoundary, append, reasonOf,
+} = await import('./autoDecideFixture.ts');
 
 describe('autoVerdict: one card reason each, every earlier check passing', () => {
 	beforeEach(async () => {
@@ -226,83 +138,5 @@ describe('autoVerdict: one card reason each, every earlier check passing', () =>
 		const e = await kit({ mode: 'accept_edits', anchorPageId: anchor });
 		assert.equal(await reasonOf(e, await row(e, 'add_blocks', append(child))), 'auto:accept_edits');
 		assert.equal(await reasonOf(e, await row(e, 'create_page', { title: 'n', workspaceId: WORKSPACE_A, parentPageId: child })), 'auto:accept_edits');
-	});
-});
-
-describe('autoDecide', () => {
-	beforeEach(async () => {
-		const keys = await app.redis.keys('ai:rl:auto*');
-		if (keys.length > 0) await app.redis.del(...keys);
-		bridge.reset();
-	});
-
-	it('claims, writes with the credential, records executed with decided_by auto:auto', async () => {
-		const k = await kit();
-		const target = await page();
-		const r = await row(k, 'add_blocks', append(target));
-		const outcome = await autoDecide(k.gate, r);
-		assert.equal(outcome.kind, 'applied');
-		if (outcome.kind !== 'applied') return;
-		assert.equal(outcome.event.decidedBy, 'auto:auto');
-		assert.equal(outcome.event.target, target);
-		assert.equal(outcome.event.undoable, true);
-		const stored = (await app.db.query('select status, decided_by from public.ai_approvals where id = $1', [r.id])).rows[0];
-		assert.deepEqual(stored, { status: 'executed', decided_by: 'auto:auto' });
-		assert.equal(bridge.calls.length, 1);
-		assert.equal(bridge.calls[0].authorization, 'Bearer the-session-token');
-	});
-
-	it('a 401 gives the claim back: pending, no decider, one bridge call, card credential_rejected', async () => {
-		const k = await kit();
-		const r = await row(k, 'add_blocks', append(await page()));
-		bridge.failWith = 401;
-		try {
-			assert.deepEqual(await autoDecide(k.gate, r), { kind: 'card', reason: 'credential_rejected' });
-		} finally {
-			bridge.failWith = 0;
-		}
-		const stored = (await app.db.query('select status, decided_by, error from public.ai_approvals where id = $1', [r.id])).rows[0];
-		assert.deepEqual(stored, { status: 'pending', decided_by: null, error: null });
-		assert.equal(bridge.calls.length, 1);
-	});
-
-	it('another refusal is recorded failed and told to the model as not applied', async () => {
-		const k = await kit();
-		const r = await row(k, 'add_blocks', append(await page()));
-		bridge.failWith = 500;
-		try {
-			const outcome = await autoDecide(k.gate, r);
-			assert.equal(outcome.kind, 'refused');
-		} finally {
-			bridge.failWith = 0;
-		}
-		const stored = (await app.db.query('select status from public.ai_approvals where id = $1', [r.id])).rows[0];
-		assert.equal(stored.status, 'failed');
-	});
-
-	it('a row someone else already decided is refused, never written twice', async () => {
-		const k = await kit();
-		const r = await row(k, 'add_blocks', append(await page()));
-		await app.db.query("update public.ai_approvals set status = 'declined' where id = $1", [r.id]);
-		assert.equal((await autoDecide(k.gate, r)).kind, 'refused');
-		assert.equal(bridge.calls.length, 0);
-	});
-
-	it('a card leaves the row pending and calls nothing', async () => {
-		const k = await kit({ mode: 'manual', anchorPageId: null });
-		const r = await row(k, 'add_blocks', append(await page()));
-		assert.deepEqual(await autoDecide(k.gate, r), { kind: 'card', reason: 'mode_manual' });
-		assert.equal(bridge.calls.length, 0);
-	});
-});
-
-describe('AM1: an applied write leaves the token nowhere', () => {
-	it('an applied write leaves no row, event or bridge-visible field holding the token', async () => {
-		const k = await kit();
-		const r = await row(k, 'add_blocks', append(await page()));
-		const outcome = await autoDecide(k.gate, r);
-		const stored = await app.db.query('select * from public.ai_approvals where id = $1', [r.id]);
-		assert.ok(!JSON.stringify([outcome, stored.rows]).includes('the-session-token'));
-		assert.ok((await app.redis.keys('*')).every((key) => !key.includes('the-session-token')));
 	});
 });

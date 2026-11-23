@@ -15,6 +15,7 @@ import { isFeatureFlagEnabled } from "@/shared/config/featureFlags";
 import { useChatStore } from "@/features/chat/model/useChatStore";
 import { ChatComposer } from "@/widgets/chat-shell/ui/ChatComposer";
 import { ModeMenu } from "@/widgets/chat-shell/ui/ModeMenu";
+import { makeModeSaver, type ModeView } from "@/features/chat/model/modeSaver";
 
 const PAGE = "11111111-1111-4111-8111-111111111111";
 const render = (openPageId: string | null, value: "manual" | "plan" | "accept_edits" | "auto" = "manual") =>
@@ -32,6 +33,9 @@ test("accept_edits is disabled with a hint while no page is open", () => {
   const closed = render(null);
   assert.match(closed, /<option[^>]*value="accept_edits"[^>]*disabled/);
   assert.match(closed, /Open a page to use it as the anchor/);
+  const hint = /<span[^>]*id="([^"]+)"[^>]*>Open a page/.exec(closed)?.[1];
+  assert.ok(hint, "the hint has an id (M8)");
+  assert.match(closed, new RegExp(`<select[^>]*aria-describedby="${hint}"`));
   const open = render(PAGE);
   assert.doesNotMatch(open, /disabled=/);
   assert.doesNotMatch(open, /Open a page to use it as the anchor/);
@@ -95,6 +99,9 @@ test("each refusal of the service becomes a code and a sentence", async () => {
     answer(status, error);
     assert.deepEqual(await patchMode("c1", { mode: "auto" }), { ok: false, code });
   }
+  answer(400, "invalid_body");
+  assert.deepEqual(await patchMode("c1", { mode: "accept_edits", anchorPageId: "not-a-uuid" }), { ok: false, code: "anchor_invalid" }, "M6");
+  assert.deepEqual(await patchMode("c1", { mode: "auto" }), { ok: false, code: "error" });
   assert.equal(modeFeedback("reauth_required").error, "Sign in again to allow automatic edits");
   assert.equal(modeFeedback("modes_not_enabled").hidden, true);
   assert.equal(modeFeedback("anchor_invalid").hidden, false);
@@ -111,4 +118,33 @@ test("patchMode sends only the schema's keys and getMode reads the stored mode",
   assert.match(sent.url, /\/api\/ai\/conversations\/c1\/mode$/);
   assert.deepEqual(JSON.parse(sent.body), { mode: "accept_edits", anchorPageId: PAGE });
   assert.deepEqual(await getMode("c1"), { mode: "accept_edits", anchorPageId: PAGE });
+});
+
+const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+test("mode picks are serialized: the last pick wins, and a failed last pick shows the confirmed mode (I2)", async () => {
+  const sent: string[] = [];
+  let release: (() => void) | undefined;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const failing = new Set<string>();
+  const shown: ModeView[] = [];
+  const saver = makeModeSaver(async (body) => {
+    sent.push(JSON.stringify(body));
+    if (body.mode === "auto") await held;
+    return failing.has(body.mode) ? ({ ok: false, code: "error" } as const) : ({ ok: true } as const);
+  }, (view) => shown.push(view));
+  saver.confirm("manual");
+  const first = saver.pick("auto", null);
+  await flush();
+  const picks = [first, saver.pick("plan", null), saver.pick("accept_edits", PAGE)];
+  await flush();
+  assert.deepEqual(sent, [JSON.stringify({ mode: "auto" })], "no PATCH leaves while one is out");
+  assert.equal(shown.at(-1)?.mode, "accept_edits", "the pending pick shows while it saves");
+  release?.();
+  await Promise.all(picks);
+  assert.deepEqual(sent.slice(1), [JSON.stringify({ mode: "accept_edits", anchorPageId: PAGE })], "a pick superseded before it left is never sent");
+  assert.deepEqual(shown.at(-1), { mode: "accept_edits", error: null, hidden: false });
+  failing.add("plan");
+  await saver.pick("plan", null);
+  assert.deepEqual(shown.at(-1), { mode: "accept_edits", error: "The mode could not be changed", hidden: false }, "the server's last word is shown");
 });

@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
+import { applyPagePatch, patchDrops, seededPageBody, sendJson, type MockPage } from './mockBridgePages.ts';
 
 export interface BridgeCall {
 	method: string;
@@ -40,7 +41,7 @@ export interface MockBridge {
 	 * nothing, and every append bumps the version.
 	 */
 	seedPage(pageId: string, content: unknown[], version?: number | null, title?: string): void;
-	pageContent(pageId: string): { version: number | null; content: unknown[]; title: string; archivedAt: string | null } | undefined;
+	pageContent(pageId: string): MockPage | undefined;
 	/** The next n appends are applied, then the connection is destroyed: the caller sees no answer. */
 	dropNextAppendAnswers(n: number): void;
 	/** The next n page PATCHes lose their answer: applied first (`apply`) or not at all, then the connection is destroyed. */
@@ -58,17 +59,6 @@ function readBody(request: IncomingMessage): Promise<Buffer> {
 	});
 }
 
-/**
- * A Postgres JSONB column returns object keys shorter first, then bytewise: the
- * page the bridge reads back is not byte-identical to the blocks that were sent.
- */
-function jsonbOrder(value: unknown): unknown {
-	if (Array.isArray(value)) return value.map(jsonbOrder);
-	if (value === null || typeof value !== 'object') return value;
-	const keys = Object.keys(value).sort((a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0));
-	return Object.fromEntries(keys.map((key) => [key, jsonbOrder((value as Record<string, unknown>)[key])]));
-}
-
 export const MOCK_MEDIA_OWNER = '00000000-0000-4000-8000-0000000000aa';
 
 export async function startMockBridge(): Promise<MockBridge> {
@@ -79,11 +69,10 @@ export async function startMockBridge(): Promise<MockBridge> {
 	let loseNextCount = 0;
 	const seenPages = new Map<string, string>(); // id -> workspaceId
 	const seenDbs = new Set<string>();
-	const pages = new Map<string, { version: number | null; content: unknown[]; title: string; archivedAt: string | null }>();
+	const pages = new Map<string, MockPage>();
 	const appendKeys = new Map<string, number>(); // `${pageId}/${key}` -> version it produced
 	let dropAppendCount = 0;
-	let dropPatchCount = 0;
-	let dropPatchApplies = true;
+	const patchDrop = patchDrops();
 
 	const mock: MockBridge = {
 		baseUrl: '',
@@ -119,7 +108,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 			pages.clear();
 			appendKeys.clear();
 			dropAppendCount = 0;
-			dropPatchCount = 0;
+			patchDrop.reset();
 		},
 		seedPage(pageId: string, content: unknown[], version: number | null = 1, title = 'Page'): void {
 			pages.set(pageId, { version, content: [...content], title, archivedAt: null });
@@ -131,8 +120,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 			dropAppendCount = n;
 		},
 		dropNextPatchAnswers(n: number, options: { apply: boolean }): void {
-			dropPatchCount = n;
-			dropPatchApplies = options.apply;
+			patchDrop.arm(n, options.apply);
 		},
 		async close(): Promise<void> {
 			await new Promise<void>((resolve) => {
@@ -213,10 +201,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 					request.socket.destroy();
 					return;
 				}
-				const answer = (): void => {
-					response.writeHead(200, { 'content-type': 'application/json' });
-					response.end(JSON.stringify({ ok: true, version: repeated ?? page.version, content: page.content }));
-				};
+				const answer = () => sendJson(response, 200, { ok: true, version: repeated ?? page.version, content: page.content });
 				if (mock.delayMs > 0) setTimeout(answer, mock.delayMs);
 				else answer();
 				return;
@@ -226,19 +211,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 			if (method === 'GET' && path.startsWith('/api/pages/')) {
 				const pid = decodeURIComponent(path.slice('/api/pages/'.length));
 				const seeded = pages.get(pid);
-				if (seeded) {
-					response.writeHead(200, { 'content-type': 'application/json' });
-					// The shape of the bridge's pageRowToEntry (scripts/bridge-api.mjs): `_id`, an empty
-					// title reads 'Untitled', and contentVersion is absent while the page has no version.
-					response.end(JSON.stringify({
-						_id: pid,
-						title: seeded.title ? seeded.title : 'Untitled',
-						content: jsonbOrder(seeded.content),
-						archivedAt: seeded.archivedAt,
-						...(seeded.version === null ? {} : { contentVersion: seeded.version }),
-					}));
-					return;
-				}
+				if (seeded) return sendJson(response, 200, seededPageBody(pid, seeded));
 				if (seenPages.has(pid)) {
 					response.writeHead(200, { 'content-type': 'application/json' });
 					response.end(JSON.stringify({ id: pid, workspaceId: seenPages.get(pid), title: 'Page' }));
@@ -357,12 +330,8 @@ export async function startMockBridge(): Promise<MockBridge> {
 					response.end(JSON.stringify({ error: 'failed' }));
 					return;
 				}
-				const dropped = dropPatchCount > 0;
-				if (dropped) dropPatchCount--;
-				if (dropped && !dropPatchApplies) {
-					request.socket.destroy();
-					return;
-				}
+				const drop = patchDrop.take();
+				if (drop === 'before') return void request.socket.destroy();
 				try {
 					await mock.onPatch?.({ path, body });
 				} catch {
@@ -370,23 +339,8 @@ export async function startMockBridge(): Promise<MockBridge> {
 					response.end(JSON.stringify({ error: { message: 'hook failed' } }));
 					return;
 				}
-				const stored = pages.get(path.slice('/api/pages/'.length));
-				const patch = body as { baseVersion?: unknown; content?: unknown; title?: unknown; archivedAt?: unknown };
-				if (stored && patch.baseVersion !== undefined && patch.baseVersion !== stored.version) {
-					response.writeHead(409, { 'content-type': 'application/json' });
-					response.end(JSON.stringify({ ok: false, code: 'version_conflict' }));
-					return;
-				}
-				if (stored) {
-					if (Array.isArray(patch.content)) stored.content = patch.content;
-					if (typeof patch.title === 'string') stored.title = patch.title;
-					if (typeof patch.archivedAt === 'string') stored.archivedAt = patch.archivedAt;
-					if (stored.version !== null) stored.version += 1;
-				}
-				if (dropped) {
-					request.socket.destroy();
-					return;
-				}
+				if (!applyPagePatch(pages.get(path.slice('/api/pages/'.length)), body)) return sendJson(response, 409, { ok: false, code: 'version_conflict' });
+				if (drop === 'after') return void request.socket.destroy();
 				response.writeHead(200, { 'content-type': 'application/json' });
 				response.end(JSON.stringify({ ok: true }));
 				return;

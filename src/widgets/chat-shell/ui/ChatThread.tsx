@@ -84,16 +84,13 @@ const AssistantAnswer = React.memo(function AssistantAnswer({
   parts,
   conversationId,
   messageId,
-  runId,
 }: {
   content: string;
   status?: ChatMessage["status"];
   parts?: ChatMessage["parts"];
   conversationId: string;
   messageId: string;
-  runId?: string;
 }) {
-  const serverId = useChatStore((s) => s.conversations.find((c) => c.id === conversationId)?.serverConversationId);
   const citations = useMemo(() => citationsFromParts(parts), [parts]);
   const activities = useMemo(() => toolActivitiesFromParts(parts), [parts]);
   const permissions = useMemo(() => permissionsFromParts(parts), [parts]);
@@ -124,7 +121,6 @@ const AssistantAnswer = React.memo(function AssistantAnswer({
           }}
         />
       ))}
-      <AppliedWrites messageId={messageId} runId={runId} serverConversationId={serverId} />
       {proposals.map((proposal) => (
         <MemoryProposalChip
           key={proposal.memoryId}
@@ -217,9 +213,6 @@ function modelLabel(model: string): string {
 export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
   const endRef = useRef<HTMLDivElement>(null);
   const agents = useChatStore((s) => s.agents);
-  const serverConversationId = useChatStore(
-    (s) => s.conversations.find((c) => c.id === messages[0]?.conversationId)?.serverConversationId,
-  );
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages.length]);
 
   // An edit would race a run in flight: the Edit button waits for it.
@@ -228,7 +221,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-8" data-testid="chat-thread">
       {messages[0] ? <SummaryNotice conversationId={messages[0].conversationId} /> : null}
-      <AppliedWritesLoader serverConversationId={serverConversationId} />
+      <AppliedWritesLoader conversationId={messages[0]?.conversationId} />
       <MessageWindow items={messages}>
         {(visible, offset) => visible.map((m, visibleIndex) => {
         const index = offset + visibleIndex;
@@ -262,7 +255,8 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                   onSave={m.status === "done" && m.content ? () => saveResearchPage({ report: m.content, question, parts: m.parts }) : undefined}
                 />
               ) : null}
-              <AssistantAnswer content={m.content} status={m.status} parts={m.parts} conversationId={m.conversationId} messageId={m.id} runId={m.runId} />
+              <AssistantAnswer content={m.content} status={m.status} parts={m.parts} conversationId={m.conversationId} messageId={m.id} />
+              <AppliedWrites messageId={m.id} runId={m.runId} conversationId={m.conversationId} />
               {!streamingNow && handoff && question !== null ? (
                 <AgentHandoffChip agent={handoff.agent} reason={handoff.reason} disabled={busy} onAsk={() => void askAgent(m.conversationId, question, handoff.agent.id)} />
               ) : null}

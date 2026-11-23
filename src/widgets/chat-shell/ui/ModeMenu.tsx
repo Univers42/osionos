@@ -23,10 +23,12 @@ interface Props {
 
 export function ModeMenu({ openPageId, value, onChange, disabled = false }: Props): React.JSX.Element {
   const noAnchor = openPageId === null;
+  const hintId = React.useId();
   return (
     <span className="inline-flex flex-col">
       <Select
         aria-label="Assistant mode"
+        aria-describedby={noAnchor ? hintId : undefined}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value as AssistMode)}
@@ -36,7 +38,7 @@ export function ModeMenu({ openPageId, value, onChange, disabled = false }: Prop
           <option key={mode} value={mode} disabled={mode === "accept_edits" && noAnchor}>{label}</option>
         ))}
       </Select>
-      {noAnchor ? <span className="px-1 text-2xs text-[var(--osio-fg-muted)]">Open a page to use it as the anchor</span> : null}
+      {noAnchor ? <span id={hintId} className="px-1 text-2xs text-[var(--osio-fg-muted)]">Open a page to use it as the anchor</span> : null}
     </span>
   );
 }

@@ -45,7 +45,7 @@ harness_apply_migrations "$PG_CONTAINER" osionos_ai_test postgres $MIGRATIONS
 
 
 # Read-only models mount for modesMigration.test.ts, as in scripts/test.sh.
-MODELS_MOUNT=$(CDPATH= cd -- "${MODELS_DIR:-$(dirname -- "$1")}" && pwd)
+MODELS_MOUNT=$(CDPATH='' cd -- "${MODELS_DIR:-$(dirname -- "$1")}" && pwd)
 
 # modesConfig.test.ts reads groot's docker-compose.public.yml, next to models/.
 # Caveat: a missing file is not mounted (docker would make a directory of it),

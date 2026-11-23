@@ -17,7 +17,7 @@ const CONVERSATION_ID = "conv-modes";
 const SERVER_ID = "11111111-1111-4111-8111-111111111111";
 const RUN_ID = "22222222-2222-4222-8222-222222222222";
 const TITLE = "Modes chat";
-const PAGE_ID = "modes-page";
+const PAGE_ID = "44444444-4444-4444-8444-444444444445";
 const BLOCKS = ["Alpha block", "Beta block", "Gamma block"].map((content, i) => ({ id: `b${i}`, type: "paragraph", content }));
 const APPROVALS = ["a1", "a2", "a3"].map((id) => `${id}-33333333-3333-4333-8333-333333333333`);
 
@@ -115,7 +115,7 @@ async function chooseAcceptEditsAndSend(page, seen) {
 async function expectAppliedRows(page, testInfo) {
   const rows = page.getByTestId("chat-applied-write");
   await expect(rows.first()).toContainText("Applied automatically (accept edits)");
-  await expect(rows.first()).toContainText("Undo is available for 7 days");
+  await expect(rows.first()).toContainText(/Undo until /);
   await expect(page.getByTestId("chat-approval-card")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("applied-rows.png") });
 }

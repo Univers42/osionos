@@ -9,8 +9,7 @@ import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
 import { refuseRun } from './refuseRun.ts';
-import { effectiveMode, type RunKind } from '../modes/effectiveMode.ts';
-import type { RunCredential } from '../modes/credential.ts';
+import { startRunMode, type ModeRunInput } from './runMode.ts';
 import { createRunTimer } from './runTiming.ts';
 import type { RunTimer } from './runTiming.ts';
 import { loadMcpTools, mcpToolChars } from '../mcpClient/runTools.ts';
@@ -54,7 +53,6 @@ import { THREAD_SYSTEM_PROMPT } from '../threads/context.ts';
 import type { ThreadRun } from './upstreamInput.ts';
 import { userContextForRun } from '../context/runContext.ts';
 import { hooksForRun } from '../context/hooks.ts';
-import { markRunStart } from '../provenance/runStart.ts';
 
 export type { RunEvent };
 
@@ -84,7 +82,7 @@ export interface MediaAttachmentRef {
 }
 export type RunAttachment = AttachmentRef | MediaAttachmentRef;
 
-export interface StartRunInput {
+export interface StartRunInput extends ModeRunInput {
 	db: Pool;
 	redis: Redis;
 	runId: string;
@@ -155,12 +153,6 @@ export interface StartRunInput {
 	 * or its error is what the user reads.
 	 */
 	continuation?: boolean;
-	/** Who started the run (AM13); absent is the unattended continuation. */
-	runKind?: RunKind;
-	/** The session the run holds for later writes (AM1). */
-	credential?: RunCredential | null;
-	/** The user turn the run belongs to; absent, the run's own id. */
-	turnId?: string;
 }
 
 export type StartRunOutcome =
@@ -460,16 +452,12 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	}
 	await touchConversation(db, conversationId);
 
-	const mode = await effectiveMode(db, { user: input.user ?? null, conversationId, runKind: input.runKind ?? 'continuation', credential: input.credential ?? null });
-	// AM3: taint the conversation before the model sees what this run hands it.
-	const marked = await markRunStart(db, {
+	const modeRun = await startRunMode(db, input, {
 		conversationId, user: input.user, contextPages: context.pages, sources, overview,
 		viewTabs: input.view?.tabs ?? [], attachmentCount: attachments.length, imageCount: images.length,
 		skillIndex: skillIndex.entries, customAgentId: isCustomAgent(agent) ? agent.id : null, thread: input.thread !== undefined,
-	}).then(() => true, () => false);
-	if (!marked) {
-		return refuseRun(db, target, { userId: ownerId, day, reserved: amount, actual: 0 }, { runId, status: 503, code: 'provenance_unavailable' });
-	}
+	});
+	if (!modeRun) return refuseRun(db, target, { userId: ownerId, day, reserved: amount, actual: 0 }, { runId, status: 503, code: 'provenance_unavailable' });
 	const execute = async (): Promise<void> => {
 		await runUpstream({
 			db,
@@ -480,9 +468,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			text,
 			timer,
 			target,
-			mode,
-			credential: input.credential ?? null,
-			...(input.turnId ? { turnId: input.turnId } : {}),
+			...modeRun,
 			...(input.effort ? { effort: input.effort } : {}),
 			emit: input.emit,
 			day,
@@ -502,7 +488,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			agent,
 			skillIndex,
 			memories,
-			mcpTools: mode.mode === 'plan' ? [] : mcpTools,
+			mcpTools: modeRun.mode.mode === 'plan' ? [] : mcpTools,
 			...(hooks ? { hooks } : {}),
 			web,
 			...(input.research ? { research: true } : {}),

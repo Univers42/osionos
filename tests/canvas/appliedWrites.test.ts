@@ -23,6 +23,7 @@ import { permissionFromEvent } from "@/features/chat/model/approvalParts";
 import { AppliedWrites } from "@/features/chat/ui/AppliedWrites";
 import { AppliedWriteRow } from "@/features/chat/ui/AppliedWriteRow";
 import { TurnUndoBar } from "@/features/chat/ui/TurnUndoBar";
+import { usePageStore } from "@/store/usePageStore";
 
 const EVENT = { approvalId: "a1", tool: "add_blocks", target: "p1", summary: "Added 2 blocks to Plan", decidedBy: "auto:auto", undoable: true };
 const view = (extra = {}) => ({ ...EVENT, undoneAt: null, undoUntil: new Date(Date.now() + 86_400_000).toISOString(), ...extra });
@@ -77,13 +78,27 @@ test("the applied row says what happened, offers Undo and the window", () => {
   assert.match(out, /Added 2 blocks to Plan/);
   assert.match(out, /<button[^>]*>Undo<\/button>/);
   assert.match(out, /Applied automatically \(auto\)/);
-  assert.match(out, /Undo is available for 7 days/);
+  const until = new Date(view().undoUntil).toLocaleDateString();
+  assert.ok(out.includes(`Undo until ${until}`), out);
+  assert.doesNotMatch(out, /7 days/);
 });
 
-test("an undone row says Undone and has no button", () => {
-  const out = html(React.createElement(AppliedWriteRow, { row: { ...view({ undoneAt: new Date().toISOString() }), messageId: "m1", runId: "r1", turnId: "", undoable: true, busy: false, error: "" }, onUndo: noop }));
-  assert.match(out, /Undone/);
+test("the mode words come from a fixed map: an unknown suffix reads as auto (M13)", () => {
+  const row = (decidedBy: string) => ({ ...view({ decidedBy }), messageId: "m1", runId: "r1", turnId: "", undoable: true, busy: false, error: "" });
+  const out = (decidedBy: string) => html(React.createElement(AppliedWriteRow, { row: row(decidedBy), onUndo: noop }));
+  assert.match(out("auto:accept_edits"), /Applied automatically \(accept edits\)/);
+  assert.match(out("auto:bypass"), /Applied automatically \(auto\)/);
+  assert.doesNotMatch(out("auto:bypass"), /bypass/);
+});
+
+test("an undone row says Undone and has no button; its live status node is there before (M1)", () => {
+  const row = (undoneAt: string | null) => ({ ...view({ undoneAt }), messageId: "m1", runId: "r1", turnId: "", undoable: true, busy: false, error: "" });
+  const out = html(React.createElement(AppliedWriteRow, { row: row(new Date().toISOString()), onUndo: noop }));
+  assert.match(out, /<p[^>]*aria-live="polite"[^>]*>Undone<\/p>/);
   assert.doesNotMatch(out, /<button/);
+  const before = html(React.createElement(AppliedWriteRow, { row: row(null), onUndo: noop }));
+  assert.match(before, /<p[^>]*aria-live="polite"[^>]*><\/p>/);
+  assert.match(before, /<div[^>]*tabindex="-1"[^>]*data-approval-id="a1"/i);
 });
 
 test("a refused undo shows its words", () => {
@@ -179,4 +194,60 @@ test("undo all never marks a row the service did not undo, and the bar counts th
   const by = Object.fromEntries(useAppliedWrites.getState().rows.map((r) => [r.approvalId, r]));
   assert.ok(by.a1.undoneAt && by.c1.undoneAt);
   assert.equal(by.a2.undoneAt, null);
+});
+
+const fromRun = () => ({ ...view(), runId: "r1", turnId: "t1", undoneAt: null });
+
+test("a list read while a local undo lands never reverts it (M3)", async () => {
+  reset();
+  useAppliedWrites.getState().add({ ...EVENT }, { messageId: "m1", runId: "r1" });
+  setAiTransport(async (_url, init) => (init?.method === "POST" ? Response.json({ ok: true }) : Response.json({ items: [fromRun()] })));
+  await useAppliedWrites.getState().undo("a1");
+  await useAppliedWrites.getState().load("srv-1");
+  assert.ok(useAppliedWrites.getState().rows[0].undoneAt, "a stale list keeps the local undo");
+});
+
+test("a turn undo with no report leaves an undone row alone (M4)", async () => {
+  reset();
+  useAppliedWrites.setState({ rows: [turnRow("a1", { undoneAt: "2026-11-23T00:00:00.000Z" }), turnRow("a2")] });
+  setAiTransport(async () => Response.json({ error: "boom" }, { status: 500 }));
+  await useAppliedWrites.getState().undoTurn("r1");
+  const by = Object.fromEntries(useAppliedWrites.getState().rows.map((r) => [r.approvalId, r]));
+  assert.equal(by.a1.error, "", "an undone row gets no failure");
+  assert.equal(by.a1.busy, false);
+  assert.ok(by.a2.error);
+});
+
+test("the turn bar shows an error of any row of the turn, not only an open one (M5)", () => {
+  const rows = [turnRow("a1"), turnRow("a2"), turnRow("a3"), turnRow("c1", { messageId: "m2", runId: "r2", undoable: false, error: "Not undone: the page changed since." })];
+  Object.assign(useAppliedWrites.getInitialState(), { rows });
+  try {
+    const out = withFlag(true, () => html(React.createElement(AppliedWrites, { messageId: "m1", runId: "r1" })));
+    assert.match(out, /data-testid="chat-turn-undo".*role="alert"[^>]*>Not undone: the page changed since\./);
+  } finally {
+    Object.assign(useAppliedWrites.getInitialState(), { rows: [] });
+  }
+});
+
+test("an undone add_blocks reads its page again, once per page for a turn (I1)", async () => {
+  reset();
+  const reads: string[] = [];
+  const original = usePageStore.getState().fetchPageContent;
+  usePageStore.setState({ fetchPageContent: async (pageId: string, jwt: string) => { reads.push(`${pageId}:${jwt}`); } });
+  Object.assign(globalThis, { __playgroundUserStore: { getState: () => ({ activePageJwt: () => "jwt-1" }) } });
+  try {
+    useAppliedWrites.setState({ rows: [turnRow("a1"), turnRow("a2"), turnRow("a3", { tool: "rename_page", target: "p2" })] });
+    setAiTransport(async (url) =>
+      String(url).endsWith("/undo")
+        ? Response.json({ ok: true })
+        : Response.json({ ok: true, results: ["a2", "a3"].map((approvalId) => ({ approvalId, ok: true })) }),
+    );
+    await useAppliedWrites.getState().undo("a1");
+    assert.deepEqual(reads, ["p1:jwt-1"]);
+    await useAppliedWrites.getState().undoTurn("r1");
+    assert.deepEqual(reads, ["p1:jwt-1", "p1:jwt-1"], "one read for the page, none for a rename");
+  } finally {
+    usePageStore.setState({ fetchPageContent: original });
+    delete (globalThis as { __playgroundUserStore?: unknown }).__playgroundUserStore;
+  }
 });

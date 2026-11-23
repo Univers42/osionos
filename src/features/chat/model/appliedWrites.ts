@@ -13,6 +13,8 @@ import { create } from "zustand";
 import { requestJson } from "@/features/ai/api/aiClient";
 import { AiError } from "@/features/ai/api/aiContract";
 
+import { reloadWrittenPage } from "./reloadWrittenPage";
+
 export interface AppliedWriteView {
   approvalId: string;
   tool: string;
@@ -35,7 +37,7 @@ export interface AppliedRow extends AppliedWriteView {
   error: string;
 }
 
-export const UNDO_WINDOW_DAYS = 7;
+const UNDO_WINDOW_DAYS = 7;
 const DAY_MS = 86_400_000;
 
 const ERRORS: Record<string, string> = {
@@ -79,56 +81,87 @@ interface AppliedState {
   load(serverConversationId: string): Promise<void>;
 }
 
+type SetState = (fn: (s: AppliedState) => Partial<AppliedState>) => void;
+type GetState = () => AppliedState;
+
 const codeOf = (cause: unknown): string => (cause instanceof AiError ? cause.code : "failed");
 
-export const useAppliedWrites = create<AppliedState>((set, get) => {
-  const patch = (match: (row: AppliedRow) => boolean, change: Partial<AppliedRow>) =>
-    set((s) => ({ rows: s.rows.map((row) => (match(row) ? { ...row, ...change } : row)) }));
-  return {
-    rows: [],
-    add(data, where) {
-      const view = appliedFromEvent(data);
-      if (!view || get().rows.some((row) => row.approvalId === view.approvalId)) return;
-      set((s) => ({ rows: [...s.rows, { ...view, ...where, turnId: "", undoable: data.undoable !== false, busy: false, error: "" }] }));
-    },
-    async undo(approvalId) {
-      patch((r) => r.approvalId === approvalId, { busy: true, error: "" });
-      try {
-        await requestJson("POST", `/approvals/${encodeURIComponent(approvalId)}/undo`);
-        patch((r) => r.approvalId === approvalId, { busy: false, undoneAt: new Date().toISOString() });
-      } catch (cause) {
-        patch((r) => r.approvalId === approvalId, { busy: false, error: undoErrorText(codeOf(cause)) });
-      }
-    },
-    async undoTurn(runId, serverConversationId) {
-      const turn = get().rows.find((r) => r.runId === runId)?.turnId ?? "";
-      const inTurn = (r: AppliedRow) => r.runId === runId || (turn !== "" && r.turnId === turn);
-      patch(inTurn, { busy: true, error: "" });
-      let results: TurnResult[] = [];
-      let failure = "";
-      try {
-        results = resultsOf(await requestJson("POST", `/runs/${encodeURIComponent(runId)}/undo-writes`));
-      } catch (cause) {
-        results = cause instanceof AiError ? resultsOf(cause.body) : [];
-        failure = results.length > 0 ? "" : undoErrorText(codeOf(cause));
-      }
-      settle(set, inTurn, results, failure);
-      // Continuations of the turn and the true undone times come from the list.
-      if (serverConversationId) await get().load(serverConversationId);
-    },
-    async load(serverConversationId) {
-      try {
-        const body = await requestJson<{ items?: Array<Record<string, unknown>> }>(
-          "GET",
-          `/conversations/${encodeURIComponent(serverConversationId)}/applied`,
-        );
-        for (const item of body.items ?? []) merge(set, item);
-      } catch {
-        // Off, or not the owner: no rows is the honest answer.
-      }
-    },
-  };
-});
+const patchRows = (set: SetState, match: (row: AppliedRow) => boolean, change: Partial<AppliedRow>) =>
+  set((s) => ({ rows: s.rows.map((row) => (match(row) ? { ...row, ...change } : row)) }));
+
+function addRow(set: SetState, get: GetState, data: Record<string, unknown>, where: { messageId: string; runId: string }): void {
+  const view = appliedFromEvent(data);
+  if (!view || get().rows.some((row) => row.approvalId === view.approvalId)) return;
+  set((s) => ({ rows: [...s.rows, { ...view, ...where, turnId: "", undoable: data.undoable !== false, busy: false, error: "" }] }));
+}
+
+/**
+ * One row's Undo. An undone add_blocks reads its page again, as an applied one does (I1).
+ * Caveat (M14): an undone rename_page or create_page leaves the sidebar's title or page
+ * list as it was until the tree is read again; only the open page's content is reloaded.
+ */
+async function undoOne(set: SetState, get: GetState, approvalId: string): Promise<void> {
+  const mine = (r: AppliedRow) => r.approvalId === approvalId;
+  patchRows(set, mine, { busy: true, error: "" });
+  try {
+    await requestJson("POST", `/approvals/${encodeURIComponent(approvalId)}/undo`);
+    patchRows(set, mine, { busy: false, undoneAt: new Date().toISOString() });
+    reloadUndone(get().rows, [approvalId]);
+  } catch (cause) {
+    patchRows(set, mine, { busy: false, error: undoErrorText(codeOf(cause)) });
+  }
+}
+
+/** The service's report of a turn undo, or the words for an answer that carries none. */
+async function askTurnUndo(runId: string): Promise<{ results: TurnResult[]; failure: string }> {
+  try {
+    return { results: resultsOf(await requestJson("POST", `/runs/${encodeURIComponent(runId)}/undo-writes`)), failure: "" };
+  } catch (cause) {
+    const results = cause instanceof AiError ? resultsOf(cause.body) : [];
+    return { results, failure: results.length > 0 ? "" : undoErrorText(codeOf(cause)) };
+  }
+}
+
+/** Undo all. A row already undone is not part of it (M4): a failure never lands on it. */
+async function undoTurn(set: SetState, get: GetState, runId: string, serverConversationId?: string): Promise<void> {
+  const turn = get().rows.find((r) => r.runId === runId)?.turnId ?? "";
+  const inTurn = (r: AppliedRow) => !r.undoneAt && (r.runId === runId || (turn !== "" && r.turnId === turn));
+  patchRows(set, inTurn, { busy: true, error: "" });
+  const { results, failure } = await askTurnUndo(runId);
+  settle(set, inTurn, results, failure);
+  reloadUndone(get().rows, results.filter((r) => r.ok).map((r) => r.approvalId));
+  // Continuations of the turn and the true undone times come from the list.
+  if (serverConversationId) await get().load(serverConversationId);
+}
+
+/** Reads each page the undone rows changed once (I1); `reloadWrittenPage` skips a tool that changed no content. */
+function reloadUndone(rows: AppliedRow[], undoneIds: string[]): void {
+  const read = new Set<string>();
+  for (const row of rows) {
+    if (!undoneIds.includes(row.approvalId) || read.has(row.target)) continue;
+    if (reloadWrittenPage(row.tool, row.target)) read.add(row.target);
+  }
+}
+
+async function loadRows(set: SetState, serverConversationId: string): Promise<void> {
+  try {
+    const body = await requestJson<{ items?: Array<Record<string, unknown>> }>(
+      "GET",
+      `/conversations/${encodeURIComponent(serverConversationId)}/applied`,
+    );
+    for (const item of body.items ?? []) merge(set, item);
+  } catch {
+    // Off, or not the owner: no rows is the honest answer.
+  }
+}
+
+export const useAppliedWrites = create<AppliedState>((set, get) => ({
+  rows: [],
+  add: (data, where) => addRow(set, get, data, where),
+  undo: (approvalId) => undoOne(set, get, approvalId),
+  undoTurn: (runId, serverConversationId) => undoTurn(set, get, runId, serverConversationId),
+  load: (serverConversationId) => loadRows(set, serverConversationId),
+}));
 
 interface TurnResult {
   approvalId: string;
@@ -149,7 +182,7 @@ function resultsOf(body: unknown): TurnResult[] {
  * `failure` is the words for an answer with no report at all.
  */
 function settle(
-  set: (fn: (s: AppliedState) => Partial<AppliedState>) => void,
+  set: SetState,
   inTurn: (row: AppliedRow) => boolean,
   results: TurnResult[],
   failure: string,
@@ -165,7 +198,7 @@ function settle(
   }));
 }
 
-function merge(set: (fn: (s: AppliedState) => Partial<AppliedState>) => void, item: Record<string, unknown>): void {
+function merge(set: SetState, item: Record<string, unknown>): void {
   const view = appliedFromEvent(item);
   if (!view) return;
   const row: AppliedRow = {
@@ -182,6 +215,6 @@ function merge(set: (fn: (s: AppliedState) => Partial<AppliedState>) => void, it
   set((s) => {
     const known = s.rows.find((r) => r.approvalId === row.approvalId);
     if (!known) return { rows: [...s.rows, row] };
-    return { rows: s.rows.map((r) => (r === known ? { ...r, undoneAt: row.undoneAt, undoUntil: row.undoUntil, runId: r.runId || row.runId, turnId: row.turnId, undoable: row.undoable } : r)) };
+    return { rows: s.rows.map((r) => (r === known ? { ...r, undoneAt: r.undoneAt ?? row.undoneAt, undoUntil: row.undoUntil, runId: r.runId || row.runId, turnId: row.turnId, undoable: row.undoable } : r)) };
   });
 }
