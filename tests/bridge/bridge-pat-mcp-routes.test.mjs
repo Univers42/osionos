@@ -102,7 +102,7 @@ describe('a route outside the table stays refused', () => {
 		}
 	});
 
-	it('lists exactly the six routes, each by method, path and permission', () => {
+	it('lists exactly the seven routes, each by method, path and permission', () => {
 		assert.deepEqual(routeSignatures(PAT_ROUTES), EXPECTED_ROUTES);
 	});});
 

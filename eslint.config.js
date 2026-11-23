@@ -102,6 +102,8 @@ export default [
       "src/shared/notion-database-sys/vendor/**/*",
       // Built output of hydrawn's library, vendored by scripts/vendor-hydrawn-board.sh.
       "vendor/hydrawn-board/**/*",
+      // esbuild output of src/entities/block/model/markdownImport.ts (osionos#240); its sources are linted.
+      "scripts/bridge-markdown-engine.mjs",
       "dist",
       "build",
       "node_modules",

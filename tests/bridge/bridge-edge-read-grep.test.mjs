@@ -34,10 +34,14 @@ const SKIP = new Set(['node_modules', '.git', 'build', 'dist', 'vendor', 'test-r
  * The link STORE extracts them — in the page-links migration of the models
  * repo, and nowhere else. The editor renders a mention as a link, and the
  * export dialect strips it out of the exported text: neither of them builds a
- * store, so neither of them may decide who may read what.
+ * store, so neither of them may decide who may read what. The bridge's markdown
+ * bundle (osionos#240) is the engine's matcher again, built by esbuild and held
+ * to its source byte for byte (bridge-markdown-engine-drift.test.mjs): it turns
+ * a mention into a block for POST /api/pages/from-markdown and builds no store.
  */
 const MENTION_READERS = [
 	'packages/markdown-engine/markdown/parserInlineMatchers.ts',
+	'scripts/bridge-markdown-engine.mjs',
 	'src/features/page-export/model/inlineDialect.ts',
 ];
 

@@ -75,6 +75,16 @@ function appendReply(parsed, readMask) {
 	return kept;
 }
 
+/**
+ * A page created from markdown (osionos#240) answers id, title and blockCount: the id follows
+ * the read of `_id`, the title of `title`, and blockCount and version follow `content`.
+ */
+function markdownCreatedReply(parsed, readMask) {
+	const read = Array.isArray(readMask) ? readMask : [];
+	const follows = { id: '_id', title: 'title', blockCount: 'content', version: 'content' };
+	return Object.fromEntries(Object.entries(follows).filter(([key, attribute]) => read.includes(attribute) && Object.hasOwn(parsed, key)).map(([key]) => [key, parsed[key]]));
+}
+
 /** The whole surface a PAT reaches: the page routes and the four the MCP server needs. */
 export const PAT_ROUTES = [
 	{ method: 'GET', path: PAGE_PATH, resource: 'pages', permission: 'read' },
@@ -83,6 +93,7 @@ export const PAT_ROUTES = [
 	{ method: 'GET', path: /^\/api\/pages\/all$/, resource: 'pages', permission: 'read', rows: true },
 	{ method: 'POST', path: /^\/api\/pages$/, resource: 'pages', permission: 'write', reply: createdReply },
 	{ method: 'POST', path: APPEND_PATH, resource: 'pages', permission: 'write', route: 'blocks-append', reply: appendReply },
+	{ method: 'POST', path: /^\/api\/pages\/from-markdown$/, resource: 'pages', permission: 'write', route: 'from-markdown', reply: markdownCreatedReply },
 ];
 
 const failure = (status, code, message) => Object.assign(new Error(message), { status, code });
@@ -94,6 +105,12 @@ function appendOutside(payload, mask) {
 	return outside.sort(byCodeUnit);
 }
 
+/** The markdown body is a write of `content`: the mask is checked as if it carried that key. */
+function markdownOutside(payload, mask) {
+	const { markdown, ...rest } = payload;
+	return attributesOutsideMask(Object.hasOwn(payload, 'markdown') ? { ...rest, content: markdown } : rest, mask);
+}
+
 /**
  * The write-set check: a payload naming an attribute outside the mask is refused whole, so a
  * client is never told a field was saved when it was not. `baseVersion` is a control field of
@@ -102,7 +119,8 @@ function appendOutside(payload, mask) {
 export function patWritePayload(payload, mask) {
 	const isObject = payload !== null && typeof payload === 'object' && !Array.isArray(payload);
 	if (!isObject) throw failure(422, 'pat_invalid_body', 'The request body must be a JSON object.');
-	const outside = mask?.route === 'blocks-append' ? appendOutside(payload, mask) : attributesOutsideMask(payload, mask).filter((key) => !CONTROL_FIELDS.has(key));
+	const outside = mask?.route === 'blocks-append' ? appendOutside(payload, mask)
+		: (mask?.route === 'from-markdown' ? markdownOutside(payload, mask) : attributesOutsideMask(payload, mask)).filter((key) => !CONTROL_FIELDS.has(key));
 	if (outside.length > 0) throw failure(403, 'pat_forbidden_attribute', `This token may not change: ${outside.join(', ')}.`);
 	return payload;
 }

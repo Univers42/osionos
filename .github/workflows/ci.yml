@@ -257,6 +257,13 @@ jobs:
           docker compose -f docker-compose.base.yml -f docker-compose.dev.yml \
             build playground
 
+      # osionos#240 M240-12: the bridge's markdown bundle drift and parity tests compare
+      # against packages/markdown-engine; an absent submodule or a stale engine commit
+      # fails here, on the runner, where git can read the submodule.
+      - name: Bridge markdown bundle pin
+        if: matrix.scope == 'root'
+        run: sh scripts/check-bridge-markdown-engine-pin.sh
+
       # Types and lint, plus the package-boundary and token guards that used to
       # run only on a developer's machine: the same gate as `npm run test:quality`.
       - name: Quality gate

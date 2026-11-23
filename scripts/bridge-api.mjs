@@ -55,6 +55,7 @@ import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSe
 // keeps importing the token helpers from here, as before the move.
 export { signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { createFromMarkdownRoute } from './bridge-pages-from-markdown.mjs';
 import { countingFetch } from './bridge-server-timing.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -4468,16 +4469,26 @@ async function replayOrConflict(error, payload, authContext, config, fetchImpl) 
 	return isReplay ? existing : null;
 }
 
-async function handlePageCreate(request, response, config, fetchImpl) {
-	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+/** Who may create a page here: workspace `create`, then the parent (one 404 for every refusal). */
+async function authorizePageCreate(request, payload, config, fetchImpl) {
 	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
 	const authContext = await requireWorkspaceAccess(request, workspaceId, 'create', config, fetchImpl);
 	const parentPageId = optionalUuid(payload.parentPageId, 'parentPageId');
 	if (parentPageId && !await canNestUnder(authContext, parentPageId, config, fetchImpl)) throw parentPageNotFound();
+	return authContext;
+}
+
+function insertPageRow(config, fetchImpl, body) {
+	return bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', { method: 'POST', body, prefer: 'return=representation' }), { workspaceId: body.workspace_id });
+}
+
+async function handlePageCreate(request, response, config, fetchImpl) {
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const authContext = await authorizePageCreate(request, payload, config, fetchImpl);
 	const body = pageCreateRowFromPayload(payload, authContext);
 	let rows;
 	try {
-		rows = await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', { method: 'POST', body, prefer: 'return=representation' }), { workspaceId });
+		rows = await insertPageRow(config, fetchImpl, body);
 	} catch (error) {
 		if (!body.id) throw error;
 		const replayed = await replayOrConflict(error, payload, authContext, config, fetchImpl);
@@ -5275,6 +5286,10 @@ async function handleWorkspaceCreate(request, response, config, fetchImpl) {
 	return true;
 }
 
+const handleFromMarkdown = createFromMarkdownRoute({
+	authorizePageCreate, rowFromPayload: pageCreateRowFromPayload, insertPage: insertPageRow, pageVersionOf, json,
+});
+
 async function handlePagesPost(url, request, response, config, fetchImpl, env = process.env) {
 	if (url.pathname === '/api/workspaces') return handleWorkspaceCreate(request, response, config, fetchImpl);
 	if (await handleMarketplacePost(url, request, response, config, fetchImpl, env)) return true;
@@ -5285,6 +5300,7 @@ async function handlePagesPost(url, request, response, config, fetchImpl, env = 
 	if (await handleRecordsPost(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/favorites') return handleFavoriteAdd(request, response, config, fetchImpl);
 	if (url.pathname === '/api/pages') return handlePageCreate(request, response, config, fetchImpl);
+	if (await handleFromMarkdown(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/auth/workspace/validate') return handleWorkspaceValidate(request, response, config, fetchImpl);
 	if (await handlePageActionCreate(url, request, response, config, fetchImpl)) return true;
 	if (await handlePageTranslate(url, request, response, config, fetchImpl)) return true;

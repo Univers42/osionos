@@ -494,4 +494,4 @@ export function createAgentHandler({ config, verifySession, fetchImpl = fetch, e
 		return streamAgent(requestDeps, session, payload, response, requestConfig);
 	};
 }
-export { toolSearchPages, toolGetPage, callerWorkspaceIds };
+export { toolSearchPages, toolGetPage, toolCreatePage, callerWorkspaceIds };

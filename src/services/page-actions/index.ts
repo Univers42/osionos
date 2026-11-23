@@ -10,9 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
 import type { Block } from "@/entities/block";
 import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
+import { markdownImportBlocks } from "@/entities/block/model/markdownImport";
 import type { PageEntry } from "@/entities/page";
 import type { PageConfig } from "@/shared/config/pageConfigStore";
 import { markdownWithMediaNote } from "@/shared/lib/media/exportMediaNote";
@@ -167,7 +167,7 @@ export async function importPageFile(file: File): Promise<ImportedPagePayload> {
 
   return {
     title: extensionIndex > 0 ? file.name.slice(0, extensionIndex) : file.name,
-    content: sanitizeLinkBlockFields(parseMarkdownToBlocks(text)),
+    content: markdownImportBlocks(text),
   };
 }
 

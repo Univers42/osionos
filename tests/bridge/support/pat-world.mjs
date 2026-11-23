@@ -42,6 +42,7 @@ export const EXPECTED_ROUTES = [
 	'GET ^\\/api\\/pages\\/all$ read',
 	'POST ^\\/api\\/pages$ write',
 	`POST ^\\/api\\/pages\\/${UUID_SOURCE}\\/blocks$ write`,
+	'POST ^\\/api\\/pages\\/from-markdown$ write',
 ];
 export const routeSignatures = (routes) => routes.map((route) => `${route.method} ${route.path.source} ${route.permission}`);
 

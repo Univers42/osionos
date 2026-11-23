@@ -137,7 +137,7 @@ describe('the route allowlist is the whole surface', () => {
 		assert.ok(reads.every((call) => call.claims === null && call.params.has('token_hash')));
 	});
 
-	it('lists exactly the six routes, each by method, path and permission', () => {
+	it('lists exactly the seven routes, each by method, path and permission', () => {
 		assert.deepEqual(routeSignatures(PAT_ROUTES), EXPECTED_ROUTES);
 	});});
 

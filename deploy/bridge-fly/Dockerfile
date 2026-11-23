@@ -54,6 +54,10 @@ COPY scripts/bridge-account-passkeys.mjs scripts/bridge-account-identities.mjs s
 # boot, so they must be in the image.
 COPY scripts/bridge-access-generation.mjs scripts/bridge-collab-auth-cache.mjs scripts/bridge-page-map-cache.mjs ./scripts/
 
+# POST /api/pages/from-markdown (osionos#240) and the editor's markdown import it runs,
+# bundled by scripts/build-bridge-markdown-engine.mjs; bridge-api.mjs imports both at boot.
+COPY scripts/bridge-pages-from-markdown.mjs scripts/bridge-markdown-engine.mjs ./scripts/
+
 ENV OSIONOS_BRIDGE_PORT=4000
 ENV HOME=/tmp
 USER node
