@@ -88,6 +88,8 @@ export interface ToolHooks {
 	 * leak guard of the web tools learns what the run read (web C356).
 	 */
 	onOutput?(toolName: string, text: string): void;
+	/** What a tool read, awaited before its result reaches the model (AM3 read-time taint). */
+	onRead?(tool: string, data: unknown): Promise<void>;
 }
 
 /**
@@ -330,6 +332,7 @@ export function readToolSet(
 						? { view: (tool as { view: (data: unknown) => ToolOutcome['view'] }).view(result.data) }
 						: {}),
 				});
+				await hooks.onRead?.(tool.name, result.data);
 				return output;
 			},
 		};

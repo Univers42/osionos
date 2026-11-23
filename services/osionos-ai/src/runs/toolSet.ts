@@ -30,6 +30,8 @@ import { dropBlockedTools } from '../context/hooks.ts';
 import type { RunHooks } from '../context/hooks.ts';
 import { listMyContextTool } from '../context/listTool.ts';
 import { keepPlanTools } from '../modes/planTools.ts';
+import { modesAllowed } from '../modes/modesConfig.ts';
+import { makeOnRead } from '../provenance/onRead.ts';
 
 /**
  * The tools of a run.
@@ -180,6 +182,8 @@ export function buildRunTools(input: {
 		onOutput: (toolName: string, text: string) => {
 			if (input.web && !toolName.startsWith('web_')) input.web.ledger.add(text);
 		},
+		// AM3: only for a caller the modes are on for; the others are 'legacy' from run start.
+		...(user && modesAllowed(config, user.userId) ? { onRead: makeOnRead(db, user, conversationId) } : {}),
 	};
 
 	const approval: ApprovalContext = {

@@ -3,6 +3,11 @@ import type { AuthUser } from '../auth.ts';
 
 /** How many ancestors the walk follows; a page deeper than this is untrusted. */
 const MAX_DEPTH = 64;
+/** The trust rule for a row someone may have edited: only the user ever wrote it. */
+export function writtenOnlyBy(userId: string, createdBy: string, updatedBy: string): boolean {
+	return createdBy === userId && updatedBy === userId;
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**

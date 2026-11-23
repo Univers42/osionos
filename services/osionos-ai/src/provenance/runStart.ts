@@ -6,7 +6,7 @@ import type { RunViewTab } from '../runs/prompt.ts';
 import type { SkillIndexEntry } from '../skills/runSkills.ts';
 import { markProvenanceTaint } from './repo.ts';
 import type { TaintReason } from './repo.ts';
-import { untrustedPageIds } from './trust.ts';
+import { untrustedPageIds, writtenOnlyBy } from './trust.ts';
 
 export interface RunStartCustomAgent {
 	scope: 'user' | 'workspace';
@@ -27,10 +27,6 @@ export interface RunStartInputs {
 	skillIndex: SkillIndexEntry[];
 	customAgent: RunStartCustomAgent | null;
 	thread: boolean;
-}
-
-function writtenOnlyBy(userId: string, createdBy: string, updatedBy: string): boolean {
-	return createdBy === userId && updatedBy === userId;
 }
 
 function agentIsForeign(agent: RunStartCustomAgent, userId: string): boolean {
@@ -110,8 +106,10 @@ async function customAgentOf(db: Pool, agentId: string | null): Promise<RunStart
 		: { scope: 'workspace', ownerId: null, createdBy: '', updatedBy: '' };
 }
 
-function logTaintFailure(error: unknown): void {
-	console.warn(JSON.stringify({ event: 'provenance_check_failed', code: (error as { code?: unknown }).code ?? (error as Error).name }));
+/** Logs a code, never a message; a null or undefined rejection has neither, so it logs 'unknown'. */
+export function logTaintFailure(error: unknown): void {
+	const code = (error as { code?: unknown } | null)?.code ?? (error as Error | null)?.name ?? 'unknown';
+	console.warn(JSON.stringify({ event: 'provenance_check_failed', code }));
 }
 
 async function checkRunStart(db: Pool, raw: RunStartRaw, user: AuthUser): Promise<TaintReason | null> {
