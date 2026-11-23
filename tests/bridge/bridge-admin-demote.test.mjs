@@ -12,6 +12,8 @@ import {
 	adminGrants, adminMembership, demoteTables, flagged, startDemoteWorld,
 } from './support/demote-world.mjs';
 import { ROLE_IDS } from './support/admin-route-world.mjs';
+import { accessTicket, accessTicketWorkspace, ticketIsCurrent } from '../../scripts/bridge-access-generation.mjs';
+import { ADMIN_WORKSPACE_ID } from '../../scripts/bridge-admin-rights.mjs';
 
 const writeIndex = (store, table, method) => store.calls.findIndex((call) => call.table === table && call.method === method);
 const LOCK = 'osb:admin-demote';
@@ -51,6 +53,13 @@ describe('POST /api/account/admin/users/:userId/demote — the happy path', () =
 		const [row] = world.store.rows(AUDIT);
 		assert.equal(row.event_type, 'admin_role_change');
 		assert.deepEqual(row.details, { targetUserId: USER_B, action: 'demote' });
+	});
+
+	it('the membership delete moves the access generations of the target and the admin workspace (D343-7c)', async (t) => {
+		const world = await startDemoteWorld(t);
+		const tickets = [accessTicket(USER_B, OTHER_WORKSPACE), accessTicketWorkspace(ADMIN_WORKSPACE_ID)];
+		assert.equal((await world.demote(USER_B)).status, 200);
+		assert.deepEqual(tickets.map(ticketIsCurrent), [false, false], 'a cached verdict read under the admin membership is dead');
 	});
 
 	it('runs idempotently for an account that holds no admin (D343-3): 200, never 500', async (t) => {
