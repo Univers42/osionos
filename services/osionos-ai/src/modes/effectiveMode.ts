@@ -31,7 +31,8 @@ interface ModeInput {
  * unscoped session all agree.
  *
  * Caveat: the row is read once; a mode changed after this read applies from the
- * next run. A failed read is not caught here: it fails the run, never widens it.
+ * next run. A failed read narrows to manual and is logged (code only): the run
+ * has already reserved budget and a row, so throwing here would strand them.
  */
 export async function effectiveMode(db: Pool, a: ModeInput): Promise<ModeSnapshot> {
 	const manual: ModeSnapshot = { mode: 'manual', anchorPageId: null, runKind: a.runKind };
@@ -39,6 +40,9 @@ export async function effectiveMode(db: Pool, a: ModeInput): Promise<ModeSnapsho
 	if (!user || !conversationId || !credential || user.scope !== undefined) return manual;
 	if (a.runKind !== 'request' && a.runKind !== 'decided') return manual;
 	if (!modesAllowed(config, user.userId)) return manual;
-	const stored = await readConversationMode(db, conversationId, user.userId);
+	const stored = await readConversationMode(db, conversationId, user.userId).catch((error: unknown) => {
+		console.warn(JSON.stringify({ event: 'mode_read_failed', code: (error as { code?: unknown }).code ?? (error as Error).name }));
+		return null;
+	});
 	return stored ? { ...stored, runKind: a.runKind } : manual;
 }

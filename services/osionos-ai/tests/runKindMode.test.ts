@@ -90,6 +90,27 @@ describe('run routes', () => {
 	});
 });
 
+describe('mode read failure', () => {
+	it('falls back to manual, completes the run and leaves no running row', async () => {
+		const id = await autoConversation('k9');
+		const original = app.db.query.bind(app.db);
+		(app.db as { query: unknown }).query = (text: unknown, ...rest: unknown[]) =>
+			typeof text === 'string' && text.includes('assist_mode')
+				? Promise.reject(Object.assign(new Error('boom'), { code: 'XX000' }))
+				: (original as (...a: unknown[]) => unknown)(text, ...rest);
+		try {
+			const snap = await effectiveMode(app.db, { user, conversationId: id, runKind: 'request', credential });
+			assert.equal(snap.mode, 'manual');
+			const res = await call('/api/ai/runs', { method: 'POST', token: tokenFor(USER_A, WORKSPACE_A), body: { runId: randomUUID(), conversationId: id, text: 'hi' } });
+			assert.equal(res.status, 200);
+		} finally {
+			(app.db as { query: unknown }).query = original;
+		}
+		const running = await app.db.query("select 1 from public.ai_runs where conversation_id = $1 and status = 'running'", [id]);
+		assert.equal(running.rowCount, 0);
+	});
+});
+
 describe('decided continuation', () => {
 	it('inherits the turn id of the run that asked', async () => {
 		const conversationId = await createConversation('k8');
