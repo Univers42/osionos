@@ -39,6 +39,17 @@ describe('sign-in writes the admin grant the identity flag implies', () => {
 		assert.equal(adminGrants(stub).length, 0);
 	});
 
+	it('an env-listed sign-in skips the post-write flag re-read; a flag-only admin sign-in makes it', async () => {
+		const reReads = (stub) => stub.log.filter((entry) => entry.name === 'osionos_bridge_identities' && entry.params.has('or')).length;
+		const env = createSigninStub({ roles });
+		assert.equal((await signIn(env, { email: 'boss@example.com' })).claims.isAdmin, true);
+		assert.equal(reReads(env), 0);
+		const dbAdmin = { provider: 'prismatica', subject: SUBJECT, email_hash: hashOf('owner@example.com'), is_admin: true, workspace_id: PRIVATE_ID };
+		const flagOnly = createSigninStub({ identities: [dbAdmin], roles });
+		assert.equal((await signIn(flagOnly)).claims.isAdmin, true);
+		assert.equal(reReads(flagOnly), 1);
+	});
+
 	it('a failing grant write never fails the sign-in', async () => {
 		const stub = createSigninStub({ roles }, { fail: (entry) => (entry.name === 'user_roles' ? new Response('down', { status: 503 }) : null) });
 		const { claims } = await signIn(stub, { email: 'boss@example.com' });

@@ -2157,12 +2157,12 @@ export async function readRefreshClaims(identity, { config, pg, fetchImpl }) {
 	return { isAdmin: stillAdmin, platformRole, memberWorkspaces };
 }
 
-/** Today's order: persist, admin flag, admin membership, member workspaces. Env admins keep it. */
+/** Today's order: persist, admin flag, admin membership, member workspaces. Only env-listed sign-ins come here. */
 async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
 	await assertAccountNotRefused(roleReader, payload.subject);
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
 	const flagged = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
-	const isAdmin = flagged && await ensureAdminRights(payload.subject, adminRightsDeps(config, fetchImpl, isEnvAdminEmail(payload, config)));
+	const isAdmin = flagged && await ensureAdminRights(payload.subject, adminRightsDeps(config, fetchImpl, true));
 	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceIdOf(payload, persisted)], config, fetchImpl);
 	// The env admin is the root of trust (ADR 0005): the flag names the admin role, so the
 	// catalogue is not read for an admin at all.
@@ -2198,7 +2198,7 @@ async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
 	// admin's read is discarded: the flag is the root of trust and names the role.
 	const platformRole = isAdmin ? 'admin' : (roleRead.status === 'fulfilled' ? roleRead.value.role : null);
 	if (isAdmin) {
-		const stillAdmin = await ensureAdminRights(payload.subject, adminRightsDeps(config, fetchImpl, isEnvAdminEmail(payload, config)));
+		const stillAdmin = await ensureAdminRights(payload.subject, adminRightsDeps(config, fetchImpl));
 		const excludeIds = [privateWorkspaceIdOf(payload, persisted)];
 		// Cleared meanwhile (#343): both first-round reads predate the demotion, so both are read again.
 		const role = stillAdmin ? 'admin' : (await readPlatformRole(roleReader, payload.subject)).role;
