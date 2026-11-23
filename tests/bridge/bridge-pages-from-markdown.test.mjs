@@ -123,6 +123,7 @@ describe('POST /api/pages/from-markdown: limits (M240-2, M240-3)', () => {
 		for (const markdown of ['é'.repeat(32_768) + 'a', 'é'.repeat(40_000)]) {
 			const over = await create({ workspaceId: IDS.team, markdown });
 			assert.equal(over.answer.status, 413, over.answer.text);
+			assert.equal(over.answer.body.code, 'markdown_too_large');
 			assert.deepEqual(over.mock.calls, []);
 		}
 	});

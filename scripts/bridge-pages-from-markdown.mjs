@@ -54,7 +54,7 @@ async function readPayload(request) {
 function requireFields(payload) {
 	const { markdown, title } = payload;
 	if (typeof markdown !== 'string') throw badRequest('markdown must be a string.');
-	if (Buffer.byteLength(markdown, 'utf8') > MARKDOWN_MAX_BYTES) throw httpError('markdown is over 64 KiB.', 413);
+	if (Buffer.byteLength(markdown, 'utf8') > MARKDOWN_MAX_BYTES) throw Object.assign(httpError('markdown is over 64 KiB.', 413), { code: 'markdown_too_large' });
 	if (title !== undefined && title !== null && typeof title !== 'string') throw badRequest('title must be a string.');
 	const storedTitle = safeText(title, Number.POSITIVE_INFINITY);
 	if (storedTitle.length > TITLE_MAX_UNITS) throw badRequest(`title is over ${TITLE_MAX_UNITS} characters.`);
