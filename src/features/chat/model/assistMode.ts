@@ -60,3 +60,20 @@ const SENTENCES: Record<ModeFailure, string> = {
 export function modeFeedback(code: ModeFailure): { error: string | null; hidden: boolean } {
   return code === "modes_not_enabled" ? { error: null, hidden: true } : { error: SENTENCES[code], hidden: false };
 }
+
+export type ModeLoad = { status: "ready"; mode: AssistMode } | { status: "failed"; hidden: boolean };
+
+/**
+ * The first read of a conversation's mode. The menu stays disabled until it is
+ * "ready", and a failed read shows an alert instead of a mode.
+ *
+ * Caveat: a failed read gives up for the life of the menu (no retry); the
+ * server may hold any mode, so showing "Manual" there would misstate it.
+ */
+export async function loadMode(conversationId: string): Promise<ModeLoad> {
+  try {
+    return { status: "ready", mode: (await getMode(conversationId)).mode };
+  } catch (cause) {
+    return { status: "failed", hidden: modeFeedback(failureOf(cause)).hidden };
+  }
+}

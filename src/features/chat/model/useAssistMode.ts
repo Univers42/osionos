@@ -2,19 +2,27 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { failureOf, getMode, modeFeedback, patchMode, type AssistMode } from "./assistMode";
+import { loadMode, modeFeedback, patchMode, type AssistMode } from "./assistMode";
 
 export function useAssistMode(conversationId: string, openPageId: string | null) {
   const [mode, setMode] = useState<AssistMode>("manual");
   const [error, setError] = useState<string | null>(null);
   const [hidden, setHidden] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let current = true;
-    getMode(conversationId).then(
-      (stored) => current && (setMode(stored.mode), setHidden(false)),
-      (cause) => current && setHidden(modeFeedback(failureOf(cause)).hidden),
-    );
+    void loadMode(conversationId).then((load) => {
+      if (!current) return;
+      if (load.status === "ready") {
+        setMode(load.mode);
+        setReady(true);
+      } else if (load.hidden) {
+        setHidden(true);
+      } else {
+        setError("The current mode could not be read");
+      }
+    });
     return () => { current = false; };
   }, [conversationId]);
 
@@ -27,5 +35,5 @@ export function useAssistMode(conversationId: string, openPageId: string | null)
     if (feedback.hidden) setHidden(true);
   }, [conversationId, openPageId]);
 
-  return { mode, error, hidden, choose };
+  return { mode, error, hidden, ready, choose };
 }

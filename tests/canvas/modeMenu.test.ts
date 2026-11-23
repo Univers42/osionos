@@ -10,8 +10,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { setAiTransport } from "@/features/ai/api/aiClient";
-import { getMode, modeFeedback, patchMode } from "@/features/chat/model/assistMode";
+import { getMode, loadMode, modeFeedback, patchMode } from "@/features/chat/model/assistMode";
 import { isFeatureFlagEnabled } from "@/shared/config/featureFlags";
+import { useChatStore } from "@/features/chat/model/useChatStore";
 import { ChatComposer } from "@/widgets/chat-shell/ui/ChatComposer";
 import { ModeMenu } from "@/widgets/chat-shell/ui/ModeMenu";
 
@@ -36,16 +37,49 @@ test("accept_edits is disabled with a hint while no page is open", () => {
   assert.doesNotMatch(open, /Open a page to use it as the anchor/);
 });
 
-test("the flag is off by default and the composer draws no menu", () => {
-  assert.equal(isFeatureFlagEnabled("osio.ai.modes"), false);
-  const html = renderToStaticMarkup(
+const composer = () =>
+  renderToStaticMarkup(
     React.createElement(ChatComposer, {
       value: "", onChange: () => undefined, onSubmit: () => undefined, onConnect: () => undefined,
       selection: { connectionId: "platform", model: "" }, onSelectionChange: () => undefined,
       chips: [], onChipsChange: () => undefined,
     }),
   );
-  assert.doesNotMatch(html, /Assistant mode/);
+
+test("the flag gates the menu: nothing when off, a disabled menu when on", () => {
+  const now = new Date().toISOString();
+  // Server rendering reads zustand's initial state, not what setState wrote.
+  Object.assign(useChatStore.getInitialState(), {
+    conversations: [{ id: "local-1", projectId: null, title: "t", serverConversationId: "srv-1", createdAt: now, updatedAt: now }],
+    activeConversationId: "local-1",
+  });
+  assert.equal(isFeatureFlagEnabled("osio.ai.modes"), false);
+  assert.doesNotMatch(composer(), /Assistant mode/);
+  // The resolver reads localStorage through `window`; node has none.
+  globalThis.localStorage.setItem("osio.ai.modes", "1");
+  Object.assign(globalThis, { window: { localStorage: globalThis.localStorage } });
+  try {
+    assert.equal(isFeatureFlagEnabled("osio.ai.modes"), true);
+    const on = composer();
+    assert.match(on, /aria-label="Assistant mode"/);
+    assert.match(on, /<select[^>]*disabled=""/);
+  } finally {
+    delete (globalThis as { window?: unknown }).window;
+    globalThis.localStorage.removeItem("osio.ai.modes");
+  }
+});
+
+test("a failed first read is not shown as Manual: the menu stays disabled", async () => {
+  setAiTransport(async () => Response.json({ error: "boom" }, { status: 500 }));
+  assert.deepEqual(await loadMode("c1"), { status: "failed", hidden: false });
+  setAiTransport(async () => Response.json({ error: "not_found" }, { status: 404 }));
+  assert.deepEqual(await loadMode("c1"), { status: "failed", hidden: true });
+  setAiTransport(async () => Response.json({ mode: "auto", anchorPageId: null }));
+  assert.deepEqual(await loadMode("c1"), { status: "ready", mode: "auto" });
+  const html = renderToStaticMarkup(
+    React.createElement(ModeMenu, { conversationId: "c1", openPageId: PAGE, value: "manual", onChange: () => undefined, disabled: true }),
+  );
+  assert.match(html, /<select[^>]*disabled=""/);
 });
 
 test("each refusal of the service becomes a code and a sentence", async () => {

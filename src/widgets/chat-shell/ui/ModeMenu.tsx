@@ -17,15 +17,18 @@ interface Props {
   openPageId: string | null;
   value: AssistMode;
   onChange(mode: AssistMode): void;
+  /** True until the stored mode is known: a guess would misstate it. */
+  disabled?: boolean;
 }
 
-export function ModeMenu({ conversationId, openPageId, value, onChange }: Props): React.JSX.Element {
+export function ModeMenu({ openPageId, value, onChange, disabled = false }: Props): React.JSX.Element {
   const noAnchor = openPageId === null;
   return (
-    <span className="inline-flex flex-col" data-conversation={conversationId}>
+    <span className="inline-flex flex-col">
       <Select
         aria-label="Assistant mode"
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value as AssistMode)}
         className="h-8 w-auto text-xs"
       >
@@ -39,11 +42,11 @@ export function ModeMenu({ conversationId, openPageId, value, onChange }: Props)
 }
 
 function LoadedModeMenu({ serverId, openPageId }: { serverId: string; openPageId: string | null }): React.JSX.Element | null {
-  const { mode, error, hidden, choose } = useAssistMode(serverId, openPageId);
+  const { mode, error, hidden, ready, choose } = useAssistMode(serverId, openPageId);
   if (hidden) return null;
   return (
     <span className="inline-flex flex-col" data-testid="ai-mode-menu">
-      <ModeMenu conversationId={serverId} openPageId={openPageId} value={mode} onChange={(next) => void choose(next)} />
+      <ModeMenu conversationId={serverId} disabled={!ready} openPageId={openPageId} value={mode} onChange={(next) => void choose(next)} />
       {error ? <span role="alert" className="px-1 text-2xs text-[var(--osio-danger)]">{error}</span> : null}
     </span>
   );
