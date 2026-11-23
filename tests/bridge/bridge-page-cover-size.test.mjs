@@ -10,9 +10,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { IDS, createPostgrestMock, harnessConfig, patch, post, send, sessionHeaders, teamWorld, withBridge } from './support/bridge-harness.mjs';
+import { pageUpdateRowFromPayload } from '../../scripts/bridge-api.mjs';
 
 const config = harnessConfig();
 const asA = sessionHeaders(config, IDS.userA, IDS.homeA);
+const asViewerB = sessionHeaders(config, IDS.userB, IDS.homeB, [IDS.team]);
 const NEW_ID = 'e2e2e2e2-1111-4111-8111-e2e2e2e2e2e2';
 const SIZED = { cover_height: 300, cover_width: 'full' };
 
@@ -88,6 +90,28 @@ describe('PATCH /api/pages/:id cover size (CS15)', () => {
 		});
 	});
 
+	it('writes the valid half of a mixed size and lists only the invalid half', async () => {
+		const mock = createPostgrestMock(sizedWorld());
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const result = await send(base, `/api/pages/${IDS.privateA}`, asA, patch({ coverHeight: 240, coverWidth: 'wide' }));
+			assert.equal(result.status, 200, result.text);
+			assert.deepEqual(result.body.ignored, ['coverWidth']);
+			assert.deepEqual([mock.page(IDS.privateA).cover_height, mock.page(IDS.privateA).cover_width], [240, 'full']);
+		});
+	});
+
+	it('refuses a viewer the same 403 for a valid and an invalid size, and writes nothing', async () => {
+		const mock = createPostgrestMock(teamWorld({ memberRole: 'viewer' }), { realWorkspaceRpc: true });
+		const before = structuredClone(mock.page(IDS.sharedA));
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const valid = await send(base, `/api/pages/${IDS.sharedA}`, asViewerB, patch({ coverHeight: 240, coverWidth: 'content' }));
+			const invalid = await send(base, `/api/pages/${IDS.sharedA}`, asViewerB, patch({ coverHeight: 700, coverWidth: 'wide' }));
+			assert.equal(valid.status, 403, valid.text);
+			assert.deepEqual([invalid.status, invalid.body], [valid.status, valid.body]);
+			assert.deepEqual(mock.page(IDS.sharedA), before);
+		});
+	});
+
 	it('leaves the size untouched when the PATCH does not name it', async () => {
 		const mock = createPostgrestMock(sizedWorld());
 		await withBridge(config, mock.fetchImpl, async (base) => {
@@ -110,8 +134,8 @@ describe('POST /api/pages cover size (CS15, insert path)', () => {
 				const result = await send(base, '/api/pages', asA, create({ [key]: value }));
 				assert.equal(result.status, 201, result.text);
 				assert.equal(mock.page(NEW_ID).title, 'Built');
-				assert.equal(mock.page(NEW_ID).cover_height ?? null, null);
-				assert.equal(mock.page(NEW_ID).cover_width ?? null, null);
+				assert.equal(Object.hasOwn(mock.page(NEW_ID), 'cover_height'), false);
+				assert.equal(Object.hasOwn(mock.page(NEW_ID), 'cover_width'), false);
 				assert.equal(hasSizeKey(result.body), false);
 			});
 		});
@@ -162,5 +186,23 @@ describe('reads answer a cover size only when the stored one is valid (item 5)',
 			assert.equal(read.status, 200, read.text);
 			assert.equal(hasSizeKey(read.body), false);
 		});
+	});
+});
+
+describe('pageUpdateRowFromPayload keeps the size rule without a filtering caller', () => {
+	for (const [key, value, column] of [['coverHeight', 700, 'cover_height'], ['coverWidth', 'wide', 'cover_width']]) {
+		it(`writes no ${column} for ${key}=${JSON.stringify(value)}`, () => {
+			const row = pageUpdateRowFromPayload({ title: 'Kept', [key]: value });
+			assert.equal(row.title, 'Kept');
+			assert.equal(row[column], undefined);
+			assert.equal(JSON.stringify(row).includes(column), false);
+		});
+	}
+
+	it('passes a valid size and a null clear through unchanged', () => {
+		assert.deepEqual(pageUpdateRowFromPayload({ coverHeight: 240, coverWidth: 'content' }).cover_height, 240);
+		assert.equal(pageUpdateRowFromPayload({ coverWidth: 'content' }).cover_width, 'content');
+		const cleared = pageUpdateRowFromPayload({ coverHeight: null, coverWidth: null });
+		assert.deepEqual([cleared.cover_height, cleared.cover_width], [null, null]);
 	});
 });

@@ -54,8 +54,8 @@ function functionBody(source, name) {
 /**
  * The payload keys the page update path reads.
  *
- * pageUpdateRowFromPayload is private to bridge-api.mjs, and that module is not this package's
- * to edit, so the list is read out of its source rather than imported. The two shapes the update
+ * The keys are read out of pageUpdateRowFromPayload's source rather than off the function:
+ * the function maps a payload, it does not name the keys it reads. The two shapes the update
  * path takes are both counted: assignPayloadValue names the payload key explicitly, and
  * templateSurface and updatedAt are read straight off the payload.
  *
