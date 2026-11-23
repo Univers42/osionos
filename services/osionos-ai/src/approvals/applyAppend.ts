@@ -74,25 +74,62 @@ async function sendOnce(call: ApplyCall, write: BridgeWrite) {
 	return bridgeWrite({ url: call.bridgeUrl, token: call.token, write, maxBodyChars: APPEND_ANSWER_MAX_CHARS });
 }
 
-export async function applyAppend(call: ApplyCall, row: ApprovalRow, write: BridgeWrite): Promise<Applied> {
+/** One row of a merged append and the write it would have sent alone. */
+export interface AppendEntry {
+	row: ApprovalRow;
+	write: BridgeWrite;
+}
+
+/** The one write of a batch: every row's blocks, in the order given, under the first row's key. */
+function mergedWrite(entries: AppendEntry[]): BridgeWrite {
+	const first = entries[0].write;
+	if (entries.length === 1) return first;
+	const blocks = entries.flatMap((entry) => entry.write.body.blocks as unknown[]);
+	return { ...first, body: { ...first.body, blocks, idempotencyKey: entries[0].row.id } };
+}
+
+async function recordAll(call: ApplyCall, entries: AppendEntry[], status: 'unknown' | 'failed', error: string, httpStatus?: number): Promise<Applied[]> {
+	await Promise.all(entries.map(({ row }) => recordOutcome(call.db, { id: row.id, status, error })));
+	return entries.map(() => ({ status, error, ...(httpStatus === undefined ? {} : { httpStatus }) }));
+}
+
+async function recordExecuted(call: ApplyCall, entries: AppendEntry[], outcome: ReturnType<typeof appendOutcome>): Promise<Applied[]> {
+	return Promise.all(
+		entries.map(async ({ row, write }): Promise<Applied> => {
+			const blocks = addedBlocksOf(write);
+			const summary = appendSummary(blocks.length, outcome, typeof write.body.afterBlockId === 'string');
+			const result = { tool: 'add_blocks' as const, pageId: String(row.args.pageId), version: outcome.version, blocks, summary };
+			const recorded = { ok: true, placed: outcome.placed, ...result };
+			await recordOutcome(call.db, { id: row.id, status: 'executed', result: recorded });
+			return { status: 'executed', result, recorded, detail: summary };
+		}),
+	);
+}
+
+/**
+ * Appends of one page and one anchor as ONE bridge call (AM6): the rows keep
+ * their own block ids and their own outcome.
+ *
+ * Caveat: the placement is read once for the whole batch, from its first
+ * block; a row after the first is reported as placed where the batch landed.
+ */
+export async function applyAppendMany(call: ApplyCall, entries: AppendEntry[]): Promise<Applied[]> {
+	const write = mergedWrite(entries);
 	let answer = await sendOnce(call, write);
 	if (answer.status === 0) answer = await sendOnce(call, write);
 	if (answer.status === 0) {
-		const error = 'the bridge did not answer: the blocks may have been added, check the page';
-		await recordOutcome(call.db, { id: row.id, status: 'unknown', error });
-		return { status: 'unknown', error };
+		return recordAll(call, entries, 'unknown', 'the bridge did not answer: the blocks may have been added, check the page');
 	}
 	if (!answer.ok) {
 		const error = refusalMessage(answer);
-		if (!holdsOutcome(call, answer.status)) await recordOutcome(call.db, { id: row.id, status: 'failed', error });
-		return { status: 'failed', error, httpStatus: answer.status };
+		const held = holdsOutcome(call, answer.status);
+		const done: Applied[] = entries.map(() => ({ status: 'failed', error, httpStatus: answer.status }));
+		if (!held) await recordAll(call, entries, 'failed', error);
+		return done;
 	}
-	const outcome = appendOutcome(write, answer.body);
-	const blocks = addedBlocksOf(write);
-	const summary = appendSummary(blocks.length, outcome, typeof write.body.afterBlockId === 'string');
-	const pageId = String(row.args.pageId);
-	const result = { tool: 'add_blocks' as const, pageId, version: outcome.version, blocks, summary };
-	const recorded = { ok: true, placed: outcome.placed, ...result };
-	await recordOutcome(call.db, { id: row.id, status: 'executed', result: recorded });
-	return { status: 'executed', result, recorded, detail: summary };
+	return recordExecuted(call, entries, appendOutcome(write, answer.body));
+}
+
+export async function applyAppend(call: ApplyCall, row: ApprovalRow, write: BridgeWrite): Promise<Applied> {
+	return (await applyAppendMany(call, [{ row, write }]))[0];
 }

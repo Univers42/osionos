@@ -24,6 +24,7 @@ const { autoVerdict } = await import('../src/approvals/autoVerdict.ts');
 const { autoDecide } = await import('../src/approvals/autoDecide.ts');
 const { makeRunCredential } = await import('../src/modes/credential.ts');
 const { makeWriteBudget, CLAIM_MARGIN_MS } = await import('../src/modes/writeBudget.ts');
+const { makeAppendCoalescer } = await import('../src/approvals/appendCoalescer.ts');
 const { makeStepCounter, checkAutoWriteRate } = await import('../src/modes/autoLimits.ts');
 const { writeConversationMode } = await import('../src/modes/mode.ts');
 const { config } = await import('../src/config.ts');
@@ -66,6 +67,7 @@ async function kit(snapshot: StoredMode = AUTO, live: StoredMode = snapshot, ove
 		credential: makeRunCredential('the-session-token', Date.now() + 3_600_000),
 		budget: makeWriteBudget({ startedAtMs: Date.now(), totalMs: 120_000, signal: new AbortController().signal }),
 		step: makeStepCounter(10),
+		coalescer: makeAppendCoalescer(),
 		reads: new Set(),
 		...over,
 	};

@@ -9,6 +9,8 @@ import type { RunCredential } from './credential.ts';
 import type { RunWriteBudget } from './writeBudget.ts';
 import { makeStepCounter } from './autoLimits.ts';
 import type { StepCounter } from './autoLimits.ts';
+import { makeAppendCoalescer } from '../approvals/appendCoalescer.ts';
+import type { AppendCoalescer } from '../approvals/appendCoalescer.ts';
 
 /**
  * Everything the decision to apply a write without a human needs, bound to one
@@ -26,6 +28,8 @@ export interface AutoGate {
 	credential: RunCredential | null;
 	budget: RunWriteBudget;
 	step: StepCounter;
+	/** Merges the appends of one page within a step into one bridge call (AM6). */
+	coalescer: AppendCoalescer;
 	/** The tool calls of the run still in flight that are not auto-decided writes. */
 	reads: Set<Promise<unknown>>;
 }
@@ -53,6 +57,8 @@ export function makeAutoGate(
 ): AutoGate | undefined {
 	const { user, auto } = input;
 	if (!config.modesEnabled || !user || !auto) return undefined;
+	const coalescer = makeAppendCoalescer();
+	auto.budget.onSettle(() => coalescer.flush());
 	return {
 		db: input.db,
 		redis: auto.redis,
@@ -65,6 +71,7 @@ export function makeAutoGate(
 		credential: auto.credential ?? null,
 		budget: auto.budget,
 		step: makeStepCounter(config.autoPerStep),
+		coalescer,
 		reads: new Set(),
 	};
 }

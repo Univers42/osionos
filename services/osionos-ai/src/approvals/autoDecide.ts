@@ -50,7 +50,10 @@ async function sendWrite(g: AutoGate, row: ApprovalRow): Promise<Applied> {
 	try {
 		const credential = g.credential;
 		if (!credential) throw new Error('no credential');
-		return await credential.use((token) => applyClaimed({ db: g.db, bridgeUrl: config.bridgeUrl ?? '', token, holdOnAuthRefusal: true }, row));
+		return await credential.use((token) => {
+			const call = { db: g.db, bridgeUrl: config.bridgeUrl ?? '', token, holdOnAuthRefusal: true };
+			return row.tool === 'add_blocks' ? g.coalescer.enqueue(row, call) : applyClaimed(call, row);
+		});
 	} catch {
 		// Past the claim a bridge call may have gone out: the row is 'unknown', never 'executing'.
 		const error = 'the write did not finish: check the page';

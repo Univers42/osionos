@@ -21,12 +21,15 @@ export interface RunWriteBudget {
 	canClaim(nowMs: number): boolean;
 	/** Not tied to the run's AbortSignal: the write settles after an abort. */
 	track<T>(write: Promise<T>): Promise<T>;
+	/** A hook that runs first in every settle: it sends what a window still holds back. */
+	onSettle(flush: () => Promise<void>): void;
 	settle(): Promise<void>;
 }
 
 export function makeWriteBudget(run: { startedAtMs: number; totalMs: number; signal: AbortSignal }): RunWriteBudget {
 	const deadlineAtMs = run.startedAtMs + run.totalMs;
 	const tracked = new Set<Promise<unknown>>();
+	const flushers: Array<() => Promise<void>> = [];
 	return {
 		deadlineAtMs,
 		aborted: () => run.signal.aborted,
@@ -37,7 +40,9 @@ export function makeWriteBudget(run: { startedAtMs: number; totalMs: number; sig
 			write.then(forget, forget);
 			return write;
 		},
+		onSettle: (flush) => void flushers.push(flush),
 		async settle() {
+			await Promise.allSettled(flushers.map((flush) => flush()));
 			while (tracked.size > 0) await Promise.allSettled([...tracked]);
 		},
 	};
