@@ -17,8 +17,14 @@ function identity(): Block {
   ]);
 }
 
+/** The profile shell below the identity row: what a profile README page starts from, since
+ *  the profile draws its identity header from the account (groot ADR 0064 PS33/PS34). */
+export function profileBodySections(): Block[] {
+  return [...featureGridSection(), ...postListSection(), ...contactSection()];
+}
+
 export function profileShell(): Block[] {
-  return [identity(), divider(), ...featureGridSection(), ...postListSection(), ...contactSection()];
+  return [identity(), divider(), ...profileBodySections()];
 }
 
 export function linkInBioShell(): Block[] {
