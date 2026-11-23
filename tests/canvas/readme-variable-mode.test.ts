@@ -97,7 +97,7 @@ test("MC-5/6: every README call site is ReadmeBlocks, and the profile widget nam
   const offenders = files.filter((f) => /renderVariableChip|resolveVariableInActivePage/.test(readFileSync(join(dir, f), "utf8")));
   assert.deepEqual(offenders, []);
   const readmeUses = files.filter((f) => /<ReadmeBlocks\b/.test(readFileSync(join(dir, f), "utf8")));
-  assert.deepEqual(readmeUses.sort(), ["ProfilePageView.tsx", "ProfileView.tsx"]);
+  assert.deepEqual(readmeUses.sort(), ["ProfileAsPage.tsx", "ProfilePageView.tsx", "ProfileView.tsx"]);
   // Owner and viewer take the same path: ReadmeBlocks has no input that tells them apart.
   const source = readFileSync(join(dir, "ReadmeBlocks.tsx"), "utf8");
   assert.match(source, /React\.FC<\{ readme: [^;]*; record: [^;]*\}>/);

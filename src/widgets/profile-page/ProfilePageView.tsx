@@ -28,6 +28,7 @@ import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { PageBlocksRenderer } from "@/widgets/page-renderer/ui/PageBlocksRenderer";
 import { useTemplateForSurface } from "@/widgets/page-renderer/model/useTemplateForSurface";
 import { ProfileFrame } from "./ProfileFrame";
+import { ProfileOrPage } from "./ProfileOrPage";
 import { ProfileView } from "./ProfileView";
 import { ProfileActions } from "./profileChrome";
 import { ReadmeBlocks } from "./ReadmeBlocks";
@@ -36,7 +37,8 @@ import { useProfile } from "./useProfile";
 
 export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
   const activeUserId = useUserStore((state) => state.activeUserId);
-  const { profile, reload } = useProfile(userId, userId === activeUserId);
+  const isOwner = userId === activeUserId;
+  const { profile, reload } = useProfile(userId, isOwner);
   const storeProfession = useProfessionStore((state) => state.profession);
   // The subject's profession is the server's when it carries one; for the member
   // viewing their own page the persisted pick covers the offline build, where
@@ -44,7 +46,7 @@ export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
   const profileProfession = (profile as { profession?: unknown } | null)?.profession;
   const subjectProfession = isProfessionId(profileProfession)
     ? profileProfession
-    : userId === activeUserId && isProfessionId(storeProfession)
+    : isOwner && isProfessionId(storeProfession)
       ? storeProfession
       : null;
   const professionBlocks = subjectProfession ? professionProfileContent(subjectProfession) : null;
@@ -55,31 +57,25 @@ export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
 
   // A member's own pick wins over the admin's global template: it is the
   // opt-in, and it is not gated on osio.profile.template.
-  if (professionBlocks) {
-    return (
-      <ProfileFrame userId={userId} profile={profile} onSaved={reload}>
-        <button
-          type="button"
-          data-testid="profession-repick"
-          onClick={() => useProfessionStore.getState().setOpen(true)}
-          className="mb-4 rounded-md border border-[var(--osio-border-default)] px-3 py-1 text-sm text-[var(--osio-fg-muted)]"
-        >
-          Change profession
-        </button>
-        <BindingProvider record={record}>
-          <PageBlocksRenderer blocks={professionBlocks} />
-        </BindingProvider>
-        <ReadmeBlocks readme={profile?.readme} record={readmeRecord} />
-      </ProfileFrame>
-    );
-  }
-
-  // Off, or no admin template yet → the built-in profile (unchanged behaviour).
-  if (!isProfileTemplateEnabled() || templateBlocks === null) {
-    return <ProfileView userId={userId} />;
-  }
-
-  return (
+  const today = professionBlocks ? (
+    <ProfileFrame userId={userId} profile={profile} onSaved={reload}>
+      <button
+        type="button"
+        data-testid="profession-repick"
+        onClick={() => useProfessionStore.getState().setOpen(true)}
+        className="mb-4 rounded-md border border-[var(--osio-border-default)] px-3 py-1 text-sm text-[var(--osio-fg-muted)]"
+      >
+        Change profession
+      </button>
+      <BindingProvider record={record}>
+        <PageBlocksRenderer blocks={professionBlocks} />
+      </BindingProvider>
+      <ReadmeBlocks readme={profile?.readme} record={readmeRecord} />
+    </ProfileFrame>
+  ) : !isProfileTemplateEnabled() || templateBlocks === null ? (
+    // Off, or no admin template yet → the built-in profile (unchanged behaviour).
+    <ProfileView userId={userId} />
+  ) : (
     <div className="h-full overflow-auto bg-[var(--osio-bg-page)] text-[var(--osio-fg-default)]">
       <div className="mx-auto max-w-3xl px-6 py-10">
         <ProfileActions userId={userId} name={profile?.name ?? ""} />
@@ -90,4 +86,7 @@ export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
       </div>
     </div>
   );
+
+  // osio.profile.page draws the README page instead; off, `today` renders as it always did.
+  return <ProfileOrPage userId={userId} profile={profile} isOwner={isOwner} onSaved={reload}>{today}</ProfileOrPage>;
 };

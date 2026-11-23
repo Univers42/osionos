@@ -24,6 +24,7 @@ import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore"
 import { usePageStore } from "@/store/usePageStore";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import type { Block } from "@/entities/block";
 import type { PageEntry } from "@/entities/page";
 import { customizeReadme, openLinkedById, pickReadmeWorkspace, type CustomizeDeps, type LinkedPage } from "./model/readmeCustomize";
 
@@ -46,7 +47,10 @@ async function saveAndSync(patch: AccountProfilePatch, version: number) {
   return outcome;
 }
 
-export function readmeDeps(jwt: string): CustomizeDeps {
+/** The blocks a new README starts with; none means an empty page. */
+export type ReadmeSeed = () => Promise<Block[]>;
+
+export function readmeDeps(jwt: string, seed?: ReadmeSeed): CustomizeDeps {
   const store = usePageStore.getState();
   const startedBy = useUserStore.getState().activeUserId;
   return {
@@ -54,11 +58,14 @@ export function readmeDeps(jwt: string): CustomizeDeps {
     loadProfile: fetchAccountProfile,
     saveProfile: saveAndSync,
     openLinked: (pageId) => openLinked(pageId, jwt),
-    createPage: (id) => store.addPage(id, "README", jwt, undefined, { surface: "page" }),
+    createPage: async (id) => {
+      const content = seed ? await seed() : [];
+      return store.addPage(id, "README", jwt, undefined, content.length > 0 ? { surface: "page", content } : { surface: "page" });
+    },
   };
 }
 
-export function useReadmeCustomize() {
+export function useReadmeCustomize(seed?: ReadmeSeed) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [gone, setGone] = useState(false);
@@ -74,13 +81,14 @@ export function useReadmeCustomize() {
     setBusy(true);
     setMessage("");
     setGone(false);
-    const result = await customizeReadme(readmeDeps(user.activePageJwt() ?? ""), workspaceId, replaceLinked);
+    const result = await customizeReadme(readmeDeps(user.activePageJwt() ?? "", seed), workspaceId, replaceLinked);
     setBusy(false);
     if (result.ok) useWorkspaceLayout.getState().openTab(pageEntryToTab(result.page));
     else {
       setMessage(result.message);
       setGone(result.linkedGone === true);
     }
+    return result.ok;
   };
 
   return { busy, message, gone, customize };
