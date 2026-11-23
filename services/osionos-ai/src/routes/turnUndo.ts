@@ -69,7 +69,12 @@ interface RowReport {
  * again resumes from there (the undone rows are not listed again).
  *
  * Caveat: the rows are read once, so a write applied while the undo runs is
- * not part of this turn's undo.
+ * not part of this turn's undo. The order is `created_at desc, id desc`: two
+ * writes in the same millisecond, or the rows of one coalesced add_blocks
+ * batch, undo in id order, which may not be the reverse of the order they were
+ * applied in. A later row resting on an earlier one then refuses as
+ * `changed_since` and the undo stops there; nothing is undone out of turn
+ * past a refusal.
  */
 export async function handleTurnUndo(ctx: RouteContext): Promise<number> {
 	if (!config.modesEnabled) return fail(ctx, 404, 'not_found');

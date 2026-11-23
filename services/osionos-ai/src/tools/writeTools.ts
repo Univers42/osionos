@@ -7,6 +7,7 @@ import { canAccessWorkspace } from '../workspaceAccess.ts';
 import { BLOCK_TYPES, CODE_LANGUAGE, TEXT_BLOCK_TYPES } from './blockTypes.ts';
 import type { ApprovalTarget } from '../approvals/types.ts';
 import type { AnyWriteTool, WriteTool, WriteToolContext } from './types.ts';
+import { blocksBytes } from './blocksBytes.ts';
 
 /**
  * The write tools of the assistant: the three writes it may ask for.
@@ -414,7 +415,7 @@ export const addBlocks: WriteTool<z.infer<typeof addBlocksArgs>> = {
 	async run(ctx, args) {
 		const page = await writablePage(ctx, args.pageId);
 		if (!page) return { ok: false, error: 'no page with that id in your workspaces' };
-		if (Buffer.byteLength(JSON.stringify(args.blocks), 'utf8') > ADD_MAX_BYTES) {
+		if (blocksBytes(args.blocks) > ADD_MAX_BYTES) {
 			return { ok: false, error: 'too much text for one change: split it into several additions' };
 		}
 		const state = await ctx.db.query<{ archived: boolean; blocks: { id: string; content: string }[] }>(

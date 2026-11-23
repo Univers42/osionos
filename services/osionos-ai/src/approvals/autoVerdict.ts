@@ -13,7 +13,9 @@ import type { ApprovalRow, CardReason, DecidedBy } from './types.ts';
 /**
  * Whether an auto mode may apply this write itself, or a human decides.
  *
- * Caveat: the checks run in a fixed order, so the card names the first failing
+ * Caveat (R1, R2): the taint and the workspace checks are the R1/R2 surface and
+ * are only as good as the provenance walk and the live workspace read they sit
+ * on. The checks run in a fixed order, so the card names the first failing
  * reason only. A tainted conversation outside the anchor shows `tainted`. The
  * last three checks spend a counter (the step, the minute, the day) even when
  * a later one refuses, so a refused write still counts against them.

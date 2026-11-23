@@ -78,9 +78,13 @@ export function makeAutoGate(
 
 /**
  * Registers every tool call that is not an auto-decidable write while it runs,
- * so a write's verdict can wait for the reads of its own step: the SDK runs the
- * calls of a step in parallel, and a read that taints the conversation must be
- * seen by the sibling write (laundering, AM3).
+ * so a write's verdict can wait for the reads of its own step. In SDK 7 a
+ * sibling read's output cannot reach a same-step write's arguments (results
+ * reach the model on the next step), so this is not a laundering block: it is a
+ * conservative consistency rule, so the verdict matches what the card would
+ * show once the step's reads have tainted the conversation (AM3). It relies on
+ * the ordering of ai@7.0.139 `executeToolsFromStream`, which starts every call
+ * of a step together.
  *
  * Caveat: the calls of a step are registered when the SDK starts them, all in
  * the same tick, before any write reaches its verdict (which awaits the

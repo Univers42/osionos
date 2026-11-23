@@ -13,6 +13,12 @@ import { readPage } from './undoBlocks.ts';
  * is released; a write that lands after the probe is then seen by a retry as
  * 'changed_since'. A timeout that applies the write later than the probe is
  * the rare direction; the row is never claimed forever without a write.
+ *
+ * The other direction is a false ok: the probe reads one field (the block ids,
+ * the title, `archived`), so a different change that happens to leave that
+ * field in the inverse's state passes, and the claim is kept over a write that
+ * did not land. The row then reads "undone" and the page differs from what the
+ * user expects.
  */
 export async function inverseLanded(
 	a: { bridgeUrl: string; sessionToken: string },

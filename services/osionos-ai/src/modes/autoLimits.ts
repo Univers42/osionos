@@ -9,7 +9,9 @@ import { checkRateLimit } from '../rateLimit.ts';
  * path spends them.
  *
  * Caveat: the daily key uses the UTC date, so a user's "day" resets at UTC
- * midnight, not at local midnight.
+ * midnight, not at local midnight. The per-minute window is a fixed bucket, so
+ * a burst across a minute boundary may reach twice the cap. A write the day cap
+ * refuses has already spent its unit, so a refused take still counts.
  */
 
 /** Its own prefix: a burst of auto writes must not spend the runs' window. */

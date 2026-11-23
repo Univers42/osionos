@@ -23,7 +23,7 @@ const { app, mock, bridge, createConversation } = await startHarness();
 const { autoVerdict } = await import('../src/approvals/autoVerdict.ts');
 const { autoDecide } = await import('../src/approvals/autoDecide.ts');
 const { makeRunCredential } = await import('../src/modes/credential.ts');
-const { makeWriteBudget, CLAIM_MARGIN_MS } = await import('../src/modes/writeBudget.ts');
+const { makeWriteBudget } = await import('../src/modes/writeBudget.ts');
 const { makeAppendCoalescer } = await import('../src/approvals/appendCoalescer.ts');
 const { makeStepCounter, checkAutoWriteRate } = await import('../src/modes/autoLimits.ts');
 const { writeConversationMode } = await import('../src/modes/mode.ts');
@@ -82,6 +82,16 @@ async function row(k: Kit, tool: string, args: Record<string, unknown>): Promise
 		[id, USER_A, WORKSPACE_A, tool, JSON.stringify(args), `ad-${id}`, k.conversationId, k.runId],
 	);
 	return inserted.rows[0];
+}
+
+/**
+ * The rate window is the wall-clock minute and the day key the UTC date: a case
+ * that fills one and then asks must not straddle a boundary, so it waits one out
+ * when fewer than 5 s remain (a minute boundary includes midnight).
+ */
+async function awayFromMinuteBoundary(): Promise<void> {
+	const left = 60_000 - (Date.now() % 60_000);
+	if (left < 5_000) await new Promise<void>((resolve) => setTimeout(resolve, left + 50));
 }
 
 const append = (pageId: string): Record<string, unknown> => ({ pageId, blocks: [{ type: 'paragraph', content: 'x' }] });
@@ -147,11 +157,13 @@ describe('autoVerdict: one card reason each, every earlier check passing', () =>
 			return [k, await row(k, 'add_blocks', append(await page()))];
 		}],
 		['rate_limited', async () => {
+			await awayFromMinuteBoundary();
 			for (let i = 0; i < config.autoPerMinute; i += 1) await checkAutoWriteRate(app.redis, USER_A);
 			const k = await kit();
 			return [k, await row(k, 'add_blocks', append(await page()))];
 		}],
 		['day_cap', async () => {
+			await awayFromMinuteBoundary();
 			const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
 			await app.redis.set(`ai:rl:auto:day:${USER_A}:${day}`, String(config.autoPerDay));
 			const k = await kit();
@@ -174,12 +186,17 @@ describe('autoVerdict: one card reason each, every earlier check passing', () =>
 	});
 
 	it('a sibling read that outlasts the run-budget margin makes the verdict refuse, not claim on a stale clock', async () => {
-		const budget = makeWriteBudget({ startedAtMs: Date.now(), totalMs: CLAIM_MARGIN_MS + 300, signal: new AbortController().signal });
+		// The budget's clock is anchored on the call, not on the wall clock of the
+		// case: 300 ms of room, a read of 600 ms, so the result does not depend on
+		// how long the setup took.
+		const calledAt = Date.now();
+		const real = makeWriteBudget({ startedAtMs: calledAt, totalMs: 120_000, signal: new AbortController().signal });
+		const budget = { ...real, canClaim: (nowMs: number) => nowMs - calledAt < 300 };
 		const k = await kit(AUTO, AUTO, { budget });
 		const r = await row(k, 'add_blocks', append(await page()));
-		assert.equal(budget.canClaim(Date.now()), true, 'room at the start');
+		assert.equal(budget.canClaim(calledAt), true, 'room at the start');
 		k.gate.reads.add(new Promise<void>((resolve) => setTimeout(resolve, 600)));
-		const verdict = await autoVerdict(k.gate, r, Date.now());
+		const verdict = await autoVerdict(k.gate, r, calledAt);
 		assert.deepEqual(verdict, { kind: 'card', reason: 'budget_low' });
 	});
 

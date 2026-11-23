@@ -23,6 +23,7 @@ import { createResearchSession } from '../research/session.ts';
 import type { ResearchSession } from '../research/session.ts';
 import { buildRunTools } from './toolSet.ts';
 import { withPlanBlock } from './planPrompt.ts';
+import { stepStartHook } from './stepStart.ts';
 import { mcpToolChars } from '../mcpClient/runTools.ts';
 import { config } from '../config.ts';
 import { readWebTaint } from '../web/settings.ts';
@@ -278,10 +279,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 					await emit('reasoning.delta', { text: delta });
 				},
 				...(research ? research.hooks : {}),
-				onStepStart: async (step) => {
-					runTools.onStepStart?.();
-					await research?.hooks.onStepStart?.(step);
-				},
+				...stepStartHook(runTools.onStepStart, research?.hooks.onStepStart),
 			});
 			// Held-back text goes out before the run ends, or fails over.
 			await research?.flush();

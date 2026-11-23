@@ -11,8 +11,12 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { after, describe, it } from 'node:test';
-import { startHarness, USER_A, WORKSPACE_A } from './harness.ts';
 import { SseStream, collect } from './sse.ts';
+
+// Unset before the service loads, so a flag set in the caller's environment cannot make this pass without testing the flag-off path.
+delete process.env.OSIONOS_AI_MODES;
+delete process.env.OSIONOS_AI_MODES_USERS;
+const { startHarness, USER_A, WORKSPACE_A } = await import('./harness.ts');
 
 const FIXTURE = new URL('./fixtures/autoFlagOff.json', import.meta.url);
 const { app, mock, bridge, postRun, tokenFor, createConversation } = await startHarness();

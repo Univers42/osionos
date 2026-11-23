@@ -96,14 +96,19 @@ async function cardOf(
 		agent: approval.agent ?? null,
 		...(cardReason ? { cardReason } : {}),
 	};
-	// C286 / web C359: a write asked after MCP output or web content
-	// entered the conversation says so on its card. Both flags off, or
-	// nothing read: no key at all (C291, C375).
-	if (config.mcpClientEnabled || config.webEnabled) {
-		const tainted = await influencedBy(ctx.db, approval.conversationId);
-		if (tainted.length > 0) asked.influencedBy = tainted;
-	}
-	return asked;
+	const influenced = await influenceOf(ctx, approval);
+	return influenced ? { ...asked, influencedBy: influenced } : asked;
+}
+
+/**
+ * C286 / web C359: a write asked after MCP output or web content entered the
+ * conversation says so on its card. Both flags off, or nothing read: no key at
+ * all (C291, C375).
+ */
+async function influenceOf(ctx: WriteToolContext, approval: ApprovalContext): Promise<Awaited<ReturnType<typeof influencedBy>> | null> {
+	if (!config.mcpClientEnabled && !config.webEnabled) return null;
+	const tainted = await influencedBy(ctx.db, approval.conversationId);
+	return tainted.length > 0 ? tainted : null;
 }
 
 /** What the model reads when an auto mode applied the write or refused it; null when a card is the answer. */

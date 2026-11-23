@@ -56,6 +56,11 @@ async function planRename(a: UndoApplied, recorded: Extract<AppliedResult, { too
 /**
  * The most descendant levels the child check looks at. Deeper than this the
  * undo refuses: a tree that deep is not one the AI built in a turn.
+ *
+ * Caveat: the walk stops at this depth and reaching it counts as a live child,
+ * so a very deep tree and a parent cycle both refuse the undo
+ * (`changed_since`), whatever sits below the bound. Over-refusing, never
+ * over-archiving.
  */
 const DESCENDANT_DEPTH_MAX = 32;
 
@@ -144,7 +149,13 @@ function precheck(approval: ApprovalRow): UndoResult | null {
 	return null;
 }
 
-/** Writes the planned inverse under the claim; a write that does not land gives the claim back. */
+/**
+ * Writes the planned inverse under the claim; a write that does not land gives the claim back.
+ *
+ * Caveat: a crash between the claim and the release (or the bridge write)
+ * leaves `undoneAt` set over a page that was never changed. The row then reads
+ * "already undone" and cannot be retried; the user undoes it by hand.
+ */
 async function writeClaimed(a: UndoApplied, write: BridgeWrite): Promise<UndoResult> {
 	if (!(await claimUndo(a.db, a.approval.id, a.approval.owner_id))) return { ok: false, code: 'already_undone' };
 	const answer = await bridgeWrite({ url: a.bridgeUrl, token: a.sessionToken, write });

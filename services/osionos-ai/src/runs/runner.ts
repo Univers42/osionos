@@ -8,6 +8,7 @@ import { appendUserTurn, deleteMessagesFromRun, hasMessagesOfRun, touchConversat
 import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
+import { refuseRun } from './refuseRun.ts';
 import { effectiveMode, type RunKind } from '../modes/effectiveMode.ts';
 import type { RunCredential } from '../modes/credential.ts';
 import { createRunTimer } from './runTiming.ts';
@@ -455,9 +456,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		text,
 	});
 	if (!userMessage) {
-		await settleTarget(db, target, { userId: ownerId, day, reserved: amount, actual: 0 });
-		await markRun(db, runId, 'failed', 'not_found');
-		return { kind: 'refused', status: 404, code: 'not_found' };
+		return refuseRun(db, target, { userId: ownerId, day, reserved: amount, actual: 0 }, { runId, status: 404, code: 'not_found' });
 	}
 	await touchConversation(db, conversationId);
 
@@ -469,9 +468,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		skillIndex: skillIndex.entries, customAgentId: isCustomAgent(agent) ? agent.id : null, thread: input.thread !== undefined,
 	}).then(() => true, () => false);
 	if (!marked) {
-		await settleTarget(db, target, { userId: ownerId, day, reserved: amount, actual: 0 });
-		await markRun(db, runId, 'failed', 'provenance_unavailable');
-		return { kind: 'refused', status: 503, code: 'provenance_unavailable' };
+		return refuseRun(db, target, { userId: ownerId, day, reserved: amount, actual: 0 }, { runId, status: 503, code: 'provenance_unavailable' });
 	}
 	const execute = async (): Promise<void> => {
 		await runUpstream({

@@ -41,6 +41,9 @@ export function makeWriteBudget(run: { startedAtMs: number; totalMs: number; sig
 			return write;
 		},
 		onSettle: (flush) => void flushers.push(flush),
+		// Caveat: settle has no timeout of its own. It waits for every tracked write,
+		// so a write whose bridge call hangs holds the run open until that call's own
+		// BRIDGE_TIMEOUT_MS fires; the run's bound is that per-call timeout.
 		async settle() {
 			await Promise.allSettled(flushers.map((flush) => flush()));
 			while (tracked.size > 0) await Promise.allSettled([...tracked]);

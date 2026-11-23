@@ -1,7 +1,13 @@
 import type { Pool } from 'pg';
 import type { AuthUser } from '../auth.ts';
 
-/** How many ancestors the walk follows; a page deeper than this is untrusted. */
+/**
+ * How many ancestors the walk follows; a page deeper than this is untrusted.
+ *
+ * Caveat (R1, R2): a legitimate page nested deeper than 64 levels is treated as
+ * untrusted, so it taints and cards. That over-taints (the safe direction); it
+ * never trusts a page it could not verify.
+ */
 const MAX_DEPTH = 64;
 /** The trust rule for a row someone may have edited: only the user ever wrote it. */
 export function writtenOnlyBy(userId: string, createdBy: string, updatedBy: string): boolean {

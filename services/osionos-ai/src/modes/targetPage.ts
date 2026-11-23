@@ -16,8 +16,9 @@ const ARG_BY_TOOL: Record<string, { key: string; kind: WriteTarget['kind'] }> = 
 
 /**
  * The page an auto mode must place in the workspace and the anchor subtree.
- * A create_page without a parent (a root page) has no target: the caller cards
- * it as no_anchor.
+ * A create_page without a parent (a root page) has no target: accept_edits cards
+ * it as no_anchor, and auto as outside_workspace (autoVerdict.inWorkspace runs
+ * first and names it). Either way an auto mode never applies a root create_page.
  *
  * Caveat: only add_blocks, rename_page and create_page are known. Any other
  * tool, or args that do not carry a uuid, give null, which over-cards (fail
