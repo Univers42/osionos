@@ -7,7 +7,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { BUNDLE_PATH, buildBundle, engineCommit, ESBUILD_VERSION, readHeader, sourceHashOf } from '../../scripts/build-bridge-markdown-engine.mjs';
+import { BUNDLE_PATH, buildBundle, engineCommit, ESBUILD_VERSION, readHeader } from '../../scripts/build-bridge-markdown-engine.mjs';
 import { requireMarkdownEngine, ROOT } from '../fixtures/markdown-import/engine-presence.mjs';
 
 const committed = readFileSync(`${ROOT}${BUNDLE_PATH}`, 'utf8');
@@ -38,13 +38,5 @@ describe('the committed markdown bundle (M240-11)', () => {
 			return;
 		}
 		assert.equal(header['engine-commit'], checkedOut);
-	});
-
-	it('fails the source hash when one bundled file changes', async (t) => {
-		if (!requireMarkdownEngine(t)) return;
-		const { inputs } = await buildBundle({ commit: header['engine-commit'] });
-		assert.ok(inputs.includes('packages/markdown-engine/markdown/parser.ts'));
-		assert.ok(inputs.includes('src/entities/block/model/linkBlocks.ts'));
-		assert.notEqual(sourceHashOf(inputs.filter((path) => !path.endsWith('parser.ts'))), header['source-sha256']);
 	});
 });

@@ -45,7 +45,7 @@ export function engineCommit(env = process.env) {
 }
 
 /** sha256 over every bundled source, by repo-relative path in code-unit order: the content the bundle was built from. */
-export function sourceHashOf(inputPaths) {
+function sourceHashOf(inputPaths) {
 	const hash = createHash('sha256');
 	for (const path of [...inputPaths].sort()) hash.update(`${path}\0`).update(readFileSync(`${ROOT}${path}`)).update('\0');
 	return hash.digest('hex');

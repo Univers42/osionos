@@ -96,4 +96,9 @@ pages store one whole file as a single `code` block.
 `PATCH /api/pages/:id` with `baseVersion` answers `409 version_conflict` when the
 page moved on since you read it: read again, then retry.
 
-There is no server-side Markdown conversion yet.
+`POST /api/pages/from-markdown` with `{ workspaceId, markdown, title?, parentPageId? }`
+creates one private page owned by the caller, converted by the editor's own Markdown
+import, and answers `201 { id, title, blockCount }`. Markdown over 64 KiB (UTF-8) answers
+`413 markdown_too_large`, a title over 200 characters `400`, and more than 20 requests in a
+burst `429` with `Retry-After`. It is not idempotent: a retry after a lost response creates
+a second page.
