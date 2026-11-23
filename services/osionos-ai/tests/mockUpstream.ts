@@ -57,6 +57,10 @@ export interface MockOptions extends StreamOptions {
 	 * ledger reads the usage of every step.
 	 */
 	usageOnFirstStepOnly: boolean;
+	/** One tool call per step, in order, then text; setting it restarts the script. */
+	toolCallScript: NonNullable<MockOptions['toolCall']>[] | null;
+	/** Awaited before the answer of every step (1-based, since the script began): a test acts between two steps. */
+	beforeStep: ((step: number) => Promise<void>) | null;
 }
 
 const DEFAULT_OPTIONS: MockOptions = {
@@ -77,6 +81,8 @@ const DEFAULT_OPTIONS: MockOptions = {
 	toolCallEveryStep: false,
 	parallelToolCalls: 1,
 	usageOnFirstStepOnly: false,
+	toolCallScript: null,
+	beforeStep: null,
 };
 
 export interface MockUpstream {
@@ -137,17 +143,11 @@ export function askedForNoTool(body: unknown): boolean {
 /** The mock upstream, on a random port of the loopback. */
 export async function startMockUpstream(initial?: Partial<MockOptions>): Promise<MockUpstream> {
 	let options: MockOptions = { ...DEFAULT_OPTIONS, ...initial };
-	// The tool call that is waiting for its answer: it is asked for once, and
-	// the answer after it is the text.
+	// The tool call waiting for its answer: asked once, the answer after it is text.
 	let pendingToolCall: MockOptions['toolCall'] = null;
-	let calls = 0;
-	const texts: string[] = [];
-	const bodies: unknown[] = [];
-	const authorizations: string[] = [];
-	let aborted = 0;
-	let modelsCalls = 0;
-	let authCalls = 0;
-	const authBodies: unknown[] = [];
+	let scriptStep = 0;
+	let calls = 0, aborted = 0, modelsCalls = 0, authCalls = 0;
+	const texts: string[] = [], bodies: unknown[] = [], authorizations: string[] = [], authBodies: unknown[] = [];
 
 	const server = createServer((request, response) => {
 		const url = request.url ?? '';
@@ -196,7 +196,7 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 		calls += 1;
 		const step = calls;
 		authorizations.push(String(request.headers.authorization ?? ''));
-		void readBody(request).then((raw) => {
+		void readBody(request).then(async (raw) => {
 			let body: unknown = raw;
 			try {
 				body = JSON.parse(raw);
@@ -204,6 +204,8 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 				body = raw;
 			}
 			bodies.push(body);
+			if (options.toolCallScript) scriptStep += 1;
+			if (options.beforeStep) await options.beforeStep(scriptStep);
 			if (options.fail) {
 				response.writeHead(500, { 'content-type': 'application/json' });
 				response.end(JSON.stringify({ error: { message: 'the upstream is down' } }));
@@ -215,18 +217,14 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			// The usage of this step: the one of the test, or the default one
 			// when the test wants the expensive step alone.
 			const usage = options.usageOnFirstStepOnly && step > 1 ? null : options.usage;
-			// The tool call is answered once: the answer after it is the text.
-			// A model that calls a tool on every step keeps the loop going.
-			// The trigger arms the call: a request that does not carry it gets
-			// the text, and the call waits for the next one.
+			// A call is answered once, then text; every-step keeps the loop going.
+			// The trigger arms the call: a request without it gets text, the call waits.
 			const armed =
 				options.toolCallTrigger === null ||
 				lastUserText(body).includes(options.toolCallTrigger);
-			const toolCall = armed
-				? options.toolCallEveryStep
-					? options.toolCall
-					: pendingToolCall
-				: null;
+			const toolCall = options.toolCallScript
+				? (options.toolCallScript[scriptStep - 1] ?? null)
+				: armed ? (options.toolCallEveryStep ? options.toolCall : pendingToolCall) : null;
 			if (armed) pendingToolCall = null;
 			// A step that runs without tools is a step that answers: the
 			// model obeys the request and writes text.
@@ -286,6 +284,7 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 		},
 		setOptions(next: Partial<MockOptions>): void {
 			options = { ...options, ...next };
+			if ('toolCallScript' in next) scriptStep = 0;
 			// A tool call that is asked for waits for the next answer.
 			if (next.toolCall) pendingToolCall = next.toolCall;
 		},

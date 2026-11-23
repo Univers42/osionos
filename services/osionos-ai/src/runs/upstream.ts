@@ -223,6 +223,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			...(webTaint ? { webTaint } : {}),
 			...(input.research ? { research: true } : {}),
 			...(input.mode?.mode === 'plan' ? { planMode: true } : {}),
+			auto: { redis, ...(input.mode ? { mode: input.mode } : {}), credential: input.credential ?? null, budget: writeBudget, ...(input.turnId ? { turnId: input.turnId } : {}) },
 			emit: (type, data) => emit(type, data),
 		});
 		const tools = input.mayTrain ? webToolsOnly(runTools.tools) : runTools.tools;
@@ -277,6 +278,10 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 					await emit('reasoning.delta', { text: delta });
 				},
 				...(research ? research.hooks : {}),
+				onStepStart: async (step) => {
+					runTools.onStepStart?.();
+					await research?.hooks.onStepStart?.(step);
+				},
 			});
 			// Held-back text goes out before the run ends, or fails over.
 			await research?.flush();

@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, describe, it } from 'node:test';
-import { startHarness, USER_A, WORKSPACE_A } from './harness.ts';
+import { SseStream, collect } from './sse.ts';
+
+process.env.OSIONOS_AI_MODES = 'on';
+process.env.OSIONOS_AI_MODES_USERS = '11111111-1111-4111-8111-111111111111';
+const { startHarness, awaitWindowRoom, USER_A, WORKSPACE_A } = await import('./harness.ts');
 
 /**
  * Auto mode's own caps (AM5, AM6): a rate bucket apart from the runs', a cap
  * per turn, per UTC day and per step.
  */
-const { app, mock, bridge } = await startHarness();
+const { app, mock, bridge, postRun, tokenFor, createConversation } = await startHarness();
 const { config } = await import('../src/config.ts');
 const { checkRunRateLimit } = await import('../src/rateLimit.ts');
 const { checkAutoWriteRate, takeDailyAuto, countAutoInTurn, makeStepCounter, AUTO_WRITE_LIMIT_PREFIX } =
@@ -36,7 +40,41 @@ describe('the auto write bucket (AM5)', () => {
 		assert.equal(AUTO_WRITE_LIMIT_PREFIX, 'ai:rl:auto');
 	});
 
-	it.todo('Task 15: 25 auto writes through the harness, then POST /runs gives 200');
+	it('25 auto writes through the harness, then POST /runs gives 200', async () => {
+		await awaitWindowRoom(20);
+		const id = randomUUID();
+		await app.db.query("insert into public.ai_conversations (id, owner_id, workspace_id, title) values ($1, $2, $3, 'c')", [id, USER_A, WORKSPACE_A]);
+		await app.db.query("update public.ai_conversations set assist_mode = 'auto' where id = $1", [id]);
+		const pages: string[] = [];
+		for (let i = 0; i < 25; i += 1) {
+			const page = randomUUID();
+			await app.db.query(
+				`insert into public.osionos_pages (id, workspace_id, owner_id, title, visibility, content) values ($1, $2, $3, 't', 'private', '[]'::jsonb)`,
+				[page, WORKSPACE_A, USER_A],
+			);
+			bridge.seedPage(page, [], 1);
+			pages.push(page);
+		}
+		const call = (page: string) => ({ name: 'add_blocks', arguments: { pageId: page, blocks: [{ type: 'paragraph', content: page }] } });
+		// 10 + 10 + 5 calls over three steps: the per-step cap is 10.
+		const chunk = (from: number, to: number) => {
+			const [first, ...rest] = pages.slice(from, to).map(call);
+			return { ...first, also: rest };
+		};
+		mock.setOptions({
+			preDelayMs: 0, chunkCount: 2, chunkGapMs: 0, fail: false, toolCall: null, toolCallTrigger: null,
+			toolCallEveryStep: false, parallelToolCalls: 1, usage: null, beforeStep: null,
+			toolCallScript: [chunk(0, 10), chunk(10, 20), chunk(20, 25)],
+		});
+		const token = tokenFor(USER_A, WORKSPACE_A);
+		const events = await collect(new SseStream(await postRun(id, randomUUID(), 'do it', undefined, token)));
+		assert.equal(events.filter((e) => e.event === 'write.applied').length, 25, 'every write applied');
+		assert.equal((await app.db.query("select count(*)::int as n from public.ai_approvals where conversation_id = $1 and decided_by = 'auto:auto' and status = 'executed'", [id])).rows[0].n, 25);
+		mock.setOptions({ toolCallScript: null });
+		const next = await postRun(await createConversation(), randomUUID(), 'hello', undefined, token);
+		assert.equal(next.status, 200);
+		await collect(new SseStream(next));
+	});
 });
 
 describe('the daily cap (AM6)', () => {

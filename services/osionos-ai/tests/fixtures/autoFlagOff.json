@@ -1,0 +1,513 @@
+{
+ "tools": [
+  {
+   "type": "function",
+   "function": {
+    "name": "search_workspace",
+    "description": "Search the pages of the workspaces the user belongs to, and get the passages that answer a question. Use it when the question is about the workspace and the pages already in the conversation do not answer it.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "query": {
+       "description": "the words to look for, as a sentence"
+      },
+      "limit": {
+       "description": "how many passages to bring back, at most 20"
+      }
+     },
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "read_page",
+    "description": "Read one page of the workspaces the user belongs to, in full. Use it after a search, to read the page a passage came from.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "pageId": {
+       "description": "the id of the page, a uuid"
+      }
+     },
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "graph_neighbors",
+    "description": "List the pages linked to a page of the user's workspaces: the pages it links to, the pages that link to it, its parent, its sub-pages, and the pages most like it. Use it to follow the links from a page you already found.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "pageId": {
+       "description": "the id of the page, a uuid"
+      },
+      "depth": {
+       "description": "how many hops to walk: 1 or 2"
+      },
+      "kinds": {
+       "description": "the kinds of neighbours to walk: link, backlink, parent, child, related"
+      },
+      "limit": {
+       "description": "how many neighbours to bring back, at most 50"
+      }
+     },
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "remember",
+    "description": "Propose a short fact, preference or convention about the user for the user to approve. Nothing is remembered until they approve it.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "text": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 300,
+       "description": "one short fact, preference or convention about the user, in one sentence"
+      }
+     },
+     "required": [
+      "text"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "open_page",
+    "description": "Open a page in the user's view: in the current tab, a new tab, or a split. Changes only what the user sees; editing stays with the write tools.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "pageId": {
+       "description": "the id of the page, a uuid"
+      },
+      "target": {
+       "description": "where to open it: current, tab (the default) or split"
+      }
+     },
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "open_panel",
+    "description": "Open a panel in the user's view. Changes only what the user sees.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "panel": {
+       "description": "the panel: one of files, search, marketplace, agents, conversations, notifications, tasks, public, database, scm, run, problems, issues"
+      }
+     },
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "open_issue_report",
+    "description": "Open the issue report dialog, prefilled with a title and a description. The user reviews and sends it. Changes only what the user sees.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "title": {
+       "description": "a short title, at most 120 characters"
+      },
+      "description": {
+       "description": "what the user saw and expected, at most 2000 characters"
+      }
+     },
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "suggest_agent",
+    "description": "Suggest that another agent answers better: the user sees a chip and may click it. Changes nothing by itself. Built-in agents only.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "agentId": {
+       "description": "the agent: one of db-architect, doc-writer, analyst, guide"
+      },
+      "reason": {
+       "description": "why that agent fits better, at most 200 characters"
+      }
+     },
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "create_page",
+    "description": "Ask the user to create a page in one of their workspaces. Use it when the answer belongs in a page of its own.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "title": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 200
+      },
+      "workspaceId": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "parentPageId": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "content": {
+       "maxItems": 100,
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+         },
+         "type": {
+          "type": "string",
+          "enum": [
+           "paragraph",
+           "heading_1",
+           "heading_2",
+           "heading_3",
+           "heading_4",
+           "heading_5",
+           "heading_6",
+           "bulleted_list",
+           "numbered_list",
+           "to_do",
+           "toggle",
+           "image",
+           "video",
+           "audio",
+           "file",
+           "code",
+           "quote",
+           "callout",
+           "equation",
+           "layout",
+           "column_list",
+           "column",
+           "divider",
+           "table_block",
+           "database_inline",
+           "database_full_page"
+          ]
+         },
+         "content": {
+          "type": "string",
+          "maxLength": 10000
+         }
+        },
+        "required": [
+         "id",
+         "type",
+         "content"
+        ],
+        "additionalProperties": false
+       }
+      }
+     },
+     "required": [
+      "title",
+      "workspaceId"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "rename_page",
+    "description": "Ask the user to rename one of their pages. Use it when the page has the wrong name; it changes the title and nothing else.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "pageId": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "title": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 200
+      }
+     },
+     "required": [
+      "pageId",
+      "title"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "update_page_settings",
+    "description": "Ask the user to change how one of their pages displays: showProperties (the property rows under the title), showConnections (the In folder / Mentions / Related block), showOutline (table of contents), fullWidth, smallText. Name only the settings to change.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "pageId": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "settings": {
+       "type": "object",
+       "properties": {
+        "showProperties": {
+         "type": "boolean"
+        },
+        "showConnections": {
+         "type": "boolean"
+        },
+        "showOutline": {
+         "type": "boolean"
+        },
+        "fullWidth": {
+         "type": "boolean"
+        },
+        "smallText": {
+         "type": "boolean"
+        }
+       },
+       "additionalProperties": false
+      }
+     },
+     "required": [
+      "pageId",
+      "settings"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "archive_page",
+    "description": "Ask the user to archive one of their pages, and the pages under it. Use it when a page has to go out of the way; it can be restored later.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "pageId": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      }
+     },
+     "required": [
+      "pageId"
+     ],
+     "additionalProperties": false
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "add_blocks",
+    "description": "Ask the user to add text blocks to one of their existing pages: at the end, or right after a top-level block whose text starts with `after` (quote it as read_page shows it). Use it to write into a page; it never changes or removes what is already there. A diagram is a `code` block with `language: \"mermaid\"` and the mermaid source as its content.",
+    "parameters": {
+     "$schema": "http://json-schema.org/draft-07/schema#",
+     "type": "object",
+     "properties": {
+      "pageId": {
+       "type": "string",
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      },
+      "blocks": {
+       "minItems": 1,
+       "maxItems": 50,
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "type": {
+          "type": "string",
+          "enum": [
+           "paragraph",
+           "heading_1",
+           "heading_2",
+           "heading_3",
+           "heading_4",
+           "heading_5",
+           "heading_6",
+           "bulleted_list",
+           "numbered_list",
+           "to_do",
+           "toggle",
+           "code",
+           "quote",
+           "callout"
+          ]
+         },
+         "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+         },
+         "language": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9+#._-]{0,31}$"
+         }
+        },
+        "required": [
+         "type",
+         "content"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "after": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 500
+      }
+     },
+     "required": [
+      "pageId",
+      "blocks"
+     ],
+     "additionalProperties": false
+    }
+   }
+  }
+ ],
+ "events": [
+  {
+   "event": "run.started",
+   "data": {
+    "runId": "<uuid>",
+    "conversationId": "<uuid>",
+    "model": "mock-model",
+    "userMessageId": "<uuid>",
+    "skippedPageIds": [],
+    "conversationTitle": "thread",
+    "retrievedCount": 0
+   }
+  },
+  {
+   "event": "tool.called",
+   "data": {
+    "toolCallId": "call_mock_add_blocks_0",
+    "toolName": "add_blocks",
+    "input": {
+     "pageId": "<uuid>",
+     "blocks": [
+      {
+       "type": "paragraph",
+       "content": "hello"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "event": "permission.asked",
+   "data": {
+    "approvalId": "<uuid>",
+    "tool": "add_blocks",
+    "verb": "Add to a page",
+    "target": {
+     "pageId": "<uuid>",
+     "title": "The notes",
+     "workspaceId": "<uuid>",
+     "workspaceName": "Workspace A"
+    },
+    "args": {
+     "pageId": "<uuid>",
+     "blocks": [
+      {
+       "type": "paragraph",
+       "content": "hello"
+      }
+     ]
+    },
+    "preview": {
+     "unit": "blocks",
+     "count": 1
+    },
+    "provenance": {
+     "pageIds": []
+    },
+    "approvedInRun": 0,
+    "expiresAt": "<time>",
+    "agent": null
+   }
+  },
+  {
+   "event": "tool.result",
+   "data": {
+    "toolCallId": "call_mock_add_blocks_0",
+    "toolName": "add_blocks",
+    "ok": true
+   }
+  },
+  {
+   "event": "text.delta",
+   "data": {
+    "text": "part-0 "
+   }
+  },
+  {
+   "event": "text.delta",
+   "data": {
+    "text": "part-1 "
+   }
+  },
+  {
+   "event": "usage",
+   "data": {
+    "inputTokens": 22,
+    "outputTokens": 14,
+    "costMicroUsd": 0
+   }
+  },
+  {
+   "event": "done",
+   "data": {
+    "runId": "<uuid>",
+    "assistantMessageId": "<uuid>",
+    "finishReason": "awaiting_approval"
+   }
+  }
+ ]
+}

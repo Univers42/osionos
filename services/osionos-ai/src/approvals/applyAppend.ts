@@ -1,5 +1,5 @@
 import type { ApprovalRow } from './types.ts';
-import { bridgeWrite, refusalMessage } from './bridge.ts';
+import { bridgeWrite, holdsOutcome, refusalMessage } from './bridge.ts';
 import type { BridgeWrite } from './bridge.ts';
 import { recordOutcome } from './repo.ts';
 import { blockDigest } from './inverseData.ts';
@@ -84,7 +84,7 @@ export async function applyAppend(call: ApplyCall, row: ApprovalRow, write: Brid
 	}
 	if (!answer.ok) {
 		const error = refusalMessage(answer);
-		await recordOutcome(call.db, { id: row.id, status: 'failed', error });
+		if (!holdsOutcome(call, answer.status)) await recordOutcome(call.db, { id: row.id, status: 'failed', error });
 		return { status: 'failed', error, httpStatus: answer.status };
 	}
 	const outcome = appendOutcome(write, answer.body);

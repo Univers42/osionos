@@ -18,10 +18,14 @@ describe('auto eligibility', () => {
 		}
 	});
 
-	it('is false for every write tool outside the list', () => {
-		for (const { name } of writeTools(true)) {
-			assert.equal(isAutoEligible(name), (AUTO_ELIGIBLE as readonly string[]).includes(name), name);
-		}
+	it('the write tools are exactly these six, and only the three eligible ones are true', () => {
+		const verdicts = Object.fromEntries(writeTools(true).map(({ name }) => [name, isAutoEligible(name)]));
+		assert.deepEqual(verdicts, { add_blocks: true, rename_page: true, create_page: true, archive_page: false, update_page_settings: false, build_plan: false });
+	});
+
+	it('AUTO_ELIGIBLE is a subset of the write tool names', () => {
+		const names = new Set(writeTools(true).map(({ name }) => name));
+		for (const tool of AUTO_ELIGIBLE) assert.ok(names.has(tool), `${tool} is not a write tool`);
 	});
 
 	it('finds no never-grantable stem in any write tool name', () => {

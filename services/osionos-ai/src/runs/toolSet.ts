@@ -15,7 +15,7 @@ import { writeToolSet } from '../approvals/toolSet.ts';
 import { mcpToolSet } from '../mcpClient/propose.ts';
 import type { McpToolEntry } from '../mcpClient/runTools.ts';
 import type { Redis } from 'ioredis';
-import type { ApprovalContext, PermissionAsked } from '../approvals/types.ts';
+import type { ApprovalContext, PermissionAsked, WriteApplied } from '../approvals/types.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import type { PageContext } from './prompt.ts';
@@ -23,6 +23,7 @@ import { citationData } from './sources.ts';
 import { cardAgentOf } from '../agents/card.ts';
 import { isCustomAgent } from '../agents/config.ts';
 import type { AgentConfig } from '../agents/config.ts';
+import { keepAgentTools, keepResearchTools } from './toolNarrowing.ts';
 import { webTools } from '../web/tools.ts';
 import type { WebRun, WebTaint } from '../web/tools.ts';
 import { guardTainted } from '../web/runWeb.ts';
@@ -32,6 +33,10 @@ import { listMyContextTool } from '../context/listTool.ts';
 import { keepPlanTools } from '../modes/planTools.ts';
 import { modesAllowed } from '../modes/modesConfig.ts';
 import { makeOnRead } from '../provenance/onRead.ts';
+import { makeAutoGate, trackReads } from '../modes/autoGate.ts';
+import type { AutoRun } from '../modes/autoGate.ts';
+
+export { keepAgentTools, keepResearchTools, RESEARCH_TOOL_NAMES } from './toolNarrowing.ts';
 
 /**
  * The tools of a run.
@@ -67,6 +72,8 @@ export interface RunTools {
 	 * when the stream of the run is gone.
 	 */
 	readonly permissions: readonly PermissionAsked[];
+	/** A step of the model begins: the auto writes of a step are counted from zero. */
+	onStepStart?(): void;
 }
 
 /** The tools of a run, and what they know of it. */
@@ -128,6 +135,8 @@ export function buildRunTools(input: {
 	 */
 	research?: boolean;
 	planMode?: boolean;
+	/** What only the upstream knows of the run, for an auto mode to apply a write (AM4); absent is today's run. */
+	auto?: AutoRun;
 	/**
 	 * The user's hooks (U3): the tools they name leave the set LAST, after every
 	 * other narrowing, so no step can add one back. Unreadable: no tools at all.
@@ -173,6 +182,10 @@ export function buildRunTools(input: {
 			// the stream expires, the row does not.
 			if (outcome.skill) await recordSkillPin(db, runId, outcome.skill);
 		},
+		onApplied: async (applied: WriteApplied) => {
+			run.hadEffect = true;
+			await emit('write.applied', applied);
+		},
 		onApproval: async (asked: PermissionAsked) => {
 			run.awaitingApproval = true;
 			permissions.push(asked);
@@ -186,6 +199,9 @@ export function buildRunTools(input: {
 		...(user && modesAllowed(config, user.userId) ? { onRead: makeOnRead(db, user, conversationId) } : {}),
 	};
 
+	const auto = makeAutoGate({ db, ...(user ? { user } : {}), conversationId, runId, ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}), ...(input.auto ? { auto: input.auto } : {}) });
+	if (auto) run.onStepStart = () => auto.step.reset();
+
 	const approval: ApprovalContext = {
 		runId,
 		conversationId,
@@ -196,6 +212,7 @@ export function buildRunTools(input: {
 		provenance: () => [
 			...new Set([...pages.map((page) => page.id), ...cited.map((source) => source.pageId)]),
 		],
+		...(auto ? { auto } : {}),
 	};
 
 	const workspaceEntries = new Map(
@@ -270,34 +287,6 @@ export function buildRunTools(input: {
 	if (run.tools && input.research) run.tools = keepResearchTools(run.tools);
 	if (run.tools && input.planMode) run.tools = keepPlanTools(run.tools);
 	if (run.tools && input.hooks) run.tools = input.hooks.kind === 'patterns' ? dropBlockedTools(run.tools, input.hooks.patterns) : undefined;
+	if (run.tools && auto) run.tools = trackReads(run.tools, auto);
 	return run;
-}
-
-/** The whole tool set of a research run (C398). */
-export const RESEARCH_TOOL_NAMES: readonly string[] = ['web_search', 'web_fetch', 'search_workspace', 'read_page'];
-
-/** Filters to the four names, after every guard: nothing outside the list can survive. */
-export function keepResearchTools(tools: ToolSet): ToolSet {
-	const kept: ToolSet = {};
-	for (const name of RESEARCH_TOOL_NAMES) if (tools[name]) kept[name] = tools[name];
-	return kept;
-}
-
-/**
- * The tools an agent keeps: its own list, plus the five the runtime always
- * gives. Default-deny: a tool added to the set before this call (an MCP tool,
- * C308/C339) is stripped for every agent and kept only for no agent. A web
- * tool is stripped for every agent too, whatever its list says (C369).
- */
-export function keepAgentTools(tools: ToolSet, agent: AgentConfig | null): ToolSet {
-	if (!agent) return tools;
-	// A custom agent never keeps an MCP tool, even one its stored list names
-	// (the table's CHECK refuses it at write; this is the second lock).
-	const allowed = new Set(isCustomAgent(agent) ? agent.tools.filter((name) => !name.startsWith('mcp_')) : agent.tools);
-	const kept: ToolSet = {};
-	for (const [name, tool] of Object.entries(tools)) {
-		if (name.startsWith('web_')) continue;
-		if (allowed.has(name) || name === 'load_skill' || name === 'remember' || name === 'open_page' || name === 'open_panel' || name === 'open_issue_report' || name === 'suggest_agent') kept[name] = tool;
-	}
-	return kept;
 }

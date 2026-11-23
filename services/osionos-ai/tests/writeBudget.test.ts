@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, describe, it } from 'node:test';
-import { startHarness, USER_A, WORKSPACE_A } from './harness.ts';
+import { SseStream } from './sse.ts';
 
 /** The write budget (AM9): an auto write already sent finishes and records its outcome. */
-const { app, bridge, mock, createConversation } = await startHarness();
+process.env.OSIONOS_AI_MODES = 'on';
+process.env.OSIONOS_AI_MODES_USERS = '11111111-1111-4111-8111-111111111111';
+const { startHarness, USER_A, WORKSPACE_A } = await import('./harness.ts');
+const { app, bridge, mock, createConversation, postRun, tokenFor } = await startHarness();
 const { CLAIM_MARGIN_MS, makeWriteBudget } = await import('../src/modes/writeBudget.ts');
 const { claimApproval } = await import('../src/approvals/claim.ts');
 const { applyClaimed } = await import('../src/approvals/apply.ts');
@@ -97,7 +100,47 @@ describe('an aborted run still settles its auto writes (AM9)', () => {
 		bridge.delayMs = 0;
 	});
 
-	it('a real run aborted after its second auto write is claimed', { todo: 'Task 15: needs autoDecide wired through the run write budget' }, () => {
-		assert.fail('pending Task 15');
+	it('a real run aborted after its second auto write is claimed: every auto row ends executed or failed', async () => {
+		const id = await createConversation();
+		await app.db.query("update public.ai_conversations set assist_mode = 'auto' where id = $1", [id]);
+		const pages: string[] = [];
+		for (let i = 0; i < 2; i += 1) {
+			const page = randomUUID();
+			await app.db.query(
+				`insert into public.osionos_pages (id, workspace_id, owner_id, title, visibility, content) values ($1, $2, $3, 'P', 'private', '[]'::jsonb)`,
+				[page, WORKSPACE_A, USER_A],
+			);
+			bridge.seedPage(page, [], 1);
+			pages.push(page);
+		}
+		const write = (pageId: string) => ({ name: 'add_blocks', arguments: { pageId, blocks: [{ type: 'paragraph', content: pageId }] } });
+		const [first, second] = pages.map(write);
+		mock.setOptions({
+			preDelayMs: 0, chunkCount: 2, chunkGapMs: 0, fail: false, toolCall: null, toolCallTrigger: null,
+			toolCallEveryStep: false, parallelToolCalls: 1, usage: null, beforeStep: null,
+			toolCallScript: [{ ...first, also: [second] }],
+		});
+		bridge.delayMs = 300;
+		try {
+			const response = await postRun(id, randomUUID(), 'do it', undefined, tokenFor(USER_A, WORKSPACE_A));
+			const stream = new SseStream(response);
+			// Both writes are claimed before the first reply: drop the client once the second is seen.
+			let seen = 0;
+			for (let event = await stream.next(); event; event = await stream.next()) {
+				if (event.event === 'tool.called' && (seen += 1) === 2) break;
+			}
+			await stream.drop();
+			const deadline = Date.now() + 10_000;
+			let rows: Array<{ status: string }> = [];
+			while (Date.now() < deadline) {
+				rows = (await app.db.query("select status from public.ai_approvals where conversation_id = $1 and decided_by like 'auto:%'", [id])).rows;
+				if (rows.length === 2 && rows.every((r) => r.status !== 'executing')) break;
+				await sleep(100);
+			}
+			assert.equal(rows.length, 2, 'both writes were claimed');
+			for (const row of rows) assert.ok(['executed', 'failed'].includes(row.status), `a row is ${row.status}`);
+		} finally {
+			bridge.delayMs = 0;
+		}
 	});
 });

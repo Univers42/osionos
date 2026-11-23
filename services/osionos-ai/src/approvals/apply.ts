@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { CODE_LANGUAGE } from '../tools/blockTypes.ts';
-import { bridgeWrite, refusalMessage } from './bridge.ts';
+import { bridgeWrite, holdsOutcome, refusalMessage } from './bridge.ts';
 import type { BridgeWrite } from './bridge.ts';
 import { recordOutcome } from './repo.ts';
 import { applyAppend } from './applyAppend.ts';
@@ -22,6 +22,11 @@ export interface ApplyCall {
 	db: Pool;
 	bridgeUrl: string;
 	token: string;
+	/**
+	 * An auto claim sets it: a 401 or 403 leaves the row 'executing' (nothing was
+	 * written) so the caller can give the claim back and ask a human instead.
+	 */
+	holdOnAuthRefusal?: boolean;
 }
 
 /** The writes with nothing to undo from: they record that they landed, and the page. */
@@ -146,7 +151,7 @@ function executedOf(row: ApprovalRow, answerBody: string, previousTitle: string 
 }
 
 async function recordFailure(call: ApplyCall, row: ApprovalRow, error: string, httpStatus?: number): Promise<Applied> {
-	await recordOutcome(call.db, { id: row.id, status: 'failed', error });
+	if (!holdsOutcome(call, httpStatus)) await recordOutcome(call.db, { id: row.id, status: 'failed', error });
 	return { status: 'failed', error, ...(httpStatus === undefined ? {} : { httpStatus }) };
 }
 

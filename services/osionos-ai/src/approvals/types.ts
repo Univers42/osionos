@@ -1,5 +1,7 @@
 import type { QueryResultRow } from 'pg';
 import type { CardAgent } from '../agents/card.ts';
+import type { AutoGate } from '../modes/autoGate.ts';
+import type { ToolHooks } from '../tools/index.ts';
 
 /**
  * The approvals: a write the assistant asked for, and the human who decides
@@ -41,6 +43,44 @@ export type ApprovalStatus =
 
 /** Who decided a write: the user, or an auto mode (AM3). */
 export type DecidedBy = 'user' | 'auto:accept_edits' | 'auto:auto';
+
+/**
+ * Why a write became a card for the human instead of being applied by an auto
+ * mode (AM4): the FIRST check that failed, in the fixed order of `autoVerdict`.
+ */
+export type CardReason =
+	| 'mode_manual'
+	| 'mode_changed'
+	| 'not_allowlisted'
+	| 'tool_not_eligible'
+	| 'tainted'
+	| 'outside_anchor'
+	| 'no_anchor'
+	| 'outside_workspace'
+	| 'no_credential'
+	| 'credential_expiring'
+	| 'credential_rejected'
+	| 'turn_cap'
+	| 'day_cap'
+	| 'step_cap'
+	| 'rate_limited'
+	| 'budget_low';
+
+/** A write an auto mode applied on its own: the run tells the client with `write.applied`. */
+export interface WriteApplied {
+	approvalId: string;
+	tool: string;
+	/** The page the write touched or made; empty when the bridge named none. */
+	target: string;
+	summary: string;
+	decidedBy: DecidedBy;
+	undoable: boolean;
+}
+
+/** The hooks of the write tools: the tool hooks, and what an auto-applied write tells the run. */
+export interface WriteHooks extends ToolHooks {
+	onApplied?(applied: WriteApplied): void | Promise<void>;
+}
 
 /** The row of an approval: what the user is asked, and what became of it. */
 export interface ApprovalRow extends QueryResultRow {
@@ -144,6 +184,8 @@ export interface ApprovalContext {
 	provenance(): readonly string[];
 	/** The agent of the run, from its pin: the card names it (C304). */
 	agent?: CardAgent | null;
+	/** Present only while the modes are on: the gate through which an auto mode may apply a write itself. */
+	auto?: AutoGate;
 }
 
 /**
@@ -179,4 +221,6 @@ export interface PermissionAsked {
 	influencedBy?: string[];
 	/** The agent that asked, from the run's pin; null for the general assistant. */
 	agent: CardAgent | null;
+	/** Why this write is a card and not applied; present only while the modes are on (AM4). */
+	cardReason?: CardReason;
 }

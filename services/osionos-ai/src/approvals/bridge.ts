@@ -17,6 +17,16 @@ export const BRIDGE_TIMEOUT_MS = 8_000;
 /** How much of an answer is kept by default: a page is a lot of JSON, and a row keeps a short result. */
 export const BRIDGE_BODY_MAX_CHARS = 4_000;
 
+/** Whether the bridge refused the credential itself (401 or 403), not the write. */
+export function isAuthRefusal(status: number | undefined): boolean {
+	return status === 401 || status === 403;
+}
+
+/** Whether an auto claim withholds a refused write's outcome from the row (`ApplyCall.holdOnAuthRefusal`). */
+export function holdsOutcome(call: { holdOnAuthRefusal?: boolean }, status: number | undefined): boolean {
+	return call.holdOnAuthRefusal === true && isAuthRefusal(status);
+}
+
 /** The write the bridge is asked for: a method, a path, and a body. */
 export interface BridgeWrite {
 	method: 'POST' | 'PATCH';

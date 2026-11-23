@@ -44,14 +44,20 @@ async function drained(conversationId: string): Promise<{ events: Awaited<Return
 	return { events: await collect(new SseStream(response)) };
 }
 
+async function setAuto(conversationId: string): Promise<void> {
+	const set = await call(`/api/ai/conversations/${conversationId}/mode`, { method: 'PATCH', token: tokenFor(USER_A, WORKSPACE_A), body: { mode: 'auto' } });
+	assert.equal(set.status, 200);
+}
+
 /** Step 1: C1 reads the hostile shared page and asks add_blocks on P: a pending card. */
-async function hostileReadThenWrite(hostile: string, privateP: string): Promise<{ c1: string; approvalId: string }> {
+async function hostileReadThenWrite(hostile: string, privateP: string, auto = false): Promise<{ c1: string; approvalId: string }> {
 	await resetMock({
 		name: 'read_page',
 		arguments: { pageId: hostile },
 		also: [{ name: 'add_blocks', arguments: { pageId: privateP, blocks: [{ type: 'paragraph', content: HOSTILE_BLOCK }] } }],
 	});
 	const c1 = await createConversation();
+	if (auto) await setAuto(c1);
 	const { events } = await drained(c1);
 	const asked = events.filter((event) => event.event === 'permission.asked');
 	assert.equal(asked.length, 1, 'step 1 asked for one card');
@@ -112,5 +118,40 @@ describe('laundering sequence (taint state)', () => {
 		assert.equal(await decide(approvalId, 'approve'), 'executed');
 		assert.deepEqual(blocksOf(privateP), [HOSTILE_BLOCK]);
 		assert.equal(await reasonOf(await readPInFreshConversation(privateP)), null);
+	});
+
+	it('auto: a conversation tainted by the hostile read does not apply the write; the card says tainted', async () => {
+		const { hostile, privateP } = await setup();
+		const { c1, approvalId } = await hostileReadThenWrite(hostile, privateP, true);
+		assert.equal(await reasonOf(c1), 'shared_page');
+		const row = (await app.db.query('select status, decided_by from public.ai_approvals where id = $1', [approvalId])).rows[0];
+		assert.deepEqual(row, { status: 'pending', decided_by: null });
+		assert.deepEqual(blocksOf(privateP), []);
+		assert.equal(bridge.calls.length, 0);
+	});
+
+	it('auto: the tainted card carries cardReason tainted', async () => {
+		const { hostile, privateP } = await setup();
+		await resetMock({
+			name: 'read_page',
+			arguments: { pageId: hostile },
+			also: [{ name: 'add_blocks', arguments: { pageId: privateP, blocks: [{ type: 'paragraph', content: HOSTILE_BLOCK }] } }],
+		});
+		const c1 = await createConversation();
+		await setAuto(c1);
+		const { events } = await drained(c1);
+		const asked = events.filter((event) => event.event === 'permission.asked');
+		assert.equal((asked[0].data as { cardReason?: string }).cardReason, 'tainted');
+	});
+
+	it('contrast: a clean auto conversation applies the same write', async () => {
+		const { privateP } = await setup();
+		await resetMock({ name: 'add_blocks', arguments: { pageId: privateP, blocks: [{ type: 'paragraph', content: 'clean' }] } });
+		const c = await createConversation();
+		await setAuto(c);
+		const { events } = await drained(c);
+		assert.equal(events.filter((event) => event.event === 'permission.asked').length, 0);
+		assert.equal(await reasonOf(c), null);
+		assert.deepEqual(blocksOf(privateP), ['clean']);
 	});
 });
