@@ -50,6 +50,9 @@ function whiteboardBridge() {
     }
     if (!url.pathname.startsWith("/api/whiteboard/v1/boards")) return null;
     calls.push({ method, path: url.pathname, auth: request.headers().authorization ?? "" });
+    if (url.pathname === "/api/whiteboard/v1/boards" && method === "GET") {
+      return { json: { boards: [...boards.values()].map(({ slug, title, rev }) => ({ slug, title, rev })), nextCursor: null } };
+    }
     if (url.pathname === "/api/whiteboard/v1/boards" && method === "POST") {
       const { title, slug } = request.postDataJSON();
       // Idempotent under a sent slug, as the bridge's createOnce: the one it has, answered 200.
@@ -125,6 +128,10 @@ test("a board drawn in the page is saved through the bridge and survives a reloa
   const block = page.locator('[data-block-type="whiteboard"]');
   await expect(block.getByTestId("whiteboard-inprocess")).toBeVisible({ timeout: 20_000 });
   await expect(block.locator("iframe")).toHaveCount(0);
+  // Opening the block creates nothing: the row comes with the first save (#319).
+  await expect(block.getByTestId("whiteboard-inprocess").locator("canvas").first()).toBeVisible({ timeout: 20_000 });
+  expect(bridge.calls.filter((call) => call.method === "POST")).toEqual([]);
+  expect(bridge.boards.size).toBe(0);
 
   await drawRectangle(page);
   await expect.poll(() => live(bridge.boards.get(SLUG)).map((element) => element.type), { timeout: 15_000 }).toEqual(["rectangle"]);

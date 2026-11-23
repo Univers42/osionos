@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { createBridgeBoardApi } from "../../src/features/whiteboard/model/bridgeBoardApi.ts";
+import { createBoardLookup, createBridgeBoardApi } from "../../src/features/whiteboard/model/bridgeBoardApi.ts";
+import { readNewBoardsLocally } from "../../src/features/whiteboard/model/newBoardRead.ts";
 
 class Refusal extends Error {
   readonly status: number;
@@ -113,4 +114,45 @@ test("the in-process board's modules import no app-session getter", () => {
   assert.deepEqual(importsOf("bridgeBoardApi.ts"), ['import type { HostedBoardApi, HydrawnBoard, HydrawnBoardSummary } from "@hydrawn/board";']);
   const clientImports = importsOf("inProcessBoard.ts").filter((line) => line.includes("@/shared/api/"));
   assert.deepEqual(clientImports, ['import { API_BASE } from "@/shared/api/client";']);
+});
+
+const refusal = (status: number, code: string, message: string) => new Refusal(status, code, message);
+
+test("the lookup walks the list by its cursor and stops at the slug", async () => {
+  const pages: Record<string, unknown> = {
+    "0": { boards: [{ slug: "a" }], nextCursor: "1" },
+    "1": { boards: [{ slug: "b" }], nextCursor: null },
+  };
+  const { sent, fetchImpl } = fakeFetch((request) => json(200, pages[new URL(request.url).searchParams.get("cursor") ?? ""]));
+  const hasBoard = createBoardLookup({ baseUrl: "https://bridge.example", token: async () => "wb-token", fetchImpl, refusal });
+  assert.equal(await hasBoard("b"), true);
+  assert.equal(await hasBoard("a"), true);
+  assert.equal(await hasBoard("missing"), false);
+  assert.deepEqual(sent.map((request) => new URL(request.url).searchParams.get("cursor")), ["0", "1", "0", "0", "1"]);
+  assert.equal(sent.every((request) => request.method === "GET" && request.headers.authorization === "Bearer wb-token"), true);
+});
+
+test("a board with no row is read as a 404 made here, and nothing is created by opening it (#319)", async () => {
+  const { sent, fetchImpl } = fakeFetch(() => json(200, { slug: "newboard1234", rev: 0 }));
+  const guarded = readNewBoardsLocally(api(fetchImpl), { hasBoard: async () => false, refusal });
+  await assert.rejects(guarded.getBoard("newboard1234"), (error: Refusal) => error.status === 404 && error.code === "not_found");
+  assert.equal(sent.length, 0, "no read and no create");
+});
+
+test("after the first save creates the board, it is read from the bridge", async () => {
+  const { sent, fetchImpl } = fakeFetch(() => json(200, { slug: "newboard1234", rev: 0 }));
+  let lookups = 0;
+  const guarded = readNewBoardsLocally(api(fetchImpl), { hasBoard: async () => ((lookups += 1), false), refusal });
+  await assert.rejects(guarded.getBoard("newboard1234"));
+  await guarded.createBoard("Sprint plan", "newboard1234");
+  await guarded.getBoard("newboard1234");
+  assert.deepEqual(sent.map((request) => request.method), ["POST", "GET"]);
+  assert.equal(lookups, 1, "one lookup per slug");
+});
+
+test("an existing board, or a lookup that fails, is read from the bridge", async () => {
+  const { sent, fetchImpl } = fakeFetch(() => json(200, { slug: "abcdefgh1234", rev: 3 }));
+  await readNewBoardsLocally(api(fetchImpl), { hasBoard: async () => true, refusal }).getBoard("abcdefgh1234");
+  await readNewBoardsLocally(api(fetchImpl), { hasBoard: async () => Promise.reject(new Error("down")), refusal }).getBoard("abcdefgh1234");
+  assert.equal(sent.length, 2);
 });

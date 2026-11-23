@@ -2,7 +2,8 @@ import { BoardStoreError, boardCss, createHostedStore, mountBoard, type BoardHan
 
 import { API_BASE } from "@/shared/api/client";
 
-import { createBridgeBoardApi } from "./bridgeBoardApi";
+import { createBoardLookup, createBridgeBoardApi, type BridgeBoardApiDeps } from "./bridgeBoardApi";
+import { readNewBoardsLocally } from "./newBoardRead";
 import { whiteboardToken } from "./whiteboardToken";
 
 /**
@@ -22,11 +23,13 @@ function boardSheet(): CSSStyleSheet {
   return sheet;
 }
 
-const bridge = createBridgeBoardApi({
+const deps: BridgeBoardApiDeps = {
   baseUrl: API_BASE,
   token: async () => (await whiteboardToken())?.token ?? null,
   refusal: (status, code, message) => new BoardStoreError(status, code, message),
-});
+};
+
+const bridge = readNewBoardsLocally(createBridgeBoardApi(deps), { hasBoard: createBoardLookup(deps), refusal: deps.refusal });
 
 export interface InProcessBoardOptions {
   slug: string;
@@ -37,12 +40,6 @@ export interface InProcessBoardOptions {
 
 export async function mountInProcessBoard(shadow: ShadowRoot, { slug, title, theme }: InProcessBoardOptions): Promise<BoardHandle> {
   shadow.adoptedStyleSheets = [boardSheet()];
-  // Created before it is read: the bridge's create under a given slug is idempotent (200 for
-  // one it has), and reading a board the first save has not created yet answers 404, which
-  // the browser reports in the console. Caveat: opening a page shows the viewer's own board
-  // under that slug, so a block on someone else's page gives the viewer an empty one, counted
-  // against their 200. A failed create is left to the board, which reports what it cannot read.
-  await bridge.createBoard(title(), slug).catch(() => undefined);
   const store = createHostedStore(bridge, title);
   return mountBoard(shadow, { store, slug, title: title(), theme });
 }

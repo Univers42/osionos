@@ -25,10 +25,10 @@ async function refusalOf(response: Response, refusal: BridgeBoardApiDeps["refusa
   return refusal(response.status, code, message);
 }
 
-export function createBridgeBoardApi({ baseUrl, token, fetchImpl = fetch, refusal }: BridgeBoardApiDeps): HostedBoardApi {
+/** One request to the board routes under the whiteboard bearer; a refusal is thrown. */
+function boardCaller({ baseUrl, token, fetchImpl = fetch, refusal }: BridgeBoardApiDeps) {
   const base = baseUrl.replace(/\/+$/, "");
-
-  async function call(path: string, init: RequestInit = {}): Promise<Response> {
+  return async (path: string, init: RequestInit = {}): Promise<Response> => {
     const bearer = await token();
     if (!bearer) throw refusal(401, "unauthorized", "Sign in to open this whiteboard.");
     const headers = new Headers(init.headers);
@@ -36,7 +36,31 @@ export function createBridgeBoardApi({ baseUrl, token, fetchImpl = fetch, refusa
     const response = await fetchImpl(`${base}${BOARDS}${path}`, { ...init, headers });
     if (!response.ok) throw await refusalOf(response, refusal);
     return response;
-  }
+  };
+}
+
+/**
+ * Whether the signed-in user has a live board under `slug`, asked of the list route, which
+ * answers 200 either way: reading a missing board answers 404, and the browser reports that
+ * in the console. Caveat: it walks the list a page at a time, so it costs up to three
+ * requests for an account at the bridge's 200-board limit.
+ */
+export function createBoardLookup(deps: BridgeBoardApiDeps): (slug: string) => Promise<boolean> {
+  const call = boardCaller(deps);
+  return async (slug) => {
+    let cursor: string | null = "0";
+    while (cursor !== null) {
+      const response = await call(`?limit=100&cursor=${encodeURIComponent(cursor)}`);
+      const page = (await response.json()) as { boards?: { slug?: unknown }[]; nextCursor?: unknown };
+      if (page.boards?.some((board) => board.slug === slug)) return true;
+      cursor = typeof page.nextCursor === "string" ? page.nextCursor : null;
+    }
+    return false;
+  };
+}
+
+export function createBridgeBoardApi(deps: BridgeBoardApiDeps): HostedBoardApi {
+  const call = boardCaller(deps);
 
   const sendJson = (method: string, body: unknown, extra: Record<string, string> = {}): RequestInit => ({
     method,
