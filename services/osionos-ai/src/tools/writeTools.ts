@@ -60,7 +60,7 @@ const createPageArgs = z.object({
 });
 
 /** The most blocks one add_blocks carries. */
-const ADD_MAX_BLOCKS = 50;
+export const ADD_MAX_BLOCKS = 50;
 
 /**
  * The most bytes of blocks one add_blocks carries. The bridge's append takes

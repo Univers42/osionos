@@ -15,7 +15,8 @@ process.env.OSIONOS_AI_AUTO_PER_TURN = '3';
 
 const { startHarness, USER_A, WORKSPACE_A } = await import('./harness.ts');
 const { app, mock, bridge, call, postRun, tokenFor, createConversation } = await startHarness();
-const { COALESCE_WINDOW_MS } = await import('../src/approvals/appendCoalescer.ts');
+const { COALESCE_WINDOW_MS, makeAppendCoalescer } = await import('../src/approvals/appendCoalescer.ts');
+const { ADD_MAX_BYTES } = await import('../src/tools/writeTools.ts');
 
 after(async () => {
 	await app.close();
@@ -59,6 +60,23 @@ const appends = () => bridge.calls.filter((c) => c.method === 'POST' && /\/block
 interface Stored { id: string; status: string; result: { blocks?: Array<{ id: string }> } | null; args: { blocks: Array<{ content: string }> } }
 const rowsOf = async (conversationId: string): Promise<Stored[]> =>
 	(await app.db.query('select id, status, result, args from public.ai_approvals where conversation_id = $1 order by created_at, id', [conversationId])).rows;
+
+/** An 'executing' add_blocks row, as a claimed auto write leaves it. */
+async function claimedRow(conversationId: string, runId: string, pageId: string, blocks: unknown[]): Promise<Record<string, unknown> & { id: string }> {
+	const rowId = randomUUID();
+	await app.db.query(
+		`insert into public.ai_approvals (id, owner_id, workspace_id, tool, args, args_sha256, status, origin, conversation_id, run_id, expires_at)
+		 values ($1, $2, $3, 'add_blocks', $4::jsonb, $5, 'executing', 'run', $6, $7, now() + interval '10 minutes')`,
+		[rowId, USER_A, WORKSPACE_A, JSON.stringify({ pageId, blocks }), `ad-${rowId}`, conversationId, runId],
+	);
+	return (await app.db.query('select * from public.ai_approvals where id = $1', [rowId])).rows[0];
+}
+
+async function aRunOf(conversationId: string): Promise<string> {
+	const runId = randomUUID();
+	await app.db.query("insert into public.ai_runs (id, conversation_id, owner_id, status, model) values ($1, $2, $3, 'running', 'm')", [runId, conversationId, USER_A]);
+	return runId;
+}
 
 describe('appends to one page in one step (AM6)', () => {
 	beforeEach(() => {
@@ -115,6 +133,59 @@ describe('appends to one page in one step (AM6)', () => {
 		const statuses = (await rowsOf(id)).map((r) => r.status);
 		assert.equal(statuses.length, 2);
 		assert.ok(statuses.every((s) => s === 'failed' || s === 'unknown'), statuses.join());
+	});
+});
+
+describe('the bounds of a batch', () => {
+	beforeEach(() => bridge.reset());
+
+	it('four appends of ~60 KB (each under the approval cap) split before the byte cap, all executed (I1)', async () => {
+		const target = await page();
+		const id = await autoConversation();
+		const runId = await aRunOf(id);
+		// An approval holds at most 64 KB of arguments: 7 blocks of 8 500 characters is ~60 KB.
+		const blocks = (text: string) => Array.from({ length: 7 }, () => ({ type: 'paragraph', content: text.repeat(8_500) }));
+		const rows = await Promise.all(['a', 'b', 'c', 'd'].map((text) => claimedRow(id, runId, target, blocks(text))));
+		const coalescer = makeAppendCoalescer();
+		const done = await Promise.all(rows.map((row) => coalescer.enqueue(row as never, { db: app.db, bridgeUrl: bridge.baseUrl, token })));
+		assert.deepEqual(done.map((d) => d.status), ['executed', 'executed', 'executed', 'executed']);
+		assert.ok(appends().length >= 2, 'one merged body of ~240 KB would pass the cap');
+		for (const sent of appends()) {
+			assert.ok(Buffer.byteLength(JSON.stringify((sent.body as { blocks: unknown[] }).blocks), 'utf8') <= ADD_MAX_BYTES);
+		}
+	});
+
+	it('more blocks than one add_blocks may carry are split (I1)', async () => {
+		const target = await page();
+		const id = await autoConversation();
+		const many = (text: string) => ({ name: 'add_blocks', arguments: { pageId: target, blocks: Array.from({ length: 30 }, (_, i) => ({ type: 'paragraph', content: `${text}${i}` })) } });
+		script([step([many('a'), many('b')])]);
+		await run(id);
+		assert.equal(appends().length, 2, '60 blocks pass ADD_MAX_BLOCKS');
+	});
+
+	it('after flush() an enqueue sends at once and never arms the window (S2)', async () => {
+		const target = await page();
+		const id = await autoConversation();
+		script([add(target, 'a')]);
+		await run(id);
+		const runId = await aRunOf(id);
+		const row = await claimedRow(id, runId, target, [{ type: 'paragraph', content: 'late' }]);
+		const coalescer = makeAppendCoalescer();
+		await coalescer.flush();
+		const delays: number[] = [];
+		const realSetTimeout = globalThis.setTimeout;
+		globalThis.setTimeout = ((fn: () => void, ms?: number) => {
+			delays.push(Number(ms));
+			return realSetTimeout(fn, ms);
+		}) as typeof setTimeout;
+		try {
+			const done = await coalescer.enqueue(row as never, { db: app.db, bridgeUrl: bridge.baseUrl, token });
+			assert.equal(done.status, 'executed');
+		} finally {
+			globalThis.setTimeout = realSetTimeout;
+		}
+		assert.ok(!delays.includes(COALESCE_WINDOW_MS), `armed the window: ${delays.join()}`);
 	});
 });
 
