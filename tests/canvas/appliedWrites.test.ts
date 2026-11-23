@@ -73,7 +73,7 @@ test("a write.applied event reaches the store through the turn, bound to its mes
 });
 
 test("the applied row says what happened, offers Undo and the window", () => {
-  const out = html(React.createElement(AppliedWriteRow, { row: { ...view(), messageId: "m1", runId: "r1", undoable: true, busy: false, error: "" }, onUndo: noop }));
+  const out = html(React.createElement(AppliedWriteRow, { row: { ...view(), messageId: "m1", runId: "r1", turnId: "", undoable: true, busy: false, error: "" }, onUndo: noop }));
   assert.match(out, /Added 2 blocks to Plan/);
   assert.match(out, /<button[^>]*>Undo<\/button>/);
   assert.match(out, /Applied automatically \(auto\)/);
@@ -81,7 +81,7 @@ test("the applied row says what happened, offers Undo and the window", () => {
 });
 
 test("an undone row says Undone and has no button", () => {
-  const out = html(React.createElement(AppliedWriteRow, { row: { ...view({ undoneAt: new Date().toISOString() }), messageId: "m1", runId: "r1", undoable: true, busy: false, error: "" }, onUndo: noop }));
+  const out = html(React.createElement(AppliedWriteRow, { row: { ...view({ undoneAt: new Date().toISOString() }), messageId: "m1", runId: "r1", turnId: "", undoable: true, busy: false, error: "" }, onUndo: noop }));
   assert.match(out, /Undone/);
   assert.doesNotMatch(out, /<button/);
 });
@@ -89,7 +89,7 @@ test("an undone row says Undone and has no button", () => {
 test("a refused undo shows its words", () => {
   assert.equal(undoErrorText("changed_since"), "Not undone: the page changed since.");
   assert.ok(undoErrorText("anything_else"));
-  const row = { ...view(), messageId: "m1", runId: "r1", undoable: true, busy: false, error: undoErrorText("changed_since") };
+  const row = { ...view(), messageId: "m1", runId: "r1", turnId: "", undoable: true, busy: false, error: undoErrorText("changed_since") };
   assert.match(html(React.createElement(AppliedWriteRow, { row, onUndo: noop })), /Not undone: the page changed since\./);
 });
 
@@ -99,7 +99,7 @@ test("the turn bar offers Undo all from two undoable rows, not from one", () => 
 });
 
 test("the flag gates every new element: rows render only when osio.ai.modes is on", () => {
-  const rows = ["a1", "a2"].map((approvalId) => ({ ...view({ approvalId }), messageId: "m1", runId: "r1", undoable: true, busy: false, error: "" }));
+  const rows = ["a1", "a2"].map((approvalId) => ({ ...view({ approvalId }), messageId: "m1", runId: "r1", turnId: "", undoable: true, busy: false, error: "" }));
   const node = () => React.createElement(AppliedWrites, { messageId: "m1", runId: "r1" });
   Object.assign(useAppliedWrites.getInitialState(), { rows });
   try {
@@ -123,7 +123,7 @@ test("undo and undo-all call the service and settle the rows", async () => {
     calls.push(`${init?.method} ${String(url).replace(/^.*\/api\/ai/, "")}`);
     return String(url).endsWith("/undo") && String(url).includes("a2")
       ? Response.json({ error: "changed_since" }, { status: 409 })
-      : Response.json({ ok: true });
+      : Response.json({ ok: true, results: [{ approvalId: "a2", ok: true }] });
   });
   await useAppliedWrites.getState().undo("a1");
   await useAppliedWrites.getState().undo("a2");
@@ -132,7 +132,7 @@ test("undo and undo-all call the service and settle the rows", async () => {
   assert.equal(a2.undoneAt, null);
   assert.equal(a2.error, "Not undone: the page changed since.");
   await useAppliedWrites.getState().undoTurn("r1");
-  assert.ok(useAppliedWrites.getState().rows.every((r) => r.undoneAt));
+  assert.ok(useAppliedWrites.getState().rows.every((r) => r.undoneAt && !r.error));
   assert.ok(calls.includes("POST /approvals/a1/undo") && calls.includes("POST /runs/r1/undo-writes"), calls.join("|"));
 });
 
@@ -141,4 +141,42 @@ test("the card shows its reason only with the flag on, and the frame carries it"
   assert.doesNotMatch(withFlag(false, card), /Automatic edits are off/);
   assert.match(withFlag(true, card), /Automatic edits are off for this conversation/);
   assert.equal(permissionFromEvent({ approvalId: "a9", tool: "add_blocks", cardReason: "tainted" })?.cardReason, "tainted");
+});
+
+const turnRow = (approvalId: string, extra = {}) => ({ ...view({ approvalId }), messageId: "m1", runId: "r1", turnId: "t1", undoable: true, busy: false, error: "", ...extra });
+
+test("a stopped turn undo settles from its results: undone rows, the refusing code, and the continuation", async () => {
+  reset();
+  const rows = [turnRow("a1"), turnRow("a2"), turnRow("a3"), turnRow("c1", { messageId: "m2", runId: "r2" })];
+  useAppliedWrites.setState({ rows });
+  const calls: string[] = [];
+  setAiTransport(async (url, init) => {
+    calls.push(`${init?.method} ${String(url).replace(/^.*\/api\/ai/, "")}`);
+    if (init?.method === "POST") {
+      const results = [{ approvalId: "c1", tool: "add_blocks", ok: true }, { approvalId: "a3", tool: "add_blocks", ok: true }, { approvalId: "a2", tool: "add_blocks", ok: false, code: "changed_since" }];
+      return Response.json({ ok: false, results }, { status: 409 });
+    }
+    return Response.json({ items: [{ ...view({ approvalId: "a3" }), runId: "r1", turnId: "t1", undoneAt: "2026-11-23T00:00:00.000Z", undoable: false }, { ...view({ approvalId: "c1" }), runId: "r2", turnId: "t1", undoneAt: "2026-11-23T00:00:00.000Z", undoable: false }] });
+  });
+  await useAppliedWrites.getState().undoTurn("r1", "srv-1");
+  const by = Object.fromEntries(useAppliedWrites.getState().rows.map((r) => [r.approvalId, r]));
+  assert.ok(by.a3.undoneAt && by.c1.undoneAt, "undone rows, continuation included");
+  assert.equal(by.a2.undoneAt, null);
+  assert.equal(by.a2.error, "Not undone: the page changed since.");
+  assert.equal(by.a1.undoneAt, null, "a row the service never reached stays applied");
+  assert.ok(calls.includes("GET /conversations/srv-1/applied"), calls.join("|"));
+});
+
+test("undo all never marks a row the service did not undo, and the bar counts the whole turn", async () => {
+  reset();
+  useAppliedWrites.setState({ rows: [turnRow("a1"), turnRow("a2", { undoable: false }), turnRow("c1", { messageId: "m2", runId: "r2" })] });
+  setAiTransport(async () => Response.json({ ok: true, results: [{ approvalId: "a1", ok: true }, { approvalId: "c1", ok: true }] }));
+  Object.assign(useAppliedWrites.getInitialState(), { rows: useAppliedWrites.getState().rows });
+  const bar = withFlag(true, () => html(React.createElement(AppliedWrites, { messageId: "m1", runId: "r1" })));
+  assert.match(bar, /2 automatic edits in this turn/);
+  Object.assign(useAppliedWrites.getInitialState(), { rows: [] });
+  await useAppliedWrites.getState().undoTurn("r1");
+  const by = Object.fromEntries(useAppliedWrites.getState().rows.map((r) => [r.approvalId, r]));
+  assert.ok(by.a1.undoneAt && by.c1.undoneAt);
+  assert.equal(by.a2.undoneAt, null);
 });

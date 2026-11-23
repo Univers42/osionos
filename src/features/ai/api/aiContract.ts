@@ -398,9 +398,12 @@ export class AiError extends Error {
    * from them, and the seconds it says are what the notice counts down.
    */
   readonly headers?: Headers;
+  /** The JSON body of the refusal, when it had one: a route may answer more than a code (turn undo). */
+  readonly body?: unknown;
 
-  constructor(status: number, code: string, message?: string, headers?: Headers) {
+  constructor(status: number, code: string, message?: string, headers?: Headers, body?: unknown) {
     super(message || code);
+    this.body = body;
     this.name = "AiError";
     this.status = status;
     this.code = code;
@@ -416,8 +419,9 @@ export class AiError extends Error {
 export async function toAiError(response: Response): Promise<AiError> {
   let code = "unknown";
   let message = "";
+  let parsed: unknown;
   try {
-    const body = (await response.clone().json()) as
+    const body = (parsed = await response.clone().json()) as
       | { error?: string | { code?: string; message?: string }; code?: string; message?: string }
       | null;
     // A route may answer a bare `{ "error": "forbidden" }`: the string is the code.
@@ -428,5 +432,5 @@ export async function toAiError(response: Response): Promise<AiError> {
   } catch {
     // A refusal that is not JSON still has a status.
   }
-  return new AiError(response.status, code, message, response.headers);
+  return new AiError(response.status, code, message, response.headers, parsed);
 }

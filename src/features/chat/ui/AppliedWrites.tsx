@@ -14,14 +14,21 @@ import { isFeatureFlagEnabled } from "@/shared/config/featureFlags";
 import { AppliedWriteRow } from "./AppliedWriteRow";
 import { TurnUndoBar } from "./TurnUndoBar";
 
-export const AppliedWrites: React.FC<{ messageId: string; runId?: string }> = ({ messageId, runId = "" }) => {
+export const AppliedWrites: React.FC<{ messageId: string; runId?: string; serverConversationId?: string }> = ({
+  messageId,
+  runId = "",
+  serverConversationId,
+}) => {
   const all = useAppliedWrites((s) => s.rows);
   const undo = useAppliedWrites((s) => s.undo);
   const undoTurn = useAppliedWrites((s) => s.undoTurn);
   if (!isFeatureFlagEnabled("osio.ai.modes")) return null;
   const rows = all.filter((r) => r.messageId === messageId || (runId !== "" && r.runId === runId));
   if (rows.length === 0) return null;
-  const open = rows.filter((r: AppliedRow) => !r.undoneAt && r.undoable);
+  // The bar speaks for the whole turn: the service undoes its continuations too.
+  const turns = new Set(rows.map((r) => r.turnId).filter(Boolean));
+  const scope = all.filter((r) => rows.includes(r) || turns.has(r.turnId));
+  const open = scope.filter((r: AppliedRow) => !r.undoneAt && r.undoable);
   const turnRun = rows.find((r) => r.runId)?.runId ?? "";
   return React.createElement(
     React.Fragment,
@@ -31,7 +38,7 @@ export const AppliedWrites: React.FC<{ messageId: string; runId?: string }> = ({
           count: open.length,
           busy: open.some((r) => r.busy),
           error: open.find((r) => r.error)?.error ?? "",
-          onUndoAll: () => void undoTurn(turnRun),
+          onUndoAll: () => void undoTurn(turnRun, serverConversationId),
         })
       : null,
     rows.map((row) => React.createElement(AppliedWriteRow, { key: row.approvalId, row, onUndo: (id) => void undo(id) })),

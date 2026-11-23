@@ -93,6 +93,7 @@ const AssistantAnswer = React.memo(function AssistantAnswer({
   messageId: string;
   runId?: string;
 }) {
+  const serverId = useChatStore((s) => s.conversations.find((c) => c.id === conversationId)?.serverConversationId);
   const citations = useMemo(() => citationsFromParts(parts), [parts]);
   const activities = useMemo(() => toolActivitiesFromParts(parts), [parts]);
   const permissions = useMemo(() => permissionsFromParts(parts), [parts]);
@@ -123,7 +124,7 @@ const AssistantAnswer = React.memo(function AssistantAnswer({
           }}
         />
       ))}
-      <AppliedWrites messageId={messageId} runId={runId} />
+      <AppliedWrites messageId={messageId} runId={runId} serverConversationId={serverId} />
       {proposals.map((proposal) => (
         <MemoryProposalChip
           key={proposal.memoryId}
