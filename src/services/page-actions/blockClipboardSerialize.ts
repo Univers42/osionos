@@ -1,8 +1,6 @@
 import type { Block } from "@/entities/block";
 import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
-// Narrow import (the parser only) — the markengine barrel also pulls the JSX React
-// renderers, which we don't need here and which the node test loader can't strip.
-import { parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
+import { markdownImportBlocks } from "@/entities/block/model/markdownImport";
 import { markdownWithMediaNote, withoutMediaNote } from "@/shared/lib/media/exportMediaNote";
 import { stripMediaSignature } from "@/shared/lib/media/mediaSignature";
 import { serializeBlocksToMarkdown } from "./pageMarkdownSerialize";
@@ -74,7 +72,7 @@ export function parseBlocksJson(json: string | null): Block[] | null {
 
 /** Markdown → blocks (the formatted-paste path; `# x` becomes a heading). */
 export function parseMarkdownClipboard(markdown: string): Block[] {
-  return sanitizeLinkBlockFields(parseMarkdownToBlocks(withoutMediaNote(markdown)));
+  return markdownImportBlocks(withoutMediaNote(markdown));
 }
 
 /**

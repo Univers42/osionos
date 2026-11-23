@@ -21,7 +21,7 @@ import React, {
 } from "react";
 import { usePageStore } from "@/store/usePageStore";
 import { isSingleBareUrl } from "@osionos/markdown-engine";
-import { detectBlockType, parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
+import { detectBlockType } from "@osionos/markdown-engine/blocks";
 import {
   getInlineEditorSelectionOffsets,
   type InlineEditorSelectionOffsets,
@@ -80,7 +80,7 @@ import {
 } from "./playgroundBlockEditor.helpers";import { inlineIconInsertText } from "./inlineIconInsert";
 import { matchInternalCopy } from "./blockClipboard";
 import { useBlockContextMenu } from "./useBlockContextMenu";
-import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
+import { markdownImportBlocks } from "@/entities/block/model/markdownImport";
 import {
   continuationOf,
   indentedListItem,
@@ -1756,7 +1756,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       const markdown = raw.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
       if (!markdown.trim() || !isBlockStructuredMarkdown(markdown)) return;
 
-      const parsed = sanitizeLinkBlockFields(parseMarkdownToBlocks(markdown));
+      const parsed = markdownImportBlocks(markdown);
       if (parsed.length === 0) return;
 
       e.preventDefault();
