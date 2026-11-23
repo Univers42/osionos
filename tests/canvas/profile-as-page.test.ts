@@ -1,7 +1,8 @@
 // ADR 0064 PS32–PS36 under osio.profile.page: the profile drawn as the README page. Its
-// cover is `cover ?? bannerUrl` through the shared rule, its identity header is README-field
-// bindings resolved against the viewed account's own record (by userId, never by name), and
-// the owner without a README gets an explicit create action that rendering never runs.
+// cover is the README cover when the shared rule accepts it, else the banner; its identity
+// header is README-field bindings resolved against the viewed account's own record (by userId,
+// never by name), and the owner without a README gets an explicit create action that
+// rendering never runs.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -73,7 +74,7 @@ test("PS33: another account with the same display name does not cross into the h
 test("PS32: a visitor sees the README as a page under the banner cover, not today's shell", () => {
   const html = asPage({});
   assert.match(html, /data-testid="page-cover"/);
-  assert.ok(html.includes(`src="${BANNER}"`), "cover ?? bannerUrl: the page has no cover for a visitor");
+  assert.ok(html.includes(`src="${BANNER}"`), "a visitor gets no README cover, so the banner");
   assert.ok(html.includes("Hello from my README") && html.includes("Builds things"));
   assert.ok(!html.includes('data-testid="profile-banner"') && !html.includes('aria-label="Profile details"'));
   assert.ok(!html.includes("page-cover-toggle-picker"), "the cover is read-only here");

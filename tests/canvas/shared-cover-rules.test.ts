@@ -1,7 +1,7 @@
 // ADR 0064 PS35: a profile cover shown to anyone but its owner passes one validator, shared
 // with the bridge: an image through the image-source rule, a gradient through a strict grammar
 // that has no url(), var() or anything that leaves one CSS value. The profile reads
-// `cover ?? bannerUrl` (PS36) and draws nothing when the result fails.
+// the page cover when it is usable, else the banner (PS36), and draws nothing when neither is.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -87,5 +87,17 @@ test("profileCover reads the page cover first and the banner when the page has n
   assert.equal(profileCover(undefined, banner), banner);
   assert.equal(profileCover(null, banner), banner);
   assert.equal(profileCover(undefined, null), null);
-  assert.equal(profileCover("url(https://evil.example/x)", banner), null, "a refused cover is not replaced by the banner");
+});
+
+test("a stored `url:` cover is unwrapped before the rule judges it", () => {
+  const banner = "https://cdn.example/banner.png";
+  assert.equal(profileCover("url:https://images.unsplash.com/x", banner), "https://images.unsplash.com/x");
+});
+
+test("a cover the rule refuses falls back to the banner instead of hiding it", () => {
+  const banner = "https://cdn.example/banner.png";
+  assert.equal(profileCover("data:image/png;base64,iVBORw0KGgo=", banner), banner);
+  assert.equal(profileCover("url(https://evil.example/x)", banner), banner);
+  assert.equal(profileCover("javascript:alert(1)", banner), banner);
+  assert.equal(profileCover("data:image/png;base64,iVBORw0KGgo=", "javascript:alert(1)"), null, "neither usable: no cover");
 });

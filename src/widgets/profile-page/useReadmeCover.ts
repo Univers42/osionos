@@ -20,7 +20,7 @@ export function useReadmeCover(pageId: string | null, isOwner: boolean): string 
     let alive = true;
     api.get<PageEntry>(`/api/pages/${encodeURIComponent(ownPageId)}`, jwt)
       .then((page) => { if (alive) setFetched(page); })
-      // A failed read leaves the banner showing (cover ?? bannerUrl); useProfile already
+      // A failed read leaves the banner showing (profileCover falls back to it); useProfile already
       // reports an unreadable profile, so a second message would say the same thing.
       .catch(() => undefined);
     return () => { alive = false; };

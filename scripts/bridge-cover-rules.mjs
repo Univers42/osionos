@@ -7,7 +7,9 @@
  *
  * Caveat: the grammar refuses valid CSS outside it (named colours but `transparent`,
  * `hsl(0 0% 0% / 50%)` slash syntax, repeating/conic gradients, calc()) and an image URL that
- * contains "gradient(": such a cover is not drawn (the profile shows no cover), never repaired.
+ * contains "gradient(". The app unwraps a stored `url:<src>` cover first; a `data:` or `blob:`
+ * upload, a ui-collection media ref and anything else refused is not drawn and the profile
+ * falls back to the banner (src/shared/lib/media/sharedCover.ts), never repaired.
  */
 
 const COVER_MAX = 2048;
