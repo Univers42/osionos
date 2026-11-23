@@ -30,6 +30,8 @@ describe('revoking the admin role of a flagged account', () => {
 		assert.equal(answer.status, 409);
 		assert.equal(answer.body.code, 'admin_flag_set');
 		assert.match(answer.body.message, /osionos_bridge_identities\.is_admin/);
+		assert.match(answer.body.message, /POST \/api\/account\/admin\/users\/:userId\/demote/, 'names the demote route (#343 D343-13)');
+		assert.doesNotMatch(answer.body.message, /operator step/);
 		assert.equal(store.callsTo(AUDIT).length, 0);
 		assert.equal(holds(store, USER_B, 'admin'), true);
 	});

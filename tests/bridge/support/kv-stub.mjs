@@ -40,6 +40,9 @@ export function kvStub() {
 			values.set(full(key), String(value));
 			return true;
 		},
+		async del(key) {
+			values.delete(full(key));
+		},
 		async getDel(key) {
 			const name = full(key);
 			const value = values.get(name) ?? null;

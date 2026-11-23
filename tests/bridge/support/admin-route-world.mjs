@@ -38,18 +38,26 @@ export function roleTables(grants = [{ userId: USER_A, role: 'admin' }]) {
 	};
 }
 
-/** A real app session; `claim` is the is_admin flag the token carries, which the routes must ignore. */
-export function tokenFor(config, userId = USER_A, claim = false) {
+function mint(config, userId, claim) {
 	const payload = validateBridgePayload({ provider: 'prismatica', subject: userId, email: 'member@example.com', name: 'Member', jti: randomUUID() });
 	const persisted = { workspaceId: '0a4d1c2e-0000-4000-8000-000000000ad1', workspaceName: 'Home', workspaceSlug: 'home' };
-	return createUserSession(payload, config, persisted, Date.now(), [], claim).session.accessToken;
+	return createUserSession(payload, config, persisted, Date.now(), [], claim);
 }
 
-export async function startAdminWorld(t, { path, tables, refuse = [], failReads, kv = kvStub() }) {
-	const config = accountConfig();
-	const store = createKeysetStore({ tables, refuse, failReads });
-	const pg = createPg({ config, env: { JWT_SECRET: ACCOUNT_JWT_SECRET }, fetchImpl: store.fetchImpl });
-	const handler = createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken, env: { JWT_SECRET: ACCOUNT_JWT_SECRET } });
+/** A real app session; `claim` is the is_admin flag the token carries, which the routes must ignore. */
+export function tokenFor(config, userId = USER_A, claim = false) {
+	return mint(config, userId, claim).session.accessToken;
+}
+
+/** An admin-claim session whose jti already holds a sudo grant, the way grantSudo leaves it. */
+export async function sudoAdminToken(config, kv, userId = USER_A) {
+	const created = mint(config, userId, true);
+	await kv.set(`sudo:${created.sessionId}`, userId, 600_000);
+	return created.session.accessToken;
+}
+
+/** The account handler on its own server, answering a thrown error the way the bridge does. */
+async function serve(t, handler) {
 	const server = createServer(async (request, response) => {
 		const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
 		try {
@@ -63,7 +71,22 @@ export async function startAdminWorld(t, { path, tables, refuse = [], failReads,
 	});
 	await new Promise((done) => server.listen(0, '127.0.0.1', done));
 	t.after(() => new Promise((done) => server.close(done)));
-	const base = `http://127.0.0.1:${server.address().port}`;
+	return `http://127.0.0.1:${server.address().port}`;
+}
+
+/**
+ * `transport` wraps the store's fetch (a GoTrue fake, a fault, a race); `env` is the account
+ * env the modules that open sealed rows read. Neither is passed on when the test names neither.
+ */
+export async function startAdminWorld(t, { path, tables, refuse = [], failReads, kv = kvStub(), transport, env, config = accountConfig() }) {
+	const store = createKeysetStore({ tables, refuse, failReads });
+	const fetchImpl = transport ? transport(store.fetchImpl) : store.fetchImpl;
+	const pg = createPg({ config, env: { JWT_SECRET: ACCOUNT_JWT_SECRET }, fetchImpl });
+	const handler = createAccountHandler({
+		config, pg, kv, verifySession: verifyAppSessionToken, env: { JWT_SECRET: ACCOUNT_JWT_SECRET },
+		...(transport ? { mfaFetch: fetchImpl } : {}), ...(env ? { mfaEnv: env } : {}),
+	});
+	const base = await serve(t, handler);
 	const admin = tokenFor(config, USER_A);
-	return { store, config, kv, base, admin, call: (query = '', options = {}) => send(base, `${path}${query}`, { token: admin, ...options }) };
+	return { store, config, kv, base, admin, pg, call: (query = '', options = {}) => send(base, `${path}${query}`, { token: admin, ...options }) };
 }

@@ -14,7 +14,8 @@
 
 /**
  * The users administration API: GET /api/account/admin/users (a keyset list),
- * GET and PATCH /api/account/admin/users/:userId, PUT /api/account/admin/users/:userId/roles.
+ * GET and PATCH /api/account/admin/users/:userId, PUT /api/account/admin/users/:userId/roles,
+ * and POST /api/account/admin/users/:userId/demote (bridge-account-admin-demote.mjs).
  *
  * Who may call: a session whose platform role, RE-READ from `public.user_roles` and
  * `public.roles` on every request, is admin. The role claim in the token is a hint for the
@@ -23,7 +24,8 @@
  *
  * The admin role of an account whose identity flag is set (`osionos_bridge_identities.is_admin`)
  * cannot be revoked here (409 admin_flag_set): sign-in and refresh re-write the grant the flag
- * implies (osionos#296), so the revoke would be undone within the hour and demote nothing.
+ * implies (osionos#296), so the revoke would be undone within the hour and demote nothing. The
+ * demote route clears the flag and the grant together (osionos#343).
  *
  * What an admin sees of another user: the public profile fields and the platform role names.
  * The select is an allowlist: an email, a setting, a session or a deletion state is not in it,
@@ -34,9 +36,6 @@
  *
  * Every write records an audit row first. No audit row, no action (bridge-guard.mjs writeAudit).
  *
- * Caveat: sudo is not required. requireSudo has no caller yet (the grant belongs to P1-2b), so
- * demanding it would make the action unreachable; the role gate and the audit row are the gate
- * until it lands.
  * Caveat: two admins without the identity flag revoking each other's admin role at once can still
  * leave no admin; a self-revoke and a flagged target are refused. A platform with no admin
  * recovers through OSIONOS_ADMIN_EMAILS.
@@ -44,6 +43,7 @@
  * action that did not happen.
  */
 
+import { demoteAdmin } from './bridge-account-admin-demote.mjs';
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { decodeCursor, keyset, pageOf } from './bridge-paging.mjs';
 import { pgError } from './bridge-pg.mjs';
@@ -177,9 +177,9 @@ async function patchUser(ctx, request, userId, response) {
 }
 
 /**
- * The admin revokes this console refuses, before any audit row or write. The real demotion of a
- * flagged account is clearing `osionos_bridge_identities.is_admin`, an operator step today; an API
- * for it is tracked at https://github.com/Univers42/osionos/issues/343 (A296-9).
+ * The admin revokes this console refuses, before any audit row or write. A flagged account is
+ * demoted through POST /api/account/admin/users/:userId/demote, which clears
+ * `osionos_bridge_identities.is_admin` with the grant (osionos#343).
  */
 async function assertAdminRevocable(client, session, userId) {
 	// A lockout is cheaper to refuse than to repair: the only way back is the env admin list.
@@ -192,7 +192,7 @@ async function assertAdminRevocable(client, session, userId) {
 	}
 	if (flagged) {
 		throw adminError(409, 'admin_flag_set', 'This account is an admin by its identity flag, which every sign-in and refresh turns back into the admin role. '
-			+ 'Demoting it means clearing osionos_bridge_identities.is_admin, an operator step today.');
+			+ 'Demote it with POST /api/account/admin/users/:userId/demote, which clears osionos_bridge_identities.is_admin and the grant together.');
 	}
 }
 
@@ -221,7 +221,7 @@ async function changeRole(ctx, request, userId, response) {
 }
 
 /** The admin routes. The gate runs first and reads the roles from the database. */
-export function createAdminUsersRoutes({ config, pg, kv, verifySession }) {
+export function createAdminUsersRoutes({ config, pg, kv, verifySession, mfaFetch, mfaEnv }) {
 	return async function handleAdminUsers(url, request, response) {
 		const pathname = url.pathname;
 		if (pathname !== USERS_PATH && !pathname.startsWith(`${USERS_PATH}/`)) return false;
@@ -229,13 +229,16 @@ export function createAdminUsersRoutes({ config, pg, kv, verifySession }) {
 		const client = pg.asService();
 		const { role } = await readPlatformRole(client, session.userId);
 		if (!roleAtLeast(role, 'admin')) throw adminError(403, 'admin_required', 'This action needs the admin role.');
-		const ctx = { config, pg, kv, session, client };
+		const ctx = { config, pg, kv, session, client, fetchImpl: mfaFetch ?? fetch, env: mfaEnv ?? process.env };
 		const isRead = request.method === 'GET';
 		const limited = await throttle(ctx, ['admin-users', isRead ? 'read' : 'write', session.userId], isRead ? READ_LIMIT : WRITE_LIMIT, response);
 		if (limited) return true;
 		const method = request.method;
 		if (pathname === USERS_PATH) return method === 'GET' ? listUsers(ctx, url, response) : false;
 		if (pathname.endsWith('/roles')) return method === 'PUT' ? changeRole(ctx, request, targetOf(pathname, '/roles'), response) : false;
+		if (pathname.endsWith('/demote')) {
+			return method === 'POST' ? demoteAdmin({ ...ctx, meta: requestMeta(request, config) }, targetOf(pathname, '/demote'), response) : false;
+		}
 		if (method === 'GET') return readUser(ctx, targetOf(pathname), response);
 		if (method === 'PATCH') return patchUser(ctx, request, targetOf(pathname), response);
 		return false;

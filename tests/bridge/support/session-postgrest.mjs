@@ -26,7 +26,7 @@ function sameText(value, text) {
 	return value != null && String(value).toLowerCase() === String(text).toLowerCase();
 }
 
-function matches(row, key, expr) {
+export function matches(row, key, expr) {
 	// A PostgREST `or=(a.gt.b,c.gt.d)` group: the row matches when ANY clause does.
 	if (key === 'or' && expr.startsWith('(') && expr.endsWith(')')) {
 		return expr.slice(1, -1).split(',').some((clause) => {
