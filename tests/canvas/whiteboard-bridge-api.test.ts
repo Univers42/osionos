@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { createBridgeBoardApi } from "../../src/features/whiteboard/model/bridgeBoardApi.ts";
@@ -86,4 +87,30 @@ test("without a session there is no token, and nothing is sent", async () => {
   const { sent, fetchImpl } = fakeFetch(() => json(200, {}));
   await assert.rejects(api(fetchImpl, null).getBoard("abcdefgh1234"), (error: Refusal) => error.status === 401);
   assert.equal(sent.length, 0);
+});
+
+test("the library is handed four board calls and no other handle", () => {
+  const { fetchImpl } = fakeFetch(() => json(200, {}));
+  assert.deepEqual(Object.keys(api(fetchImpl)).sort(), ["createBoard", "getBoard", "putThumbnail", "replaceBoard"]);
+});
+
+test("a request carries the whiteboard bearer and no ambient credential", async () => {
+  const seen: RequestInit[] = [];
+  const fetchImpl = (async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+    seen.push(init);
+    return json(200, { slug: "abcdefgh1234", rev: 1 });
+  }) as typeof fetch;
+  await api(fetchImpl).getBoard("abcdefgh1234");
+  assert.equal(seen[0]?.credentials, undefined);
+  assert.deepEqual([...new Headers(seen[0]?.headers).keys()], ["authorization"]);
+});
+
+// Caveat: a text match on import lines. It misses a session getter reached through a re-export
+// or a dynamic import; it over-reports nothing. Ruling condition 1 of osionos#319.
+test("the in-process board's modules import no app-session getter", () => {
+  const model = new URL("../../src/features/whiteboard/model/", import.meta.url);
+  const importsOf = (file: string) => readFileSync(new URL(file, model), "utf8").split("\n").filter((line) => line.startsWith("import "));
+  assert.deepEqual(importsOf("bridgeBoardApi.ts"), ['import type { HostedBoardApi, HydrawnBoard, HydrawnBoardSummary } from "@hydrawn/board";']);
+  const clientImports = importsOf("inProcessBoard.ts").filter((line) => line.includes("@/shared/api/"));
+  assert.deepEqual(clientImports, ['import { API_BASE } from "@/shared/api/client";']);
 });
