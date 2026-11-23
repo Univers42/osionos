@@ -30,6 +30,7 @@ function mcpApprovalTtlMs(): number {
 }
 
 export { EXECUTING_TIMEOUT_MS };
+export { claimUndo, releaseUndo } from './undoClaim.ts';
 
 /** How long a decided approval is kept before it is deleted. */
 export const APPROVAL_RETENTION_DAYS = 7;

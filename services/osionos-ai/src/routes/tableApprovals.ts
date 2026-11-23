@@ -1,4 +1,5 @@
 import { handleApprovalDecision, handleApprovalGet, handleApprovalList, handleApprovalResume, handleApprovalUndo } from './approvals.ts';
+import { handleTurnUndo } from './turnUndo.ts';
 import type { RouteEntry } from './types.ts';
 
 /**
@@ -12,4 +13,5 @@ export const APPROVAL_ROUTES: RouteEntry[] = [
 	{ methods: ['POST'], pattern: /^\/api\/ai\/approvals\/([^/]+)$/, label: '/api/ai/approvals/:id', handle: handleApprovalDecision },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/approvals\/([^/]+)\/resume$/, label: '/api/ai/approvals/:id/resume', handle: handleApprovalResume },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/approvals\/([^/]+)\/undo$/, label: '/api/ai/approvals/:id/undo', handle: handleApprovalUndo },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/runs\/([^/]+)\/undo-writes$/, label: '/api/ai/runs/:id/undo-writes', handle: handleTurnUndo },
 ];

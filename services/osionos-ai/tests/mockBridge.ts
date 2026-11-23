@@ -39,8 +39,8 @@ export interface MockBridge {
 	 * block id (an unknown one appends at the end), a repeated idempotency key appends
 	 * nothing, and every append bumps the version.
 	 */
-	seedPage(pageId: string, content: unknown[], version?: number): void;
-	pageContent(pageId: string): { version: number; content: unknown[] } | undefined;
+	seedPage(pageId: string, content: unknown[], version?: number, title?: string): void;
+	pageContent(pageId: string): { version: number; content: unknown[]; title: string; archivedAt: string | null } | undefined;
 	/** The next n appends are applied, then the connection is destroyed: the caller sees no answer. */
 	dropNextAppendAnswers(n: number): void;
 	reset(): void;
@@ -66,7 +66,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 	let loseNextCount = 0;
 	const seenPages = new Map<string, string>(); // id -> workspaceId
 	const seenDbs = new Set<string>();
-	const pages = new Map<string, { version: number; content: unknown[] }>();
+	const pages = new Map<string, { version: number; content: unknown[]; title: string; archivedAt: string | null }>();
 	const appendKeys = new Map<string, number>(); // `${pageId}/${key}` -> version it produced
 	let dropAppendCount = 0;
 
@@ -105,8 +105,8 @@ export async function startMockBridge(): Promise<MockBridge> {
 			appendKeys.clear();
 			dropAppendCount = 0;
 		},
-		seedPage(pageId: string, content: unknown[], version = 1): void {
-			pages.set(pageId, { version, content: [...content] });
+		seedPage(pageId: string, content: unknown[], version = 1, title = 'Page'): void {
+			pages.set(pageId, { version, content: [...content], title, archivedAt: null });
 		},
 		pageContent(pageId: string) {
 			return pages.get(pageId);
@@ -205,6 +205,12 @@ export async function startMockBridge(): Promise<MockBridge> {
 			// GET /api/pages/<id>
 			if (method === 'GET' && path.startsWith('/api/pages/')) {
 				const pid = decodeURIComponent(path.slice('/api/pages/'.length));
+				const seeded = pages.get(pid);
+				if (seeded) {
+					response.writeHead(200, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ id: pid, ...seeded }));
+					return;
+				}
 				if (seenPages.has(pid)) {
 					response.writeHead(200, { 'content-type': 'application/json' });
 					response.end(JSON.stringify({ id: pid, workspaceId: seenPages.get(pid), title: 'Page' }));
@@ -329,6 +335,19 @@ export async function startMockBridge(): Promise<MockBridge> {
 					response.writeHead(500, { 'content-type': 'application/json' });
 					response.end(JSON.stringify({ error: { message: 'hook failed' } }));
 					return;
+				}
+				const stored = pages.get(path.slice('/api/pages/'.length));
+				const patch = body as { baseVersion?: unknown; content?: unknown; title?: unknown; archivedAt?: unknown };
+				if (stored && patch.baseVersion !== undefined && patch.baseVersion !== stored.version) {
+					response.writeHead(409, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ ok: false, code: 'version_conflict' }));
+					return;
+				}
+				if (stored) {
+					if (Array.isArray(patch.content)) stored.content = patch.content;
+					if (typeof patch.title === 'string') stored.title = patch.title;
+					if (typeof patch.archivedAt === 'string') stored.archivedAt = patch.archivedAt;
+					stored.version += 1;
 				}
 				response.writeHead(200, { 'content-type': 'application/json' });
 				response.end(JSON.stringify({ ok: true }));

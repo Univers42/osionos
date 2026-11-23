@@ -99,12 +99,15 @@ export async function bridgeRead(
 		path,
 		fetchImpl = fetch,
 		timeoutMs = BRIDGE_TIMEOUT_MS,
+		maxBodyChars = BRIDGE_BODY_MAX_CHARS,
 	}: {
 		url: string;
 		token: string;
 		path: string;
 		fetchImpl?: typeof fetch;
 		timeoutMs?: number;
+		/** A caller that parses a whole page (the undo) asks for more. */
+		maxBodyChars?: number;
 	},
 ): Promise<BridgeAnswer> {
 	try {
@@ -117,7 +120,7 @@ export async function bridgeRead(
 			signal: AbortSignal.timeout(timeoutMs),
 		});
 		const body = await response.text();
-		return { ok: response.ok, status: response.status, body: body.slice(0, BRIDGE_BODY_MAX_CHARS) };
+		return { ok: response.ok, status: response.status, body: body.slice(0, maxBodyChars) };
 	} catch {
 		return { ok: false, status: 0, body: '' };
 	}

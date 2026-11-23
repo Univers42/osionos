@@ -11,6 +11,7 @@ import { revalidateStoredPlan } from '../builders/plan.ts';
 import { executePlan } from '../builders/execute.ts';
 import { undoClaimed, undoPages, undoRefusal, type UndoOutcome } from '../builders/undoApproval.ts';
 import type { ApprovalRow } from '../approvals/types.ts';
+import { answerAppliedUndo } from './turnUndo.ts';
 import { hookRefusal } from '../context/hooks.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
@@ -242,6 +243,7 @@ export async function handleApprovalUndo(ctx: RouteContext): Promise<number> {
 	if (typeof approval === 'number') return approval;
 	const sessionToken = bearerToken(ctx.request);
 	if (!sessionToken) return refuse(ctx, 401, 'unauthorized');
+	if (approval.tool !== 'build_plan') return answerAppliedUndo(ctx, approval, sessionToken);
 	const run = { db: ctx.deps.db, sessionToken, approval };
 	const outcome = approval.status === 'partial' ? await undoClaimed(run, user.userId) : await undoPages(run);
 	return answerUndo(ctx, approval.id, outcome);

@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { claimPartial, getOwnedApproval, recordOutcome } from '../approvals/repo.ts';
 import type { ApprovalRow } from '../approvals/types.ts';
 import { donePageItems } from './items.ts';
+import { UNDOABLE_TOOLS, recordedOf } from '../approvals/undoApplied.ts';
 import { undoBuild, type UndoBuildResult } from './undo.ts';
 
 /**
@@ -32,8 +33,13 @@ export type UndoOutcome =
 	  };
 
 /** Why an approval cannot be undone now, or null when it can. */
-export function undoRefusal(approval: Pick<ApprovalRow, 'tool' | 'status'>): string | null {
-	if (approval.tool !== 'build_plan') return 'not_a_plan';
+export function undoRefusal(approval: Pick<ApprovalRow, 'tool' | 'status' | 'result'>): string | null {
+	// An applied write that recorded its inverse goes to `undoApplied`; one that
+	// did not (a row from before the record) keeps the old answer.
+	if (approval.tool !== 'build_plan') {
+		if (recordedOf(approval)) return null;
+		return UNDOABLE_TOOLS.has(approval.tool) ? 'not_a_plan' : 'not_undoable';
+	}
 	// A write is in flight (a resume, or another undo): the caller may try again.
 	if (approval.status === 'executing') return 'approval_busy';
 	if (approval.status !== 'executed' && approval.status !== 'partial') return 'approval_not_built';
