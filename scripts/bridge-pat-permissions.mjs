@@ -61,6 +61,8 @@ export const PAT_RESOURCES = {
 			'icon',
 			'cover',
 			'coverPosition',
+			'coverHeight',
+			'coverWidth',
 			'updatedAt',
 			'workspaceId',
 			'ownerId',

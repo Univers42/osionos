@@ -167,6 +167,30 @@ describe('publish writes a sanitised snapshot', () => {
 		assert.deepEqual(written.content.map((block) => block.type), ['paragraph']);
 	});
 
+	// PH3/PS47: a cover size is page metadata the public copy never carries — not from the
+	// row, and not from a block that happens to hold one (KEPT_FIELDS gains no size).
+	it('stores no cover size, from the row or from a block', async () => {
+		const calls = [];
+		const fetchImpl = async (url, options) => {
+			calls.push({ url: String(url), options });
+			return { ok: true, status: 200, text: async () => JSON.stringify([{ token: TOKEN }]) };
+		};
+		const sizedBlock = { id: 'p1', type: 'paragraph', content: 'text', coverHeight: 240, coverWidth: 'content', cover_height: 240, cover_width: 'content' };
+		const handler = createPublicHandler({
+			config,
+			verifySession,
+			verifyPageAccess: async () => ({ row: { owner_id: 'user-1', title: 'Public', icon: null, cover_height: 240, cover_width: 'content', content: [sizedBlock] } }),
+			fetchImpl,
+			env: ON,
+		});
+		const response = mockResponse();
+		await handler(new URL(`http://app/api/pages/${PAGE_ID}/publish`), request('POST'), response, config);
+		assert.equal(response.statusCode, 200);
+		const written = calls[0].options.body;
+		assert.equal(JSON.parse(written).content[0].content, 'text');
+		assert.doesNotMatch(written, /cover_?(height|width)/i);
+	});
+
 	it('passes the access gate refusal through and writes nothing', async () => {
 		const refusal = Object.assign(new Error('You do not have access to this page.'), { status: 403 });
 		let writes = 0;

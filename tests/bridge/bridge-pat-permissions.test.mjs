@@ -84,6 +84,8 @@ const FULL_PAGE_ROW = {
 	icon: 'rocket',
 	cover: 'https://cdn.example.test/cover.png',
 	cover_position: 42,
+	cover_height: 240,
+	cover_width: 'content',
 	updated_at: '2026-10-22T00:00:00.000Z',
 	created_at: '2026-10-01T00:00:00.000Z',
 	workspace_id: '22222222-2222-4222-8222-222222222222',

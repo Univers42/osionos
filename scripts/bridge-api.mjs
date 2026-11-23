@@ -743,6 +743,26 @@ function postgrestQuery(params) {
 	return searchParams.toString();
 }
 
+const COVER_WIDTHS = new Set(['full', 'content']);
+
+// CS15: a cover size is stored as sent or not at all, the ranges of the column CHECKs.
+// Unlike cover_position it is never clamped: a PAT caller's out-of-range value is
+// reported in `ignored`, not silently rewritten (cover-writer ruling K1).
+const COVER_SIZE_FIELDS = {
+	coverHeight: (value) => Number.isInteger(value) && value >= 120 && value <= 640,
+	coverWidth: (value) => COVER_WIDTHS.has(value),
+};
+
+/** The payload minus each cover size that is neither null nor valid, each listed in `ignored`. */
+function withoutInvalidCoverSize({ payload, ignored }) {
+	const invalid = Object.keys(COVER_SIZE_FIELDS)
+		.filter((key) => hasOwn(payload, key) && payload[key] !== null && !COVER_SIZE_FIELDS[key](payload[key]));
+	if (invalid.length === 0) return { payload, ignored };
+	const kept = { ...payload };
+	for (const key of invalid) delete kept[key];
+	return { payload: kept, ignored: [...ignored, ...invalid] };
+}
+
 export function pageRowToEntry(row) {
 	// The version of the page's CONTENT, as the client PATCHes against it. Absent while
 	// the database has no version column (the migration ships separately): every select
@@ -757,6 +777,10 @@ export function pageRowToEntry(row) {
 		icon: row.icon ?? undefined,
 		cover: row.cover ?? undefined,
 		coverPosition: typeof row.cover_position === 'number' ? row.cover_position : undefined,
+		// Never a null key: the live client's pageStamp tells "no size" by `=== undefined`,
+		// so a null would turn every unsized page unclean without an edit (ruling Q3 F2).
+		coverHeight: COVER_SIZE_FIELDS.coverHeight(row.cover_height) ? row.cover_height : undefined,
+		coverWidth: COVER_SIZE_FIELDS.coverWidth(row.cover_width) ? row.cover_width : undefined,
 		updatedAt: row.updated_at ?? row.created_at ?? undefined,
 		workspaceId: row.workspace_id,
 		ownerId: row.owner_id ?? null,
@@ -855,6 +879,11 @@ function pageCreateRowFromPayload(payload, authContext) {
 	if (hasOwn(payload, 'coverPosition') && typeof payload.coverPosition === 'number') {
 		row.cover_position = Math.max(0, Math.min(100, payload.coverPosition));
 	}
+	// The create answers the stored page (201), which has no `ignored` channel: an invalid
+	// size is dropped here, and the answer shows the page without it.
+	const sized = withoutInvalidCoverSize({ payload, ignored: [] }).payload;
+	assignPayloadValue(row, sized, 'coverHeight', 'cover_height', (value) => value);
+	assignPayloadValue(row, sized, 'coverWidth', 'cover_width', (value) => value);
 	// Only attach template columns for template creates, so a backend whose schema
 	// predates the template migration still accepts ordinary page inserts.
 	if (payload.isTemplate === true || payload.isDefaultTemplate === true || payload.recurrence || payload.templateSurface) {
@@ -892,6 +921,9 @@ function pageUpdateRowFromPayload(payload) {
 	assignPayloadValue(row, payload, 'icon', 'icon', (value) => textOrNull(value, 80));
 	assignPayloadValue(row, payload, 'cover', 'cover', (value) => storedMediaText(textOrNull(value, 1024)));
 	assignPayloadValue(row, payload, 'coverPosition', 'cover_position', (value) => typeof value === 'number' ? Math.max(0, Math.min(100, value)) : null);
+	// handlePageUpdate already moved every invalid size to `ignored` (withoutInvalidCoverSize).
+	assignPayloadValue(row, payload, 'coverHeight', 'cover_height', (value) => value);
+	assignPayloadValue(row, payload, 'coverWidth', 'cover_width', (value) => value);
 	assignPayloadValue(row, payload, 'databaseId', 'database_id', (value) => value === null ? null : textOrNull(value, 160));
 	assignPayloadValue(row, payload, 'surface', 'surface', (value) => PAGE_SURFACE_VALUES.has(value) ? value : null);
 	assignPayloadValue(row, payload, 'visibility', 'visibility', pageVisibility);
@@ -1711,7 +1743,7 @@ async function requirePageScopeAccess(request, pageId, payload, permission, conf
 // content then loads lazily per page on open (fetchPageContent). `version` rides along
 // (#82) so a hydrate learns another device's write without a clock comparison; it names
 // the column, so the list needs groot's osionos-page-version-migration.sql applied.
-const PAGE_LIST_SELECT = 'id,title,icon,cover,cover_position,updated_at,created_at,workspace_id,owner_id,visibility,collaborators,parent_page_id,sort_order,database_id,archived_at,properties,surface,is_template,is_default_template,template_surface,recurrence,version';
+const PAGE_LIST_SELECT = 'id,title,icon,cover,cover_position,cover_height,cover_width,updated_at,created_at,workspace_id,owner_id,visibility,collaborators,parent_page_id,sort_order,database_id,archived_at,properties,surface,is_template,is_default_template,template_surface,recurrence,version';
 
 // One chunk of the workspace-wide scan: small enough that no single response is the whole
 // workspace, large enough that an ordinary one is answered in a couple of requests.
@@ -4546,7 +4578,7 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	// Only the owner changes who may read the page; a non-owner's sharing keys are dropped
 	// (listed in `ignored` when they differed) while the rest of the edit is still written.
 	const sharingChecked = withoutForeignSharingChanges(pagePayload, existing, context.token.userId);
-	const { payload, ignored } = await withoutUnreachableParent(sharingChecked, existing, context.token, config, fetchImpl);
+	const { payload, ignored } = await withoutUnreachableParent(withoutInvalidCoverSize(sharingChecked), existing, context.token, config, fetchImpl);
 	if (Object.keys(payload).length === 0 && Object.keys(pagePayload).length > 0) {
 		// Nothing left to write — not even updated_at, so the version did not move and
 		// the caller's baseVersion stays valid (that is why no version is answered here).

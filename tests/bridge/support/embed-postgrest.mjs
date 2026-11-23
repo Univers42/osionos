@@ -25,7 +25,7 @@ const TABLE_COLUMNS = {
 	osionos_workspaces: ['id', 'owner_id', 'name', 'slug', 'settings', 'created_at', 'updated_at'],
 	osionos_workspace_members: ['workspace_id', 'user_id', 'role', 'permissions'],
 	osionos_pages: [
-		'id', 'title', 'icon', 'cover', 'cover_position', 'updated_at', 'created_at', 'workspace_id', 'owner_id',
+		'id', 'title', 'icon', 'cover', 'cover_position', 'cover_height', 'cover_width', 'updated_at', 'created_at', 'workspace_id', 'owner_id',
 		'visibility', 'collaborators', 'parent_page_id', 'sort_order', 'database_id', 'archived_at', 'properties',
 		'surface', 'is_template', 'is_default_template', 'template_surface', 'recurrence', 'content', 'version',
 	],
