@@ -1,10 +1,9 @@
 // ADR 0067 PH7 / ADR 0064 PS22 for osio.profile.page: the profile-as-a-page surface adds nothing
-// to the boot chunk graph. It loads behind the profile tab's own lazy import, and the banner
-// mirror loads only when the flag is on.
+// to the boot chunk graph. It loads behind the profile tab's own lazy import.
 // Caveat: a source check, not a bundle measurement. It holds while these imports keep their
 // shape; a new static importer under a name not listed in SURFACE is not seen.
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -12,7 +11,7 @@ import { fileURLToPath } from "node:url";
 const SRC = fileURLToPath(new URL("../../src/", import.meta.url));
 const read = (path: string) => readFileSync(join(SRC, path), "utf8");
 
-const SURFACE = ["ProfileAsPage", "CreateProfilePage", "ProfileIdentityHeader", "useReadmeCover", "profileReadmeSeed", "bannerCoverSync", "sharedCover"];
+const SURFACE = ["ProfileAsPage", "CreateProfilePage", "ProfileIdentityHeader", "useReadmeCover", "profileReadmeSeed", "sharedCover"];
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -46,8 +45,13 @@ test("PH7: the page surface is imported only from inside its own lazy chunk", ()
   }
 });
 
-test("PH7: the banner mirror loads dynamically, behind the flag", () => {
+// PS36: the banner is not copied into the README page cover. A write overwrote a hand-set cover
+// and left a dangling one when the banner object was deleted; the cover falls back to the
+// banner at render time only, and the write waits for a bridge ruling.
+test("PS36: a banner change writes nothing to the README page", () => {
   const banner = read("features/settings/profile/BannerUpload.tsx");
-  assert.match(banner, /if \(!isProfilePageEnabled\(\)\) return 'skipped';\s*const \{ mirrorBanner \} = await import\('@\/widgets\/profile-page\/bannerCoverSync'\)/);
-  assert.doesNotMatch(banner, /^import [^;]*bannerCoverSync/m);
+  assert.doesNotMatch(banner, /widgets\/profile-page|isProfilePageEnabled|editPageHeader|patchPage/);
+  for (const gone of ["widgets/profile-page/bannerCoverSync.ts", "widgets/profile-page/model/bannerCoverMirror.ts"]) {
+    assert.equal(existsSync(join(SRC, gone)), false, `${gone} is removed`);
+  }
 });

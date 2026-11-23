@@ -90,13 +90,39 @@ test("PS35: a cover the shared rule refuses is not drawn", () => {
   assert.ok(!html.includes('data-testid="page-cover"'), html.slice(0, 300));
 });
 
-test("PS36: the owner sees their README page's cover over the banner", () => {
+const WRITES = ["editPageHeader", "patchPage", "addPage", "updatePageContent"] as const;
+
+/** Runs `draw` with every page-store write and every non-GET fetch counted instead of sent. */
+function countWrites(draw: () => string): { html: string; writes: string[] } {
+  const writes: string[] = [];
+  const saved = Object.fromEntries(WRITES.map((name) => [name, usePageStore.getState()[name]]));
+  const fetchBefore = globalThis.fetch;
+  usePageStore.setState(Object.fromEntries(WRITES.map((name) => [name, () => { writes.push(name); }])) as never);
+  globalThis.fetch = (async (input: unknown, init?: { method?: string }) => {
+    if ((init?.method ?? "GET").toUpperCase() !== "GET") writes.push(`fetch ${String(input)}`);
+    return new Response("{}", { status: 200 });
+  }) as typeof fetch;
+  try {
+    return { html: draw(), writes };
+  } finally {
+    usePageStore.setState(saved as never);
+    globalThis.fetch = fetchBefore;
+  }
+}
+
+// Caveat: renderToStaticMarkup runs no effects, so this sees writes made while drawing, not a
+// write an effect would issue after mount; tests/canvas/profile-page-lazy.test.ts pins that
+// the banner uploader has no README write path at all.
+test("PS36: the README cover wins over the banner, and drawing either writes nothing", () => {
   const gradient = "linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)";
-  storePage({ cover: gradient });
-  const html = asPage({ isOwner: true });
-  assert.ok(html.includes("#8b5cf6") && !html.includes(`src="${BANNER}"`), html.slice(0, 600));
   storePage({});
-  assert.ok(asPage({ isOwner: true }).includes(`src="${BANNER}"`), "no page cover yet: the banner");
+  const banner = countWrites(() => asPage({ isOwner: true }));
+  assert.ok(banner.html.includes(`src="${BANNER}"`), "no README cover: the banner is drawn");
+  assert.deepEqual(banner.writes, []);
+  storePage({ cover: gradient });
+  const cover = countWrites(() => asPage({ isOwner: true }));
+  assert.ok(cover.html.includes("#8b5cf6") && !cover.html.includes(`src="${BANNER}"`), cover.html.slice(0, 600));
+  assert.deepEqual(cover.writes, []);
 });
 
 test("PS34: the owner without a README gets an explicit create button and nothing is created", () => {
