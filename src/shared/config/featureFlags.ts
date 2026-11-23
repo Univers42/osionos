@@ -65,10 +65,12 @@ export function isEnvOnlyFlagEnabled(
   return typeof value === "string" ? flagValueToBoolean(value, fallback) : fallback;
 }
 
-/** Profile = a page (ADR 0064 PS32–PS38). Env-only: beta builds set
- *  `VITE_OSIO_PROFILE_PAGE=1`; live builds leave it unset (ADR 0067 PH1). */
+/** Profile = a page (ADR 0064 PS32–PS38), off by default. A production build reads only
+ *  `VITE_OSIO_PROFILE_PAGE` (beta sets it, live leaves it unset: ADR 0067 PH1/PH2); dev and
+ *  test builds keep the overrides the e2e specs use. MODE, as isLayoutModesEnabled explains. */
 export function isProfilePageEnabled(): boolean {
-  return isEnvOnlyFlagEnabled("osio.profile.page");
+  if (import.meta.env.MODE === "production") return isEnvOnlyFlagEnabled("osio.profile.page");
+  return isFeatureFlagEnabled("osio.profile.page", false);
 }
 
 /** Canvas V2 (free-frame builder) is the default canvas. The legacy V1 grid

@@ -1,10 +1,11 @@
 // ADR 0067 PH2: a flag ruled live-BLOCKED must not be reachable from a URL or localStorage
 // override in a live build. The ordinary resolver honours both; the env-only accessor must not.
+// isProfilePageEnabled's live lock is MODE-keyed: profile-page-flag.test.ts.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { isFeatureFlagEnabled, isEnvOnlyFlagEnabled, isProfilePageEnabled } = await import(
+const { isFeatureFlagEnabled, isEnvOnlyFlagEnabled } = await import(
   "../../src/shared/config/featureFlags.ts"
 );
 
@@ -27,7 +28,6 @@ test("a URL override turns the ordinary resolver on but never the env-only flag"
   withOverrides(`?${FLAG}=1`, {}, () => {
     assert.equal(isFeatureFlagEnabled(FLAG), true, "control: the URL tier is live");
     assert.equal(isEnvOnlyFlagEnabled(FLAG, false, {}), false);
-    assert.equal(isProfilePageEnabled(), false);
   });
 });
 
@@ -35,7 +35,6 @@ test("a localStorage override never turns the env-only flag on", () => {
   withOverrides("", { [FLAG]: "1", VITE_OSIO_PROFILE_PAGE: "1" }, () => {
     assert.equal(isFeatureFlagEnabled(FLAG), true, "control: the storage tier is live");
     assert.equal(isEnvOnlyFlagEnabled(FLAG, false, {}), false);
-    assert.equal(isProfilePageEnabled(), false);
   });
 });
 
