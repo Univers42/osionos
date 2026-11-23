@@ -193,8 +193,12 @@ export async function startMockBridge(): Promise<MockBridge> {
 					request.socket.destroy();
 					return;
 				}
-				response.writeHead(200, { 'content-type': 'application/json' });
-				response.end(JSON.stringify({ ok: true, version: repeated ?? page.version, content: page.content }));
+				const answer = (): void => {
+					response.writeHead(200, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ ok: true, version: repeated ?? page.version, content: page.content }));
+				};
+				if (mock.delayMs > 0) setTimeout(answer, mock.delayMs);
+				else answer();
 				return;
 			}
 

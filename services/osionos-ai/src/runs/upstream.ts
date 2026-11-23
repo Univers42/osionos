@@ -27,7 +27,8 @@ import { mcpToolChars } from '../mcpClient/runTools.ts';
 import { config } from '../config.ts';
 import { readWebTaint } from '../web/settings.ts';
 import { newWebRun, webToolChars } from '../web/runWeb.ts';
-import { abortCode, pumpUpstream } from './streamPump.ts';
+import { abortCode, pumpUpstream, TOTAL_TIMEOUT_MS } from './streamPump.ts';
+import { makeWriteBudget } from '../modes/writeBudget.ts';
 import { firstPartBudgetMs } from './streamClock.ts';
 import { classifyRunFailure, errorFrame, storedError } from './upstreamError.ts';
 import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
@@ -129,6 +130,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const limits = input.research ? RESEARCH_LIMITS : undefined;
 	const stepLimits = runLimitsFor(input);
 	const startedAt = clock.now();
+	const writeBudget = makeWriteBudget({ startedAtMs: startedAt, totalMs: stepLimits?.deadlineMs ?? TOTAL_TIMEOUT_MS, signal: runController.signal });
 	const runState = {
 		signal: runController.signal,
 		runId,
@@ -377,6 +379,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		}
 
 		research?.end('done', current.budget.deadlineHit === true);
+		await writeBudget.settle();
 		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
 		// The summary is written after `done`, off the run's response, by the
 		// target that answered (context C377, C381).
@@ -384,6 +387,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			scheduleSummary({ db, target: current.target, runId, conversationId, ownerId, oldestKeptId: input.summarizeFrom.oldestKeptId, day });
 		}
 	} catch (error) {
+		await writeBudget.settle();
 		const closed = error instanceof ThreadAccessLost
 			? 'access_revoked'
 			: error instanceof EmptyAnswer
