@@ -144,6 +144,33 @@ describe('a refresh whose flag is cleared mid-write undoes its grant', () => {
 		assert.ok(lines.every((line) => !line.includes(SUBJECT)));
 	});
 
+	it('a post-write read that fails once is retried: a flag cleared meanwhile still undoes the grant', async (t) => {
+		const warn = t.mock.method(console, 'warn', () => {});
+		let stub = null;
+		let failures = 0;
+		const clearOnUpsert = (entry) => {
+			if (entry.name.startsWith('user_roles') && entry.method === 'POST') stub.identityRows[0].is_admin = false;
+		};
+		const fail = (entry) => (isReRead(entry) && failures++ === 0 ? new Response('down', { status: 503 }) : null);
+		stub = createSigninStub({ identities: [structuredClone(identityRow)], roles }, { hold: clearOnUpsert, fail });
+		const { isAdmin } = await refresh(stub);
+		assert.equal(isAdmin, false);
+		assert.equal(adminGrants(stub).length, 0);
+		assert.equal(stub.log.filter(isReRead).length, 2);
+		assert.equal(warn.mock.calls.length, 0, 'a retry that reads is not a failure');
+	});
+
+	it('a post-write read that fails twice keeps the grant once, with its own warning code', async (t) => {
+		const warn = t.mock.method(console, 'warn', () => {});
+		const fail = (entry) => (isReRead(entry) ? new Response('down', { status: 503 }) : null);
+		const stub = createSigninStub({ identities: [structuredClone(identityRow)], roles }, { fail });
+		assert.equal((await refresh(stub)).isAdmin, true);
+		assert.equal(stub.log.filter(isReRead).length, 2);
+		assert.equal(adminGrants(stub).length, 1);
+		const lines = warn.mock.calls.map((call) => String(call.arguments[0]));
+		assert.equal(lines.filter((line) => line.includes('admin_flag_recheck_failed')).length, 1, lines.join(' | '));
+	});
+
 	it('a flagged account is unchanged: the re-read runs, nothing is deleted', async () => {
 		const stub = createSigninStub({ identities: [structuredClone(identityRow)], roles });
 		const { isAdmin } = await refresh(stub);

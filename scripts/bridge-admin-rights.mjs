@@ -25,7 +25,8 @@
  *
  * `deps.rest(path, options)` is a service-role PostgREST call.
  *
- * Caveat: a re-read that fails keeps the row and warns: a flaky link must not strip a real admin.
+ * Caveat: a re-read that fails twice keeps the row and warns: a flaky link must not strip a real
+ * admin. The retry adds up to one more fetch timeout to a sign-in or refresh on a dead link.
  * A demotion racing that sign-in can then leave a grant behind; its read-back answers 503
  * demote_incomplete when it sees it, and a row written after the read-back stays until a re-run.
  * Caveat: an undo delete that fails also leaves the row (warned); the token is still minted
@@ -95,15 +96,21 @@ async function writeGrant(userId, { rest }) {
 	return () => restDelete(rest)(grantRows(userId, roleId));
 }
 
-/** False only when the flag reads cleared; a failed read is "still admin" (see the header Caveat). */
+/**
+ * False only when the flag reads cleared. A failed read is tried once more at once: a cold link's
+ * first call is the one that fails, and each kept row is a grant a racing demotion has to find.
+ * Two failures are "still admin" (see the header Caveat).
+ */
 async function flagHolds(userId, { rest }) {
+	const read = () => rest(flaggedRowsQuery(userId));
+	let rows;
 	try {
-		const rows = await rest(flaggedRowsQuery(userId));
-		return Array.isArray(rows) && rows.some((row) => row?.is_admin === true);
+		rows = await read().catch(read);
 	} catch {
-		warn('the flag re-read after the write failed; the row is kept');
+		warn('admin_flag_recheck_failed: the flag re-read after the write failed twice; the row is kept');
 		return true;
 	}
+	return Array.isArray(rows) && rows.some((row) => row?.is_admin === true);
 }
 
 async function undoAll(undos) {
