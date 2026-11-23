@@ -100,6 +100,8 @@ export async function customizeReadme(
   const linkedId = loaded.profile.readmePageId;
   if (linkedId && !replaceLinked) {
     const linked = await deps.openLinked(linkedId);
+    // The page belongs to the account that clicked: it is not opened in another account's layout.
+    if (deps.accountChanged?.()) return { ok: false, message: ACCOUNT_CHANGED };
     if (linked.status === "found") return { ok: true, page: linked.page };
     if (linked.status === "gone") {
       return { ok: false, linkedGone: true, message: "Your README page was deleted or archived, so it cannot be opened." };
@@ -116,6 +118,9 @@ export async function customizeReadme(
   }
   if (linked === "failed") {
     return { ok: false, message: "Your README was created but could not be linked to your profile. Try again." };
+  }
+  if (deps.accountChanged?.()) {
+    return { ok: false, message: "The account changed during the save. The README was linked in the account that started it." };
   }
   return { ok: true, page };
 }

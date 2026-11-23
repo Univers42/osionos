@@ -9,6 +9,7 @@ import "./support/user-store-env.ts";
 
 const { useUserStore } = await import("../../src/features/auth/index.ts");
 const { usePageStore } = await import("../../src/store/usePageStore.ts");
+const { useAccountProfileStore } = await import("../../src/store/settings/useAccountProfileStore.ts");
 const { readmeDeps } = await import("../../src/widgets/profile-page/useReadmeCustomize.ts");
 const { customizeReadme } = await import("../../src/widgets/profile-page/model/readmeCustomize.ts");
 
@@ -85,6 +86,25 @@ test("control: with no switch the page is linked through the same deps", async (
     const result = await customizeReadme(readmeDeps("jwt-a"), "ws-a");
     assert.deepEqual(bridge.patches, [`jwt-${A}`]);
     assert.equal(result.ok, true);
+  } finally {
+    bridge.restore();
+  }
+});
+
+test("an account switch during the successful save leaves the second account's profile store alone", async () => {
+  signInAs(A);
+  createPageThen(() => undefined);
+  useAccountProfileStore.setState({ status: "ready", profile: { userId: B, readmePageId: null } as never, version: 1, error: null });
+  const bridge = stubBridge(() => {
+    signInAs(B);
+    return json(200, { userId: A, readmePageId: PAGE_ID, version: 4 });
+  });
+  try {
+    const result = await customizeReadme(readmeDeps("jwt-a"), "ws-a");
+    assert.deepEqual(bridge.patches, [`jwt-${A}`], "the save itself was signed by the account that clicked");
+    assert.equal(useAccountProfileStore.getState().profile?.userId, B, "the first account's row is not written over the second's");
+    assert.equal(result.ok, false, "the first account's README is not opened in the second account's layout");
+    assert.match(result.ok ? "" : result.message, /linked in the account that started it/);
   } finally {
     bridge.restore();
   }

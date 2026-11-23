@@ -41,9 +41,11 @@ function openLinked(pageId: string, jwt: string): Promise<LinkedPage> {
 
 // The row the save returns goes into the account store, so the Profile field slash item
 // (gated on the store's readmePageId) shows on the README at once, not after the next hydrate.
-async function saveAndSync(patch: AccountProfilePatch, version: number) {
+// The account store holds one row with no user key: after a switch during the save, the row that
+// comes back belongs to the account that clicked and must not replace the active account's.
+async function saveAndSync(patch: AccountProfilePatch, version: number, accountChanged: () => boolean) {
   const outcome = await saveAccountProfile(patch, version);
-  if (outcome.ok) useAccountProfileStore.setState({ status: "ready", profile: outcome.profile, version: outcome.version, error: null });
+  if (outcome.ok && !accountChanged()) useAccountProfileStore.setState({ status: "ready", profile: outcome.profile, version: outcome.version, error: null });
   return outcome;
 }
 
@@ -53,10 +55,11 @@ export type ReadmeSeed = () => Promise<Block[]>;
 export function readmeDeps(jwt: string, seed?: ReadmeSeed): CustomizeDeps {
   const store = usePageStore.getState();
   const startedBy = useUserStore.getState().activeUserId;
+  const accountChanged = () => useUserStore.getState().activeUserId !== startedBy;
   return {
-    accountChanged: () => useUserStore.getState().activeUserId !== startedBy,
+    accountChanged,
     loadProfile: fetchAccountProfile,
-    saveProfile: saveAndSync,
+    saveProfile: (patch, version) => saveAndSync(patch, version, accountChanged),
     openLinked: (pageId) => openLinked(pageId, jwt),
     createPage: async (id) => {
       const content = seed ? await seed() : [];
