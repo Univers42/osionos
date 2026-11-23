@@ -249,7 +249,7 @@ describe('C605 every membership writer is pinned', () => {
 
 	// Pinned by hand: changing this list is a review of who may write permanent membership.
 	const PINNED = [
-		'scripts/bridge-api.mjs:ensureAdminWorkspaceMembership', // exempt: env-admin provisioning; the admin claim is the gate
+		'scripts/bridge-admin-rights.mjs:writeMembership', // exempt: admin provisioning from the identity flag, undone when the flag reads cleared (osionos#343)
 		'scripts/bridge-api.mjs:handleWorkspaceCreate', // exempt: workspace create writes the caller's own owner row
 		'scripts/bridge-collab.mjs:addMember', // gated: joinCollaboration public and decideJoinRequest approve check first
 		'scripts/bridge-workspace-invite-accept.mjs:acceptInviteRow', // gated: both accept routes re-check the connection before the member POST

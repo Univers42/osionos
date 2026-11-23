@@ -47,6 +47,7 @@ import { createKv } from './bridge-kv.mjs';
 import { createPg } from './bridge-pg.mjs';
 import { createPatGate, patWritePayload } from './bridge-pat-middleware.mjs';
 import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
+import { ADMIN_WORKSPACE_ID, ensureAdminRights, ensureAdminRoleGrant } from './bridge-admin-rights.mjs';
 import { claimPlatformRole, isAdminAddress, platformRoleReader, readPlatformRole } from './bridge-roles.mjs';
 import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 // Re-exported so every existing caller (bridge-chat, bridge-rtc, db-isolation-suite, the tests)
@@ -284,9 +285,8 @@ export function configFromEnv(env = process.env) {
 	};
 }
 
-/** The dedicated admin workspace (seeded by osionos-admin-migration.sql). Admins
- *  are provisioned as members at login so its template pages ride the token. */
-export const ADMIN_WORKSPACE_ID = '0a4d1c2e-0000-4000-8000-000000000ad1';
+// Admins are provisioned as members of the admin workspace at login (bridge-admin-rights.mjs).
+export { ADMIN_WORKSPACE_ID };
 
 export function stableStringify(value) {
 	if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -2095,48 +2095,13 @@ async function resolveAdminFlag(payload, config, fetchImpl) {
 	}
 }
 
-/** Idempotently provision admin-workspace membership so its template pages ride
- *  the session token (workspace_ids). Best-effort; the admin gate is the claim. */
-async function ensureAdminWorkspaceMembership(userId, config, fetchImpl) {
-	if (!config.serviceKey || !config.baasUrl) return;
-	try {
-		await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_workspace_members', {
-			method: 'POST',
-			body: { workspace_id: ADMIN_WORKSPACE_ID, user_id: userId, role: 'admin', permissions: ['read', 'update', 'admin'] },
-			prefer: 'resolution=merge-duplicates,return=minimal',
-		}), { workspaceId: ADMIN_WORKSPACE_ID, userId });
-	} catch {
-		/* best-effort */
-	}
-}
-
 /**
- * The grant the users console reads. The flag names the admin role in the claim, but the console
- * re-reads `public.user_roles` (bridge-account-users.mjs), so a flag with no row was refused there
- * (osionos#296). `expires_at: null` renews an expired grant. Sign-in and refresh both write it.
- * Best-effort, like the membership: a failure leaves the console refused until the next sign-in or
- * refresh (about an hour), never fails either of them.
+ * The service-role call the admin-rights writers take, or null when this bridge has none.
+ * `envListed`: the sign-in is admin by OSIONOS_ADMIN_EMAILS, so no re-read can make it not admin.
  */
-async function ensureAdminRoleGrant(userId, config, fetchImpl) {
-	if (!config.serviceKey || !config.baasUrl) return;
-	try {
-		const roles = await baasRest(config, fetchImpl, 'roles?name=eq.admin&select=id&limit=1');
-		const roleId = Array.isArray(roles) ? roles[0]?.id : null;
-		if (!roleId) return;
-		await baasRest(config, fetchImpl, 'user_roles?on_conflict=user_id,role_id', {
-			method: 'POST',
-			body: { user_id: userId, role_id: roleId, expires_at: null },
-			prefer: 'resolution=merge-duplicates,return=minimal',
-		});
-	} catch {
-		console.warn(`[osionos-bridge] ensureAdminRoleGrant: writing the admin grant failed for ${userId}`);
-	}
-}
-
-/** What the identity flag implies: the admin workspace membership, then the role grant. */
-async function ensureAdminRights(userId, config, fetchImpl) {
-	await ensureAdminWorkspaceMembership(userId, config, fetchImpl);
-	await ensureAdminRoleGrant(userId, config, fetchImpl);
+function adminRightsDeps(config, fetchImpl, envListed = false) {
+	if (!config.serviceKey || !config.baasUrl) return null;
+	return { rest: (path, options) => baasRest(config, fetchImpl, path, options), envListed };
 }
 
 /**
@@ -2183,20 +2148,21 @@ function privateWorkspaceIdOf(payload, persisted) {
 export async function readRefreshClaims(identity, { config, pg, fetchImpl }) {
 	const payload = { subject: identity.sub, provider: identity.provider, email: identity.email, emailVerified: false };
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
-	const [memberWorkspaces] = await Promise.all([
+	const [memberWorkspaces, stillAdmin] = await Promise.all([
 		memberWorkspaceEntries(identity.sub, identity.workspace_ids.slice(0, 1), config, fetchImpl),
-		isAdmin ? ensureAdminRoleGrant(identity.sub, config, fetchImpl) : null,
+		isAdmin ? ensureAdminRoleGrant(identity.sub, adminRightsDeps(config, fetchImpl)) : false,
 	]);
-	const platformRole = isAdmin ? 'admin' : (await readPlatformRole(platformRoleReader(pg), identity.sub)).role;
-	return { isAdmin, platformRole, memberWorkspaces };
+	// A flag cleared between the read and the grant write (a demotion, #343) mints a non-admin token.
+	const platformRole = stillAdmin ? 'admin' : (await readPlatformRole(platformRoleReader(pg), identity.sub)).role;
+	return { isAdmin: stillAdmin, platformRole, memberWorkspaces };
 }
 
 /** Today's order: persist, admin flag, admin membership, member workspaces. Env admins keep it. */
 async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
 	await assertAccountNotRefused(roleReader, payload.subject);
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
-	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
-	if (isAdmin) await ensureAdminRights(payload.subject, config, fetchImpl);
+	const flagged = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
+	const isAdmin = flagged && await ensureAdminRights(payload.subject, adminRightsDeps(config, fetchImpl, isEnvAdminEmail(payload, config)));
 	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceIdOf(payload, persisted)], config, fetchImpl);
 	// The env admin is the root of trust (ADR 0005): the flag names the admin role, so the
 	// catalogue is not read for an admin at all.
@@ -2232,9 +2198,11 @@ async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
 	// admin's read is discarded: the flag is the root of trust and names the role.
 	const platformRole = isAdmin ? 'admin' : (roleRead.status === 'fulfilled' ? roleRead.value.role : null);
 	if (isAdmin) {
-		await ensureAdminRights(payload.subject, config, fetchImpl);
+		const stillAdmin = await ensureAdminRights(payload.subject, adminRightsDeps(config, fetchImpl, isEnvAdminEmail(payload, config)));
 		const excludeIds = [privateWorkspaceIdOf(payload, persisted)];
-		return { persisted, isAdmin, platformRole, memberWorkspaces: await memberWorkspaceEntries(payload.subject, excludeIds, config, fetchImpl) };
+		// Cleared meanwhile (#343): both first-round reads predate the demotion, so both are read again.
+		const role = stillAdmin ? 'admin' : (await readPlatformRole(roleReader, payload.subject)).role;
+		return { persisted, isAdmin: stillAdmin, platformRole: role, memberWorkspaces: await memberWorkspaceEntries(payload.subject, excludeIds, config, fetchImpl) };
 	}
 	// The private workspace is still in this read; createUserSession drops it from the extras.
 	return { persisted, isAdmin, platformRole, memberWorkspaces: memberRead.status === 'fulfilled' ? memberRead.value : [] };

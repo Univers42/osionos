@@ -109,3 +109,47 @@ describe('a refresh writes the admin grant the identity flag implies', () => {
 		assert.equal(store.callsTo('user_roles').filter((call) => call.method === 'POST').length, writesBefore + 1);
 	});
 });
+
+// osionos#343 D343-10: a demotion clears the flag, then deletes the grant. A refresh that read the
+// flag before the clear and upserts after the delete must not leave a durable admin behind.
+describe('a refresh whose flag is cleared mid-write undoes its grant', () => {
+	const identityRow = { provider: 'prismatica', subject: SUBJECT, email_hash: hashOf('owner@example.com'), is_admin: true, workspace_id: PRIVATE_ID };
+	const tokenIdentity = { sub: SUBJECT, provider: 'prismatica', email: 'owner@example.com', workspace_ids: [PRIVATE_ID] };
+	const refresh = (stub) => readRefreshClaims(tokenIdentity, { config: signinConfig(), pg: noFactorPg(), fetchImpl: stub.fetchImpl });
+	const deletes = (stub) => stub.log.filter((entry) => entry.method === 'DELETE');
+	const isReRead = (entry) => entry.name === 'osionos_bridge_identities' && entry.params.has('or');
+
+	it('the post-write read sees the flag cleared: the grant is deleted and the claim is not admin', async () => {
+		let stub = null;
+		const clearOnUpsert = (entry) => {
+			if (entry.name.startsWith('user_roles') && entry.method === 'POST') stub.identityRows[0].is_admin = false;
+		};
+		stub = createSigninStub({ identities: [structuredClone(identityRow)], roles }, { hold: clearOnUpsert });
+		const { isAdmin, platformRole } = await refresh(stub);
+		assert.deepEqual({ isAdmin, platformRole: platformRole ?? null }, { isAdmin: false, platformRole: null });
+		assert.equal(adminGrants(stub).length, 0);
+		assert.deepEqual(deletes(stub).map((entry) => entry.name), ['user_roles']);
+	});
+
+	it('a post-write read that fails keeps the grant, warns without ids, and stays admin', async (t) => {
+		const warn = t.mock.method(console, 'warn', () => {});
+		const fail = (entry) => (isReRead(entry) ? new Response('down', { status: 503 }) : null);
+		const stub = createSigninStub({ identities: [structuredClone(identityRow)], roles }, { fail });
+		const { isAdmin } = await refresh(stub);
+		assert.equal(isAdmin, true);
+		assert.equal(adminGrants(stub).length, 1);
+		assert.equal(deletes(stub).length, 0);
+		const lines = warn.mock.calls.map((call) => String(call.arguments[0]));
+		assert.ok(lines.some((line) => /flag re-read after the write failed/.test(line)));
+		assert.ok(lines.every((line) => !line.includes(SUBJECT)));
+	});
+
+	it('a flagged account is unchanged: the re-read runs, nothing is deleted', async () => {
+		const stub = createSigninStub({ identities: [structuredClone(identityRow)], roles });
+		const { isAdmin } = await refresh(stub);
+		assert.equal(isAdmin, true);
+		assert.equal(adminGrants(stub).length, 1);
+		assert.equal(stub.log.filter(isReRead).length, 1);
+		assert.equal(deletes(stub).length, 0);
+	});
+});
