@@ -34,11 +34,12 @@ describe('POST /api/pages/from-markdown through a personal access token', () => 
 		assert.equal(answer.body.blockCount, stored.content.length);
 	});
 
-	it('answers a write-only token without the attributes it may not read', async (t) => {
+	it('answers a write-only token with the id only, as POST /api/pages answers _id', async (t) => {
 		const { world, secret } = await viaPat(t, classic('pages:write'));
 		const answer = await create(world, secret);
 		assert.equal(answer.status, 201, answer.text);
-		assert.deepEqual(answer.body, {});
+		assert.deepEqual(Object.keys(answer.body), ['id']);
+		assert.ok(world.pages.rows('osionos_pages').some((row) => row.id === answer.body.id));
 	});
 
 	it('refuses markdown from a token that may not write content (403 pat_forbidden_attribute) and writes nothing', async (t) => {

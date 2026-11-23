@@ -76,13 +76,15 @@ function appendReply(parsed, readMask) {
 }
 
 /**
- * A page created from markdown (osionos#240) answers id, title and blockCount: the id follows
- * the read of `_id`, the title of `title`, and blockCount and version follow `content`.
+ * A page created from markdown (osionos#240) always answers its id, as maskAttributes always
+ * keeps `_id`: the caller must be able to address what it created. The title follows the read
+ * of `title`; blockCount and version follow `content`.
  */
 function markdownCreatedReply(parsed, readMask) {
 	const read = Array.isArray(readMask) ? readMask : [];
-	const follows = { id: '_id', title: 'title', blockCount: 'content', version: 'content' };
-	return Object.fromEntries(Object.entries(follows).filter(([key, attribute]) => read.includes(attribute) && Object.hasOwn(parsed, key)).map(([key]) => [key, parsed[key]]));
+	const follows = { title: 'title', blockCount: 'content', version: 'content' };
+	const kept = Object.fromEntries(Object.entries(follows).filter(([key, attribute]) => read.includes(attribute) && Object.hasOwn(parsed, key)).map(([key]) => [key, parsed[key]]));
+	return Object.hasOwn(parsed, 'id') ? { id: parsed.id, ...kept } : kept;
 }
 
 /** The whole surface a PAT reaches: the page routes and the four the MCP server needs. */
