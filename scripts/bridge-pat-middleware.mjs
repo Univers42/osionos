@@ -76,15 +76,13 @@ function appendReply(parsed, readMask) {
 }
 
 /**
- * A page created from markdown (osionos#240) always answers its id, as maskAttributes always
- * keeps `_id`: the caller must be able to address what it created. The title follows the read
- * of `title`; blockCount and version follow `content`.
+ * A page created from markdown (osionos#240) always answers its id, as maskAttributes keeps
+ * `_id`; the title follows the read of `title`, blockCount and version that of `content`.
  */
 function markdownCreatedReply(parsed, readMask) {
 	const read = Array.isArray(readMask) ? readMask : [];
-	const follows = { title: 'title', blockCount: 'content', version: 'content' };
-	const kept = Object.fromEntries(Object.entries(follows).filter(([key, attribute]) => read.includes(attribute) && Object.hasOwn(parsed, key)).map(([key]) => [key, parsed[key]]));
-	return Object.hasOwn(parsed, 'id') ? { id: parsed.id, ...kept } : kept;
+	const follows = [['title', 'title'], ['blockCount', 'content'], ['version', 'content']].filter(([key, attribute]) => read.includes(attribute) && Object.hasOwn(parsed, key));
+	return Object.fromEntries([['id', parsed.id], ...follows.map(([key]) => [key, parsed[key]])]);
 }
 
 /** The whole surface a PAT reaches: the page routes and the four the MCP server needs. */
@@ -305,20 +303,17 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, rateL
 		return answer(ctx.response, ctx.config, status, code);
 	}
 
-	const stampOf = () => new Date(now()).toISOString();
-
 	/**
 	 * One conditional PATCH decides atomically which request of the hour records the use; a row
 	 * read as used within the hour skips even that. Caveat: the row was read at lookup, so two
 	 * concurrent first calls both try the PATCH (the condition still lets only one win).
 	 */
 	async function claimHourlyUse(row) {
-		const rowId = row.id;
 		const lastUsed = Date.parse(row.last_used_at);
 		if (lastUsed > now() - AUDIT_WINDOW_MS) return null;
-		const stamp = stampOf();
+		const stamp = new Date(now()).toISOString();
 		const cutoff = new Date(now() - AUDIT_WINDOW_MS).toISOString();
-		const claimed = await guarded('token use', () => pg.asService().patch(`${PAT_TABLE}?id=eq.${rowId}&or=(last_used_at.is.null,last_used_at.lt.${cutoff})&select=id`, { last_used_at: stamp }, { prefer: 'return=representation' }));
+		const claimed = await guarded('token use', () => pg.asService().patch(`${PAT_TABLE}?id=eq.${row.id}&or=(last_used_at.is.null,last_used_at.lt.${cutoff})&select=id`, { last_used_at: stamp }, { prefer: 'return=representation' }));
 		return Array.isArray(claimed) && claimed.length > 0 ? stamp : null;
 	}
 
@@ -367,14 +362,8 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, rateL
 		const row = await lookup(presented);
 		if (!row) return answer(response, config, 401, 'pat_invalid');
 		const ctx = { request, response, url, config, row, jti: randomUUID() };
-		if (row.revoked_at != null) {
-			await refuse(ctx, 401, 'pat_invalid', 'revoked');
-			return true;
-		}
-		if (!(Date.parse(row.expires_at) > now())) {
-			await refuse(ctx, 401, 'pat_invalid', 'expired');
-			return true;
-		}
+		if (row.revoked_at != null) return refuse(ctx, 401, 'pat_invalid', 'revoked');
+		if (!(Date.parse(row.expires_at) > now())) return refuse(ctx, 401, 'pat_invalid', 'expired');
 		// The owner's ban or live suspension refuses the token like it refuses a sign-in (the one
 		// moderation function every path asks); a failed moderation read lets it through, as there.
 		try {
