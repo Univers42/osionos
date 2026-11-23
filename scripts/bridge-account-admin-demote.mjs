@@ -45,6 +45,7 @@ import { bumpAccessAfter } from './bridge-access-generation.mjs';
 import { createEmailRows, openAddress } from './bridge-account-email-rows.mjs';
 import { requireAdmin } from './bridge-admin-check.mjs';
 import { ADMIN_WORKSPACE_ID, flaggedRowsQuery } from './bridge-admin-rights.mjs';
+import { BAAS_FETCH_TIMEOUT_MS } from './bridge-baas-body.mjs';
 import { readGotrueUser } from './bridge-gotrue-user.mjs';
 import { requireSudo, writeAudit } from './bridge-guard.mjs';
 import { pgError } from './bridge-pg.mjs';
@@ -54,9 +55,13 @@ import { sessionClock } from './bridge-sessions.mjs';
 import { sendJson } from './bridge-social-core.mjs';
 
 const LOCK_KEY = 'admin-demote';
-// The locked section is at most nine sequential service-role calls of 8 s each (the read-back is
-// one parallel round): 72 s. The TTL sits above it, so a slow run never loses its lock midway.
-const LOCK_TTL_MS = 120_000;
+// The locked section is at most ten sequential service-role calls (the read-back's three reads
+// are one parallel round), each bounded by the fetch timeout; two more rounds are the margin.
+// Caveat: the bound holds only while each call aborts at BAAS_FETCH_TIMEOUT_MS. A paused
+// process, a starved event loop or a slow kv adds time it does not count, and that run loses
+// the lock midway (the release Caveat in the header, and the re-read before the clear).
+const LOCKED_ROUNDS = 10;
+const LOCK_TTL_MS = (LOCKED_ROUNDS + 2) * BAAS_FETCH_TIMEOUT_MS;
 const MEMBERSHIP = `osionos_workspace_members?workspace_id=eq.${ADMIN_WORKSPACE_ID}`;
 const LISTED = 'This account is an admin by an address listed in OSIONOS_ADMIN_EMAILS, and its next sign-in would make it admin again. '
 	+ 'Remove the address from OSIONOS_ADMIN_EMAILS first, then demote it.';

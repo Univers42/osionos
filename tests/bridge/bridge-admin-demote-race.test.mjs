@@ -6,6 +6,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { USER_A, USER_B } from './support/account-world.mjs';
 import { sudoAdminToken } from './support/admin-route-world.mjs';
+import { BAAS_FETCH_TIMEOUT_MS } from '../../scripts/bridge-baas-body.mjs';
 import { IDENTITIES, demoteTables, flagged, startDemoteWorld } from './support/demote-world.mjs';
 
 const flaggedUsers = (store) => new Set(store.rows(IDENTITIES).filter((row) => row.is_admin === true && row.user_id).map((row) => row.user_id));
@@ -41,6 +42,23 @@ describe('two admins demoting each other at once', () => {
 		assert.equal(answers.find((answer) => answer.status === 409).body.code, 'demote_busy');
 		assert.equal(flaggedUsers(world.store).size, 1, 'one flagged admin is left');
 		assert.equal(world.kv.values.has('osb:admin-demote'), false);
+	});
+
+	it('the lock outlives the locked section even when every call in it runs to the fetch timeout', async (t) => {
+		const world = await startDemoteWorld(t);
+		const { setNx, del } = world.kv;
+		const lock = { ttl: 0, from: 0, calls: 0 };
+		world.kv.setNx = (key, value, ttlMs) => {
+			if (key === 'admin-demote') Object.assign(lock, { ttl: ttlMs, from: world.store.calls.length });
+			return setNx(key, value, ttlMs);
+		};
+		world.kv.del = (key) => {
+			if (key === 'admin-demote') lock.calls = world.store.calls.length - lock.from;
+			return del(key);
+		};
+		assert.equal((await world.demote(USER_B)).status, 200);
+		assert.ok(lock.calls >= 10, `${lock.calls} calls under the lock`);
+		assert.ok(lock.ttl >= lock.calls * BAAS_FETCH_TIMEOUT_MS, `TTL ${lock.ttl} ms under ${lock.calls} calls of ${BAAS_FETCH_TIMEOUT_MS} ms`);
 	});
 
 	it('the loser retrying after the winner is refused 403: its own flag is gone', async (t) => {
