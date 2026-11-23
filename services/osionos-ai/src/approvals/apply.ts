@@ -162,7 +162,9 @@ export async function applyClaimed(call: ApplyCall, row: ApprovalRow): Promise<A
 		return recordFailure(call, row, 'the write cannot be sent: the bridge is not configured');
 	}
 	if (row.tool === 'add_blocks') return applyAppend(call, row, write);
-	const previousTitle = row.tool === 'rename_page' ? await readTitleBefore(call.db, str(row.args.pageId)) : null;
+	// A failed read is "no inverse recorded": the rename still goes out, undoable-less,
+	// rather than throwing with the row left 'executing' and nothing sent.
+	const previousTitle = row.tool === 'rename_page' ? await readTitleBefore(call.db, str(row.args.pageId)).catch(() => null) : null;
 	const answer = await bridgeWrite({ url: call.bridgeUrl, token: call.token, write });
 	if (!answer.ok) return recordFailure(call, row, refusalMessage(answer), answer.status);
 	const done = executedOf(row, answer.body, previousTitle);

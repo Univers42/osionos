@@ -32,14 +32,22 @@ export async function answerAppliedUndo(ctx: RouteContext, approval: ApprovalRow
 	return REFUSAL_STATUS[result.code];
 }
 
-/** The undoable rows of a turn the caller owns, newest first, minus the ones already undone. */
-async function turnRows(ctx: RouteContext, runId: string, ownerId: string): Promise<ApprovalRow[]> {
+/**
+ * The undoable rows of a turn the caller owns, newest first, minus the ones already undone.
+ * A turn spans its decided continuations, which share the turn_id of the run that asked;
+ * the id named may be a run of the turn or the turn id itself.
+ */
+async function turnRows(ctx: RouteContext, turnId: string, ownerId: string): Promise<ApprovalRow[]> {
 	const found = await ctx.deps.db.query<ApprovalRow>(
 		`select ${COLUMNS} from public.ai_approvals
-		  where run_id = $1 and owner_id = $2 and status = 'executed' and tool = any($3::text[])
+		  where run_id in (
+		        select id from public.ai_runs
+		         where owner_id = $2
+		           and (id = $1 or turn_id = $1 or turn_id = (select turn_id from public.ai_runs where id = $1 and owner_id = $2)))
+		    and owner_id = $2 and status = 'executed' and tool = any($3::text[])
 		    and coalesce(result, '{}'::jsonb)->>'undoneAt' is null
 		  order by created_at desc, id desc`,
-		[runId, ownerId, [...UNDOABLE_TOOLS]],
+		[turnId, ownerId, [...UNDOABLE_TOOLS]],
 	);
 	return found.rows;
 }
@@ -64,6 +72,7 @@ interface RowReport {
  * not part of this turn's undo.
  */
 export async function handleTurnUndo(ctx: RouteContext): Promise<number> {
+	if (!config.modesEnabled) return fail(ctx, 404, 'not_found');
 	const user = requireUser(ctx);
 	if (!user) return 401;
 	const runId = ctx.params[0] ?? '';

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
-import { startHarness, USER_A, WORKSPACE_A } from './harness.ts';
 import { SseStream, collect } from './sse.ts';
 
 /**
@@ -9,6 +8,10 @@ import { SseStream, collect } from './sse.ts';
  * undone only while the page still reads the way the write left it; every
  * other state is a named refusal and the page is left alone.
  */
+// The undo routes are behind the flag (I1): this file runs them with it on.
+process.env.OSIONOS_AI_MODES = 'on';
+process.env.OSIONOS_AI_MODES_USERS = '33333333-3333-4333-8333-333333333333';
+const { startHarness, USER_A, WORKSPACE_A } = await import('./harness.ts');
 const { app, bridge, mock, postRun, tokenFor, createConversation, call } = await startHarness();
 const { undoApplied } = await import('../src/approvals/undoApplied.ts');
 const { blockDigest } = await import('../src/approvals/inverseData.ts');
@@ -332,5 +335,47 @@ describe('POST /api/ai/runs/:id/undo-writes', () => {
 	it('answers 404 for a run that is not the caller\'s', async () => {
 		const answer = await post(randomUUID());
 		assert.equal(answer.status, 404);
+	});
+});
+
+describe('turn undo spans the decided continuations of the turn (I2)', () => {
+	it('undoes a write made by a continuation run that shares the turn_id', async () => {
+		run = await aRun();
+		const first = run;
+		const pageId = await page([HUMAN, AI], 'Turn');
+		const a = await blocksRow(pageId);
+		const continuation = await aRun();
+		const turn = await app.db.query('select turn_id from public.ai_runs where id = $1', [first.runId]);
+		await app.db.query('update public.ai_runs set turn_id = $2 where id = $1', [continuation.runId, turn.rows[0].turn_id ?? first.runId]);
+		await app.db.query('update public.ai_runs set turn_id = $2 where id = $1', [first.runId, turn.rows[0].turn_id ?? first.runId]);
+		const otherPage = await page([HUMAN, AI], 'Turn2');
+		run = continuation;
+		const b = await blocksRow(otherPage);
+		const answer = await call(`/api/ai/runs/${first.runId}/undo-writes`, { method: 'POST', token: TOKEN, body: {} });
+		const body = answer.body as { results: { approvalId: string; ok: boolean }[] };
+		assert.equal(answer.status, 200);
+		assert.deepEqual(body.results.map((r) => r.approvalId).sort(), [a.id, b.id].sort());
+		assert.deepEqual(bridge.pageContent(otherPage)?.content, [HUMAN]);
+	});
+});
+
+describe('POST /api/ai/approvals/:id/undo for an applied write (T17)', () => {
+	const post = (id: string) => call(`/api/ai/approvals/${id}/undo`, { method: 'POST', token: TOKEN, body: {} });
+
+	it('undoes an applied add_blocks over HTTP', async () => {
+		run = await aRun();
+		const pageId = await page([HUMAN, AI]);
+		const row = await blocksRow(pageId);
+		const answer = await post(row.id);
+		assert.equal(answer.status, 200);
+		assert.deepEqual(bridge.pageContent(pageId)?.content, [HUMAN]);
+	});
+
+	it('answers not_undoable for an archive_page row', async () => {
+		run = await aRun();
+		const row = await executed('archive_page', { pageId: randomUUID() }, {});
+		const answer = await post(row.id);
+		assert.equal(answer.status, 409);
+		assert.equal((answer.body as { code?: string }).code, 'not_undoable');
 	});
 });

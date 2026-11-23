@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { claimPartial, getOwnedApproval, recordOutcome } from '../approvals/repo.ts';
 import type { ApprovalRow } from '../approvals/types.ts';
+import { config } from '../config.ts';
 import { donePageItems } from './items.ts';
 import { UNDOABLE_TOOLS, recordedOf } from '../approvals/undoApplied.ts';
 import { undoBuild, type UndoBuildResult } from './undo.ts';
@@ -35,8 +36,10 @@ export type UndoOutcome =
 /** Why an approval cannot be undone now, or null when it can. */
 export function undoRefusal(approval: Pick<ApprovalRow, 'tool' | 'status' | 'result'>): string | null {
 	// An applied write that recorded its inverse goes to `undoApplied`; one that
-	// did not (a row from before the record) keeps the old answer.
+	// did not (a row from before the record) keeps the old answer. With the modes
+	// flag off nothing is routed there: the answer is the pre-modes `not_a_plan`.
 	if (approval.tool !== 'build_plan') {
+		if (!config.modesEnabled) return 'not_a_plan';
 		if (recordedOf(approval)) return null;
 		return UNDOABLE_TOOLS.has(approval.tool) ? 'not_a_plan' : 'not_undoable';
 	}
