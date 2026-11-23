@@ -39,6 +39,7 @@ import {
 } from './bridge-social-core.mjs';
 import { isOwnerOrCollaborator } from './bridge-page-read.mjs';
 import { bumpAccessAfter } from './bridge-access-generation.mjs';
+import { publicAnswerBody, publicErrorFrame } from './bridge-error-sentences.mjs';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -252,7 +253,8 @@ async function executeTool(deps, session, name, input) {
 	try {
 		return await runner(deps, session, input ?? {});
 	} catch (error) {
-		return { ok: false, error: error instanceof Error ? error.message : 'Tool execution failed.' };
+		// The result is streamed to the client as a tool_result frame, so it is a public answer.
+		return { ok: false, error: publicErrorFrame(error).message };
 	}
 }
 
@@ -272,6 +274,19 @@ function writeSseHead(response, config) {
 		'access-control-allow-credentials': 'true',
 		vary: 'Origin',
 	});
+}
+
+/** The plain JSON failure sent before the stream opens. */
+function replyFailure(response, status, message, config) {
+	response.writeHead(status, {
+		'content-type': 'application/json; charset=utf-8',
+		'cache-control': 'no-store',
+		'access-control-allow-origin': config.allowedOrigin,
+		'access-control-allow-credentials': 'true',
+		vary: 'Origin',
+	});
+	response.end(JSON.stringify(publicAnswerBody(status, { ok: false, message })));
+	return true;
 }
 
 /* -------------------------- Anthropic message turn ------------------------- */
@@ -428,7 +443,7 @@ async function streamAgent(deps, session, payload, response, config) {
 		}
 		sse(response, 'result', { text: finalText });
 	} catch (error) {
-		sse(response, 'error', { message: error instanceof Error ? error.message : 'Agent stream failed.' });
+		sse(response, 'error', publicErrorFrame(error));
 		sse(response, 'result', { text: finalText });
 	}
 	response.end();
@@ -451,32 +466,14 @@ export function createAgentHandler({ config, verifySession, fetchImpl = fetch, e
 		try {
 			session = verifySession(bearerToken(request), requestConfig);
 		} catch (error) {
-			const status = error?.status ?? 401;
-			response.writeHead(status, {
-				'content-type': 'application/json; charset=utf-8',
-				'cache-control': 'no-store',
-				'access-control-allow-origin': requestConfig.allowedOrigin,
-				'access-control-allow-credentials': 'true',
-				vary: 'Origin',
-			});
-			response.end(JSON.stringify({ ok: false, message: error instanceof Error ? error.message : 'Authentication required.' }));
-			return true;
+			return replyFailure(response, error?.status ?? 401, error instanceof Error ? error.message : 'Authentication required.', requestConfig);
 		}
 
 		let payload;
 		try {
 			payload = await readJsonBody(request, AGENT_BODY_LIMIT);
 		} catch (error) {
-			const status = error?.status ?? 400;
-			response.writeHead(status, {
-				'content-type': 'application/json; charset=utf-8',
-				'cache-control': 'no-store',
-				'access-control-allow-origin': requestConfig.allowedOrigin,
-				'access-control-allow-credentials': 'true',
-				vary: 'Origin',
-			});
-			response.end(JSON.stringify({ ok: false, message: error instanceof Error ? error.message : 'Invalid request body.' }));
-			return true;
+			return replyFailure(response, error?.status ?? 400, error instanceof Error ? error.message : 'Invalid request body.', requestConfig);
 		}
 
 		const requestDeps = { ...deps, config: requestConfig };

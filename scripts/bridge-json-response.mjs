@@ -50,9 +50,10 @@ function logStreamError(error) {
 	if (error && error.code !== 'ERR_STREAM_PREMATURE_CLOSE') console.error(`bridge: gzip answer failed: ${error.message}`);
 }
 
-// Every answer written through here has its 5xx message held to a fixed sentence. The rtc, runner
-// and IDE sandbox writers call publicAnswerBody; agent, connector, oauth, perms, ide-http-edge and
-// the SSE streams write around both.
+// Every answer written through here has its 5xx message held to a fixed sentence. The rtc, runner,
+// IDE sandbox and agent writers call publicAnswerBody, the agent and Claude SSE streams
+// publicErrorFrame; the connector, oauth, perms, ide-http-edge writers and the runner's own SSE
+// frames send only fixed sentences on a 5xx.
 export function writeJsonResponse(response, status, headers, body) {
 	const payload = JSON.stringify(publicAnswerBody(status, body));
 	if (typeof payload !== 'string' || payload.length < GZIP_MIN_CHARS) {

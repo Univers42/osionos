@@ -12,7 +12,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { fixedMessage, publicAnswerBody, publicSentence } from '../../scripts/bridge-error-sentences.mjs';
+import { fixedMessage, publicAnswerBody, publicErrorFrame, publicSentence } from '../../scripts/bridge-error-sentences.mjs';
 
 const UPSTREAM = 'BaaS request failed with 500: {"message":"column osionos_pages.owner_col does not exist"}';
 
@@ -60,5 +60,23 @@ describe('publicAnswerBody', () => {
 
 	it('leaves a body without a string message alone', () => {
 		for (const body of [null, 'text', [1], { ok: false }, { message: 3 }]) assert.equal(publicAnswerBody(500, body), body);
+	});
+});
+
+describe('publicErrorFrame', () => {
+	it('holds a 5xx error to the fixed sentence and logs the original', (t) => {
+		const logged = t.mock.method(console, 'error', () => {});
+		assert.deepEqual(publicErrorFrame(Object.assign(new Error(UPSTREAM), { status: 502 })), { message: fixedMessage(502) });
+		assert.deepEqual(logged.mock.calls.map((call) => call.arguments[0]), [`bridge: 502 answer: ${UPSTREAM}`]);
+	});
+
+	it('reads an error without a status as a 500', (t) => {
+		t.mock.method(console, 'error', () => {});
+		assert.deepEqual(publicErrorFrame(new Error('spawn claude ENOENT')), { message: fixedMessage(500) });
+		assert.deepEqual(publicErrorFrame('thrown text'), { message: fixedMessage(500) });
+	});
+
+	it('keeps the words of an error under 500', () => {
+		assert.deepEqual(publicErrorFrame(Object.assign(new Error('Prompt is required.'), { status: 422 })), { message: 'Prompt is required.' });
 	});
 });

@@ -2,12 +2,13 @@
  * What an error answer may say. A route's message can quote upstream text (PostgREST names
  * the table, column or constraint that failed), and the routes copy `error.message` into
  * their bodies through a dozen helpers, so every answer written through writeJsonResponse
- * holds a 5xx message to a fixed sentence and logs the original. The rtc, runner and IDE
- * sandbox writers end their own response and call publicAnswerBody themselves; the agent,
- * connector, oauth, perms and ide-http-edge writers, the SSE streams and every 4xx answer
- * are not covered. A bridge-authored 5xx sentence keeps its
- * words only when declared through publicSentence: the opt-in is by exact text, so no
- * upstream message can ever match one.
+ * holds a 5xx message to a fixed sentence and logs the original. The rtc, runner, IDE
+ * sandbox and agent writers end their own response and call publicAnswerBody themselves; the
+ * agent and Claude SSE streams send publicErrorFrame. The connector, oauth, perms and
+ * ide-http-edge writers and the runner's own SSE frames only ever send fixed sentences on a
+ * 5xx; every 4xx answer keeps its words. A bridge-authored 5xx sentence keeps its words only
+ * when declared through publicSentence: the opt-in is by exact text, so no upstream message
+ * can ever match one.
  */
 /* ************************************************************************** */
 /*                                                                            */
@@ -20,15 +21,6 @@
 /*   Updated: 2026/11/23 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
-
-/**
- * What an error answer may say. A route's message can quote upstream text (PostgREST names
- * the table, column or constraint that failed), and the routes copy `error.message` into
- * their bodies through a dozen helpers, so the one place every JSON answer passes, the
- * writer, holds a 5xx message to a fixed sentence and logs the original. A bridge-authored
- * 5xx sentence keeps its words only when declared through publicSentence: the opt-in is by
- * exact text, so no upstream message can ever match one.
- */
 
 const FIXED_MESSAGES = new Map([
 	[400, 'The request was not accepted.'],
@@ -72,4 +64,11 @@ export function publicAnswerBody(status, body) {
 	const sentence = fixedMessage(status);
 	if (body.message !== sentence) logUpstream(status, body.message);
 	return { ...body, message: sentence };
+}
+
+/** The `error` frame a stream may send for a caught error; one without a status is a 500. */
+export function publicErrorFrame(error) {
+	const status = Number.isInteger(error?.status) ? error.status : 500;
+	const message = typeof error?.message === 'string' ? error.message : fixedMessage(status);
+	return publicAnswerBody(status, { message });
 }

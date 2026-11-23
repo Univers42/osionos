@@ -21,7 +21,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
 import { writeJsonResponse } from './bridge-json-response.mjs';
-import { fixedMessage, logUpstream, publicSentence } from './bridge-error-sentences.mjs';
+import { fixedMessage, logUpstream, publicErrorFrame, publicSentence } from './bridge-error-sentences.mjs';
 import { readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
@@ -2926,12 +2926,12 @@ async function handleClaudeAgentStream(request, response, config, spawnImpl = sp
 		if (!response.writableEnded) child.kill('SIGTERM');
 	});
 	child.on('error', (error) => {
-		sse(response, 'error', { message: error.message });
+		sse(response, 'error', publicErrorFrame(error));
 		response.end();
 	});
 	child.on('close', (code) => {
 		if (buffer.trim()) handleLine(buffer);
-		if (code !== 0) sse(response, 'error', { message: stderr.trim() || `Claude exited with code ${code}` });
+		if (code !== 0) sse(response, 'error', publicErrorFrame({ message: stderr.trim() || `Claude exited with code ${code}` }));
 		sse(response, 'done', { code, result: finalResult });
 		response.end();
 	});

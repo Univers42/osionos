@@ -43,10 +43,37 @@ function configWith(flag) {
 	return flag ? { ...base, agentClaudeEnabled: true } : base;
 }
 
+const CHILD_LEAK = 'Error: ENOENT open /srv/osionos/.env.secrets';
+
+/** A child that writes CHILD_LEAK to stderr and exits 1, or fails to spawn with it. */
+function failingSpawn(how) {
+	return () => {
+		const child = new EventEmitter();
+		child.stdout = new EventEmitter();
+		child.stderr = new EventEmitter();
+		child.kill = () => {};
+		setImmediate(() => {
+			if (how === 'spawn') return child.emit('error', new Error(CHILD_LEAK));
+			child.stderr.emit('data', Buffer.from(CHILD_LEAK));
+			return child.emit('close', 1);
+		});
+		return child;
+	};
+}
+
 async function postStream(base, headers) {
 	const response = await fetch(`${base}/api/agent/claude/stream`, { method: 'POST', headers, body: JSON.stringify({ prompt: 'hi' }) });
 	await response.text();
 	return response.status;
+}
+
+async function streamText(config, spawnImpl) {
+	let answer;
+	await withBridge(config, fetch, async (base) => {
+		const response = await fetch(`${base}/api/agent/claude/stream`, { method: 'POST', headers: sessionFor(config, true), body: JSON.stringify({ prompt: 'hi' }) });
+		answer = { status: response.status, text: await response.text() };
+	}, { spawnImpl });
+	return answer;
 }
 
 describe('POST /api/agent/claude/stream', () => {
@@ -99,6 +126,22 @@ describe('POST /api/agent/claude/stream', () => {
 		const keys = Object.keys(calls[0].options.env);
 		assert.ok(keys.includes('ANTHROPIC_API_KEY'));
 		assert.ok(keys.every((key) => ['PATH', 'HOME', 'LANG'].includes(key) || key.startsWith('ANTHROPIC_')), keys.join(','));
+	});
+
+	it('a child that exits non-zero sends the fixed sentence, not its stderr', async (t) => {
+		t.mock.method(console, 'error', () => {});
+		const { status, text } = await streamText(configWith(true), failingSpawn('exit'));
+		assert.equal(status, 200);
+		assert.ok(text.includes('event: error'), text);
+		assert.ok(!text.includes(CHILD_LEAK), text);
+	});
+
+	it('a child that fails to spawn sends the fixed sentence, not the spawn error', async (t) => {
+		t.mock.method(console, 'error', () => {});
+		const { status, text } = await streamText(configWith(true), failingSpawn('spawn'));
+		assert.equal(status, 200);
+		assert.ok(text.includes('event: error'), text);
+		assert.ok(!text.includes(CHILD_LEAK), text);
 	});
 });
 
