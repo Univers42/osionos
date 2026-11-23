@@ -10,8 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Block } from "@/entities/block";
 import { ReadOnlyBlock } from "@/entities/block";
 import { RenderModeProvider } from "@/entities/block/ui/renderMode";
@@ -25,6 +24,7 @@ import {
 import { usePageStore } from "@/store/usePageStore";
 import { mark, measure } from "@osionos/perf-probe";
 import { ErrorBoundary } from "@osionos/ui/atoms/ErrorBoundary";
+import { VirtualWindow } from "@/shared/ui/virtual-window/VirtualWindow";
 
 const INTERNAL_PAGE_LINK_PREFIX = "page://";
 
@@ -68,29 +68,16 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
   const openPage = usePageStore((s) => s.openPage);
   const pageById = usePageStore((s) => s.pageById);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const renderIndexRef = useRef(0);
-  const renderStartMarkRef = useRef("");
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
-  renderIndexRef.current += 1;
-  renderStartMarkRef.current = `PageBlocksRenderer:render:${renderIndexRef.current}:start`;
-  mark(renderStartMarkRef.current);
+  // One mark name per instance, not per render: measure() pairs the latest mark of a name, and a
+  // render counter would need a ref written during render, which stops the React Compiler.
+  const instanceId = useId();
+  const renderStartMark = `PageBlocksRenderer:render:${instanceId}:start`;
+  mark(renderStartMark);
   const renderMeta = useMemo(() => createRootBlockRenderMeta(blocks), [blocks]);
   const shouldVirtualize = blocks.length >= ROOT_BLOCK_VIRTUALIZATION_THRESHOLD;
-  // https://github.com/Univers42/osionos/issues/337: React Compiler skips this
-  // component because of the tanstack virtualizer (library limitation) — the
-  // virtualized path is perf-budgeted in the canvas benchmarks as-is.
-  // eslint-disable-next-line react-hooks/incompatible-library -- the library returns unmemoizable functions; no local fix (osionos#341)
-  const virtualizer = useVirtualizer({
-    count: shouldVirtualize ? renderMeta.length : 0,
-    getScrollElement: () => scrollElement,
-    estimateSize: (index) => estimateBlockHeight(renderMeta[index]?.block ?? blocks[0]),
-    getItemKey: (index) => renderMeta[index]?.block.id ?? index,
-    overscan: ROOT_BLOCK_VIRTUALIZATION_OVERSCAN,
-    scrollMargin,
-  });
-
   useLayoutEffect(() => {
     if (!shouldVirtualize) return;
     const root = rootRef.current;
@@ -114,9 +101,9 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
   }, [blocks.length, shouldVirtualize]);
 
   useLayoutEffect(() => {
-    const endMark = `${renderStartMarkRef.current}:commit`;
+    const endMark = `${renderStartMark}:commit`;
     mark(endMark);
-    measure(`PageBlocksRenderer.render.${blocks.length}`, renderStartMarkRef.current, endMark);
+    measure(`PageBlocksRenderer.render.${blocks.length}`, renderStartMark, endMark);
   });
 
   useEffect(() => {
@@ -159,11 +146,19 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
     return () => root.removeEventListener("click", handleClick);
   }, [openPage, pageById]);
 
-  if (shouldVirtualize) {
-    return (
+  return (
+    <VirtualWindow
+      count={shouldVirtualize ? renderMeta.length : 0}
+      getScrollElement={() => scrollElement}
+      estimateSize={(index) => estimateBlockHeight(renderMeta[index]?.block ?? blocks[0])}
+      getItemKey={(index) => renderMeta[index]?.block.id ?? index}
+      overscan={ROOT_BLOCK_VIRTUALIZATION_OVERSCAN}
+      scrollMargin={scrollMargin}
+    >
+      {({ items, totalSize, measureElement }) => shouldVirtualize ? (
       <RenderModeProvider mode="preview">
-        <div ref={rootRef} className="relative" style={{ height: virtualizer.getTotalSize() }}>
-        {virtualizer.getVirtualItems().map((virtualItem) => {
+        <div ref={rootRef} className="relative" style={{ height: totalSize }}>
+        {items.map((virtualItem) => {
           const item = renderMeta[virtualItem.index];
           if (!item) return null;
 
@@ -171,7 +166,7 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
             <div
               key={virtualItem.key}
               data-index={virtualItem.index}
-              ref={virtualizer.measureElement}
+              ref={measureElement}
               className="absolute left-0 right-0 top-0"
               style={{ transform: `translateY(${virtualItem.start - scrollMargin}px)` }}
             >
@@ -183,18 +178,17 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
         })}
       </div>
       </RenderModeProvider>
-    );
-  }
-
-  return (
-    <RenderModeProvider mode="preview">
-      <div ref={rootRef} className="flex flex-col">
-      {renderMeta.map((item) => (
-        <ErrorBoundary key={item.block.id} fallback={BLOCK_FALLBACK}>
-          <ReadOnlyBlock block={item.block} index={item.effectiveIndex} properties={properties} />
-        </ErrorBoundary>
-      ))}
-    </div>
-    </RenderModeProvider>
+      ) : (
+      <RenderModeProvider mode="preview">
+        <div ref={rootRef} className="flex flex-col">
+        {renderMeta.map((item) => (
+          <ErrorBoundary key={item.block.id} fallback={BLOCK_FALLBACK}>
+            <ReadOnlyBlock block={item.block} index={item.effectiveIndex} properties={properties} />
+          </ErrorBoundary>
+        ))}
+      </div>
+      </RenderModeProvider>
+      )}
+    </VirtualWindow>
   );
 };

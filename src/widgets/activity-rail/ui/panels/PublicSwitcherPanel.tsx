@@ -12,8 +12,8 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import { Globe } from "lucide-react";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
+import { VirtualWindow } from "@/shared/ui/virtual-window/VirtualWindow";
 import { useUserStore } from "@/features/auth";
 import { useUIStore } from "@/shared/config/uiStore";
 import type { Workspace } from "@/entities/user/model/types";
@@ -36,15 +36,6 @@ export const PublicSwitcherPanel: React.FC = () => {
     return q ? joined.filter((w) => w.name.toLowerCase().includes(q)) : [...joined];
   }, [joined, query]);
 
-  // TanStack Virtual returns non-memoizable functions (sanctioned: see PageBlocksRenderer).
-  // eslint-disable-next-line react-hooks/incompatible-library -- the library returns unmemoizable functions; no local fix (osionos#341)
-  const rows = useVirtualizer({
-    count: items.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 36,
-    overscan: 12,
-  });
-
   const select = (ws: Workspace) => {
     switchWorkspace(ws._id);
     setActivePanel("files");
@@ -61,12 +52,13 @@ export const PublicSwitcherPanel: React.FC = () => {
           className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1.5 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
         />
       </div>
-      {items.length === 0 ? (
+      <VirtualWindow count={items.length} getScrollElement={() => scrollRef.current} estimateSize={() => 36} overscan={12}>
+      {({ items: rows, totalSize }) => items.length === 0 ? (
         <p className="px-3 py-3 text-xs text-[var(--osio-fg-subtle)]">No joined projects.</p>
       ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 pb-3">
-          <div style={{ height: rows.getTotalSize(), position: "relative", width: "100%" }}>
-            {rows.getVirtualItems().map((v) => {
+          <div style={{ height: totalSize, position: "relative", width: "100%" }}>
+            {rows.map((v) => {
               const ws = items[v.index];
               const active = ws._id === activeWorkspaceId;
               return (
@@ -95,6 +87,7 @@ export const PublicSwitcherPanel: React.FC = () => {
           </div>
         </div>
       )}
+      </VirtualWindow>
     </div>
   );
 };

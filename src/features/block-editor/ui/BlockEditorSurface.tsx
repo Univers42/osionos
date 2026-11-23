@@ -12,7 +12,7 @@
 
 import React, { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { defaultRangeExtractor, useVirtualizer, type Range } from "@tanstack/react-virtual";
+import { defaultRangeExtractor, type Range } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
 
 import type { Block } from "@/entities/block";
@@ -28,6 +28,7 @@ import {
 	ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
 import { ReadOnlyBlockList } from "@/entities/block/ui/ReadOnlyBlockList";
+import { VirtualWindow, type VirtualWindowHandle } from "@/shared/ui/virtual-window/VirtualWindow";
 import { BlockVisibilityPopover } from "./visibility/BlockVisibilityPopover";
 import { VisibilityScopeProvider } from "@/entities/block/model/visibilityScope";
 import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
@@ -1146,6 +1147,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 	renderBlockEditor,
 }) => {
 		const listRef = useRef<HTMLUListElement | null>(null);
+		const windowRef = useRef<VirtualWindowHandle | null>(null);
 		const [scrollMargin, setScrollMargin] = useState(0);
 		const renderItems = useMemo(() => {
 			const runIndexes = numberedRunIndexes(blocks);
@@ -1168,20 +1170,6 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 			if (caret === null || indexes.includes(caret)) return indexes;
 			return [...indexes, caret].sort((a, b) => a - b);
 		}, [renderItems]);
-		// https://github.com/Univers42/osionos/issues/337: TanStack Virtual returns
-		// non-memoizable functions, so the React Compiler skips this component.
-		// eslint-disable-next-line react-hooks/incompatible-library -- the library returns unmemoizable functions; no local fix (osionos#341)
-		const virtualizer = useVirtualizer({
-			count: shouldVirtualize ? renderItems.length : 0,
-			// Observed from mount for the root list, so the render that crosses the threshold
-			// already knows the viewport; with a 0 size the range is null and no row renders.
-			getScrollElement: () => (isRoot ? resolveScrollElement(listRef.current) : null),
-			estimateSize: (index) => estimateBlockHeight(renderItems[index]?.block ?? blocks[0]),
-			getItemKey: (index) => renderItems[index]?.block.id ?? index,
-			overscan: ROOT_BLOCK_VIRTUALIZATION_OVERSCAN,
-			rangeExtractor,
-			scrollMargin,
-		});
 
 		useLayoutEffect(() => {
 			if (!shouldVirtualize) return;
@@ -1211,12 +1199,12 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 				if (!blockId) return;
 				const index = renderItems.findIndex((item) => item.block.id === blockId);
 				if (index < 0) return;
-				virtualizer.scrollToIndex(index, { align: "auto" });
+				windowRef.current?.scrollToIndex(index, { align: "auto" });
 			};
 
 			document.addEventListener(VIRTUAL_BLOCK_FOCUS_EVENT, handleVirtualFocus);
 			return () => document.removeEventListener(VIRTUAL_BLOCK_FOCUS_EVENT, handleVirtualFocus);
-		}, [renderItems, shouldVirtualize, virtualizer]);
+		}, [renderItems, shouldVirtualize]);
 
 		const renderItem = (item: (typeof renderItems)[number]) => {
 			const { block, numberedIndex, nextNumberedDepth, nextBulletDepth, isHighlighted } = item;
@@ -1309,17 +1297,29 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 			);
 		};
 
-		if (shouldVirtualize) {
-			return (
+	return (
+		<VirtualWindow
+			count={shouldVirtualize ? renderItems.length : 0}
+			// Observed from mount for the root list, so the render that crosses the threshold
+			// already knows the viewport; with a 0 size the range is null and no row renders.
+			getScrollElement={() => (isRoot ? resolveScrollElement(listRef.current) : null)}
+			estimateSize={(index) => estimateBlockHeight(renderItems[index]?.block ?? blocks[0])}
+			getItemKey={(index) => renderItems[index]?.block.id ?? index}
+			overscan={ROOT_BLOCK_VIRTUALIZATION_OVERSCAN}
+			rangeExtractor={rangeExtractor}
+			scrollMargin={scrollMargin}
+			handleRef={windowRef}
+		>
+			{({ items, totalSize, measureElement }) => shouldVirtualize ? (
 				<ul
 					ref={listRef}
 					data-testid="block-tree-root"
 					data-parent-block-type=""
 					data-parent-block-id=""
 					className="relative m-0 list-none p-0"
-					style={{ height: virtualizer.getTotalSize() }}
+					style={{ height: totalSize }}
 				>
-					{virtualizer.getVirtualItems().map((virtualItem) => {
+					{items.map((virtualItem) => {
 						const item = renderItems[virtualItem.index];
 						if (!item) return null;
 
@@ -1328,7 +1328,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 								key={virtualItem.key}
 								data-index={virtualItem.index}
 								data-virtual-block-id={item.block.id}
-								ref={virtualizer.measureElement}
+								ref={measureElement}
 								className="group/block-branch absolute left-0 right-0 top-0 rounded-md"
 								style={{ transform: `translateY(${virtualItem.start - scrollMargin}px)` }}
 							>
@@ -1337,26 +1337,25 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 						);
 					})}
 				</ul>
-			);
-		}
-
-	return (
-		<ul
-			ref={isRoot ? listRef : undefined}
-			data-testid={isRoot ? "block-tree-root" : `${parentBlockType ?? "nested"}-children`}
-			data-parent-block-type={parentBlockType ?? ""}
-			data-parent-block-id={parentBlockId ?? ""}
-			className={`${getNestedTreeClassName(parentBlockType, isRoot)} m-0 list-none p-0`}
-		>
-			{renderItems.map((item) => {
-				const { block } = item;
-				return (
-					<li key={block.id} className="group/block-branch rounded-md">
-						{renderItem(item)}
-					</li>
-				);
-			})}
-		</ul>
+			) : (
+				<ul
+					ref={isRoot ? listRef : undefined}
+					data-testid={isRoot ? "block-tree-root" : `${parentBlockType ?? "nested"}-children`}
+					data-parent-block-type={parentBlockType ?? ""}
+					data-parent-block-id={parentBlockId ?? ""}
+					className={`${getNestedTreeClassName(parentBlockType, isRoot)} m-0 list-none p-0`}
+				>
+					{renderItems.map((item) => {
+						const { block } = item;
+						return (
+							<li key={block.id} className="group/block-branch rounded-md">
+								{renderItem(item)}
+							</li>
+						);
+					})}
+				</ul>
+			)}
+		</VirtualWindow>
 	);
 };
 
