@@ -21,6 +21,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
 import { writeJsonResponse } from './bridge-json-response.mjs';
+import { publicSentence } from './bridge-error-sentences.mjs';
 import { readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
@@ -679,15 +680,18 @@ export async function baasRegistryGet(config, fetchImpl, path, tenantId, timeout
 	return readJsonBody(response, { service: 'adapter-registry', empty: [], failureStatus: responseStatusForBaasFailure });
 }
 
+const MOUNTS_RATE_LIMITED = publicSentence('The tenant mount list is rate limited — retry shortly.');
+
 /** What the caller gets when grobase refuses the tenant mount list. Each refusal reads as an
  *  outage, never as an empty list: a 404 is a tenant-control without the route, and a 429 is
  *  the self-serve bucket that every Funnel client shares. */
 function tenantMountsFailure(status, url) {
 	if (status === 404) {
-		return { status: 503, message: `grobase does not serve GET ${new URL(url).pathname} — its tenant-control predates the self-serve mount list.` };
+		// The path is the bridge's own configured URL, never grobase's answer, so it may be declared here.
+		return { status: 503, message: publicSentence(`grobase does not serve GET ${new URL(url).pathname} — its tenant-control predates the self-serve mount list.`) };
 	}
 	if (status === 401 || status === 403) return { status: 403, message: 'grobase refused the tenant api key on the mount list.' };
-	if (status === 429) return { status: 503, message: 'The tenant mount list is rate limited — retry shortly.' };
+	if (status === 429) return { status: 503, message: MOUNTS_RATE_LIMITED };
 	return { status: 502, message: `The tenant mount list failed with ${status}.` };
 }
 
@@ -5310,10 +5314,12 @@ async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}',
 	return { res, data };
 }
 
+const NO_APP_SESSION = publicSentence('Could not establish the app session.');
+
 // A gateway 409/429 is a refusal the user can act on, not an upstream outage, so it keeps its status.
 function gatewaySessionError(res, data) {
 	const status = res.status === 409 || res.status === 429 ? res.status : 502;
-	const error = Object.assign(new Error(data.message || 'Could not establish the app session.'), { status });
+	const error = Object.assign(new Error(data.message || NO_APP_SESSION), { status });
 	if (status === 502) return error;
 	if (typeof data.error === 'string') error.code = data.error;
 	if (status === 429) {

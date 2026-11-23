@@ -68,7 +68,7 @@ describe('connections read plan', () => {
 		const stub = createSocialStub(worldWith({}), { failing: ['edges', 'blocks'] });
 		const answer = await getConnections(stub, ME);
 		await settle();
-		assert.deepEqual(answer, { status: 502, body: { ok: false, message: 'BaaS request failed with 500: {"message":"stub failure"}' } });
+		assert.deepEqual(answer, { status: 502, body: { ok: false, message: 'The service is unavailable; try again.' } });
 		assert.deepEqual(reasons, []);
 	});
 

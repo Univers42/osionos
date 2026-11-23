@@ -35,11 +35,13 @@
  */
 
 import { bearerToken, httpError, readJsonBody, safeText, sendJson } from './bridge-social-core.mjs';
+import { publicSentence } from './bridge-error-sentences.mjs';
 import { assertPublicHttpUrl, PRIVATE_ADDRESS_MESSAGE } from './bridge-url-guard.mjs';
 import { guardedRequest } from './bridge-url-fetch.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 
 const WEBHOOK_TIMEOUT_MS = 5_000;
+const NO_RESPONSE = publicSentence('Webhook endpoint did not respond.');
 const WEBHOOK_BUCKET = { capacity: 10, refillPerSec: 0.2 };
 /** The answer is dropped: read a little of it, so the socket does not stall. */
 const WEBHOOK_RESPONSE_BYTES = 4 * 1024;
@@ -66,7 +68,7 @@ export async function handleAutomationWebhook(deps, request, response, config) {
 		// The guard refused the address at connect time: that is a 422 with the
 		// guard's message, not a webhook that failed to answer.
 		if (error?.code === 'private_address') throw httpError(PRIVATE_ADDRESS_MESSAGE, 422);
-		sendJson(response, 502, { ok: false, message: 'Webhook endpoint did not respond.' }, config);
+		sendJson(response, 502, { ok: false, message: NO_RESPONSE }, config);
 		return;
 	}
 	sendJson(response, 200, { ok: status >= 200 && status < 300, status }, config);

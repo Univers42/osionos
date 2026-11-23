@@ -34,6 +34,7 @@
 // way, and two copies of this machinery would drift apart on what "fresh" means.
 
 import { BAAS_FETCH_TIMEOUT_MS } from './bridge-baas-body.mjs';
+import { publicSentence } from './bridge-error-sentences.mjs';
 import {
 	LARGE_TABLE_ROWS,
 	PAGE_SIZE,
@@ -47,6 +48,8 @@ import {
 } from './bridge-session-tracker.mjs';
 
 export { POLL_INTERVAL_MS, RETRY_AFTER_SECONDS, STALE_AFTER_MS, timestampMicros };
+
+const NOT_READY = publicSentence('The session revocation check is not ready; try again shortly.');
 
 /**
  * The cut-off tracker of one process: the whole table lives in a Map that the
@@ -146,7 +149,7 @@ export function assertSessionNotCutOff(tracker, userId, issuedAtMs) {
 	const state = tracker.status();
 	if (state === 'off') return;
 	if (state !== 'fresh') {
-		throw Object.assign(httpError('The session revocation check is not ready; try again shortly.', 503, 'session_cutoffs_unavailable'), { retryAfterSeconds: RETRY_AFTER_SECONDS });
+		throw Object.assign(httpError(NOT_READY, 503, 'session_cutoffs_unavailable'), { retryAfterSeconds: RETRY_AFTER_SECONDS });
 	}
 	const cutoff = tracker.cutoffMicros(userId);
 	if (cutoff !== undefined && issuedAtMs * 1000 < cutoff) {

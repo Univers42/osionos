@@ -26,6 +26,7 @@
 
 import { pipeline } from 'node:stream';
 import { createGzip } from 'node:zlib';
+import { publicAnswerBody } from './bridge-error-sentences.mjs';
 
 export const GZIP_MIN_CHARS = 16 * 1024;
 const GZIP_LEVEL = 4;
@@ -47,8 +48,9 @@ function logStreamError(error) {
 	if (error && error.code !== 'ERR_STREAM_PREMATURE_CLOSE') console.error(`bridge: gzip answer failed: ${error.message}`);
 }
 
+// Every JSON answer passes here, so this is where a 5xx message is held to a fixed sentence.
 export function writeJsonResponse(response, status, headers, body) {
-	const payload = JSON.stringify(body);
+	const payload = JSON.stringify(publicAnswerBody(status, body));
 	if (typeof payload !== 'string' || payload.length < GZIP_MIN_CHARS) {
 		response.writeHead(status, headers);
 		response.end(payload);

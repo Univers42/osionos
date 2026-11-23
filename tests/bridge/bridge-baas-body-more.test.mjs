@@ -178,6 +178,8 @@ describe('the adapter-registry read answers 502, never an empty mount list, on a
 // the mount ACL calls still go to the PostgREST mock.
 
 const DB = 'f0f0f0f0-6666-4666-8666-f0f0f0f0f0f0';
+// A 5xx body carries a fixed sentence; which reader failed is read from the server log.
+const logged = (spy, pattern) => spy.mock.calls.some((call) => pattern.test(String(call.arguments[0])));
 const TABLES_PATH = `/${DB}/tables/tasks`;
 const SCHEMA_PATH = `/${DB}/schema`;
 
@@ -197,19 +199,21 @@ function routerBridge(path, answer, run) {
 
 describe('the query-router readers answer 502 on a broken body, and keep their empty answer', () => {
 	// reader 4 — baasQueryPost, behind the record read (/api/records/:dbId/:table/:pk/open)
-	it('answers 502 when the record read stops mid-stream', async () => {
+	it('answers 502 when the record read stops mid-stream', async (t) => {
+		const errors = t.mock.method(console, 'error', () => {});
 		await routerBridge(TABLES_PATH, cutResponse, async (base) => {
 			const answer = await send(base, `/api/records/${DB}/tasks/7/open`, asA, { method: 'POST' });
 			assert.equal(answer.status, 502, answer.text);
-			assert.match(answer.text, /query-router/);
+			assert.ok(logged(errors, /query-router/), answer.text);
 		});
 	});
 
-	it('answers 502 when the record read is not valid JSON', async () => {
+	it('answers 502 when the record read is not valid JSON', async (t) => {
+		const errors = t.mock.method(console, 'error', () => {});
 		await routerBridge(TABLES_PATH, garbledResponse, async (base) => {
 			const answer = await send(base, `/api/records/${DB}/tasks/7/open`, asA, { method: 'POST' });
 			assert.equal(answer.status, 502, answer.text);
-			assert.match(answer.text, /not valid JSON/);
+			assert.ok(logged(errors, /not valid JSON/), answer.text);
 		});
 	});
 
@@ -222,19 +226,21 @@ describe('the query-router readers answer 502 on a broken body, and keep their e
 	});
 
 	// reader 5 — baasQueryGet, behind the schema read (/api/databases/:dbId/schema)
-	it('answers 502 when the schema read stops mid-stream', async () => {
+	it('answers 502 when the schema read stops mid-stream', async (t) => {
+		const errors = t.mock.method(console, 'error', () => {});
 		await routerBridge(SCHEMA_PATH, cutResponse, async (base) => {
 			const answer = await send(base, `/api/databases/${DB}/schema`, asA);
 			assert.equal(answer.status, 502, answer.text);
-			assert.match(answer.text, /query-router/);
+			assert.ok(logged(errors, /query-router/), answer.text);
 		});
 	});
 
-	it('answers 502 when the schema read is not valid JSON', async () => {
+	it('answers 502 when the schema read is not valid JSON', async (t) => {
+		const errors = t.mock.method(console, 'error', () => {});
 		await routerBridge(SCHEMA_PATH, garbledResponse, async (base) => {
 			const answer = await send(base, `/api/databases/${DB}/schema`, asA);
 			assert.equal(answer.status, 502, answer.text);
-			assert.match(answer.text, /not valid JSON/);
+			assert.ok(logged(errors, /not valid JSON/), answer.text);
 		});
 	});
 
@@ -248,11 +254,12 @@ describe('the query-router readers answer 502 on a broken body, and keep their e
 	});
 
 	// reader 6 — baasQueryPassthrough, behind the table route (/api/databases/:dbId/tables/:table)
-	it('answers 502 when the table answer stops mid-stream', async () => {
+	it('answers 502 when the table answer stops mid-stream', async (t) => {
+		const errors = t.mock.method(console, 'error', () => {});
 		await routerBridge(TABLES_PATH, cutResponse, async (base) => {
 			const answer = await send(base, `/api/databases/${DB}/tables/tasks`, asA, post({ op: 'list' }));
 			assert.equal(answer.status, 502, answer.text);
-			assert.match(answer.text, /query-router/);
+			assert.ok(logged(errors, /query-router/), answer.text);
 		});
 	});
 

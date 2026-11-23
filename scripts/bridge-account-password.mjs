@@ -56,6 +56,9 @@ import { accountError, accountAddress, callerSession, clientMetaOf, noContent, r
 import { grantSudo, rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { cutOffSessions } from './bridge-session-cutoff.mjs';
 import { revokeOtherFamilies, sessionClock, sessionRowOf } from './bridge-sessions.mjs';
+import { publicSentence } from './bridge-error-sentences.mjs';
+
+const SIGNOUT_FAILED = publicSentence('Your password HAS changed, but other devices could not be signed out. Sign them out from your sessions list.');
 
 const PATH = '/api/account/password';
 const LIMIT = { limit: 5, windowMs: 3_600_000 };
@@ -118,7 +121,7 @@ export async function endOtherSignIns(deps, session, response, reason = 'passwor
 	try {
 		await signEveryoneOut(deps, session.userId, response);
 	} catch {
-		throw accountError(503, 'password_changed_signout_failed', 'Your password HAS changed, but other devices could not be signed out. Sign them out from your sessions list.');
+		throw accountError(503, 'password_changed_signout_failed', SIGNOUT_FAILED);
 	}
 }
 

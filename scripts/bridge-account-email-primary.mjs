@@ -37,6 +37,7 @@ import { endOtherSignIns } from './bridge-account-password.mjs';
 import { guardMutation, ownRow, recordOf } from './bridge-account-email-flow.mjs';
 import { emailUnavailable, hmacOf } from './bridge-account-email-rows.mjs';
 import { sendJson } from './bridge-social-core.mjs';
+import { publicSentence } from './bridge-error-sentences.mjs';
 
 const LOCK_TTL_MS = 60_000;
 const BUDGET = { limit: 5, windowMs: 600_000 };
@@ -124,7 +125,7 @@ async function writeAddress(ctx, userId, address, previous) {
 	}
 }
 
-const SIGNOUT_FAILED = 'Your primary address HAS changed, but other devices could not be signed out. Change your password to sign them out.';
+const SIGNOUT_FAILED = publicSentence('Your primary address HAS changed, but other devices could not be signed out. Change your password to sign them out.');
 
 async function finish(ctx, session, request, response, { row, address, kept }) {
 	const logged = (what) => (error) => ctx.log(what, error?.code ?? 'unknown');

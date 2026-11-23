@@ -41,6 +41,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
+import { fixedMessage } from './bridge-error-sentences.mjs';
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { attributesOutsideMask, evaluatePat, maskAttributes, byCodeUnit } from './bridge-pat-permissions.mjs';
 import { findPatByHash, hashPatSecret, isPatSecret, PAT_PREFIX } from './bridge-pat-store.mjs';
@@ -109,17 +110,6 @@ export function patWritePayload(payload, mask) {
 function headersWithout(headers, name) {
 	return Object.fromEntries(Object.entries(headers ?? {}).filter(([key]) => key.toLowerCase() !== name));
 }
-
-const FIXED_MESSAGES = new Map([
-	[400, 'The request was not accepted.'],
-	[401, 'Not authorized.'],
-	[403, 'Not allowed.'],
-	[404, 'Not found.'],
-	[409, 'The page changed; reload and retry.'],
-	[422, 'The request body was not valid.'],
-	[429, 'Too many requests.'],
-]);
-const fixedMessage = (status) => FIXED_MESSAGES.get(status) ?? (status >= 500 ? 'The service is unavailable; try again.' : 'The request failed.');
 
 /**
  * A route error reaches a PAT client as its code plus a fixed sentence per status: the route's

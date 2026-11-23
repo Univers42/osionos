@@ -34,6 +34,7 @@ import { revokeAllPats } from './bridge-pat-store.mjs';
 import { accountError, callerSession, clientMetaOf, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { sendJson } from './bridge-social-core.mjs';
+import { publicSentence } from './bridge-error-sentences.mjs';
 import { stepUpTokens } from './bridge-session-stepup.mjs';
 import { CODES_TABLE, TOTP_TABLE, VERIFY_LIMIT, assertNotBlocked, clearFailures, countAttempt, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
 import { recoveryRemaining } from './bridge-account-mfa-recovery.mjs';
@@ -66,7 +67,7 @@ async function redateSession({ pg }, session, atMs) {
 	}
 }
 
-const SIGNED_OUT = 'Two-step verification changed and you are signed out; sign in again.';
+const SIGNED_OUT = publicSentence('Two-step verification changed and you are signed out; sign in again.');
 
 /**
  * The answer of an accepted code. After confirm and disable the cut-off has already refused

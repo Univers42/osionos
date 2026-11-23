@@ -19,13 +19,15 @@
  */
 
 import { bearerToken, httpError, readJsonBody, sendJson } from './bridge-social-core.mjs';
+import { publicSentence } from './bridge-error-sentences.mjs';
 import { admitUnfurl, defaultUnfurler } from './bridge-unfurl-core.mjs';
 
 const ROUTE = '/api/embed/resolve';
+const EMBED_FAILED = publicSentence('Embed request failed.');
 
 // Unexpected failures never echo their message: it could carry a socket errno or an upstream detail.
 function errorBody(error) {
-	return error?.status ? error.message : 'Embed request failed.';
+	return error?.status ? error.message : EMBED_FAILED;
 }
 
 export function createEmbedHandler({ config, verifySession, unfurler = defaultUnfurler }) {

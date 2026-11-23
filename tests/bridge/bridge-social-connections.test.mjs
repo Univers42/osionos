@@ -100,7 +100,7 @@ describe('GET /api/connections', () => {
 
 	it('connections: edges read failure answers today\'s status', async (t) => {
 		const { answer } = await run(t, { connections: [edge(1, ME, A, 'accepted')] }, '', { failing: ['edges'] });
-		assert.deepEqual(answer, { status: 502, body: { ok: false, message: 'BaaS request failed with 500: {"message":"stub failure"}' } });
+		assert.deepEqual(answer, { status: 502, body: { ok: false, message: 'The service is unavailable; try again.' } });
 	});
 
 	it('connections: the route never posts an edge', async (t) => {
