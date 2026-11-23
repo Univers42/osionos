@@ -22,6 +22,7 @@ import { clock, RESEARCH_LIMITS, RESEARCH_WEB_CAPS, runLimitsFor } from '../tool
 import { createResearchSession } from '../research/session.ts';
 import type { ResearchSession } from '../research/session.ts';
 import { buildRunTools } from './toolSet.ts';
+import { withPlanBlock } from './planPrompt.ts';
 import { mcpToolChars } from '../mcpClient/runTools.ts';
 import { config } from '../config.ts';
 import { readWebTaint } from '../web/settings.ts';
@@ -80,7 +81,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const agent = input.agent ?? null;
 	// The system prompt of THIS run: the base one, or the one of the agent,
 	// whose data-boundary line comes last (devil C38).
-	const system = input.thread ? THREAD_SYSTEM_PROMPT : systemPromptFor(agent, input.skillIndex);
+	const system = withPlanBlock(input.thread ? THREAD_SYSTEM_PROMPT : systemPromptFor(agent, input.skillIndex), input.mode);
 
 	// The cancel controller is the run's; each attempt follows it.
 	const timer = input.timer ?? createRunTimer();
@@ -219,6 +220,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			...(web ? { web } : {}),
 			...(webTaint ? { webTaint } : {}),
 			...(input.research ? { research: true } : {}),
+			...(input.mode ? { mode: input.mode } : {}),
 			emit: (type, data) => emit(type, data),
 		});
 		const tools = input.mayTrain ? webToolsOnly(runTools.tools) : runTools.tools;

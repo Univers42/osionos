@@ -29,6 +29,8 @@ import { guardTainted } from '../web/runWeb.ts';
 import { dropBlockedTools } from '../context/hooks.ts';
 import type { RunHooks } from '../context/hooks.ts';
 import { listMyContextTool } from '../context/listTool.ts';
+import { keepPlanTools } from '../modes/planTools.ts';
+import type { ModeSnapshot } from '../modes/effectiveMode.ts';
 
 /**
  * The tools of a run.
@@ -124,6 +126,8 @@ export function buildRunTools(input: {
 	 * tools are not in the request at all.
 	 */
 	research?: boolean;
+	/** The mode of the run (AM14): plan keeps the reads only, applied before the hooks. */
+	mode?: ModeSnapshot;
 	/**
 	 * The user's hooks (U3): the tools they name leave the set LAST, after every
 	 * other narrowing, so no step can add one back. Unreadable: no tools at all.
@@ -262,6 +266,7 @@ export function buildRunTools(input: {
 	if (run.tools) run.tools = keepAgentTools(run.tools, agent);
 	if (run.tools && input.webTaint) run.tools = guardTainted(run.tools, input.webTaint, hooks, pool);
 	if (run.tools && input.research) run.tools = keepResearchTools(run.tools);
+	if (run.tools && input.mode?.mode === 'plan') run.tools = keepPlanTools(run.tools);
 	if (run.tools && input.hooks) run.tools = input.hooks.kind === 'patterns' ? dropBlockedTools(run.tools, input.hooks.patterns) : undefined;
 	return run;
 }

@@ -492,7 +492,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			agent,
 			skillIndex,
 			memories,
-			mcpTools,
+			mcpTools: mode.mode === 'plan' ? [] : mcpTools,
 			...(hooks ? { hooks } : {}),
 			web,
 			...(input.research ? { research: true } : {}),
