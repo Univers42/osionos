@@ -14,6 +14,7 @@
  * The banner row of the public profile: a 3:1 preview, "Upload banner" (crop in
  * the browser, POST /api/profile/banner) and "Remove banner" behind a confirm.
  * The bridge validates and strips; this only prepares the one 1500x500 variant.
+ * With osio.profile.page on, the README page cover follows the banner (ADR 0064 PS36).
  */
 
 import React, { useRef, useState } from 'react';
@@ -25,7 +26,9 @@ import { ConfirmModal } from '../ui/ConfirmModals';
 import { type EncodedAvatar } from './avatarVariants';
 import { BANNER_HEIGHT, BANNER_WIDTH, bannerCropRect, buildBannerPayload } from './bannerVariant';
 import { SIGN_IN_TO_UPLOAD, uploadFailureMessage } from './uploadFailure';
-import { isSafeImageSource } from '@/shared/lib/media/bridgeMediaUrl';
+import { bridgeMediaUrl, isSafeImageSource } from '@/shared/lib/media/bridgeMediaUrl';
+import { isProfilePageEnabled } from '@/shared/config/featureFlags';
+import type { BannerChange, MirrorOutcome } from '@/widgets/profile-page/model/bannerCoverMirror';
 
 interface BannerUploadProps {
   bannerUrl: string | null;
@@ -46,6 +49,13 @@ async function drawBanner(bitmap: ImageBitmap, type: string, quality: number): P
 
 const safeSource = (url: string | null): string | undefined => (isSafeImageSource(url) ? url : undefined);
 
+// Dynamic, and only with the flag on: the flag-off settings chunk stays as it was (ADR 0067 PH7).
+async function mirrorWhenProfilePage(change: BannerChange): Promise<MirrorOutcome> {
+  if (!isProfilePageEnabled()) return 'skipped';
+  const { mirrorBanner } = await import('@/widgets/profile-page/bannerCoverSync');
+  return mirrorBanner(change);
+}
+
 export const BannerUpload: React.FC<BannerUploadProps> = ({ bannerUrl, onChanged }) => {
   const toast = useToastStore((state) => state.push);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,6 +67,15 @@ export const BannerUpload: React.FC<BannerUploadProps> = ({ bannerUrl, onChanged
     toast({ kind: 'error', title: 'The banner could not be uploaded.', description: reason });
   };
 
+  // The banner itself is saved either way; a cover that did not follow is said, not hidden.
+  const mirror = (banner: string | null) => {
+    void mirrorWhenProfilePage({ banner, previous: bannerUrl })
+      .catch((): MirrorOutcome => 'failed')
+      .then((outcome) => {
+        if (outcome === 'failed') toast({ kind: 'error', title: 'Your profile page cover was not updated.' });
+      });
+  };
+
   const upload = async (file: File | undefined) => {
     if (!file) return;
     const jwt = getActivePageJwt();
@@ -66,9 +85,10 @@ export const BannerUpload: React.FC<BannerUploadProps> = ({ bannerUrl, onChanged
       const bitmap = await createImageBitmap(file);
       try {
         const banner = await buildBannerPayload((_width, type, quality) => drawBanner(bitmap, type, quality));
-        await api.post('/api/profile/banner', { banner }, jwt);
+        const saved = await api.post<{ bannerPath?: string }>('/api/profile/banner', { banner }, jwt);
         toast({ kind: 'success', title: 'Banner saved' });
         onChanged();
+        if (saved?.bannerPath) mirror(bridgeMediaUrl(saved.bannerPath));
       } finally {
         bitmap.close();
       }
@@ -85,6 +105,7 @@ export const BannerUpload: React.FC<BannerUploadProps> = ({ bannerUrl, onChanged
       await api.delete('/api/profile/banner', getActivePageJwt() ?? undefined);
       toast({ kind: 'success', title: 'Banner removed' });
       onChanged();
+      mirror(null);
     } catch {
       toast({ kind: 'error', title: 'The banner could not be removed. Try again.' });
     }

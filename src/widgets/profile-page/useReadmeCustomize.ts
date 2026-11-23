@@ -28,7 +28,7 @@ import type { Block } from "@/entities/block";
 import type { PageEntry } from "@/entities/page";
 import { customizeReadme, openLinkedById, pickReadmeWorkspace, type CustomizeDeps, type LinkedPage } from "./model/readmeCustomize";
 
-function openLinked(pageId: string, jwt: string): Promise<LinkedPage> {
+export function openLinked(pageId: string, jwt: string): Promise<LinkedPage> {
   const store = usePageStore.getState();
   return openLinkedById(pageId, {
     readStore: (id) => usePageStore.getState().pageById(id),
