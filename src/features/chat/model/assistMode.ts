@@ -74,7 +74,7 @@ export function modeFeedback(code: ModeFailure): { error: string | null; hidden:
   return code === "modes_not_enabled" ? { error: null, hidden: true } : { error: SENTENCES[code], hidden: false };
 }
 
-export type ModeLoad = { status: "ready"; mode: AssistMode } | { status: "failed"; hidden: boolean };
+export type ModeLoad = { status: "ready"; mode: AssistMode; anchorPageId: string | null } | { status: "failed"; hidden: boolean };
 
 /**
  * The first read of a conversation's mode. The menu stays disabled until it is
@@ -85,7 +85,8 @@ export type ModeLoad = { status: "ready"; mode: AssistMode } | { status: "failed
  */
 export async function loadMode(conversationId: string): Promise<ModeLoad> {
   try {
-    return { status: "ready", mode: (await getMode(conversationId)).mode };
+    const { mode, anchorPageId } = await getMode(conversationId);
+    return { status: "ready", mode, anchorPageId: anchorPageId ?? null };
   } catch (cause) {
     return { status: "failed", hidden: modeFeedback(failureOf(cause)).hidden };
   }

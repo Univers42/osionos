@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadMode, patchMode, type AssistMode } from "./assistMode";
 import { makeModeSaver, type ModeSaver, type ModeView } from "./modeSaver";
 
-const START: ModeView = { mode: "manual", error: null, hidden: false };
+const START: ModeView = { mode: "manual", anchorPageId: null, error: null, hidden: false };
 
 /** The first read of the stored mode; true once it is known. */
 function useStoredMode(conversationId: string, saver: ModeSaver, show: (view: ModeView) => void): boolean {
@@ -18,8 +18,8 @@ function useStoredMode(conversationId: string, saver: ModeSaver, show: (view: Mo
         show({ ...START, hidden: load.hidden, error: load.hidden ? null : "The current mode could not be read" });
         return;
       }
-      saver.confirm(load.mode);
-      show({ ...START, mode: load.mode });
+      saver.confirm(load.mode, load.anchorPageId);
+      show({ ...START, mode: load.mode, anchorPageId: load.mode === "accept_edits" ? load.anchorPageId : null });
       setReady(true);
     });
     return () => { current = false; };

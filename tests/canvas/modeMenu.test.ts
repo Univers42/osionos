@@ -16,6 +16,7 @@ import { useChatStore } from "@/features/chat/model/useChatStore";
 import { ChatComposer } from "@/widgets/chat-shell/ui/ChatComposer";
 import { ModeMenu } from "@/widgets/chat-shell/ui/ModeMenu";
 import { makeModeSaver, type ModeView } from "@/features/chat/model/modeSaver";
+import { usePageStore } from "@/store/usePageStore";
 
 const PAGE = "11111111-1111-4111-8111-111111111111";
 const render = (openPageId: string | null, value: "manual" | "plan" | "accept_edits" | "auto" = "manual") =>
@@ -79,7 +80,9 @@ test("a failed first read is not shown as Manual: the menu stays disabled", asyn
   setAiTransport(async () => Response.json({ error: "not_found" }, { status: 404 }));
   assert.deepEqual(await loadMode("c1"), { status: "failed", hidden: true });
   setAiTransport(async () => Response.json({ mode: "auto", anchorPageId: null }));
-  assert.deepEqual(await loadMode("c1"), { status: "ready", mode: "auto" });
+  assert.deepEqual(await loadMode("c1"), { status: "ready", mode: "auto", anchorPageId: null });
+  setAiTransport(async () => Response.json({ mode: "accept_edits", anchorPageId: PAGE }));
+  assert.deepEqual(await loadMode("c1"), { status: "ready", mode: "accept_edits", anchorPageId: PAGE }, "the anchor is kept (M7)");
   const html = renderToStaticMarkup(
     React.createElement(ModeMenu, { conversationId: "c1", openPageId: PAGE, value: "manual", onChange: () => undefined, disabled: true }),
   );
@@ -135,7 +138,7 @@ test("mode picks are serialized: the last pick wins, and a failed last pick show
     if (body.mode === "auto") await held;
     return failing.has(body.mode) ? ({ ok: false, code: "error" } as const) : ({ ok: true } as const);
   }, (view) => shown.push(view));
-  saver.confirm("manual");
+  saver.confirm("manual", null);
   const first = saver.pick("auto", null);
   await flush();
   const picks = [first, saver.pick("plan", null), saver.pick("accept_edits", PAGE)];
@@ -145,8 +148,40 @@ test("mode picks are serialized: the last pick wins, and a failed last pick show
   release?.();
   await Promise.all(picks);
   assert.deepEqual(sent.slice(1), [JSON.stringify({ mode: "accept_edits", anchorPageId: PAGE })], "a pick superseded before it left is never sent");
-  assert.deepEqual(shown.at(-1), { mode: "accept_edits", error: null, hidden: false });
+  assert.deepEqual(shown.at(-1), { mode: "accept_edits", anchorPageId: PAGE, error: null, hidden: false });
   failing.add("plan");
   await saver.pick("plan", null);
-  assert.deepEqual(shown.at(-1), { mode: "accept_edits", error: "The mode could not be changed", hidden: false }, "the server's last word is shown");
+  assert.deepEqual(shown.at(-1), { mode: "accept_edits", anchorPageId: PAGE, error: "The mode could not be changed", hidden: false }, "the server's last word is shown");
+  await saver.pick("auto", null);
+  assert.equal(shown.at(-1)?.anchorPageId, null, "no anchor outside accept_edits");
+});
+
+const OTHER = "22222222-2222-4222-8222-222222222222";
+const anchored = (openPageId: string | null, anchorPageId: string, value: "manual" | "accept_edits" = "accept_edits") =>
+  renderToStaticMarkup(
+    React.createElement(ModeMenu, { conversationId: "c1", openPageId, value, anchorPageId, onChange: () => undefined, onUseThisPage: () => undefined }),
+  );
+
+test("accept_edits names its anchor and offers to move it to the open page (M7)", () => {
+  assert.match(anchored(PAGE, PAGE), /Anchor: a page/, "a page the list does not hold falls back");
+  assert.doesNotMatch(anchored(PAGE, PAGE), /Use this page/, "the open page already is the anchor");
+  assert.match(anchored(OTHER, PAGE), /<button[^>]*>Use this page<\/button>/);
+  assert.doesNotMatch(anchored(null, PAGE), /Use this page/, "no open page, nothing to move to");
+  assert.doesNotMatch(anchored(OTHER, PAGE, "manual"), /Anchor:/, "other modes have no anchor");
+  const initial = usePageStore.getInitialState();
+  const saved = { pages: initial.pages, pagesIndex: initial.pagesIndex };
+  Object.assign(initial, { pages: { w1: [{ id: PAGE, title: "Roadmap" }] }, pagesIndex: { [PAGE]: { workspaceId: "w1", index: 0 } } });
+  try {
+    assert.match(anchored(OTHER, PAGE), /Anchor: Roadmap/);
+  } finally {
+    Object.assign(initial, saved);
+  }
+});
+
+test("a confirmed anchor survives a refused pick (M7)", async () => {
+  const shown: ModeView[] = [];
+  const saver = makeModeSaver(async () => ({ ok: false, code: "error" } as const), (view) => shown.push(view));
+  saver.confirm("accept_edits", PAGE);
+  await saver.pick("accept_edits", OTHER);
+  assert.deepEqual(shown.at(-1), { mode: "accept_edits", anchorPageId: PAGE, error: "The mode could not be changed", hidden: false });
 });

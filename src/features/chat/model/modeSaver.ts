@@ -13,6 +13,8 @@ import { modeFeedback, type AssistMode, type ModeFailure } from "./assistMode";
 
 export interface ModeView {
   mode: AssistMode;
+  /** The page accept_edits writes to, as the service holds it (M7); null in any other mode. */
+  anchorPageId: string | null;
   error: string | null;
   hidden: boolean;
 }
@@ -20,30 +22,40 @@ export interface ModeView {
 export type ModeSave = (body: { mode: AssistMode; anchorPageId?: string }) => Promise<{ ok: true } | { ok: false; code: ModeFailure }>;
 
 export interface ModeSaver {
-  /** The mode the service holds, as the first read said. */
-  confirm(mode: AssistMode): void;
+  /** The mode and anchor the service holds, as the first read said. */
+  confirm(mode: AssistMode, anchorPageId: string | null): void;
   /** Shows `next` and saves it after the PATCH in flight; resolves once it settled or was skipped. */
   pick(next: AssistMode, anchorPageId: string | null): Promise<void>;
 }
 
 export function makeModeSaver(save: ModeSave, show: (view: ModeView) => void): ModeSaver {
   let confirmed: AssistMode = "manual";
+  let confirmedAnchor: string | null = null;
+  const anchorOf = (mode: AssistMode, anchorPageId: string | null) => (mode === "accept_edits" ? anchorPageId : null);
   let latest = 0;
   let tail: Promise<void> = Promise.resolve();
   const settle = async (seq: number, next: AssistMode, anchorPageId: string | null) => {
     if (seq !== latest) return;
     const result = await save({ mode: next, ...(anchorPageId ? { anchorPageId } : {}) });
-    if (result.ok) confirmed = next;
+    if (result.ok) {
+      confirmed = next;
+      confirmedAnchor = anchorOf(next, anchorPageId);
+    }
     if (seq !== latest) return;
-    show(result.ok ? { mode: next, error: null, hidden: false } : { mode: confirmed, ...modeFeedback(result.code) });
+    show(
+      result.ok
+        ? { mode: next, anchorPageId: confirmedAnchor, error: null, hidden: false }
+        : { mode: confirmed, anchorPageId: confirmedAnchor, ...modeFeedback(result.code) },
+    );
   };
   return {
-    confirm(mode) {
+    confirm(mode, anchorPageId) {
       confirmed = mode;
+      confirmedAnchor = anchorOf(mode, anchorPageId);
     },
     pick(next, anchorPageId) {
       const seq = ++latest;
-      show({ mode: next, error: null, hidden: false });
+      show({ mode: next, anchorPageId: anchorOf(next, anchorPageId), error: null, hidden: false });
       tail = tail.then(() => settle(seq, next, anchorPageId));
       return tail;
     },
