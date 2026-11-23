@@ -53,6 +53,7 @@ import { THREAD_SYSTEM_PROMPT } from '../threads/context.ts';
 import type { ThreadRun } from './upstreamInput.ts';
 import { userContextForRun } from '../context/runContext.ts';
 import { hooksForRun } from '../context/hooks.ts';
+import { markRunStart } from '../provenance/runStart.ts';
 
 export type { RunEvent };
 
@@ -370,12 +371,13 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// The workspace block comes with it (plan H1): which pages the caller can
 	// read, under the same Settings switch (C205).
 	let workspaceBlockText: string | undefined;
+	let overview: Awaited<ReturnType<typeof loadWorkspaceOverview>> = null;
 	if (input.account === true && input.user) {
 		const runWorkspaceId = input.workspaceId ?? input.user.workspaceId;
 		const loadedAccount = await loadAccountContext(db, input.user, runWorkspaceId);
 		const accountCtx = mayTrain ? accountWithoutWorkspace(loadedAccount) : loadedAccount;
 		accountBlockText = accountBlock(accountCtx, new Date());
-		const overview = mayTrain ? null : await loadWorkspaceOverview(db, input.user, runWorkspaceId);
+		overview = mayTrain ? null : await loadWorkspaceOverview(db, input.user, runWorkspaceId);
 		if (overview) workspaceBlockText = workspaceBlock(overview, accountCtx.workspaceName);
 	}
 	// The view block, when the client reports one.
@@ -460,6 +462,12 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	await touchConversation(db, conversationId);
 
 	const mode = await effectiveMode(db, { user: input.user ?? null, conversationId, runKind: input.runKind ?? 'continuation', credential: input.credential ?? null });
+	// AM3: taint the conversation before the model sees what this run hands it.
+	await markRunStart(db, {
+		conversationId, user: input.user, contextPages: context.pages, sources, overview,
+		viewTabs: input.view?.tabs ?? [], attachmentCount: attachments.length, imageCount: images.length,
+		skillIndex: skillIndex.entries, customAgentId: isCustomAgent(agent) ? agent.id : null, thread: input.thread !== undefined,
+	});
 	const execute = async (): Promise<void> => {
 		await runUpstream({
 			db,
