@@ -1,7 +1,7 @@
 // The Markdown corpus of osionos#240: the parity test (bundle vs TypeScript source,
 // M240-10) and the parse-time bench (M240-4) read the same documents.
 // SHAPES are the 37 adversarial shapes of the devil ruling's audit (scratch md240 bench,
-// shapes.mjs), each a function of a target length in characters.
+// shapes.mjs) and the 14 found after it, each a function of a target length in characters.
 // Caveat: the shapes and the fuzz tokens are the shapes someone thought of; a
 // super-linear path no generator produces is not covered (ruling, "Not known").
 
@@ -36,8 +36,8 @@ export const SHAPES = {
 	quote_nest: (n) => rep('> ', n) + 'x',
 	list_nest_same_line: (n) => rep('- ', n) + 'x',
 	list_indent_stair: (n) => {
-		let text = '';
-		for (let depth = 0; text.length < n; depth++) text += ' '.repeat(depth * 2) + '- x\n';
+		let text = '- x\n';
+		for (let depth = 1; text.length + depth * 2 + 4 <= n; depth++) text += ' '.repeat(depth * 2) + '- x\n';
 		return text;
 	},
 	quote_lines: (n) => rep('> a\n', n),
@@ -49,6 +49,23 @@ export const SHAPES = {
 	cr_quote_blank: (n) => rep('> a\r\n>\r\n', n),
 	para_lines_pipe: (n) => rep('x|y\nz\n', n),
 	long_para_one_line: (n) => rep('word ', n),
+	// After the ruling: the line-tail shapes the engine fixes found (review R3), the
+	// schemeless-href shapes of security finding S1 (cubic up to engine 31ce91f) and the
+	// bare-URL rescans of ruling S1-9 (quadratic up to the same pin).
+	compact_toggle_ws_cr: (n) => '#>' + rep(' ', n) + 'a\rb',
+	bracket_toggle_ws_cr: (n) => '> [>]' + rep(' ', n) + 'a\rb',
+	container_open_ws_cr: (n) => ':::note' + rep(' ', n) + 'a\rb',
+	link_dots_space: (n) => '[a](' + rep('.', n) + ' x)',
+	link_dotq_cr: (n) => '[a](' + rep('.?', n) + '\rx)',
+	link_dotq_cr_title: (n) => '[a](' + rep('.?', n) + '\rx "t")',
+	reversed_link_dots_space: (n) => '(a)[' + rep('.', n) + ' x]',
+	reversed_link_dotq_cr: (n) => '(a)[' + rep('.?', n) + '\rx]',
+	link_title_dots: (n) => '[a](' + rep('.', n) + ' x "t")',
+	link_dots_tab: (n) => '[a](' + rep('.', n) + '\tx)',
+	link_dotq_u2028: (n) => '[a](' + rep('.?', n) + '\u2028x)',
+	bare_http_semicolon: (n) => rep('http://;', n) + 'x',
+	bare_www_semicolon: (n) => rep('www.;', n) + 'x',
+	label_bare_http: (n) => '[' + rep('http://;', n) + 'x](y)',
 };
 
 /** Documents a user writes, one per block family, plus the ruling's edge cases. */
