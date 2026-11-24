@@ -1,5 +1,5 @@
 // osionos#240 M240-4: the worst single parse of POST /api/pages/from-markdown at its 64 KiB
-// cap, timed on the committed bundle (the code the bridge runs): the 37 ruling shapes plus a
+// cap, timed on the committed bundle (the code the bridge runs): the corpus shapes plus a
 // seeded fuzz run, each document parsed RUNS times and its slowest run kept. Fails above
 // BUDGET_MS. One line per document, then a summary line, go to the JSONL artifact.
 // Usage: node tests/bench/markdown-import/bench.mjs [--out tests/bench/markdown-import/results.jsonl]
@@ -25,9 +25,20 @@ function atCap(text) {
 	return text.slice(0, end);
 }
 
+// Room for a shape's tail: cutting a document at the cap would drop the `\rx)` that makes
+// the run before it expensive, and time a different document.
+const TAIL_ROOM = 64;
+
+/** A shape just under the cap, whole: a shape that does not fit is an error, never cut. */
+function shapeAtCap(name, make) {
+	const markdown = make(MARKDOWN_MAX_BYTES - TAIL_ROOM);
+	if (Buffer.byteLength(markdown, 'utf8') > MARKDOWN_MAX_BYTES) throw new Error(`shape ${name} is over the cap`);
+	return markdown;
+}
+
 /** The corpus: every shape at the cap, then fuzz documents whose lengths climb to the cap. */
 function documents() {
-	const shapes = Object.entries(SHAPES).map(([name, make]) => [`shape:${name}`, atCap(make(MARKDOWN_MAX_BYTES * 2))]);
+	const shapes = Object.entries(SHAPES).map(([name, make]) => [`shape:${name}`, shapeAtCap(name, make)]);
 	const seedState = { seed: FUZZ_SEED };
 	const fuzz = Array.from({ length: FUZZ_DOCS }, (_, index) => [`fuzz:${index}`, atCap(fuzzDocument(seedState, Math.ceil(MARKDOWN_MAX_BYTES * (index + 1) / FUZZ_DOCS)))]);
 	return [...shapes, ...fuzz];
