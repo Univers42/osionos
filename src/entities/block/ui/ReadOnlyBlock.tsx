@@ -373,7 +373,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       return (
         <EquationView
           source={block.content}
-          className="my-2 overflow-x-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-3 text-[var(--osio-fg-default)]"
+          className="my-0 overflow-x-auto rounded-md px-3 py-2 text-[var(--osio-fg-default)]"
         />
       );
 
@@ -393,9 +393,9 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       const { body, cite } = splitQuoteAttribution(block.content);
       return (
         <blockquote className={`my-0.5 flex ${tint}`} style={surface}>
-          <div className="mr-3 w-1 shrink-0 rounded-full bg-[var(--osio-fg-muted)]" />
+          <div className="mr-3.5 w-[3px] shrink-0 bg-[var(--osio-fg-default)]" />
           <div className="min-w-0 flex-1">
-            <span className={`${getToggleHeadingClass(block.headingLevel)} block py-0.5 italic text-[var(--osio-fg-default)]`}>
+            <span className={`${getToggleHeadingClass(block.headingLevel)} block py-0.5 text-[var(--osio-fg-default)]`}>
               <InlineMarkdown content={body} />
             </span>
             {cite ? (
@@ -420,8 +420,8 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
 
     case "divider":
       return (
-        <div className="py-0 my-0">
-          <hr className="w-full h-px border-0 bg-[var(--osio-fg-subtle)]" />
+        <div className="py-1.5">
+          <hr className="w-full h-px border-0 bg-[var(--osio-border-default)]" />
         </div>
       );
 

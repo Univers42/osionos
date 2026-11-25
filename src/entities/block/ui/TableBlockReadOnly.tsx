@@ -85,7 +85,7 @@ export const TableBlockReadOnly: React.FC<TableBlockReadOnlyProps> = ({ block, w
   });
 
   return (
-    <div className={wide ? "osio-wide-block my-2" : "osio-scrollbar-hidden my-2 overflow-x-auto overflow-y-visible rounded-lg border border-[var(--osio-db-line)] bg-[var(--osio-bg-surface)]"}>
+    <div className={wide ? "osio-wide-block my-2" : "osio-scrollbar-hidden my-2 overflow-x-auto overflow-y-visible rounded-md border border-[var(--osio-db-line-soft)] bg-[var(--osio-bg-surface)]"}>
       <div data-wide-block-content={wide ? "" : undefined} className={wide ? undefined : "contents"}>
         <div data-wide-block-scroller={wide ? "" : undefined} className={wide ? undefined : "contents"}>
           <table data-wide-block-table={wide ? "" : undefined} className={tableClassName} style={{ tableLayout: config.layoutMode === "fixed" ? "fixed" : "auto" }}>
@@ -144,7 +144,7 @@ function getCellClassName(
     "text-[var(--osio-fg-default)] align-top",
     getTableAlignmentClassName(alignment),
     config.wrap === false ? "truncate whitespace-nowrap" : "whitespace-normal break-words",
-    config.showBorders === false ? "" : "border-b border-r border-[var(--osio-db-line)] last:border-r-0",
+    config.showBorders === false ? "" : "border-b border-r border-[var(--osio-db-line-soft)] last:border-r-0",
     config.headerColumn && columnIndex === 0 ? "font-medium bg-[var(--osio-bg-subtle)]" : "",
     config.headerRow !== false && rowIndex === 0 ? "font-medium" : "",
   ].filter(Boolean).join(" ");
