@@ -18,7 +18,15 @@
 
    Axis ticks: Recharts writes fill="#666" on every tick label (2.1:1 on Nord
    dark). Only the cartesian axes are listed because the vendored charts draw no
-   polar ones; a radar chart added later needs .recharts-polar-angle-axis-tick-value. */
+   polar ones; a radar chart added later needs .recharts-polar-angle-axis-tick-value.
+
+   Narrow top bar: under 520px of its own width the action buttons wrap onto a
+   second line instead of running off the right edge with the "New" button.
+
+   Bar value labels: the vendored chart leaves 16px to the right of the plot, so
+   the longest horizontal bar's value was cut ("20" for 200,000). The plot gives
+   up 2.5rem on the right and the SVG may draw into it. A value wider than that
+   (about seven digits at 11px) is still cut. */
 
 @layer utilities {
   html :where(.notion-object-database) {
@@ -62,6 +70,26 @@
     }
     & .recharts-cartesian-axis-tick-value {
       fill: var(--osio-fg-muted);
+    }
+    & .odb-chart-plot {
+      padding-right: 2.5rem;
+    }
+    & .odb-chart-plot .recharts-surface {
+      overflow: visible;
+    }
+    & .odb-topbar {
+      container-type: inline-size;
+    }
+    @container (max-width: 520px) {
+      & .odb-topbar-row,
+      & .odb-topbar-actions {
+        flex-wrap: wrap;
+        row-gap: 0.25rem;
+      }
+      & .odb-topbar-actions {
+        flex-shrink: 1;
+        margin-left: auto;
+      }
     }
   }
 }
