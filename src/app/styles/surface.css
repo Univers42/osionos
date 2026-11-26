@@ -1,0 +1,69 @@
+/* Surface, depth and borders: how panes and floating surfaces are drawn. Each axis is an
+   attribute on <html> (theme.ts, mirrored by index.html); at its default it is absent and
+   this file costs nothing. The tokens stay SOLID: translucency and its blur arrive together
+   in one rule per consumer spelling, so a consumer the rule misses is opaque, never
+   see-through without blur. Hand-written tokens live here, not in the generated tokens. */
+
+:root {
+  --osio-menu-shadow: var(--osio-shadow-menu);
+}
+
+/* Depth. Overlay and dialog remaps apply everywhere; flat/deep lift the dialog the kit pins to e4. */
+:root[data-elevation="flat"] {
+  --osio-overlay-shadow: var(--osio-e1);
+  --osio-menu-shadow: var(--osio-e1);
+  --osio-dialog-shadow: var(--osio-e2);
+}
+
+:root[data-elevation="deep"] {
+  --osio-overlay-shadow: var(--osio-e5);
+  --osio-menu-shadow: var(--osio-e5);
+  --osio-dialog-shadow: var(--osio-e5);
+}
+
+:root:is([data-elevation="flat"], [data-elevation="deep"]) [data-modal-overlay] > [role="dialog"] {
+  box-shadow: var(--osio-dialog-shadow);
+}
+
+:root[data-borders="none"] { --osio-overlay-border: transparent; }
+:root[data-borders="strong"] { --osio-overlay-border: var(--osio-border-strong); }
+
+/* Forced colours: a border is how the system draws an edge, so "none" keeps it. */
+@media (forced-colors: active) {
+  :root[data-borders="none"] { --osio-overlay-border: var(--osio-border-default); }
+}
+
+/* Panes and the dock only where the frame gap exists: compact and zen run cards edge to edge
+   and phones (shell.css: max-width 767.98px; the sidebar hook uses 767) have no gap, so none
+   of these may re-add a border or shadow there. */
+@media (width > 767.98px) {
+  :root:not([data-density="compact"])[data-elevation="flat"] { --osio-pane-shadow: none; }
+  :root:not([data-density="compact"])[data-elevation="deep"] { --osio-pane-shadow: var(--osio-e4); }
+  :root:not([data-density="compact"])[data-borders="none"] { --osio-pane-border: transparent; }
+  :root:not([data-density="compact"])[data-borders="strong"] { --osio-pane-border: var(--osio-border-strong); }
+
+  @media (forced-colors: active) {
+    :root:not([data-density="compact"])[data-borders="none"] { --osio-pane-border: var(--osio-border-default); }
+  }
+}
+
+/* Frosted: menus, popovers, dropdown lists and dialogs only. A browser without backdrop-filter
+   drops the whole block (opaque); reduced transparency and forced colours put both halves back.
+   Ponytail: keyed on the consumer class literal; a consumer spelled any other way stays opaque
+   (the unit test lists them all). Reduced transparency is read as "reduce" so a browser that
+   does not know the feature keeps frosted: it cannot signal the preference. */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  :root[data-surface="frosted"] :is(.osio-surface-overlay, [class*="bg-[var(--osio-overlay-bg)]"]) {
+    background-color: color-mix(in srgb, var(--osio-overlay-bg) 80%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    backdrop-filter: blur(20px) saturate(1.6);
+  }
+
+  @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+    :root[data-surface="frosted"] :is(.osio-surface-overlay, [class*="bg-[var(--osio-overlay-bg)]"]) {
+      background-color: var(--osio-overlay-bg);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+}

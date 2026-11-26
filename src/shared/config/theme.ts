@@ -180,6 +180,16 @@ export type CaretColor = (typeof CARET_COLORS)[number];
 export type CaretShape = "bar" | "thick" | "block" | "underscore";
 export type CaretBlink = "on" | "off";
 
+/** How floating surfaces are drawn: opaque, or translucent over a blur of what is behind them. */
+export const SURFACES = ["solid", "frosted"] as const;
+export type Surface = (typeof SURFACES)[number];
+/** How far panes and menus lift off the canvas, along the e0..e5 ladder. */
+export const ELEVATIONS = ["default", "flat", "deep"] as const;
+export type Elevation = (typeof ELEVATIONS)[number];
+/** The hairline round panes and menus: the palette's, none, or its stronger one. */
+export const BORDERS = ["default", "none", "strong"] as const;
+export type Borders = (typeof BORDERS)[number];
+
 export interface Appearance {
   /** a preset id, or "custom" to use `hue`. */
   accent: string;
@@ -196,6 +206,9 @@ export interface Appearance {
   caretColor: CaretColor;
   caretShape: CaretShape;
   caretBlink: CaretBlink;
+  surface: Surface;
+  elevation: Elevation;
+  borders: Borders;
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -212,6 +225,9 @@ export const DEFAULT_APPEARANCE: Appearance = {
   caretColor: "accent",
   caretShape: "bar",
   caretBlink: "on",
+  surface: "solid",
+  elevation: "default",
+  borders: "default",
 };
 
 const APPEARANCE_STORAGE_KEY = "osionos:appearance";
@@ -255,6 +271,9 @@ export function parseAppearance(raw: string | null): Appearance {
     caretColor: oneOf(stored.caretColor, CARET_COLORS, DEFAULT_APPEARANCE.caretColor),
     caretShape: oneOf(stored.caretShape, ["bar", "thick", "block", "underscore"], DEFAULT_APPEARANCE.caretShape),
     caretBlink: oneOf(stored.caretBlink, ["on", "off"], DEFAULT_APPEARANCE.caretBlink),
+    surface: oneOf(stored.surface, SURFACES, DEFAULT_APPEARANCE.surface),
+    elevation: oneOf(stored.elevation, ELEVATIONS, DEFAULT_APPEARANCE.elevation),
+    borders: oneOf(stored.borders, BORDERS, DEFAULT_APPEARANCE.borders),
   };
 }
 
@@ -275,7 +294,7 @@ export function persistAppearance(appearance: Appearance) {
  *  it changes what a paste does, not what the document looks like. */
 const ATTRIBUTE_AXES = [
   "accent", "density", "radius", "uiScale", "linkUnderline", "motion", "animatedImages", "hovercards",
-  "caretColor", "caretShape", "caretBlink",
+  "caretColor", "caretShape", "caretBlink", "surface", "elevation", "borders",
 ] as const;
 
 /** The appearance as it stands. applyAppearance() keeps it up to date, so a

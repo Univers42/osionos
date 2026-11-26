@@ -152,6 +152,7 @@ export const EXCLUDED_TOKENS: readonly { pattern: RegExp; reason: string }[] = [
   { pattern: /^transition-(colors|press)$/, reason: "shorthand: a list of transitions built from dur-* and ease-*" },
   { pattern: /^motion-(fast|slow|standard)$/, reason: "shorthand: a duration and a curve; set dur-* and ease-*" },
   { pattern: /^wide-/, reason: "local layout utility: measured from the page scroller, not a theme setting" },
+  { pattern: /^(menu|dialog)-shadow$/, reason: "internal: the elevation style (data-elevation) remaps the shadow a menu or dialog reads; set overlay-shadow" },
   { pattern: /^layout-(cols|min|gap)$/, reason: "internal: set on a column list by its stored layout style (ADR 0064)" },
 ];
 
