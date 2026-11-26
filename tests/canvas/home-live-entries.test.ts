@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { applyHomeDemoSeed, homeDemoDay, rebaseHomeDemoDates } from "../../src/widgets/database-view/model/homeDemoSeed.ts";
-import { dedupeById, pickRecentEntries, safeCardCover } from "../../src/widgets/database-view/model/homeLiveEntries.ts";
+import { dedupeById, pickRecentEntries, safeCardCover, safeCardIcon } from "../../src/widgets/database-view/model/homeLiveEntries.ts";
 
 const empty = { databases: {}, pages: {}, views: {} };
 
@@ -41,4 +41,11 @@ test("dedupeById keeps the first; safeCardCover drops non-image tokens", () => {
   assert.equal(safeCardCover("linear-gradient(red, blue)"), "linear-gradient(red, blue)");
   assert.equal(safeCardCover("sunset"), undefined);
   assert.equal(safeCardCover(null), undefined);
+});
+
+test("safeCardIcon keeps emoji and drops what a text card cannot print", () => {
+  assert.equal(safeCardIcon("📁"), "📁");
+  assert.equal(safeCardIcon("icon:grid"), undefined);
+  assert.equal(safeCardIcon("https://x/y.png"), undefined);
+  assert.equal(safeCardIcon(null), undefined);
 });
