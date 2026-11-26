@@ -159,7 +159,7 @@ export const PeopleHovercard: React.FC<{ person: PersonSummary; children: React.
       </button>
       {open && (
         <div role="dialog" aria-label={`${person.name}, profile`}
-          className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-1 w-72 rounded-lg border border-[var(--osio-overlay-border)] bg-[var(--osio-overlay-bg)] p-3 shadow-[var(--osio-shadow-menu)]">
+          className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-1 w-72 rounded-lg border border-[var(--osio-overlay-border)] bg-[var(--osio-overlay-bg)] p-3 shadow-[var(--osio-menu-shadow)]">
           <div className="flex items-center gap-3">
             {person.avatar
               ? <img src={person.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
