@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { DockTab } from "@/widgets/workbench/model/workbenchLayout";
+import type { MenuAction } from "./menuTypes";
 
 /**
  * Decide what the Terminal menu should do for a "New Terminal" click.
@@ -36,25 +37,28 @@ export interface WorkbenchViewActionMap {
   openProblems: () => void;
   openOutput: () => void;
   openPorts: () => void;
-}
-
-export interface MenuItemSpec {
-  id: string;
-  label: string;
-  accelerator?: string;
-  run: () => void;
-  separatorAfter?: boolean;
+  isDockOpen: () => boolean;
+  isStatusBarVisible: () => boolean;
 }
 
 /**
- * The View-menu items for the workbench (panel/status bar, then the dock tabs).
- * The caller places them right after an item that already ends a group, so the
- * trailing separator closes the second group.
+ * The Appearance rows that show or hide a workbench region. Both are checkbox
+ * rows: they keep the ids the old View › Toggle rows had, and read their state
+ * through the injected readers.
  */
-export function workbenchViewItems(actions: WorkbenchViewActionMap): MenuItemSpec[] {
+export function workbenchAppearanceItems(actions: WorkbenchViewActionMap): MenuAction[] {
   return [
-    { id: "view.panel", label: "Toggle Panel", accelerator: "⌃J", run: actions.toggleDock },
-    { id: "view.statusbar", label: "Toggle Status Bar", run: actions.toggleStatusBar, separatorAfter: true },
+    { id: "view.panel", label: "Panel", accelerator: "⌃J", run: actions.toggleDock, checked: actions.isDockOpen },
+    { id: "view.statusbar", label: "Status bar", run: actions.toggleStatusBar, checked: actions.isStatusBarVisible },
+  ];
+}
+
+/**
+ * The View-menu items that open a dock tab. The caller places them right after
+ * an item that already ends a group, so the trailing separator closes this one.
+ */
+export function workbenchViewItems(actions: WorkbenchViewActionMap): MenuAction[] {
+  return [
     { id: "view.problems", label: "Problems", run: actions.openProblems },
     { id: "view.output", label: "Output", run: actions.openOutput },
     { id: "view.ports", label: "Ports", run: actions.openPorts, separatorAfter: true },

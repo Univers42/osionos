@@ -12,7 +12,9 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { terminalMenuAction, workbenchViewItems, type WorkbenchViewActionMap } from "../../src/widgets/top-bar/model/workbenchMenuItems.ts";
+import {
+  terminalMenuAction, workbenchAppearanceItems, workbenchViewItems, type WorkbenchViewActionMap,
+} from "../../src/widgets/top-bar/model/workbenchMenuItems.ts";
 
 test("terminalMenuAction: split always returns split", () => {
   assert.equal(terminalMenuAction("split", { dockOpen: false, dockTab: "terminal" }), "split");
@@ -35,60 +37,54 @@ test("terminalMenuAction: new with dock open on terminal returns new", () => {
   assert.equal(terminalMenuAction("new", { dockOpen: true, dockTab: "terminal" }), "new");
 });
 
-test("workbenchViewItems: returns exactly 5 items in correct order with correct ids", () => {
-  const calls: string[] = [];
-  const actions: WorkbenchViewActionMap = {
+/** An action map whose every action records its name, and whose region readers answer from `state`. */
+function recordingActions(calls: string[], state = { dock: false, status: false }): WorkbenchViewActionMap {
+  return {
     toggleDock: () => calls.push("toggleDock"),
     toggleStatusBar: () => calls.push("toggleStatusBar"),
     openProblems: () => calls.push("openProblems"),
     openOutput: () => calls.push("openOutput"),
     openPorts: () => calls.push("openPorts"),
+    isDockOpen: () => state.dock,
+    isStatusBarVisible: () => state.status,
   };
-  const items = workbenchViewItems(actions);
-  assert.equal(items.length, 5);
-  assert.deepEqual(items.map((i) => i.id), [
-    "view.panel",
-    "view.statusbar",
-    "view.problems",
-    "view.output",
-    "view.ports",
-  ]);
-});
+}
 
-test("workbenchViewItems: Toggle Panel carries accelerator ⌃J", () => {
-  const actions: WorkbenchViewActionMap = {
-    toggleDock: () => {},
-    toggleStatusBar: () => {},
-    openProblems: () => {},
-    openOutput: () => {},
-    openPorts: () => {},
-  };
-  const items = workbenchViewItems(actions);
-  const panelItem = items.find((i) => i.id === "view.panel");
-  assert.ok(panelItem);
-  assert.equal(panelItem.accelerator, "⌃J");
+test("workbenchViewItems: returns the three dock-tab rows in order, the toggles live under Appearance", () => {
+  const items = workbenchViewItems(recordingActions([]));
+  assert.deepEqual(items.map((i) => i.id), ["view.problems", "view.output", "view.ports"]);
 });
 
 test("workbenchViewItems: each item calls its injected action exactly once", () => {
   const calls: string[] = [];
-  const actions: WorkbenchViewActionMap = {
-    toggleDock: () => calls.push("toggleDock"),
-    toggleStatusBar: () => calls.push("toggleStatusBar"),
-    openProblems: () => calls.push("openProblems"),
-    openOutput: () => calls.push("openOutput"),
-    openPorts: () => calls.push("openPorts"),
-  };
-  const items = workbenchViewItems(actions);
-  for (const item of items) {
-    item.run();
-  }
-  assert.deepEqual(calls, ["toggleDock", "toggleStatusBar", "openProblems", "openOutput", "openPorts"]);
+  for (const item of workbenchViewItems(recordingActions(calls))) item.run();
+  assert.deepEqual(calls, ["openProblems", "openOutput", "openPorts"]);
 });
 
-test("workbenchViewItems: separators close the panel group and the dock-tab group", () => {
-  const noop = (): void => {};
-  const items = workbenchViewItems({
-    toggleDock: noop, toggleStatusBar: noop, openProblems: noop, openOutput: noop, openPorts: noop,
-  });
-  assert.deepEqual(items.map((i) => i.separatorAfter === true), [false, true, false, false, true]);
+test("workbenchViewItems: one separator closes the dock-tab group", () => {
+  const items = workbenchViewItems(recordingActions([]));
+  assert.deepEqual(items.map((i) => i.separatorAfter === true), [false, false, true]);
+});
+
+test("workbenchAppearanceItems: Panel and Status bar keep their old ids, Panel carries ⌃J", () => {
+  const items = workbenchAppearanceItems(recordingActions([]));
+  assert.deepEqual(items.map((i) => [i.id, i.label, i.accelerator]), [
+    ["view.panel", "Panel", "⌃J"],
+    ["view.statusbar", "Status bar", undefined],
+  ]);
+});
+
+test("workbenchAppearanceItems: each row calls its action once", () => {
+  const calls: string[] = [];
+  for (const item of workbenchAppearanceItems(recordingActions(calls))) item.run();
+  assert.deepEqual(calls, ["toggleDock", "toggleStatusBar"]);
+});
+
+test("workbenchAppearanceItems: checked is read from the region readers when asked, not when built", () => {
+  const state = { dock: false, status: true };
+  const items = workbenchAppearanceItems(recordingActions([], state));
+  assert.deepEqual(items.map((i) => i.checked?.()), [false, true]);
+  state.dock = true;
+  state.status = false;
+  assert.deepEqual(items.map((i) => i.checked?.()), [true, false]);
 });
