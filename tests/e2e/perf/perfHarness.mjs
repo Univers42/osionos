@@ -65,7 +65,8 @@ export async function bootApp(page) {
 
 // In page: arm() waits for the first `startEvent` (capture phase, so before any app handler),
 // then resolves with the elapsed ms at the 2nd rAF - or, with `until`, at the first later rAF
-// where {selector, text?} matches.
+// where {selector, text?, visible?} matches. `visible` also requires el.checkVisibility(), for an
+// element that stays mounted while hidden (the closed dock sits in a display:none wrapper).
 function armProbe({ startEvent, until }) {
   const probe = {};
   probe.done = new Promise((resolve, reject) => {
@@ -76,7 +77,7 @@ function armProbe({ startEvent, until }) {
       let frames = 0;
       const tick = () => {
         frames += 1;
-        const ready = frames >= 2 && (!until || [...document.querySelectorAll(until.selector)].some((el) => !until.text || el.textContent.includes(until.text)));
+        const ready = frames >= 2 && (!until || [...document.querySelectorAll(until.selector)].some((el) => (!until.text || el.textContent.includes(until.text)) && (!until.visible || el.checkVisibility())));
         if (ready) resolve(performance.now() - startedAt);
         else if (frames > 600) reject(new Error(`${JSON.stringify(until)} not painted within 600 frames`));
         else requestAnimationFrame(tick);
