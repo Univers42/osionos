@@ -1,6 +1,5 @@
 import { isPaneZoomEnabled } from "@/shared/config/featureFlags";
-import { useZenMode } from "@/shared/config/useZenMode";
-import { useToastStore } from "@osionos/ui/primitives/useToastStore";
+import { toggleZenWithExitHint } from "@/shared/config/useZenMode";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { usePalette } from "@/widgets/top-bar/model/usePalette";
 import { findPane } from "@/widgets/workspace-grid/model/layoutTree";
@@ -26,6 +25,15 @@ function zoomSelectedPane(change: PaneZoomChange): void {
   if (paneId) useWorkspaceLayout.getState().zoomPane(paneId, change);
 }
 
+/**
+ * Zen from the Ctrl+K Ctrl+Z chord: the chord's first step (mod+k) also opens
+ * Search, so close it before toggling.
+ */
+function toggleZenFromChord(): void {
+  usePalette.getState().close();
+  toggleZenWithExitHint();
+}
+
 export const APP_COMMANDS: Command[] = [
   { id: "openSearch", title: "Search", category: "App", run: () => usePalette.getState().openSearch() },
   { id: "openPalette", title: "Command palette", category: "App", run: () => usePalette.getState().openCommand() },
@@ -41,19 +49,7 @@ export const APP_COMMANDS: Command[] = [
     id: "toggleZenMode",
     title: "Toggle Zen mode",
     category: "App",
-    run: () => {
-      // The chord's first step (mod+k) also opens Search — undo that.
-      usePalette.getState().close();
-      useZenMode.getState().toggle();
-      if (!useZenMode.getState().zen) return;
-      // An escape route: zen hides the chrome, so name the way out.
-      useToastStore.getState().push({
-        kind: "info",
-        title: "Zen mode",
-        description: "Press Ctrl+K Ctrl+Z to exit",
-        action: { label: "Exit", onClick: () => useZenMode.getState().exit() },
-      });
-    },
+    run: toggleZenFromChord,
   },
   {
     id: "splitPane",

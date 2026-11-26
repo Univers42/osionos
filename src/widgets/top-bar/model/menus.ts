@@ -5,159 +5,27 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/06/25 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Created: 2026/11/26 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/11/26 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import { useUserStore } from "@/features/auth";
-import { debugActiveFile, openOrCreateTasksFile, runActiveFile, runDefaultTask } from "@/features/ide/model/ideTasks";
-import { isQuickCaptureEnabled, isWhiteboardEnabled } from "@/shared/config/featureFlags";
-import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
-import { isThemeBasePinned, toggleThemeMode } from "@/shared/config/theme";
-import { useUIStore } from "@/shared/config/uiStore";
-import { useToastStore } from "@osionos/ui/primitives/useToastStore";
-import type { SettingsSectionId } from "@/features/settings/model/sections";
-import { usePageStore } from "@/store/usePageStore";
-import { useIssueReportRequest } from "@/features/issues/model/issueReportRequest";
-import { LEGAL_LINKS } from "@/features/legal/model/siteLegalLinks";
-import { whiteboardAppUrl } from "@/shared/config/appUrls";
-import { consoleTab, homeTab, trashTab, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
-import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
-import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
-import { captureOpenOrigin, openCreatedPage } from "@/widgets/workspace-grid/model/createdPageOpen";
-import { hasLocalTerminal } from "@/features/ide/model/localPty";
-import { openMachineFolder } from "@/widgets/activity-rail/model/panelFocus";
-import { usePalette } from "./usePalette";
-import { whiteboardViewItems } from "./whiteboardMenuItems";
-import { openWorkbenchTerminal, workbenchViewMenu } from "@/widgets/workbench/model/workbenchMenuActions";
+import type { MenuContext, MenuGroup } from "./menuTypes";
+import { editMenu } from "./menus/editMenu";
+import { fileMenu } from "./menus/fileMenu";
+import { goMenu } from "./menus/goMenu";
+import { helpMenu } from "./menus/helpMenu";
+import { selectionMenu } from "./menus/selectionMenu";
+import { terminalMenu } from "./menus/terminalMenu";
+import { viewMenu } from "./menus/viewMenu";
 
-export interface MenuItem {
-  id: string;
-  label: string;
-  /** Display-only accelerator hint; only shown for chords actually bound globally. */
-  accelerator?: string;
-  run: () => void;
-  separatorAfter?: boolean;
-}
-
-export interface MenuGroup {
-  id: string;
-  label: string;
-  items: MenuItem[];
-}
-
-/** App-level callbacks the menubar needs that live in React state (not a store). */
-export interface MenuContext {
-  openSettings: (section?: SettingsSectionId) => void;
-}
-
-const DOCS_URL = "https://github.com/Univers42/osionos";
-
-/** The quick light/dark flip, which says why it does nothing while the active theme sets the mode. */
-function toggleThemeFromMenu() {
-  if (!isThemeBasePinned()) {
-    toggleThemeMode();
-    return;
-  }
-  useToastStore.getState().push({
-    kind: "info",
-    title: "Your theme sets light or dark",
-    description: "Choose another theme in Settings › Preferences to switch.",
-  });
-}
+export type { MenuAction, MenuContext, MenuGroup, MenuItem, MenuSubmenu } from "./menuTypes";
 
 /**
- * Build the menubar groups. Every item dispatches to an existing store action or
- * the command palette, so nothing here is a dead button. All actions are
- * focus-independent (they never depend on a preserved editor text selection).
+ * Build the menubar groups, in menubar order. Every row dispatches to an
+ * existing store action or the command palette, so nothing here is a dead
+ * button, and none depends on a preserved editor text selection.
  */
 export function buildMenus(ctx: MenuContext): MenuGroup[] {
-  const layout = () => useWorkspaceLayout.getState();
-  const palette = () => usePalette.getState();
-
-  const createPage = (title: string, surface?: "folder") => {
-    const user = useUserStore.getState();
-    const workspace = user.activeWorkspace();
-    const jwt = user.activePageJwt() ?? "";
-    if (!workspace) return;
-    const options = surface ? { surface } : undefined;
-    const origin = captureOpenOrigin(!surface);
-    void usePageStore.getState().addPage(workspace._id, title, jwt, undefined, options).then((page) => {
-      if (!page) return;
-      if (surface) useToastStore.getState().push({ kind: "success", title: "Folder created" });
-      else openCreatedPage({ id: page._id, workspaceId: workspace._id, kind: "page", title: page.title }, origin);
-    });
-  };
-
-  const closeActiveTab = () => {
-    const state = layout();
-    const tab = activeTabOf(state.root, state.activePaneId);
-    if (tab) state.closeTab(state.activePaneId, tab.tabId);
-  };
-
-  return [
-    {
-      id: "file", label: "File", items: [
-        { id: "file.new-page", label: "New page", run: () => createPage("Untitled") },
-        { id: "file.new-folder", label: "New folder", run: () => createPage("New folder", "folder"), separatorAfter: true },
-        ...(isQuickCaptureEnabled()
-          ? [{ id: "file.capture", label: "Quick capture", run: () => useQuickCapture.getState().setOpen(true), separatorAfter: true }]
-          : []),
-        ...(hasLocalTerminal() ? [] : [{ id: "file.open-folder", label: "Open Folder…", accelerator: "⌘K ⌘O", run: openMachineFolder, separatorAfter: true }]),
-        { id: "file.search", label: "Search…", accelerator: "⌘K", run: () => palette().openSearch(), separatorAfter: true },
-        { id: "file.settings", label: "Settings", run: ctx.openSettings },
-      ],
-    },
-    {
-      id: "edit", label: "Edit", items: [
-        { id: "edit.find", label: "Find pages…", accelerator: "⌘K", run: () => palette().openSearch() },
-        { id: "edit.command", label: "Run command…", accelerator: "⌘⇧P", run: () => palette().openCommand() },
-      ],
-    },
-    {
-      id: "selection", label: "Selection", items: [
-        { id: "sel.split-right", label: "Split editor right", accelerator: "⌘\\", run: () => layout().splitActivePane(layout().activePaneId, "row") },
-        { id: "sel.split-down", label: "Split editor down", run: () => layout().splitActivePane(layout().activePaneId, "column"), separatorAfter: true },
-        { id: "sel.close-pane", label: "Close pane", run: () => layout().closePane(layout().activePaneId) },
-        { id: "sel.close-tab", label: "Close tab", run: closeActiveTab },
-      ],
-    },
-    {
-      id: "view", label: "View", items: [
-        { id: "view.sidebar", label: "Show or hide the sidebar", accelerator: "Ctrl+Alt+B", run: () => useUIStore.getState().toggleDocked() },
-        { id: "view.theme", label: "Toggle theme", run: toggleThemeFromMenu, separatorAfter: true },
-        ...workbenchViewMenu(),
-        { id: "view.home", label: "Home", run: () => layout().openTab(homeTab()) },
-        { id: "view.trash", label: "Trash", run: () => layout().openTab(trashTab()) },
-        { id: "view.console", label: "BaaS Console", run: () => layout().openTab(consoleTab()) },
-        // Two gates, not one: the flag is the kill-switch, the URL is the capability.
-        // A build with VITE_WHITEBOARD_APP_URL blanked cannot load the embed at all, so
-        // the item is withheld rather than offered and then failing.
-        ...whiteboardViewItems(isWhiteboardEnabled() && whiteboardAppUrl() !== "", () => layout().openTab(whiteboardTab())),
-      ],
-    },
-    {
-      id: "terminal", label: "Terminal", items: [
-        { id: "term.new", label: "New Terminal", accelerator: "⌃`", run: () => openWorkbenchTerminal("new") },
-        { id: "term.split", label: "Split Terminal", run: () => openWorkbenchTerminal("split") },
-        { id: "term.run-task", label: "Run Task", run: () => void runDefaultTask() },
-        { id: "term.run-build", label: "Run Build Task", run: () => void runDefaultTask("build") },
-        { id: "term.run-active", label: "Run Active File", run: () => void runActiveFile() },
-        { id: "term.debug-active", label: "Debug Python File", accelerator: "F5", run: () => void debugActiveFile() },
-        { id: "term.run-test", label: "Run Selected Test", run: () => void runDefaultTask("test"), separatorAfter: true },
-        { id: "term.configure", label: "Configure Tasks", run: () => void openOrCreateTasksFile() },
-        { id: "term.configure-build", label: "Configure Default Build Task", run: () => void openOrCreateTasksFile() },
-      ],
-    },
-    {
-      id: "help", label: "Help", items: [
-        { id: "help.docs", label: "Documentation", run: () => { globalThis.open(DOCS_URL, "_blank", "noopener"); } },
-        { id: "help.shortcuts", label: "Keyboard shortcuts", run: () => ctx.openSettings("shortcuts") },
-        { id: "help.report", label: "Report an issue…", run: () => useIssueReportRequest.getState().open({ title: "", description: "" }) },
-        ...LEGAL_LINKS.map((link) => ({ id: `help.${link.id}`, label: link.label, run: () => { globalThis.open(link.href, "_blank", "noopener"); } })),
-        { id: "help.about", label: "About osionos", run: () => useToastStore.getState().push({ kind: "info", title: "osionos", description: "Notion-style collaborative workspace" }) },
-      ],
-    },
-  ];
+  return [fileMenu(ctx), editMenu(), selectionMenu(), viewMenu(), goMenu(), terminalMenu(), helpMenu(ctx)];
 }

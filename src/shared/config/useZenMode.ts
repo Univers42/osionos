@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { create } from "zustand";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 
 interface ZenState {
   zen: boolean;
@@ -35,3 +36,19 @@ export const useZenMode = create<ZenState>((set, get) => ({
   toggle: () => set({ zen: !get().zen }),
   exit: () => set({ zen: false }),
 }));
+
+/**
+ * Toggle zen mode, and on entering it toast the way out: zen hides the chrome
+ * that holds every other exit. Shared by the Ctrl+K Ctrl+Z chord and View ›
+ * Appearance › Zen mode.
+ */
+export function toggleZenWithExitHint(): void {
+  useZenMode.getState().toggle();
+  if (!useZenMode.getState().zen) return;
+  useToastStore.getState().push({
+    kind: "info",
+    title: "Zen mode",
+    description: "Press Ctrl+K Ctrl+Z to exit",
+    action: { label: "Exit", onClick: () => useZenMode.getState().exit() },
+  });
+}

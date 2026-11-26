@@ -40,10 +40,11 @@ test.describe("the settings tab", () => {
     await expect(region(page)).toBeVisible();
   });
 
-  test("File menu › Settings opens the same tab", async ({ page, baseURL }) => {
+  test("File menu › Preferences › Settings opens the same tab", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await page.getByRole("button", { name: "File", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Settings" }).click();
+    await page.getByRole("menuitem", { name: "Preferences" }).click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
 
     await expect(settingsTabInStrip(page)).toHaveCount(1);
     await expect(region(page)).toBeVisible();

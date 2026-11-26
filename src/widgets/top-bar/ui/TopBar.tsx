@@ -16,6 +16,9 @@ import { buildCommands, type PaletteCommand } from "../model/commands";
 import { buildMenus } from "../model/menus";
 import { usePalette, useTopBarHotkeys } from "../model/usePalette";
 import { SharedSpacePresenceBar } from "@/features/collab/ui/SharedSpacePresenceBar";
+import { AgentButton } from "./AgentButton";
+import { LayoutToggles } from "./LayoutToggles";
+import { PhoneMenu } from "./PhoneMenu";
 import { TopBarMenu } from "./TopBarMenu";
 import { TopBarSearch } from "./TopBarSearch";
 import { UpdateButton } from "./UpdateButton";
@@ -26,7 +29,7 @@ interface TopBarProps {
   onOpenSettings: (section?: SettingsSectionId) => void;
 }
 
-/** Global VSCode-style top bar: menus · command/search · update · window controls.
+/** Global VSCode-style top bar: menus · command/search · agent · layout toggles · update · window controls.
  *  No brand label: it did nothing, and the user knows which app they are in. */
 export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
   useTopBarHotkeys();
@@ -59,6 +62,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
       data-testid="app-topbar"
       className="flex h-[var(--osio-topbar-h)] shrink-0 items-center gap-1.5 bg-transparent px-2"
     >
+      <PhoneMenu groups={menus} />
       <div className="hidden md:block">
         <TopBarMenu groups={menus} />
       </div>
@@ -67,9 +71,12 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
         <TopBarSearch commands={commands} />
       </div>
 
+      <AgentButton ctx={ctx} />
+
       <div className="hidden sm:flex items-center gap-1">
         <SharedSpacePresenceBar />
         <QuickCaptureButton />
+        <LayoutToggles />
         <UpdateButton />
       </div>
       <WindowControls />
