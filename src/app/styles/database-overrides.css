@@ -26,7 +26,13 @@
    Bar value labels: the vendored chart leaves 16px to the right of the plot, so
    the longest horizontal bar's value was cut ("20" for 200,000). The plot gives
    up 2.5rem on the right and the SVG may draw into it. A value wider than that
-   (about seven digits at 11px) is still cut. */
+   (about seven digits at 11px) is still cut.
+
+   Month calendar on a phone: a 39px day cell wrapped "Nov 1" onto two lines and
+   left an event chip no room for its icon (measured 2026-11-26). Under 640px
+   the label stays on one line, right-aligned, the hover "+" leaves the flow and
+   the chip gives up its side padding. Keyed on the viewport, so a calendar in a
+   narrow column of a wide window still wraps. */
 
 @layer utilities {
   html :where(.notion-object-database) {
@@ -79,6 +85,24 @@
     }
     & .odb-topbar {
       container-type: inline-size;
+    }
+    & .group\/day > div:first-child > span {
+      white-space: nowrap;
+    }
+    @media (max-width: 640px) {
+      & .group\/day > div:first-child {
+        justify-content: flex-end;
+      }
+      & .group\/day > div:first-child > span {
+        padding-inline: 0.125rem;
+      }
+      & .group\/day > div:first-child > button {
+        position: absolute;
+        left: 0.125rem;
+      }
+      & .group\/chip {
+        padding-inline: 0.125rem;
+      }
     }
     @container (max-width: 520px) {
       & .odb-topbar-row,

@@ -92,15 +92,22 @@
 @container odb-topbar (max-width: 40rem) {
   .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row {
     flex-wrap: wrap;
-    gap: 0.25rem 0.5rem;
+    justify-content: flex-start;
+    gap: 0.25rem;
   }
 
-  /* An 8rem basis, not 0: in a 150 px column New and the collapse toggle
+  /* A 7rem basis, not 0: in a 150 px column New and the collapse toggle
      shared the title's line and crushed it to 5 px (measured 2026-10-28).
      Now they wrap below it when the three don't fit. */
   .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row > :first-child {
-    flex: 1 1 8rem;
+    flex: 1 1 7rem;
     min-width: 0;
+  }
+
+  /* The toggle's 2 px margin pushed it onto a line of its own in a 273 px
+     phone column (measured 2026-11-26); the row gap already spaces it. */
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row > .odb-collapse-btn {
+    margin-left: 0;
   }
 
   .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row::after {
