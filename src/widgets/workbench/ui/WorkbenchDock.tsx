@@ -27,8 +27,11 @@ import { IdeOutputPanel } from "@/features/ide/ui/IdeOutputPanel";
 import { IdePortsPanel } from "@/features/ide/ui/IdePortsPanel";
 import { IdeProblemsPanel } from "@/features/ide/ui/IdeProblemsPanel";
 import { SandboxUnavailable } from "@/features/ide/ui/SandboxUnavailable";
-import { DOCK_TABS, clampDockHeight, type DockTab } from "@/widgets/workbench/model/workbenchLayout";
+import { DOCK_TABS, type DockPosition, type DockTab } from "@/widgets/workbench/model/workbenchLayout";
 import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";
+import { DockPositionMenu } from "./DockPositionMenu";
+import { DOCK_MARGIN, dockSizeStyle } from "./dockFrame";
+import { ICON_BTN } from "./dockIconButton";
 
 // Lazy so xterm.js (~250KB) loads only when the terminal first opens.
 const IdeTerminal = React.lazy(() =>
@@ -59,9 +62,6 @@ const TAB_LABEL: Record<DockTab, string> = {
   debug: "Debug",
   ports: "Ports",
 };
-
-// 24px is the smallest target WCAG 2.2 allows; the glyph stays small inside it.
-const ICON_BTN = "osio-code-btn h-6 w-6 shrink-0";
 
 function nextTabIndex(key: string, index: number): number | null {
   const count = DOCK_TABS.length;
@@ -199,12 +199,13 @@ const DockTabs: React.FC<{ active: DockTab; conflicts: number }> = ({ active, co
   );
 };
 
-/** Bottom dock: Terminal / Problems / Output / Ports. The terminal stays MOUNTED
- *  (hidden) on other tabs so its PTY socket and scrollback survive. */
-export const WorkbenchDock: React.FC = () => {
+/** The dock, at the bottom or on a side: Terminal / Problems / Output / Ports. The terminal
+ *  stays MOUNTED (hidden) on other tabs so its PTY socket and scrollback survive. */
+export const WorkbenchDock: React.FC<{ position: DockPosition }> = ({ position }) => {
   const active = useWorkbenchStore((s) => s.dockTab);
   const closeDock = useWorkbenchStore((s) => s.closeDock);
   const height = useWorkbenchStore((s) => s.dockHeight);
+  const width = useWorkbenchStore((s) => s.dockWidth);
   const conflicts = useIdeSyncConflicts((s) => conflictCount(s.byPageId));
   const sandboxReachable = isSandboxReachable(useSandboxHealthStore((s) => s.state));
   const vsCodePanel = hasLocalTerminal() || !sandboxReachable;
@@ -215,10 +216,10 @@ export const WorkbenchDock: React.FC = () => {
       data-testid="workbench-dock"
       data-code-theme="app"
       data-osio-code-chrome
-      style={{ height: clampDockHeight(height, globalThis.innerHeight), minHeight: "var(--osio-dock-min-h)" }}
+      style={dockSizeStyle(position, height, width)}
       // A card like a pane: it clips the terminal to its corners, sits the same
       // gutter in from the canvas, and the splitter above it is the gap.
-      className="mx-[var(--osio-frame-gap)] mb-[var(--osio-frame-gap)] flex shrink-0 flex-col overflow-hidden rounded-[var(--osio-radius-pane)] border-[length:var(--osio-dock-border-width)] border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-dock-shadow)]"
+      className={`${DOCK_MARGIN[position]} flex shrink-0 flex-col overflow-hidden rounded-[var(--osio-radius-pane)] border-[length:var(--osio-dock-border-width)] border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-dock-shadow)]`}
     >
       {/* The tabs scroll sideways when the actions would otherwise be pushed out of the card (phone width). */}
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-2 text-xs text-[var(--osio-code-fg-muted)]">
@@ -228,6 +229,7 @@ export const WorkbenchDock: React.FC = () => {
         {active === "terminal" && !vsCodePanel && <TerminalActions />}
         {active === "terminal" && vsCodePanel && <ComputerActions />}
         {active === "output" && <OutputActions />}
+        <DockPositionMenu />
         <Tooltip label="Hide panel" side="bottom">
           <button type="button" aria-label="Hide panel" onClick={closeDock} className={ICON_BTN}>
             <X size={14} />
