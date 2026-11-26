@@ -15,8 +15,7 @@
 import React, { useRef, useState } from "react";
 import { AtSign, Paperclip, Plug, Plus } from "lucide-react";
 
-import { IconButton, MenuItem } from "@/shared/ui";
-import { PopoverMenu } from "./PopoverMenu";
+import { IconButton, MenuItem, PopoverMenu } from "@/shared/ui";
 
 interface Props {
   onAttach: () => void;

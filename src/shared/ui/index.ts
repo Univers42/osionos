@@ -26,3 +26,4 @@ export * from "./atoms/Select";
 export * from "./atoms/Textarea";
 export * from "./molecules/NoteComposeModal";
 export * from "./molecules/MenuSubmenu";
+export * from "./molecules/PopoverMenu";
