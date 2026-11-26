@@ -28,7 +28,7 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
-import { dedupeById, safeCardCover, signCardCovers } from "./homeLiveEntries";
+import { dedupeById, safeCardCover, safeCardIcon, signCardCovers } from "./homeLiveEntries";
 import { TEMPLATES_DB_ID, TEMPLATES_GALLERY_VIEW } from "./workspaceDatabaseConstants";
 import type { CatalogueCard } from "@/data/templates/catalogue/types";
 import { listEnabledCatalogue } from "@/features/templates/model/catalogueGate";
@@ -50,7 +50,7 @@ function entryToCard(entry: PageEntry): Page {
   return {
     id: entry._id,
     databaseId: TEMPLATES_DB_ID,
-    icon: entry.icon,
+    icon: safeCardIcon(entry.icon),
     cover: safeCardCover(entry.cover),
     properties: { [TEMPLATE_TITLE]: entry.title || "Untitled template" },
     content: [],

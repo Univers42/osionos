@@ -28,7 +28,7 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
-import { pickRecentEntries, safeCardCover, signCardCovers } from "./homeLiveEntries";
+import { pickRecentEntries, safeCardCover, safeCardIcon, signCardCovers } from "./homeLiveEntries";
 import { RECENTS_DB_ID, RECENTS_GALLERY_VIEW } from "./workspaceDatabaseConstants";
 
 const RECENT_TITLE = "home-recent-title";
@@ -47,7 +47,7 @@ function entryToCard(entry: PageEntry): Page {
   return {
     id: entry._id,
     databaseId: RECENTS_DB_ID,
-    icon: entry.icon,
+    icon: safeCardIcon(entry.icon),
     cover: safeCardCover(entry.cover),
     properties: { [RECENT_TITLE]: entry.title || "Untitled" },
     content: [],

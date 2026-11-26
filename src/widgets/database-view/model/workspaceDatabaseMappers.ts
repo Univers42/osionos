@@ -13,6 +13,7 @@
 import type { Page } from "@notion-db/object-database";
 import type { SelectOption } from "@notion-db/contract-types";
 import type { PageEntry } from "@/entities/page";
+import { safeCardIcon } from "./homeLiveEntries";
 import { DEFAULT_FILE_COVER, FILE, FOLD, WS_FILES_DB_ID, WS_FOLDERS_DB_ID } from "./workspaceDatabaseConstants";
 
 const OPTION_COLORS = [
@@ -60,7 +61,7 @@ export function folderEntryToNotionPage(entry: PageEntry, derive: FolderDerive):
   return {
     id: entry._id,
     databaseId: WS_FOLDERS_DB_ID,
-    icon: entry.icon,
+    icon: safeCardIcon(entry.icon),
     cover: entry.cover,
     properties: {
       [FOLD.title]: entry.title || "Untitled folder",
@@ -86,7 +87,7 @@ export function fileEntryToNotionPage(entry: PageEntry, derive: FileDerive): Pag
   return {
     id: entry._id,
     databaseId: WS_FILES_DB_ID,
-    icon: entry.icon,
+    icon: safeCardIcon(entry.icon),
     cover: entry.cover || DEFAULT_FILE_COVER,
     properties: {
       [FILE.title]: entry.title || "Untitled",

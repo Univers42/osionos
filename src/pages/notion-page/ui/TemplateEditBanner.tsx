@@ -33,14 +33,14 @@ export const TemplateEditBanner: React.FC<{ pageId: string }> = ({ pageId }) => 
   const every = usePageStore((s) => s.pageById(pageId)?.recurrence?.every ?? "none");
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-[var(--osio-warning)] bg-[var(--osio-block-tint-yellow-bg)] px-4 py-2 text-sm text-[var(--osio-block-tint-yellow-fg)]">
+    <div className="flex flex-wrap items-center gap-2 border-b border-[var(--osio-border-default)] bg-[var(--osio-block-tint-yellow-bg)] px-4 py-2 text-sm text-[var(--osio-block-tint-yellow-fg)]">
       <Database size={14} aria-hidden />
       <span>You&apos;re editing a template in <strong>{dbName}</strong></span>
       <select name="template-recurrence"
         aria-label="Template recurrence"
         value={every}
         onChange={(e) => patchTemplateRecurrence(pageId, { every: e.target.value as PageRecurrenceEvery })}
-        className="ml-auto rounded-md border border-[var(--osio-warning)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs text-[var(--osio-fg-default)]"
+        className="ml-auto cursor-pointer rounded-sm border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs text-[var(--osio-fg-default)] hover:border-[var(--osio-border-strong)]"
       >
         {RECURRENCE_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>

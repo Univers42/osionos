@@ -330,7 +330,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
                 "osio-line-marker text-sm leading-relaxed shrink-0 w-4 h-4 rounded-xs border flex items-center justify-center",
                 block.checked
                   ? "bg-[var(--osio-accent)] border-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
-                  : "border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]",
+                  : "border-[var(--osio-fg-subtle)] bg-[var(--osio-bg-surface)]",
               ].join(" ")}
             >
               {block.checked && (

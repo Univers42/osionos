@@ -62,7 +62,7 @@ export const TodoBlockEditor: React.FC<{
           "osio-line-marker text-sm leading-relaxed shrink-0 w-4 h-4 rounded-xs border flex items-center justify-center cursor-pointer",
           block.checked
             ? "bg-[var(--osio-accent)] border-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
-            : "border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] hover:border-[var(--osio-fg-muted)]",
+            : "border-[var(--osio-fg-subtle)] bg-[var(--osio-bg-surface)] hover:border-[var(--osio-fg-default)]",
         ].join(" ")}
       >
         {block.checked && (

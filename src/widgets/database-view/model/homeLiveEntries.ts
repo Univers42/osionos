@@ -20,6 +20,12 @@ export function safeCardCover(cover: string | null | undefined): string | undefi
   return /^(https?:|\/|data:image\/|blob:|linear-gradient|radial-gradient)/.test(cover) ? cover : undefined;
 }
 
+/** Icon the vendored cards can print: they render `icon` as text, so a symbolic `icon:<name>` token or an image URL is dropped (no glyph beats raw token text). */
+export function safeCardIcon(icon: string | null | undefined): string | undefined {
+  if (!icon) return undefined;
+  return /^(icon:|https?:|\/|data:|blob:)/.test(icon) ? undefined : icon;
+}
+
 /** First occurrence of each `_id` wins; later duplicates are dropped. */
 export function dedupeById<T extends { _id: string }>(entries: readonly T[]): T[] {
   const seen = new Set<string>();
