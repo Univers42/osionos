@@ -12,7 +12,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { cx } from "@osionos/ui/shared/classNames";
-import type { MenuGroup, MenuItem } from "../model/menus";
+import { flattenActions, type MenuAction, type MenuGroup } from "../model/menuTypes";
 import { MenuDropdown } from "./MenuDropdown";
 
 interface TopBarMenuProps {
@@ -40,7 +40,7 @@ export const TopBarMenu: React.FC<TopBarMenuProps> = ({ groups }) => {
     };
   }, [openId]);
 
-  function handleSelect(item: MenuItem): void {
+  function handleSelect(item: MenuAction): void {
     setOpenId(null);
     item.run();
   }
@@ -62,7 +62,7 @@ export const TopBarMenu: React.FC<TopBarMenuProps> = ({ groups }) => {
           >
             {group.label}
           </button>
-          {openId === group.id && <MenuDropdown items={group.items} onSelect={handleSelect} />}
+          {openId === group.id && <MenuDropdown items={flattenActions(group.items)} onSelect={handleSelect} />}
         </div>
       ))}
     </nav>

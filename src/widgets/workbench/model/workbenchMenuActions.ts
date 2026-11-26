@@ -13,7 +13,8 @@
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { hasLocalTerminal } from "@/features/ide/model/localPty";
 import { isSandboxReachable, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
-import { terminalMenuAction, workbenchViewItems, type MenuItemSpec } from "@/widgets/top-bar/model/workbenchMenuItems";
+import type { MenuAction } from "@/widgets/top-bar/model/menuTypes";
+import { terminalMenuAction, workbenchAppearanceItems, workbenchViewItems, type WorkbenchViewActionMap } from "@/widgets/top-bar/model/workbenchMenuItems";
 import { useWorkbenchStore } from "./workbenchStore";
 
 /** Terminal menu: in the desktop app the dock's terminal, a shell on this computer. On the web, one
@@ -34,13 +35,26 @@ export function openWorkbenchTerminal(mode: "new" | "split"): void {
   workbench.openDock("terminal");
 }
 
-export function workbenchViewMenu(): MenuItemSpec[] {
+/** The workbench store's actions and readers, read at call time so a row never closes over stale state. */
+function workbenchActions(): WorkbenchViewActionMap {
   const workbench = (): ReturnType<typeof useWorkbenchStore.getState> => useWorkbenchStore.getState();
-  return workbenchViewItems({
+  return {
     toggleDock: () => workbench().toggleDock(),
     toggleStatusBar: () => workbench().toggleStatusBar(),
     openProblems: () => workbench().openDock("problems"),
     openOutput: () => workbench().openDock("output"),
     openPorts: () => workbench().openDock("ports"),
-  });
+    isDockOpen: () => workbench().dockOpen,
+    isStatusBarVisible: () => workbench().statusBarVisible,
+  };
+}
+
+/** The View-menu rows that open a dock tab (Problems, Output, Ports). */
+export function workbenchViewMenu(): MenuAction[] {
+  return workbenchViewItems(workbenchActions());
+}
+
+/** The Appearance rows for the dock Panel and the Status bar. */
+export function workbenchAppearanceMenu(): MenuAction[] {
+  return workbenchAppearanceItems(workbenchActions());
 }

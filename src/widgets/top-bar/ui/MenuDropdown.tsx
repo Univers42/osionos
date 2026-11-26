@@ -11,11 +11,11 @@
 /* ************************************************************************** */
 
 import React from "react";
-import type { MenuItem } from "../model/menus";
+import type { MenuAction } from "../model/menuTypes";
 
 interface MenuDropdownProps {
-  items: MenuItem[];
-  onSelect: (item: MenuItem) => void;
+  items: MenuAction[];
+  onSelect: (item: MenuAction) => void;
 }
 
 /** A single menubar dropdown panel (popover tier, token-styled). */
