@@ -117,7 +117,7 @@ export const AccentControl: React.FC<{ appearance: Appearance; paletteId: string
   );
 };
 
-function Segmented<T extends string>({
+export function Segmented<T extends string>({
   label,
   value,
   options,
