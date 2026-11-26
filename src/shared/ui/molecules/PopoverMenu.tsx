@@ -22,7 +22,7 @@
 
 import React, { useEffect, useRef } from "react";
 
-import { Menu, Popover } from "@/shared/ui";
+import { Menu, Popover } from "@osionos/ui";
 
 interface Props {
   anchorRef: React.RefObject<HTMLElement | null>;

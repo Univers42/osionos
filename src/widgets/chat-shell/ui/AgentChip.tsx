@@ -15,12 +15,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, UsersRound } from "lucide-react";
 
-import { Button, MenuItem } from "@/shared/ui";
+import { Button, MenuItem, PopoverMenu } from "@/shared/ui";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import { scopeWords } from "@/features/ai/model/agentForm";
 import { PANEL_MAX, PANEL_MIN, togglePanelMember } from "@/features/chat/model/agentPanel";
 import { AgentAvatar } from "./AgentAvatar";
-import { PopoverMenu } from "./PopoverMenu";
 
 interface Props {
   agents: AgentSummary[];

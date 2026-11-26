@@ -3,10 +3,9 @@
 import React, { useRef, useState } from "react";
 import { UsersRound } from "lucide-react";
 
-import { MenuItem } from "@/shared/ui";
+import { MenuItem, PopoverMenu } from "@/shared/ui";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import { AgentAvatar } from "./AgentAvatar";
-import { PopoverMenu } from "./PopoverMenu";
 
 interface Props {
   /** The agents that may be asked: the author of the answer is already left out. */
