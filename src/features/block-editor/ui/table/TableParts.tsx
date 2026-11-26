@@ -274,7 +274,7 @@ function getFirstCellPaddingClassName(padding: TableBlockPadding | undefined): s
 
 function getCellFrameClassName(config: TableBlockConfig, alignment: TableBlockTextAlign, rowIndex: number, columnIndex: number): string {
   const paddingClass = columnIndex === 0 ? getFirstCellPaddingClassName(config.cellPadding) : getTablePaddingClassName(config.cellPadding);
-  return ["relative text-[var(--osio-fg-default)] align-top focus-within:bg-[var(--osio-bg-hover)]", paddingClass, getTableAlignmentClassName(alignment), config.wrap === false ? "whitespace-nowrap" : "whitespace-normal break-words", config.showBorders === false ? "" : "border-b border-r border-[var(--osio-db-line)] last:border-r-0", config.headerColumn && columnIndex === 0 ? "font-medium bg-[var(--osio-bg-subtle)]" : "", config.headerRow !== false && rowIndex === 0 ? "font-medium" : ""].filter(Boolean).join(" ");
+  return ["relative text-[var(--osio-fg-default)] align-top focus-within:bg-[var(--osio-bg-hover)]", paddingClass, getTableAlignmentClassName(alignment), config.wrap === false ? "whitespace-nowrap" : "whitespace-normal break-words", config.showBorders === false ? "" : "border-b border-r border-[var(--osio-db-line-soft)] last:border-r-0", config.headerColumn && columnIndex === 0 ? "font-medium bg-[var(--osio-bg-subtle)]" : "", config.headerRow !== false && rowIndex === 0 ? "font-medium" : ""].filter(Boolean).join(" ");
 }
 
 function areCellsEqual(previous: Readonly<EditableTableCellProps>, next: Readonly<EditableTableCellProps>): boolean {

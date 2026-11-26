@@ -691,6 +691,25 @@ body {
 
 }
 
+/* The page code block (not the IDE surfaces that share .osio-code-card) is a flat filled
+   panel in the app theme; a per-block dark/light theme keeps its own fixed palette. */
+.osio-code-block:not([data-code-theme="dark"], [data-code-theme="light"]) {
+  --osio-code-bg: var(--osio-bg-subtle);
+}
+
+/* Controls that only matter while the pointer or focus is in the block. Devices without
+   hover keep them visible, and focus inside the block always reveals them. */
+@media (hover: hover) {
+  .osio-code-block .osio-code-quiet {
+    opacity: 0;
+    transition: opacity var(--osio-dur-fast) ease-out;
+  }
+  .osio-code-block:hover .osio-code-quiet,
+  .osio-code-block:focus-within .osio-code-quiet {
+    opacity: 1;
+  }
+}
+
 .osio-code-card .hljs,
 .osio-code-card .hljs-subst {
   color: var(--osio-code-fg) !important;

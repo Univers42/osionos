@@ -180,3 +180,14 @@
 .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar > :has(> .odb-view-tabs) {
   padding-inline: 0;
 }
+
+/* One rule under the tabs is enough: the package also draws one between the
+ * title and the tabs, which boxed the title in. The tab keeps the 6px chip
+ * radius of every other small control on the page, not the package's 12px. */
+.osionos-database-block--inline .osionos-object-database-single-view .odb-topbar > :has(> .odb-view-tabs) {
+  border-top-color: transparent;
+}
+
+.osionos-database-block--inline .osionos-object-database-single-view .odb-view-tabs button {
+  border-radius: var(--osio-radius-chip);
+}

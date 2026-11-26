@@ -102,8 +102,8 @@
   & [data-wide-block-table] {
     width: max-content;
     min-width: 100%;
-    border: 1px solid var(--osio-db-line);
-    border-radius: var(--osio-radius-lg);
+    border: 1px solid var(--osio-db-line-soft);
+    border-radius: var(--osio-radius-sm);
     background-color: var(--osio-bg-surface);
     border-collapse: separate;
     border-spacing: 0;
