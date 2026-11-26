@@ -130,10 +130,32 @@ test("every consumer of --osio-overlay-bg is a spelling the frosted rule covers"
 
 test("the frosted rule names both covered spellings and ships translucency with its blur", () => {
   const css = readFileSync("src/app/styles/surface.css", "utf8");
-  const rule = /:root\[data-surface="frosted"\] :is\((.*)\)\s*\{([^}]*)\}/.exec(css);
+  const rule = /:root:not\(\[data-density="compact"\]\)\[data-surface="frosted"\] :where\((.*)\)\s*\{([^}]*)\}/.exec(css);
   assert.ok(rule, "frosted rule missing");
   assert.ok(rule[1].includes(".osio-surface-overlay") && rule[1].includes(`[class*="${COVERED[0]}"]`));
   assert.match(rule[2], /background-color:\s*color-mix/);
   assert.match(rule[2], /backdrop-filter:\s*blur/);
   assert.ok(!/--osio-overlay-bg\s*:\s*color-mix/.test(css), "the token itself must stay solid");
+});
+
+test("every frosted rule is desktop-only and outside compact density, fallback included", () => {
+  const css = readFileSync("src/app/styles/surface.css", "utf8");
+  const frosted = css.slice(css.indexOf("@media (width > 767.98px) {\n  @supports"));
+  assert.ok(frosted.startsWith("@media (width > 767.98px)"), "frosted block must sit in the desktop media query");
+  const selectors = frosted.match(/^\s*:root[^{]*data-surface="frosted"[^{]*\{/gm) ?? [];
+  assert.equal(selectors.length, 2);
+  for (const selector of selectors) assert.ok(selector.includes(':not([data-density="compact"])'), selector);
+  assert.equal(css.match(/data-surface="frosted"/g)?.length, 2, "no frosted rule outside the guarded block");
+});
+
+test("a later corner tweak keeps the preset; a mixed surface axis is Custom", () => {
+  for (const preset of STYLE_PRESETS) assert.equal(activeStyleId({ ...DEFAULT_APPEARANCE, ...preset.patch, radius: preset.id === "paper" ? "round" : "sharp" }), preset.id);
+  assert.ok(STYLE_PRESETS.every((preset) => preset.patch.radius !== undefined));
+  assert.equal(activeStyleId({ ...DEFAULT_APPEARANCE, borders: "strong" }), null);
+});
+
+test("the selected style carries a non-colour cue that survives forced colours", () => {
+  const tsx = readFileSync("src/features/theme/StyleControls.tsx", "utf8");
+  assert.match(tsx, /peer-checked:\[&_svg\]:block/);
+  assert.match(tsx, /<svg aria-hidden="true"/);
 });

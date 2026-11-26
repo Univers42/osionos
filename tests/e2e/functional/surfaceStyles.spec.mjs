@@ -210,6 +210,32 @@ test.describe("surface styles", () => {
     expect(forced.alpha).toBe(1);
   });
 
+  test("frosted is off in compact density", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const { slash } = await openSurfaces(page);
+    await setAttrs(page, { surface: "frosted" });
+    expect((await probe(slash)).blur).toContain("blur");
+    await setAttrs(page, { density: "compact" });
+    const compact = await probe(slash);
+    expect(compact.blur).toBe("none");
+    expect(compact.alpha).toBe(1);
+    await page.evaluate(() => delete document.documentElement.dataset.density);
+    expect((await probe(slash)).blur).toContain("blur");
+  });
+
+  test.describe("phone viewport", () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+
+    test("frosted never blurs a menu on a phone", async ({ page, baseURL }) => {
+      await openFreshPage(page, baseURL);
+      await setAttrs(page, { surface: "frosted" });
+      const { slash } = await openSurfaces(page);
+      const phone = await probe(slash);
+      expect(phone.blur).toBe("none");
+      expect(phone.alpha).toBe(1);
+    });
+  });
+
   test("gap 0: flat, deep and borders never reach a compact, zen, phone or resizing pane", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     const pane = () =>

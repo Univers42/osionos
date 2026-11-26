@@ -7,7 +7,7 @@
 
 import React, { useId } from 'react';
 
-import { STYLE_PRESETS, activeStyleId } from '@/shared/config/stylePresets';
+import { STYLE_PRESETS, activeStyleId, type StyleId } from '@/shared/config/stylePresets';
 import type { Appearance, Borders, Elevation, Surface } from '@/shared/config/theme';
 
 import { Segmented } from './AppearanceControls';
@@ -22,7 +22,7 @@ interface Look {
 const SOLID = 'var(--osio-bg-page)';
 const FROSTED = 'color-mix(in srgb, var(--osio-bg-elevated) 55%, transparent)';
 
-const LOOKS: Record<string, Look> = {
+const LOOKS: Record<StyleId, Look> = {
   calm: { radius: '6px', shadow: 'var(--osio-e1)', border: '1px solid var(--osio-border-default)', card: SOLID },
   paper: { radius: '1px', shadow: 'none', border: '1px solid var(--osio-border-strong)', card: SOLID },
   soft: { radius: '10px', shadow: 'var(--osio-e4)', border: '1px solid transparent', card: SOLID },
@@ -59,9 +59,14 @@ export const StyleControls: React.FC<{ appearance: Appearance; onChange: (patch:
                 onChange={() => onChange(preset.patch)}
                 className="peer sr-only"
               />
-              <span className="flex flex-col gap-1.5 rounded-xl border border-[var(--osio-border-default)] p-1.5 peer-checked:border-[var(--osio-accent)] peer-checked:ring-2 peer-checked:ring-[var(--osio-accent)] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--osio-focus-ring-color)]">
+              <span className="flex flex-col gap-1.5 rounded-xl border border-[var(--osio-border-default)] p-1.5 peer-checked:[&_svg]:block peer-checked:border-[var(--osio-accent)] peer-checked:ring-2 peer-checked:ring-[var(--osio-accent)] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--osio-focus-ring-color)]">
                 <StyleMock look={LOOKS[preset.id]} />
-                <span className="px-0.5 text-sm font-semibold text-[var(--osio-fg-default)]">{preset.label}</span>
+                <span className="flex items-center justify-between gap-1 px-0.5 text-sm font-semibold text-[var(--osio-fg-default)]">
+                  {preset.label}
+                  <svg aria-hidden="true" viewBox="0 0 16 16" className="hidden h-4 w-4 shrink-0 fill-none stroke-current stroke-2">
+                    <path d="M3 8.5l3.2 3.2L13 4.8" />
+                  </svg>
+                </span>
               </span>
             </label>
           ))}

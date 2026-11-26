@@ -34,7 +34,10 @@
 		     accessibility choices: link underlines, motion, animated images,
 		     hovercards) BEFORE first paint so there is no flash of the default
 		     theme. Mirrors src/shared/config/theme.ts; App.tsx re-validates and
-		     re-applies on mount (an unknown accent id set here is dropped there). -->
+		     re-applies on mount (an unknown accent id set here is dropped there).
+		     Every axis lists its non-default values: at the default the attribute
+		     stays absent, so a person who never chose one carries nothing.
+		     (urlPaste has no attribute: it changes what a paste does.) -->
 		<script>
 			(function () {
 				try {
@@ -45,9 +48,6 @@
 					var p = localStorage.getItem('osionos:palette');
 					if (p) ds.palette = p;
 					var a = JSON.parse(localStorage.getItem('osionos:appearance')) || {};
-					// Every axis lists its non-default values: at the default the
-					// attribute stays absent, so a person who never chose one carries
-					// nothing. (urlPaste has no attribute: it changes what a paste does.)
 					var axes = { density: ['compact'], radius: ['sharp', 'round'], uiScale: ['small', 'large'],
 						linkUnderline: ['always'], motion: ['reduce', 'full'],
 						animatedImages: ['system', 'still'], hovercards: ['off'],

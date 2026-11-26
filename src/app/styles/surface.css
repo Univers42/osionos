@@ -47,23 +47,28 @@
   }
 }
 
-/* Frosted: menus, popovers, dropdown lists and dialogs only. A browser without backdrop-filter
+/* Frosted: menus, popovers, dropdown lists and dialogs only, on desktop outside compact density
+   like the panes. The consumer sits in :where() so it adds no specificity of its own; this sheet is
+   unlayered, so it beats Tailwind's layered utilities whatever their specificity (no consumer pairs
+   the overlay background with a hover:/aria-selected: background on one element today). A browser without backdrop-filter
    drops the whole block (opaque); reduced transparency and forced colours put both halves back.
    Ponytail: keyed on the consumer class literal; a consumer spelled any other way stays opaque
    (the unit test lists them all). Reduced transparency is read as "reduce" so a browser that
    does not know the feature keeps frosted: it cannot signal the preference. */
-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  :root[data-surface="frosted"] :is(.osio-surface-overlay, [class*="bg-[var(--osio-overlay-bg)]"]) {
-    background-color: color-mix(in srgb, var(--osio-overlay-bg) 80%, transparent);
-    -webkit-backdrop-filter: blur(20px) saturate(1.6);
-    backdrop-filter: blur(20px) saturate(1.6);
-  }
+@media (width > 767.98px) {
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    :root:not([data-density="compact"])[data-surface="frosted"] :where(.osio-surface-overlay, [class*="bg-[var(--osio-overlay-bg)]"]) {
+      background-color: color-mix(in srgb, var(--osio-overlay-bg) 80%, transparent);
+      -webkit-backdrop-filter: blur(20px) saturate(1.6);
+      backdrop-filter: blur(20px) saturate(1.6);
+    }
 
-  @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
-    :root[data-surface="frosted"] :is(.osio-surface-overlay, [class*="bg-[var(--osio-overlay-bg)]"]) {
-      background-color: var(--osio-overlay-bg);
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
+    @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+      :root:not([data-density="compact"])[data-surface="frosted"] :where(.osio-surface-overlay, [class*="bg-[var(--osio-overlay-bg)]"]) {
+        background-color: var(--osio-overlay-bg);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
     }
   }
 }
