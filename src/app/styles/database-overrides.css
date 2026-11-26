@@ -32,7 +32,12 @@
    left an event chip no room for its icon (measured 2026-11-26). Under 640px
    the label stays on one line, right-aligned, the hover "+" leaves the flow and
    the chip gives up its side padding. Keyed on the viewport, so a calendar in a
-   narrow column of a wide window still wraps. */
+   narrow column of a wide window still wraps.
+
+   Timeline toolbar: at 390px the date range broke onto five lines beside the
+   zoom toggle. The range stays on one line and the toolbar wraps the zoom
+   toggle under it when the two no longer fit; under 640px of viewport the
+   toolbar also gives up padding so the range is not clipped at 273px. */
 
 @layer utilities {
   html :where(.notion-object-database) {
@@ -89,7 +94,23 @@
     & .group\/day > div:first-child > span {
       white-space: nowrap;
     }
+    & div:has(> div > button[aria-label="Previous period"]) {
+      flex-wrap: wrap;
+      row-gap: 0.25rem;
+    }
+    & button[aria-label="Next period"] + span {
+      white-space: nowrap;
+    }
     @media (max-width: 640px) {
+      & div:has(> div > button[aria-label="Previous period"]) {
+        padding-inline: 0.5rem;
+      }
+      & div:has(> button[aria-label="Previous period"]) {
+        gap: 0.125rem;
+      }
+      & button[aria-label="Next period"] + span {
+        margin-left: 0.25rem;
+      }
       & .group\/day > div:first-child {
         justify-content: flex-end;
       }
