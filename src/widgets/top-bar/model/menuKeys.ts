@@ -85,13 +85,13 @@ function resolveRowKey(key: string, state: Extract<MenuKeyState, { focus: "row" 
     case "Home": return { type: "focusRow", index: 0 };
     case "End": return { type: "focusRow", index: labels.length - 1 };
     case "Enter":
-    case " ": return { type: "activate" };
+    case " ": return submenu && level === 0 ? { type: "openSub" } : { type: "activate" };
     case "ArrowRight":
       if (submenu && level === 0) return { type: "openSub" };
-      return { type: "openMenu", index: ringStep(trigger, count, 1), row: "first" };
+      return count > 1 ? { type: "openMenu", index: ringStep(trigger, count, 1), row: "first" } : NONE;
     case "ArrowLeft":
       if (level === 1) return { type: "closeSub" };
-      return { type: "openMenu", index: ringStep(trigger, count, -1), row: "first" };
+      return count > 1 ? { type: "openMenu", index: ringStep(trigger, count, -1), row: "first" } : NONE;
     case "Escape": return level === 1 ? { type: "closeSub" } : { type: "close", focus: "trigger" };
     case "Tab": return { type: "close", focus: "none" };
     default: return key.length === 1 ? typeahead(key, labels, index) : NONE;
@@ -100,7 +100,9 @@ function resolveRowKey(key: string, state: Extract<MenuKeyState, { focus: "row" 
 
 /**
  * The menubar's keyboard table (WAI-ARIA menubar): what `key` does given where
- * focus is. Pure, so the whole table is testable without a DOM. Ponytail:
+ * focus is. Pure, so the whole table is testable without a DOM. Enter and Space
+ * on a submenu row open it onto its first item and never close it; ArrowRight and
+ * ArrowLeft on a plain row do nothing when the bar has a single trigger. Ponytail:
  * typeahead matches the first letter only — a typed word does not narrow.
  */
 export function resolveMenuKey(key: string, state: MenuKeyState): MenuKeyAction {

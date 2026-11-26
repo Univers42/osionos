@@ -42,11 +42,12 @@ export interface FocusReturn {
  * get the editable BEFORE `run`, since native undo acts on the focused
  * element. Every other row runs first and focus returns on the next frame,
  * never into a block while blocks are selected: focusin there clears the
- * marquee selection that Edit › Copy/Cut/Delete act on.
+ * marquee selection that Edit › Copy/Cut/Delete act on. When no editable takes
+ * focus back and focus sits on <body>, it lands on `fallbackRef` (the opener).
  * Ponytail: a click on a non-focusing control (Safari buttons) is caught on
  * pointerdown only — focus that moved earlier by script is not remembered.
  */
-export function useFocusReturn(containerRef: RefObject<HTMLElement | null>): FocusReturn {
+export function useFocusReturn(containerRef: RefObject<HTMLElement | null>, fallbackRef?: RefObject<HTMLElement | null>): FocusReturn {
   const remembered = useRef<HTMLElement | null>(null);
 
   const remember = (from: EventTarget | null): void => {
@@ -61,7 +62,9 @@ export function useFocusReturn(containerRef: RefObject<HTMLElement | null>): Foc
 
   const restoreAfterRun = (): void => {
     const active = document.activeElement;
-    if (active === document.body || containerRef.current?.contains(active)) refocus();
+    if (active !== document.body && !containerRef.current?.contains(active)) return;
+    refocus();
+    if (document.activeElement === document.body) fallbackRef?.current?.focus({ preventScroll: true });
   };
 
   return {

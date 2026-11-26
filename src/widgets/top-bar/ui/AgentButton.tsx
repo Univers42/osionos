@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, type KeyboardEvent } from "react";
 import { ChevronDown, Sparkles } from "lucide-react";
 import { useChatStore } from "@/features/chat/model/useChatStore";
 import { cx } from "@osionos/ui/shared/classNames";
@@ -25,10 +25,14 @@ const PART = "inline-flex items-center justify-center text-[var(--osio-fg-muted)
 /**
  * The agent entry, right after the search bar: the main part opens the
  * assistant with the caret in its composer, the caret lists the agents to start
- * a chat with. Phone-sized (44px) below `sm`.
+ * a chat with. Phone-sized (44px) below `sm`. Escape closes the menu from the
+ * main button too, and a chosen row leaves focus on the caret unless the
+ * composer takes it.
  */
 export const AgentButton: React.FC<{ ctx: MenuContext }> = ({ ctx }) => {
   const boxRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLButtonElement>(null);
+  const caretRef = useRef<HTMLButtonElement>(null);
   const nav = useMenuNavigation(boxRef, IDS);
   const agents = useChatStore((state) => state.agents);
   const open = nav.openId === IDS[0];
@@ -40,12 +44,27 @@ export const AgentButton: React.FC<{ ctx: MenuContext }> = ({ ctx }) => {
   function handleSelect(item: MenuAction): void {
     nav.close();
     item.run();
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body || boxRef.current?.contains(document.activeElement)) caretRef.current?.focus({ preventScroll: true });
+    });
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLElement>): void {
+    if (event.key === "Escape" && open && event.target === mainRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      nav.close();
+      caretRef.current?.focus();
+      return;
+    }
+    nav.onKeyDown(event);
   }
 
   return (
-    <div ref={boxRef} className="relative shrink-0" aria-keyshortcuts={nav.keyshortcuts} onKeyDown={nav.onKeyDown}>
+    <div ref={boxRef} className="relative shrink-0" aria-keyshortcuts={nav.keyshortcuts} onKeyDown={onKeyDown}>
       <div className="inline-flex items-center rounded-[var(--osio-radius-chip)] border border-[var(--osio-border-default)]">
         <button
+          ref={mainRef}
           type="button"
           aria-label="Ask an agent"
           title="Ask an agent"
@@ -57,6 +76,7 @@ export const AgentButton: React.FC<{ ctx: MenuContext }> = ({ ctx }) => {
         </button>
         <button
           type="button"
+          ref={caretRef}
           data-menu-trigger
           aria-label="Choose an agent"
           aria-haspopup="menu"

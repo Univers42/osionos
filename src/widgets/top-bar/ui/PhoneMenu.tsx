@@ -14,6 +14,8 @@ import React, { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ChevronRight, Menu } from "lucide-react";
 import { cx } from "@osionos/ui/shared/classNames";
 import { isSubmenu, type MenuAction, type MenuGroup, type MenuItem } from "../model/menuTypes";
+import { wrapTab } from "./menuDom";
+import { useFocusReturn } from "./useFocusReturn";
 
 const ROW = "osio-menu-item min-h-11 w-full";
 
@@ -58,12 +60,16 @@ const Items: React.FC<{ items: MenuItem[]; onRun: (item: MenuAction) => void }> 
 /**
  * Below `md` the menubar does not fit: one button opens a top-anchored sheet
  * with every menu as a disclosure. Escape, a tap on the backdrop or a row
- * closes it, and focus goes back to the button.
+ * closes it; Tab wraps inside the sheet. A row runs through `useFocusReturn`
+ * (Undo/Redo get the editable first); when no editable takes focus back, focus
+ * lands on the button.
  */
 export const PhoneMenu: React.FC<{ groups: MenuGroup[] }> = ({ groups }) => {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusReturn = useFocusReturn(rootRef, buttonRef);
 
   useEffect(() => {
     if (open) sheetRef.current?.querySelector<HTMLElement>("summary")?.focus();
@@ -75,6 +81,7 @@ export const PhoneMenu: React.FC<{ groups: MenuGroup[] }> = ({ groups }) => {
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>): void {
+    if (event.key === "Tab" && sheetRef.current) wrapTab(sheetRef.current, event);
     if (event.key !== "Escape") return;
     event.stopPropagation();
     close();
@@ -82,11 +89,11 @@ export const PhoneMenu: React.FC<{ groups: MenuGroup[] }> = ({ groups }) => {
 
   function run(item: MenuAction): void {
     setOpen(false);
-    item.run();
+    focusReturn.activate(item);
   }
 
   return (
-    <div className="md:hidden">
+    <div ref={rootRef} className="md:hidden" {...focusReturn.captureProps}>
       <button
         ref={buttonRef}
         type="button"
@@ -104,6 +111,7 @@ export const PhoneMenu: React.FC<{ groups: MenuGroup[] }> = ({ groups }) => {
           <div
             ref={sheetRef}
             role="dialog"
+            aria-modal="true"
             aria-label="Menu"
             aria-keyshortcuts="Escape"
             onKeyDown={onKeyDown}

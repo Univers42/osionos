@@ -97,3 +97,16 @@ test("an empty menu never throws and never moves", () => {
   assert.deepEqual(resolveMenuKey("ArrowDown", row(0, { labels: [] })), { type: "none" });
   assert.deepEqual(resolveMenuKey("a", row(0, { labels: [] })), { type: "none" });
 });
+
+test("Enter and Space on a top-level submenu row open it; on any other row they activate", () => {
+  for (const key of ["Enter", " "]) {
+    assert.deepEqual(resolveMenuKey(key, row(2, { submenu: true })), { type: "openSub" });
+    assert.deepEqual(resolveMenuKey(key, row(0, { level: 1 })), { type: "activate" });
+  }
+});
+
+test("ArrowRight and ArrowLeft on a plain row do nothing when the bar has a single trigger", () => {
+  assert.deepEqual(resolveMenuKey("ArrowRight", row(0, { count: 1, trigger: 0 })), { type: "none" });
+  assert.deepEqual(resolveMenuKey("ArrowLeft", row(0, { count: 1, trigger: 0 })), { type: "none" });
+  assert.deepEqual(resolveMenuKey("ArrowLeft", row(0, { count: 1, trigger: 0, level: 1 })), { type: "closeSub" });
+});

@@ -66,3 +66,19 @@ export function readKeyState(container: Element, target: EventTarget | null): Me
   const row = target.closest<HTMLElement>(ROW_SELECTOR);
   return row && container.contains(row) ? rowState(container, row) : null;
 }
+
+/** The rendered, tabbable controls of `root` in order (rows inside a closed disclosure are not rendered). */
+export function tabStops(root: Element): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>("summary, button:not([disabled])")].filter((one) => one.checkVisibility());
+}
+
+/** Keeps Tab inside `root`: from the last stop it wraps to the first, from the first with Shift to the last. Returns true when it moved focus. */
+export function wrapTab(root: Element, event: { key: string; shiftKey: boolean; preventDefault: () => void }): boolean {
+  if (event.key !== "Tab") return false;
+  const stops = tabStops(root);
+  const edge = event.shiftKey ? stops.at(0) : stops.at(-1);
+  if (!edge || document.activeElement !== edge) return false;
+  event.preventDefault();
+  (event.shiftKey ? stops.at(-1) : stops.at(0))?.focus();
+  return true;
+}
