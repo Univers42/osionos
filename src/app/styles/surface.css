@@ -47,7 +47,7 @@
   }
 }
 
-/* Frosted: menus, popovers, dropdown lists and dialogs only, on desktop outside compact density
+/* Frosted (and glass, which includes it): menus, popovers, dropdown lists and dialogs only, on desktop outside compact density
    like the panes. The consumer sits in :where() so it adds no specificity of its own; this sheet is
    unlayered, so it beats Tailwind's layered utilities whatever their specificity (no consumer pairs
    the overlay background with a hover:/aria-selected: background on one element today). A browser without backdrop-filter
@@ -57,18 +57,85 @@
    does not know the feature keeps frosted: it cannot signal the preference. */
 @media (width > 767.98px) {
   @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-    :root:not([data-density="compact"])[data-surface="frosted"] :where(.osio-surface-overlay, [class*="bg-[var(--osio-overlay-bg)]"]) {
+    :root:not([data-density="compact"]):is([data-surface="frosted"], [data-surface="glass"]) :where(.osio-surface-overlay, [class*="bg-[var(--osio-overlay-bg)]"]) {
       background-color: color-mix(in srgb, var(--osio-overlay-bg) 80%, transparent);
       -webkit-backdrop-filter: blur(20px) saturate(1.6);
       backdrop-filter: blur(20px) saturate(1.6);
     }
 
     @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
-      :root:not([data-density="compact"])[data-surface="frosted"] :where(.osio-surface-overlay, [class*="bg-[var(--osio-overlay-bg)]"]) {
+      :root:not([data-density="compact"]):is([data-surface="frosted"], [data-surface="glass"]) :where(.osio-surface-overlay, [class*="bg-[var(--osio-overlay-bg)]"]) {
         background-color: var(--osio-overlay-bg);
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
       }
+    }
+  }
+}
+
+/* Glass: a soft coloured canvas behind see-through chrome. The aurora is the shell's own
+   background (static gradients, no animation, no fixed attachment) and applies at every width;
+   the second hue is the accent turned 70 degrees. Reduced transparency and forced colours
+   put the plain canvas back.
+   Ponytail: the 70 degree hue turn is a taste constant, not derived from the palette; a
+   palette whose canvas is already tinted shows a muddier aurora. Browsers without CSS relative
+   colours keep the plain canvas (the @supports block). */
+@supports (color: oklch(from red l c h)) {
+  :root[data-surface="glass"] {
+    --osio-aurora-a: color-mix(in srgb, var(--osio-accent) 24%, transparent);
+    --osio-aurora-b: color-mix(in srgb, oklch(from var(--osio-accent) l c calc(h + 70)) 20%, transparent);
+  }
+
+  :root[data-surface="glass"][data-theme="dark"] {
+    --osio-aurora-a: color-mix(in srgb, var(--osio-accent) 16%, transparent);
+    --osio-aurora-b: color-mix(in srgb, oklch(from var(--osio-accent) l c calc(h + 70)) 13%, transparent);
+  }
+
+  :root[data-surface="glass"] [data-osio-shell] {
+    background:
+      radial-gradient(60% 55% at 10% 6%, var(--osio-aurora-a), transparent 70%),
+      radial-gradient(55% 50% at 92% 16%, var(--osio-aurora-b), transparent 70%),
+      radial-gradient(75% 60% at 45% 108%, var(--osio-aurora-a), transparent 72%),
+      var(--osio-bg-canvas);
+  }
+
+  @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+    :root[data-surface="glass"] [data-osio-shell] {
+      background: var(--osio-bg-canvas);
+    }
+  }
+}
+
+/* Glass edge and the vibrant sidebar card, only where the frame gap exists and outside compact.
+   The edge rides --osio-pane-shadow, so zen, resizing and the phone rules that null it still win.
+   The card sets its own background-color only (never --osio-bg-surface), so sticky headers,
+   menus and inputs inside it stay opaque; peek stays opaque. No backdrop-filter on the card.
+   Ponytail: the card sits on a static gradient, so there is nothing to blur; a non-static
+   background behind it (an image, a video) would need the blur back. */
+@media (width > 767.98px) {
+  :root:not([data-density="compact"])[data-surface="glass"] {
+    --osio-glass-edge: inset 0 1px 0 rgb(255 255 255 / 0.55);
+    --osio-pane-shadow: var(--osio-glass-edge), var(--osio-e1);
+  }
+
+  :root:not([data-density="compact"])[data-surface="glass"][data-theme="dark"] {
+    --osio-glass-edge: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  }
+
+  :root:not([data-density="compact"])[data-surface="glass"][data-elevation="flat"] { --osio-pane-shadow: var(--osio-glass-edge); }
+  :root:not([data-density="compact"])[data-surface="glass"][data-elevation="deep"] { --osio-pane-shadow: var(--osio-glass-edge), var(--osio-e4); }
+
+  :root:not([data-density="compact"])[data-surface="glass"] aside:not([data-sidebar-mode="peek"]) [data-osio-sidebar-card] {
+    background-color: color-mix(in srgb, var(--osio-bg-surface) 76%, transparent);
+  }
+
+  @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+    :root:not([data-density="compact"])[data-surface="glass"] { --osio-pane-shadow: var(--osio-e1); }
+    :root:not([data-density="compact"])[data-surface="glass"][data-elevation="flat"] { --osio-pane-shadow: none; }
+    :root:not([data-density="compact"])[data-surface="glass"][data-elevation="deep"] { --osio-pane-shadow: var(--osio-e4); }
+
+    :root:not([data-density="compact"])[data-surface="glass"] aside:not([data-sidebar-mode="peek"]) [data-osio-sidebar-card] {
+      background-color: var(--osio-bg-surface);
     }
   }
 }

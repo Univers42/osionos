@@ -153,6 +153,8 @@ export const EXCLUDED_TOKENS: readonly { pattern: RegExp; reason: string }[] = [
   { pattern: /^motion-(fast|slow|standard)$/, reason: "shorthand: a duration and a curve; set dur-* and ease-*" },
   { pattern: /^wide-/, reason: "local layout utility: measured from the page scroller, not a theme setting" },
   { pattern: /^(menu|dialog)-shadow$/, reason: "internal: the elevation style (data-elevation) remaps the shadow a menu or dialog reads; set overlay-shadow" },
+  { pattern: /^aurora-[ab]$/, reason: "internal: the glass surface's canvas tints, derived from accent" },
+  { pattern: /^glass-edge$/, reason: "internal: the glass surface's lit pane edge, folded into pane-shadow" },
   { pattern: /^layout-(cols|min|gap)$/, reason: "internal: set on a column list by its stored layout style (ADR 0064)" },
 ];
 
