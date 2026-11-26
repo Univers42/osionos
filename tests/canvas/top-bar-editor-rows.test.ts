@@ -134,6 +134,11 @@ test("Undo uses the structural history, and falls back to the native undo when t
   assert.deepEqual([fake.calls, native], [["undo"], ["undo", "redo"]]);
 });
 
+test("only Undo and Redo ask for the editor back before they run", () => {
+  activate(fakeHandle([paragraph("a")]), ["a"]);
+  assert.deepEqual(actions(editMenu().items).filter((row) => row.refocusEditor).map((row) => row.id), ["edit.undo", "edit.redo"]);
+});
+
 test("Delete removes the selected block in one commit and clears the selection", () => {
   const fake = fakeHandle([paragraph("a"), paragraph("b")]);
   activate(fake, ["a"]);

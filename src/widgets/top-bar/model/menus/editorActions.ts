@@ -61,18 +61,18 @@ export function blockAction(row: RowSpec, needsSelection: boolean, operate: Bloc
 /**
  * Undo or Redo: the editor's structural history while it has one, otherwise the
  * browser's native text history. Never disabled for an empty structural
- * history, since typing is undone natively (useBlockHistory). Ponytail: the
- * native step needs the editable focused when the row runs — the dropdown
- * restores that focus (increment 1B), so before 1B a mouse click may find the
- * focus on the menu and do nothing.
+ * history, since typing is undone natively (useBlockHistory). The native step
+ * needs the editable focused when the row runs, so the row asks the dropdown
+ * for that focus first (`refocusEditor`).
  */
 export function historyAction(row: RowSpec, kind: "undo" | "redo"): MenuAction {
   const structural = (handle: EditorHandle): boolean => (kind === "undo" ? handle.canUndo() : handle.canRedo());
-  return blockAction(row, false, (handle) => {
+  const action = blockAction(row, false, (handle) => {
     if (!structural(handle)) document.execCommand(kind);
     else if (kind === "undo") handle.undo();
     else handle.redo();
   });
+  return { ...action, refocusEditor: true };
 }
 
 /** Tell the user the browser refused the clipboard read, and where Paste still works. */

@@ -27,6 +27,8 @@ export interface MenuAction {
   separatorAfter?: boolean;
   disabled?: () => boolean;
   checked?: () => boolean;
+  /** The dropdown hands focus back to the editable it came from BEFORE `run` (native undo/redo act on the focused element). */
+  refocusEditor?: boolean;
 }
 
 /** A row that opens a list of actions. One level only: children are actions. */

@@ -105,7 +105,7 @@ test.describe("activity rail sidebar", () => {
     await expect(peek(page)).not.toHaveAttribute("data-open", "");
   });
 
-  test("Ctrl+Alt+B hides and restores; nothing floats over the content, and the top bar has no toggle or brand label", async ({ page, baseURL }) => {
+  test("Ctrl+Alt+B hides and restores; nothing floats over the content, and the top bar has no Toggle sidebar button or brand label (its layout toggle is Primary side bar)", async ({ page, baseURL }) => {
     await gotoDocked(page, baseURL);
     await expect(page.getByTestId("app-topbar").getByRole("button", { name: "Toggle sidebar" })).toHaveCount(0);
     await expect(page.getByTestId("app-topbar")).not.toContainText("osionos");
