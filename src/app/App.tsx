@@ -342,6 +342,7 @@ const App: React.FC = () => {
     <BindingSourcesProvider>
       <div
         data-testid="app-shell"
+        data-osio-shell
         data-zen={zen ? "1" : undefined}
         className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
       >

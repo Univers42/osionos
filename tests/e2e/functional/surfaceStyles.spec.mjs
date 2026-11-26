@@ -1,26 +1,14 @@
 // Surface styles: solid or frosted floating surfaces, elevation depth, border weight,
-// and the four presets that set them together. Each is an attribute on <html>.
+// and the five presets that set them together. Each is an attribute on <html>.
 //
 // Caveat: a screenshot-variance check proves blur is painted, not that it looks good;
 // contrast is computed against the two extreme backdrops (white, black), not the real page.
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-
 import { activateFirstEditor, openFreshPage, openPageMenuPanel, slashMenu } from "../../browser/core/app.mjs";
 import { openSettings } from "../support/settingsHelpers.mjs";
-
-const html = (page) => page.locator("html");
-const setAttrs = (page, attrs) => page.evaluate((a) => Object.assign(document.documentElement.dataset, a), attrs);
-
-/** Computed facts of one surface: blur, background alpha, shadow and box. */
-const probe = (locator) =>
-  locator.evaluate((el) => {
-    const cs = getComputedStyle(el);
-    const alpha = (cs.backgroundColor.match(/\/\s*([\d.]+)\)|rgba\([^)]*,\s*([\d.]+)\)/) ?? [])[1] ?? (cs.backgroundColor.match(/rgba\([^)]*,\s*([\d.]+)\)/) ?? [])[1] ?? "1";
-    const r = el.getBoundingClientRect();
-    return { blur: cs.backdropFilter, alpha: Number(alpha), shadow: cs.boxShadow, border: cs.borderTopColor, box: [r.x, r.y, r.width, r.height].map(Math.round) };
-  });
+import { html, probe, setAttrs } from "../support/surfaceProbes.mjs";
 
 /** Opens every kind of floating surface in turn, returning label to locator. */
 async function openSurfaces(page) {
@@ -42,12 +30,11 @@ test.describe("surface styles", () => {
     await openFreshPage(page, baseURL);
     await openSettings(page, "Preferences");
     const style = page.getByRole("group", { name: "Style" });
-    await expect(style.getByRole("radio")).toHaveCount(4);
-    const writes = await page.evaluate(() => {
+    await expect(style.getByRole("radio")).toHaveCount(5);
+    await page.evaluate(() => {
       window.__attrWrites = 0;
       new MutationObserver((m) => (window.__attrWrites += m.length)).observe(document.documentElement, { attributes: true });
     });
-    void writes;
     await style.getByRole("radio", { name: /Frost/ }).check({ force: true });
     await expect(html(page)).toHaveAttribute("data-surface", "frosted");
     expect(await page.evaluate(() => window.__attrWrites)).toBeLessThanOrEqual(2);
