@@ -1,6 +1,6 @@
 import type { Appearance } from "./theme";
 
-export type StyleId = "calm" | "paper" | "soft" | "frost";
+export type StyleId = "calm" | "paper" | "soft" | "frost" | "aurora";
 
 export interface StylePreset {
   id: StyleId;
@@ -15,6 +15,7 @@ export const STYLE_PRESETS: readonly StylePreset[] = [
   { id: "paper", label: "Paper", patch: { surface: "solid", elevation: "flat", borders: "strong", radius: "sharp" } },
   { id: "soft", label: "Soft", patch: { surface: "solid", elevation: "deep", borders: "none", radius: "round" } },
   { id: "frost", label: "Frost", patch: { surface: "frosted", elevation: "default", borders: "default", radius: "default" } },
+  { id: "aurora", label: "Aurora", patch: { surface: "glass", elevation: "deep", borders: "none", radius: "round" } },
 ];
 
 /** The id of the style whose surface, depth and borders the appearance matches, or null ("Custom"). Corners are applied by a preset but not compared: a later corner tweak keeps the style. Derived, never stored. */

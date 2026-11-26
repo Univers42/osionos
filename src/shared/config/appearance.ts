@@ -50,8 +50,8 @@ export type CaretColor = (typeof CARET_COLORS)[number];
 export type CaretShape = "bar" | "thick" | "block" | "underscore";
 export type CaretBlink = "on" | "off";
 
-/** How floating surfaces are drawn: opaque, or translucent over a blur of what is behind them. */
-export const SURFACES = ["solid", "frosted"] as const;
+/** How floating surfaces are drawn: opaque, translucent over a blur (frosted), or frosted plus a coloured canvas and a see-through sidebar (glass). */
+export const SURFACES = ["solid", "frosted", "glass"] as const;
 export type Surface = (typeof SURFACES)[number];
 /** How far panes and menus lift off the canvas, along the e0..e5 ladder. */
 export const ELEVATIONS = ["default", "flat", "deep"] as const;
