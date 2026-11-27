@@ -11,40 +11,20 @@
 /* ************************************************************************** */
 
 /**
- * Appearance controls: a light/dark/system mode toggle, the accent and
- * density/corner/text-size axes (AppearanceControls), and a grid of named color
- * palettes (Warm, Nord, Monochrome, …). The palette drives the global
- * `data-palette` axis (theme.ts) — orthogonal to light/dark — so a theme is one
- * click and re-skins the whole app. Picking a palette also clears any legacy
- * per-workspace token override so the chosen palette is what actually shows.
+ * Theme rows for Settings > Preferences: a live preview, the light/dark mode, the grid of
+ * named color palettes (Warm, Nord, Monochrome, …) and the theme library. The palette drives
+ * the global `data-palette` axis (theme.ts), orthogonal to light/dark, so a theme is one click.
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Monitor, Moon, Sun } from 'lucide-react';
 
-import { useUserStore } from '@/features/auth';
-import {
-  applyPalette,
-  applyTheme,
-  PALETTES,
-  persistPalette,
-  persistThemeMode,
-  readStoredPalette,
-  readStoredThemeMode,
-  type ThemeMode,
-} from '@/shared/config/theme';
-import { useWorkspaceConfigStore } from '@/shared/config/workspaceConfigStore';
-import { isThemeBasePinned } from '@/shared/config/theme';
+import { DEFAULT_PALETTE, isThemeBasePinned, PALETTES, type ThemeMode } from '@/shared/config/theme';
 import { useThemeLibrary, resolveTheme } from './model/useThemeLibrary';
+import type { ThemeSelection } from './model/useThemeSelection';
+import { AppearanceRow } from './ui/AppearanceRow';
 import { ThemeLibraryControls } from './ui/ThemeLibraryControls';
-
-import { AccentControl, CaretControls, ShapeControls, useAppearance } from './AppearanceControls';
-import { MotionControls } from './MotionControls';
-import { StyleControls } from './StyleControls';
-
-interface WorkspaceThemeControlsProps {
-  compact?: boolean;
-}
+import { ThemePreview } from './ui/ThemePreview';
 
 const MODES: { id: ThemeMode; label: string; Icon: typeof Sun }[] = [
   { id: 'light', label: 'Light', Icon: Sun },
@@ -72,94 +52,83 @@ const PalettePreview: React.FC<{ swatches: readonly string[] }> = ({ swatches })
   );
 };
 
-export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ compact = false }) => {
-  const [mode, setMode] = useState<ThemeMode>(() => readStoredThemeMode());
-  const [palette, setPalette] = useState<string>(() => readStoredPalette());
-  const [appearance, changeAppearance] = useAppearance();
+const ModeControl: React.FC<{ mode: ThemeMode; disabled: boolean; onSelect: (next: ThemeMode) => void }> = ({ mode, disabled, onSelect }) => (
+  <div role="group" aria-label="Mode" className="inline-flex rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-0.5">
+    {MODES.map(({ id, label, Icon }) => (
+      <button
+        key={id}
+        type="button"
+        aria-pressed={mode === id}
+        disabled={disabled}
+        onClick={() => onSelect(id)}
+        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-(--osio-dur-fast) ${
+          mode === id
+            ? 'bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-sm)]'
+            : 'text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]'
+        }`}
+      >
+        <Icon size={14} aria-hidden="true" /> {label}
+      </button>
+    ))}
+  </div>
+);
+
+const PaletteGrid: React.FC<{ palette: string; onSelect: (id: string) => void }> = ({ palette, onSelect }) => (
+  <div className="grid gap-2.5 sm:grid-cols-2">
+    {PALETTES.map((preset) => (
+      <button
+        type="button"
+        key={preset.id}
+        aria-pressed={palette === preset.id}
+        onClick={() => onSelect(preset.id)}
+        className={`group rounded-xl border p-2 text-left transition-all duration-(--osio-dur-fast) ${
+          palette === preset.id
+            ? 'border-[var(--osio-accent)] ring-2 ring-[var(--osio-accent)] ring-offset-1 ring-offset-[var(--osio-bg-surface)]'
+            : 'border-[var(--osio-border-default)] hover:border-[var(--osio-border-strong)]'
+        }`}
+      >
+        <PalettePreview swatches={preset.swatches} />
+        <div className="mt-2 px-0.5">
+          <span className="block text-sm font-semibold text-[var(--osio-fg-default)]">{preset.label}</span>
+          <span className="mt-0.5 block text-xs leading-snug text-[var(--osio-fg-muted)]">{preset.description}</span>
+        </div>
+      </button>
+    ))}
+  </div>
+);
+
+/** Preview, Mode, Color theme and the theme library, driven by the shared theme selection. */
+export const ThemeSettings: React.FC<{ theme: ThemeSelection }> = ({ theme }) => {
   const activeThemeName = useThemeLibrary((s) => s.activeTheme);
   const activeThemeDoc = activeThemeName ? resolveTheme(activeThemeName) : null;
   const pinnedBase = Boolean(activeThemeDoc?.base) || isThemeBasePinned();
   const pinnedPalette = Boolean(activeThemeDoc?.palette);
-  const activeUserId = useUserStore((s) => s.activeUserId);
-  const activeWorkspace = useUserStore((s) => s.activeWorkspace());
-  const clearAppearance = useWorkspaceConfigStore((s) => s.clearAppearance);
-
-  const selectMode = (next: ThemeMode) => {
-    applyTheme(next);
-    persistThemeMode(next);
-    setMode(next);
-  };
-
-  const selectPalette = (id: string) => {
-    applyPalette(id);
-    persistPalette(id);
-    setPalette(id);
-    // Drop a per-workspace appearance still stored from before palettes existed.
-    const workspaceId = activeWorkspace?._id;
-    if (activeUserId && workspaceId) void clearAppearance(activeUserId, workspaceId).catch(() => {});
-  };
-
   return (
-    <div className={compact ? 'space-y-4' : 'space-y-4 overflow-y-auto p-4'}>
-      <StyleControls appearance={appearance} onChange={changeAppearance} />
-      <MotionControls appearance={appearance} onChange={changeAppearance} />
-      <ThemeLibraryControls />
-      <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">Mode</p>
-        <div className="inline-flex rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-0.5">
-          {MODES.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={mode === id}
-              disabled={pinnedBase}
-              onClick={() => selectMode(id)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-(--osio-dur-fast) ${
-                mode === id
-                  ? 'bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-sm)]'
-                  : 'text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]'
-              }`}
-            >
-              <Icon size={14} /> {label}
-            </button>
-          ))}
-        </div>
-        {pinnedBase && <p className="mt-1 text-xs text-[var(--osio-fg-muted)]">Set by {activeThemeName}</p>}
+    <>
+      <ThemePreview />
+      <AppearanceRow
+        title="Mode"
+        description="Light, dark, or follow your system."
+        changed={theme.mode !== 'system'}
+        onReset={() => theme.selectMode('system')}
+      >
+        <ModeControl mode={theme.mode} disabled={pinnedBase} onSelect={theme.selectMode} />
+      </AppearanceRow>
+      {pinnedBase ? <p className="pb-2 text-xs text-[var(--osio-fg-muted)]">Set by {activeThemeName}</p> : null}
+      <AppearanceRow
+        title="Color theme"
+        description="The palette behind every surface and text color."
+        changed={theme.palette !== DEFAULT_PALETTE}
+        onReset={() => theme.selectPalette(DEFAULT_PALETTE)}
+        stack
+      >
+        {pinnedPalette ? <p className="mb-2 text-xs text-[var(--osio-fg-muted)]">Set by {activeThemeName}</p> : null}
+        <PaletteGrid palette={theme.palette} onSelect={theme.selectPalette} />
+      </AppearanceRow>
+      <div className="border-t border-[var(--osio-border-default)] py-3 empty:hidden">
+        <ThemeLibraryControls />
       </div>
-
-      <AccentControl appearance={appearance} paletteId={palette} onChange={changeAppearance} />
-      <ShapeControls appearance={appearance} onChange={changeAppearance} />
-      <CaretControls appearance={appearance} onChange={changeAppearance} />
-
-      <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">Color theme</p>
-        {pinnedPalette && <p className="mb-2 text-xs text-[var(--osio-fg-muted)]">Set by {activeThemeName}</p>}
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          {PALETTES.map((preset) => {
-            const selected = palette === preset.id;
-            return (
-              <button
-                type="button"
-                key={preset.id}
-                aria-pressed={selected}
-                onClick={() => selectPalette(preset.id)}
-                className={`group rounded-xl border p-2 text-left transition-all duration-(--osio-dur-fast) ${
-                  selected
-                    ? 'border-[var(--osio-accent)] ring-2 ring-[var(--osio-accent)] ring-offset-1 ring-offset-[var(--osio-bg-surface)]'
-                    : 'border-[var(--osio-border-default)] hover:border-[var(--osio-border-strong)]'
-                }`}
-              >
-                <PalettePreview swatches={preset.swatches} />
-                <div className="mt-2 px-0.5">
-                  <span className="block text-sm font-semibold text-[var(--osio-fg-default)]">{preset.label}</span>
-                  <span className="mt-0.5 block text-xs leading-snug text-[var(--osio-fg-muted)]">{preset.description}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+    </>
   );
 };
 

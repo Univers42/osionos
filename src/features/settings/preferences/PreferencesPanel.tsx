@@ -16,13 +16,12 @@ import React, { useMemo, useState } from 'react';
 // change, invoice PDF, 2FA QR): they are imported dynamically at their call
 // sites so the settings chunk stays lean (~280KB of deps off its parse path).
 import { Button, Dropdown, Modal, Toggle } from '@/shared/ui';
-import { WorkspaceThemeControls } from '@/features/theme/WorkspaceThemePanel';
 import { useUserPreferencesStore } from '@/store/settings';
 import { ConfirmModal } from '../ui/ConfirmModals';
 import { PanelStatus, Section, SettingRow } from '../ui/settingsKit';
 import { runAsync } from '../model/settingsCalls';
 import { useSettingsHydration } from '../model/settingsHydration';
-import { AccessibilitySettings } from './AccessibilitySettings';
+import { AppearanceSections } from './AppearanceSections';
 import { DATE_FORMAT_OPTIONS, NUMBER_FORMAT_OPTIONS, OPEN_ON_START_OPTIONS, WEEK_START_OPTIONS, setAutoTimezone, setTimezone } from './options';
 import { AccountExportSection } from '../ui/AccountExportSection';
 import { RecommendationPrivacy } from '../ui/RecommendationPrivacy';
@@ -70,15 +69,7 @@ export const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUse
 
   return (
     <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
-      <Section title="Appearance">
-        <p className="mb-3 text-sm text-[var(--osio-fg-muted)]">
-          Choose a color theme and light/dark mode for osionos on this device.
-        </p>
-        <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
-          <WorkspaceThemeControls compact />
-        </div>
-      </Section>
-      <AccessibilitySettings />
+      <AppearanceSections />
       <Section title="Input options">
         <SettingRow title="Use Enter to add a new line" description="Applies to chat, comments, and other input fields. Press Cmd/Ctrl + Enter to send." action={<Toggle checked={Boolean(preferences?.enterAddsNewline)} onChange={(checked) => update({ enterAddsNewline: checked })} label="Use Enter to add a new line" />} />
       </Section>
@@ -105,7 +96,7 @@ export const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUse
       </Section>
 
       {modal?.name === 'cookies' && <CookieSettingsModal mode={cookies?.mode ?? 'customize'} onSave={(mode) => { update({ cookies: { ...preferences?.cookies, mode } }); setModal(null); }} onClose={() => setModal(null)} />}
-      {modal?.name === 'reset-preferences' && <ConfirmModal title="Reset preferences" message="This restores language, theme, input, privacy, and desktop preferences to their defaults." actionLabel="Reset" onConfirm={() => { runAsync(reset(userId)); setModal(null); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'reset-preferences' && <ConfirmModal title="Reset preferences" message="This restores language, input, privacy, and desktop preferences to their defaults." actionLabel="Reset" onConfirm={() => { runAsync(reset(userId)); setModal(null); }} onClose={() => setModal(null)} />}
     </PanelStatus>
   );
 };
