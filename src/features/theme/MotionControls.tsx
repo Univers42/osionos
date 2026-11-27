@@ -1,6 +1,6 @@
 /**
  * Settings > Preferences > Motion: how a page or tab comes in, how menus and dialogs open,
- * and how fast every animation runs. Each row is a Segmented control written to <html>
+ * how fast every animation runs, its easing curve, and how a button feels when pressed. Each row is a Segmented control written to <html>
  * by the appearance store; the CSS lives in app/styles/motion.css. A Preview replays the
  * chosen page transition on a sample card, and a muted line says when a reduced-motion
  * setting turns all of it off.
@@ -8,7 +8,7 @@
 
 import React, { useRef, useSyncExternalStore } from 'react';
 
-import type { Appearance, MotionSpeed, OverlayTransition, PageTransition } from '@/shared/config/theme';
+import type { Appearance, Easing, MotionSpeed, OverlayTransition, PageTransition, PressFeedback } from '@/shared/config/theme';
 
 import { APPEARANCE_CHOICES } from '@/shared/config/appearanceChoices';
 import { AxisRow } from './ui/AppearanceRow';
@@ -51,7 +51,7 @@ const PagePreview: React.FC = () => {
   );
 };
 
-/** The three motion rows, a preview of the page transition, and a note when reduced motion is on. */
+/** The five motion rows, a preview of the page transition, and a note when reduced motion is on. */
 export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch: Partial<Appearance>) => void }> = ({ appearance, onChange }) => {
   const reduced = useMotionReduced(appearance.motion);
   return (
@@ -90,6 +90,22 @@ export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch
           value={appearance.motionSpeed}
           options={APPEARANCE_CHOICES.motionSpeed.options}
           onChange={(motionSpeed) => onChange({ motionSpeed })}
+        />
+      </AxisRow>
+      <AxisRow anchor="motion-easing" title="Easing style" description="How movement starts and settles. Overrides the theme's own easing." appearance={appearance} axes={['easing']} onChange={onChange}>
+        <Segmented<Easing>
+          label="Easing style"
+          value={appearance.easing}
+          options={APPEARANCE_CHOICES.easing.options}
+          onChange={(easing) => onChange({ easing })}
+        />
+      </AxisRow>
+      <AxisRow anchor="motion-press" title="Button press" description="What a button does when you press it." appearance={appearance} axes={['pressFeedback']} onChange={onChange}>
+        <Segmented<PressFeedback>
+          label="Button press"
+          value={appearance.pressFeedback}
+          options={APPEARANCE_CHOICES.pressFeedback.options}
+          onChange={(pressFeedback) => onChange({ pressFeedback })}
         />
       </AxisRow>
     </div>

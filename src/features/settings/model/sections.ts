@@ -77,6 +77,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
       { id: "motion-page", label: "Page and tab transition", keywords: ["motion", "animation", "transition", "fade", "blur", "slide", "scale", "page", "tab"] },
       { id: "motion-overlay", label: "Menus and dialogs", keywords: ["motion", "animation", "transition", "popover", "menu", "dialog", "zoom", "blur", "fade"] },
       { id: "motion-speed", label: "Animation speed", keywords: ["motion", "animation", "speed", "slow", "fast", "duration"] },
+      { id: "motion-easing", label: "Easing style", keywords: ["motion","animation","easing","curve","bounce","bouncy","snappy","smooth","spring"] },
+      { id: "motion-press", label: "Button press", keywords: ["motion","animation","press","click","button","squish","feedback","tap"] },
       { id: "theme-tokens", label: "Theme tokens", keywords: ["tokens", "json", "reference", "variables", "css variables", "keys", "custom theme", "theme format"], description: "Every key a theme JSON accepts, with its current value." },
       { id: "theme-json", label: "Advanced theme (JSON)", keywords: ["json", "custom theme", "tokens", "css variables", "colors", "spacing", "fonts"] },
       { id: "input-options", label: "Input options", keywords: ["enter", "newline", "send"] },

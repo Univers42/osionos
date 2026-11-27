@@ -113,6 +113,8 @@ export function inlineSettings(): InlineSetting[] {
     axisSetting("pageTransition", ["animation", "tab"]),
     axisSetting("overlayTransition", ["animation", "menu", "dialog"]),
     axisSetting("motionSpeed", ["animation", "duration"]),
+    axisSetting("easing", ["animation", "curve", "bounce", "spring"]),
+    axisSetting("pressFeedback", ["animation", "click", "squish", "tap"]),
     axisSetting("animatedImages", ["gif", "accessibility"]),
     axisSetting("hovercards", ["preview", "hover"]),
     axisSetting("urlPaste", ["url", "paste"]),
