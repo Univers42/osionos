@@ -95,10 +95,14 @@ const INSTALLER_URL = "https://raw.githubusercontent.com/Univers42/osionos/main/
  *  remembers nothing, so its terminal asks for the emailed code on every load. */
 export const REMEMBER_ORIGINS: readonly string[] = ["https://baas.tail10f2ea.ts.net:8443", "https://baas-beta.tail10f2ea.ts.net"];
 
-/** Installs or updates, pairs and starts, in one command that stays running. */
+const flags = (flag: string, values: readonly string[]): string => values.map((value) => ` ${flag} ${shellWord(value)}`).join("");
+
+/** Installs or updates, pairs and starts, in one command that stays running. From production or the
+ *  beta it is one line serving and remembering both, so one install opens either (TB19). */
 export function connectCommand(bridgeUrl: string, appOrigin: string, name?: string): string {
   const named = name ? ` --name ${shellWord(name)}` : "";
-  const remembered = REMEMBER_ORIGINS.includes(appOrigin) ? ` --remember-origin ${shellWord(appOrigin)}` : "";
-  return `curl -fsSL ${INSTALLER_URL} | sh -s -- --bridge ${shellWord(bridgeUrl)} --app-origin ${shellWord(appOrigin)}${remembered}${named}`;
+  const trusted = REMEMBER_ORIGINS.includes(appOrigin);
+  const origins = flags("--app-origin", trusted ? REMEMBER_ORIGINS : [appOrigin]) + flags("--remember-origin", trusted ? REMEMBER_ORIGINS : []);
+  return `curl -fsSL ${INSTALLER_URL} | sh -s -- --bridge ${shellWord(bridgeUrl)}${origins}${named}`;
 }
 
