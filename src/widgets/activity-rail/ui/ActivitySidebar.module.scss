@@ -42,6 +42,11 @@
   box-shadow: var(--osio-pane-shadow);
 }
 
+/* The phone drawer takes focus programmatically (usePhoneDrawer); the card itself shows no ring. */
+.panel:focus-visible {
+  outline: none;
+}
+
 /* On the right the panel's content edge faces left, so the border colours swap. */
 .activitySidebar[data-sidebar-side="right"] .panel {
   border-right-color: var(--osio-pane-border);
@@ -142,7 +147,7 @@
     bottom: var(--osio-frame-gap);
     left: 100%;
     height: auto;
-    max-width: calc(100vw - 100% - var(--osio-frame-gap));
+    max-width: calc(100vw - 100% - var(--osio-frame-gap) - var(--osio-safe-left) - var(--osio-safe-right));
   }
 
   .activitySidebar:not([data-sidebar-mode="peek"]) .panelInner {
@@ -155,7 +160,7 @@
     top: 0;
     bottom: 0;
     left: 100%;
-    width: calc(100vw - 100%);
+    width: calc(100vw - 100% - var(--osio-safe-left) - var(--osio-safe-right));
     background: var(--osio-overlay);
   }
 
