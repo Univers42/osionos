@@ -3,21 +3,13 @@
 // this page shares the node origin, and with it a session: a later frame takes the secret from one
 // already open, so opening a file does not ask for another emailed code.
 import { EDITOR_CHANNEL } from "../features/machines/model/editorFrameProtocol";
-import { readSelf } from "../features/ide/vscode/machineSession";
 import { whoami } from "../features/ide/vscode/machineWhoami";
 import { linkTerminalToApp, type TerminalAppLink } from "../features/ide/model/terminalAppLink";
 import { createNodeFsClient, type NodeFsClient, type NodeFsCredential, type NodeFsState } from "../features/ide/vfs/nodeFsClient";
+import { pageAppOrigins, selfNode } from "../features/ide/model/nodePage";
 
 const PEER_WAIT_MS = 250;
 const FS_SOCKET_PATH = "/api/fs";
-
-const appOrigins = (): string[] =>
-  (document.querySelector<HTMLMetaElement>('meta[name="osionos-app-origin"]')?.content ?? "").split(" ").filter(Boolean);
-
-async function selfNode(): Promise<string | null> {
-  const res = await fetch("/api/machine/self", { credentials: "same-origin" });
-  return res.status === 200 ? readSelf(await res.json().catch(() => null)) : null;
-}
 
 export type EditorSession = {
   client: NodeFsClient;
@@ -44,13 +36,13 @@ function peerSecret(peers: BroadcastChannel): Promise<string | null> {
 }
 
 export async function startEditorSession(onAppMessage: (data: unknown) => boolean, onState: (state: NodeFsState) => void): Promise<EditorSession | null> {
-  const node = await selfNode();
-  if (!node) return null;
+  const self = await selfNode();
+  if (!self) return null;
   const peers = new BroadcastChannel(EDITOR_CHANNEL);
   const link = linkTerminalToApp({
     page: { parent: window.parent, top: window.top, self: window },
-    appOrigins: appOrigins(),
-    node,
+    appOrigins: pageAppOrigins(),
+    node: self.node,
     post: (message, origin) => window.parent.postMessage(message, origin),
     listen: (handler) => {
       const onMessage = (event: MessageEvent) => handler(event);
@@ -84,7 +76,7 @@ export async function startEditorSession(onAppMessage: (data: unknown) => boolea
   }
 
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${FS_SOCKET_PATH}`;
-  const appOrigin = (): string => linked.appOrigin() ?? appOrigins()[0] ?? "";
+  const appOrigin = (): string => linked.appOrigin() ?? pageAppOrigins()[0] ?? "";
   const client = createNodeFsClient({
     open: () => new WebSocket(url) as never,
     credential: async () => {

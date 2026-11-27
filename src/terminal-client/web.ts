@@ -6,22 +6,12 @@
 // storage, beside a resume assertion the app fetched with no emailed code (Amendment 1). Framed by
 // anything but the app's top page, it draws nothing.
 import { readCodeTheme, type CodeTheme } from "../features/ide/model/codeTheme";
-import { readSelf } from "../features/ide/vscode/machineSession";
 import { whoami } from "../features/ide/vscode/machineWhoami";
 import type { TerminalColors, TerminalPtyApi } from "../features/ide/model/terminalPort";
 import { linkTerminalToApp, type TerminalAppLink } from "../features/ide/model/terminalAppLink";
 import { PTY_SOCKET_PATH, ptyApiOverWebSocket, type SocketLike } from "../features/ide/model/terminalSocket";
 import { rememberedStoreOver } from "../features/ide/model/terminalCredentials";
-
-const appOrigins = (): string[] =>
-  (document.querySelector<HTMLMetaElement>('meta[name="osionos-app-origin"]')?.content ?? "").split(" ").filter(Boolean);
-
-async function selfNode(): Promise<{ node: string; remembers: boolean } | null> {
-  const res = await fetch("/api/machine/self", { credentials: "same-origin" });
-  const body: unknown = res.status === 200 ? await res.json().catch(() => null) : null;
-  const node = readSelf(body);
-  return node ? { node, remembers: (body as { remember?: unknown }).remember === true } : null;
-}
+import { pageAppOrigins, selfNode } from "../features/ide/model/nodePage";
 
 async function forgetOnNode(device: string): Promise<void> {
   await fetch("/api/machine/forget", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ device }) });
@@ -52,7 +42,7 @@ export async function startOnTheWeb(start: (api: TerminalPtyApi, colors: Termina
   const { node, remembers } = self;
   const link = linkTerminalToApp({
     page: { parent: window.parent, top: window.top, self: window },
-    appOrigins: appOrigins(),
+    appOrigins: pageAppOrigins(),
     node,
     post: (message, origin) => window.parent.postMessage(message, origin),
     listen: (handler) => {
