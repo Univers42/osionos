@@ -52,7 +52,7 @@ test("an auto-hidden title bar gives its height to the workbench and returns at 
   await openDesktop(page, baseURL);
   const mainTop = async () => (await page.locator("#osio-main").boundingBox()).y;
   const docked = await mainTop();
-  await chooseViewAppearance(page, "Auto-hide title bar");
+  await chooseViewAppearance(page, "Auto-hide title bar", "menuitemcheckbox");
   await page.mouse.move(VIEWPORT.width / 2, VIEWPORT.height / 2);
   await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
   await expect.poll(() => topbarBottom(page)).toBeLessThanOrEqual(0);
@@ -68,6 +68,9 @@ test("an auto-hidden title bar gives its height to the workbench and returns at 
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-shell")).toHaveAttribute("data-topbar-autohide", "1");
-  await chooseViewAppearance(page, "Auto-hide title bar");
+  // The setting survived the reload, so the bar is hidden: reach it the way a user does.
+  await page.mouse.move(VIEWPORT.width / 2, 2);
+  await expect.poll(() => topbarBottom(page)).toBeGreaterThan(30);
+  await chooseViewAppearance(page, "Auto-hide title bar", "menuitemcheckbox");
   await expect(page.getByTestId("app-shell")).not.toHaveAttribute("data-topbar-autohide", "1");
 });
