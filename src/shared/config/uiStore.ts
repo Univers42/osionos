@@ -23,6 +23,7 @@ export type ActivePanel =
   | 'marketplace'
   | 'agents'
   | 'conversations'
+  | 'assistant'
   | 'notifications'
   | 'tasks'
   | 'public'
@@ -51,7 +52,7 @@ export function migratePanelId(panel: unknown): ActivePanel {
 }
 
 const KNOWN_PANELS = new Set<ActivePanel>([
-  'files', 'search', 'marketplace', 'agents', 'conversations', 'notifications', 'tasks', 'public', 'database', 'templates',
+  'files', 'search', 'marketplace', 'agents', 'conversations', 'assistant', 'notifications', 'tasks', 'public', 'database', 'templates',
   'scm', 'run', 'problems', 'issues',
 ]);
 

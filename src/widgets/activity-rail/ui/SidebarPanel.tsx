@@ -34,6 +34,7 @@ const PANEL_TITLES: Record<ActivePanel, string> = {
   search: "Search",
   agents: "Agents",
   conversations: "Conversations",
+  assistant: "Assistant",
   notifications: "Notifications",
   tasks: "My Tasks",
   public: "Shared", // label-only rename (AOC §12); id stays "public" (R-R3)

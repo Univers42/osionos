@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Search, Settings2, SquarePen } from "lucide-react";
+import { Search, SquarePen } from "lucide-react";
 
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import type { Conversation } from "@/features/chat/model/chatTypes";
@@ -54,8 +54,8 @@ const AgentRow: React.FC<{ agent: AgentSummary | null; picked: boolean; onPick: 
   );
 };
 
-/** The left rail of the assistant: start a chat, pick who answers, find an old conversation. */
-export const BrainRail: React.FC<Props> = ({ conversations, activeId, onOpen, onNew, agents, agentId, onPickAgent }) => {
+/** The chats half of the sidebar's Assistant panel: start a chat, pick who answers, find an old one. */
+export const AssistantChats: React.FC<Props> = ({ conversations, activeId, onOpen, onNew, agents, agentId, onPickAgent }) => {
   const [query, setQuery] = useState("");
   const visibleAgents = agents.filter((agent) => agent.kind !== "custom" || !agent.archived);
   const groups = useMemo(() => {
@@ -65,8 +65,8 @@ export const BrainRail: React.FC<Props> = ({ conversations, activeId, onOpen, on
   }, [conversations, query]);
 
   return (
-    <aside aria-label="Assistant navigation" className="flex h-full w-64 shrink-0 flex-col border-r border-[var(--osio-border-soft)] bg-[var(--osio-bg-panel)]">
-      <div className="flex flex-col gap-2 p-3 pb-1">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-col gap-2 px-3 pb-1">
         <button
           type="button"
           onClick={onNew}
@@ -127,16 +127,6 @@ export const BrainRail: React.FC<Props> = ({ conversations, activeId, onOpen, on
           )}
         </nav>
       </div>
-
-      <div className="border-t border-[var(--osio-border-soft)] p-1.5">
-        <button
-          type="button"
-          onClick={() => openAiHub("overview")}
-          className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-        >
-          <Settings2 size={15} aria-hidden="true" /> AI Hub
-        </button>
-      </div>
-    </aside>
+    </div>
   );
 };

@@ -26,9 +26,10 @@ test("aiHubTab is an ai-hub tab with a stable pageId", () => {
   assert.equal(first.pageId, second.pageId);
 });
 
-test("the Conversations group lists AI Hub right after Conversations", () => {
-  const labels = RAIL_GROUPS.find((group) => group.id === "conversations")!.items.map((item) => item.label);
-  assert.equal(labels.indexOf("AI Hub"), labels.indexOf("Conversations") + 1);
+test("the Conversations group lists the Assistant panel right after Conversations", () => {
+  const items = RAIL_GROUPS.find((group) => group.id === "conversations")!.items;
+  const at = items.findIndex((item) => item.label === "Conversations") + 1;
+  assert.deepEqual(items[at]?.action, { kind: "panel", panel: "assistant" });
 });
 
 test("formatMicroUsd reads like money, with a floor for real sub-cent spend", () => {
