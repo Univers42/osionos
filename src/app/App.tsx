@@ -12,23 +12,18 @@
 
 import React, { useEffect, useRef, useState } from "react";
 
-import type { UserSession } from "@/entities/user";
 import { useUserStore } from "@/features/auth";
-import { isBridgeSession, isPortalMode, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
+import { isBridgeSession, isPortalMode } from "@/features/auth/model/userStore.helpers";
 import { Portal } from "@/features/auth/ui/Portal";
-import { LegalLinks } from "@/features/legal/ui/LegalLinks";
 import { usePageSync } from "@/store/sync/usePageSync";
 import { useUnreadSync } from "@/store/chat/useUnreadSync";
 import { useNotifyLive } from "@/store/chat/useNotifyLive";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
-import { QuickCaptureModal } from "@/features/quick-capture/ui/QuickCaptureModal";
-import { WorkspaceIntentModal } from "@/features/workspace-onboarding/ui/WorkspaceIntentModal";
-import { ProfessionPickerModal } from "@/features/professions/ui/ProfessionPickerModal";
 import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { useZenMode } from "@/shared/config/useZenMode";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
 import { usePageStore } from "@/store/usePageStore";
-import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
+import { loadActivePage } from "@/store/pageStore.helpers";
 import { ActivitySidebar } from "@/widgets/activity-rail";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
@@ -37,115 +32,25 @@ import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersi
 import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
 import { LazyCanvasDebugRoute, LazyMachineView, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
 import { syncObjectDbForAccount } from "./objectDbAccountSync";
+import { PrivateWorkspaceScreen, SigningInScreen } from "./SessionGateScreens";
+import { ShellHosts } from "./ShellHosts";
+import { ensureBridgeWorkspacePages, seedEmptyOnlineWorkspaces } from "./workspaceBootstrap";
 import { startDrawnCaret } from "@/features/theme/model/drawnCaret";
 import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { applyStoredTheme } from "@/shared/config/themeApply";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
-import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
-import { ThemeSafeModeBanner } from "@/features/theme/ui/ThemeSafeModeBanner";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
 import { useConnectivityNotices } from "@/features/connectivity/model/useConnectivityNotices";
 import { useVariablesSync } from "@/features/variables/model/useVariablesSync";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
-import { ToastViewport } from "@osionos/ui/primitives";
-import { ShareHost } from "@/features/share/ShareHost";
-import { IssueReportHost } from "@/features/issues/ui/IssueReportHost";
-import { ExportHost } from "@/features/page-export/ui/ExportHost";
-import { ActionGuardHost } from "@/features/app-actions/ui/ActionGuardHost";
-import { AiInlinePanel } from "@/features/ai/ui/AiInlinePanel";
 import { TopBar } from "@/widgets/top-bar";
-import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
 import { BindingSourcesProvider } from "@/features/bindings/ui/BindingSourcesProvider";
-
-type UserSessions = Record<string, UserSession>;
 
 const LazyNoAccessScreen = React.lazy(() =>
   import("@/features/page-link/NoAccessScreen").then((module) => ({ default: module.NoAccessScreen })),
 );
-
-function ensureBridgeWorkspacePages(session: UserSession | null | undefined) {
-  const workspaceIds = [
-    ...(session?.privateWorkspaces ?? []),
-    ...(session?.sharedWorkspaces ?? []),
-  ].map((workspace) => workspace._id);
-  const allowedWorkspaceIds = new Set(workspaceIds);
-
-  usePageStore.setState((pageState) => {
-    const pages = Object.fromEntries(
-      workspaceIds.map((workspaceId) => [workspaceId, pageState.pages[workspaceId] ?? []]),
-    );
-    const recents = pageState.recents.filter((recent) => allowedWorkspaceIds.has(recent.workspaceId));
-    const activePage = pageState.activePage && allowedWorkspaceIds.has(pageState.activePage.workspaceId)
-      ? pageState.activePage
-      : null;
-    const navigationPath = pageState.navigationPath.filter((page) => allowedWorkspaceIds.has(page.workspaceId));
-
-    for (const workspaceId of workspaceIds) {
-      pages[workspaceId] = pages[workspaceId] ?? [];
-    }
-    savePagesCache(pages);
-    saveRecents(recents);
-    return {
-      ...derivePageState(pages, pageState.pageIdsByWorkspace),
-      recents,
-      activePage,
-      navigationPath,
-      seeded: true,
-      showTrash: false,
-    };
-  });
-}
-
-function uniqueSessionWorkspaces(sessions: UserSessions) {
-  const seen = new Set<string>();
-  return Object.values(sessions)
-    .flatMap((session) => [...session.privateWorkspaces, ...session.sharedWorkspaces])
-    .filter((workspace) => {
-      if (seen.has(workspace._id)) return false;
-      seen.add(workspace._id);
-      return true;
-    });
-}
-
-async function seedEmptyOnlineWorkspaces(sessions: UserSessions, jwt: string) {
-  const uniqueWorkspaces = uniqueSessionWorkspaces(sessions);
-  // usePageSync's hydrate is the canonical pull for every accessible workspace; don't
-  // duplicate it. Read the store (hydrate populates it) and only fetch workspaces that
-  // still look empty — either genuinely empty (need a server-confirmed pull before we seed)
-  // or not yet hydrated. fetchPages' TTL de-thrashes any overlap with a concurrent
-  // sidebar/files-panel mount and with seedOnlinePages' own per-workspace re-check.
-  const emptyWorkspaces = uniqueWorkspaces.filter(
-    (workspace) => (usePageStore.getState().pages[workspace._id] ?? []).length === 0,
-  );
-  if (emptyWorkspaces.length > 0) {
-    await Promise.all(
-      emptyWorkspaces.map((workspace) => usePageStore.getState().fetchPages(workspace._id, jwt)),
-    );
-  }
-
-  const pages = usePageStore.getState().pages;
-  const anyEmpty = uniqueWorkspaces.some(
-    (workspace) => (pages[workspace._id] ?? []).length === 0,
-  );
-  if (!anyEmpty) return;
-
-  const personas = useUserStore.getState().personas;
-  const workspaceMap: Record<string, string> = {};
-
-  for (let index = 0; index < personas.length; index++) {
-    const persona = personas[index];
-    const personaSession = sessions[persona.id];
-    if (!personaSession) continue;
-    const privateWorkspace = personaSession.privateWorkspaces[0];
-    if (privateWorkspace) workspaceMap[`mock-ws-private-${index}`] = privateWorkspace._id;
-    const sharedWorkspace = personaSession.sharedWorkspaces[0];
-    if (sharedWorkspace) workspaceMap["mock-ws-shared-team"] = sharedWorkspace._id;
-  }
-
-  await usePageStore.getState().seedOnlinePages(workspaceMap, jwt);
-}
 
 function isDevCanvasDebugRoute() {
   if (!import.meta.env.DEV || globalThis.window === undefined) return false;
@@ -298,42 +203,13 @@ const App: React.FC = () => {
     return <LazyStyleGuideRoute />;
   }
 
-  if (!ready) {
-    return (
-      <div className="flex items-center justify-center h-screen w-screen bg-[var(--osio-bg-page)]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin w-8 h-8 border-2 border-[var(--osio-accent)] border-t-transparent rounded-full" />
-          <p className="text-sm text-[var(--osio-fg-muted)]">Signing in...</p>
-        </div>
-      </div>
-    );
-  }
+  if (!ready) return <SigningInScreen />;
 
   if (isPortalMode() && !activeUserId) {
     return <Portal />;
   }
 
-  if (error === "bridge-session-required" || !activeUserId) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[var(--osio-bg-page)] px-6 text-[var(--osio-fg-default)]">
-        <section className="w-full max-w-md rounded-md border border-[var(--osio-border)] bg-[var(--osio-bg-panel)] p-6 shadow-osio-e1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">Private workspace</p>
-          <h1 className="mt-3 text-2xl font-semibold">Open osionos from Prismatica</h1>
-          <p className="mt-3 text-sm leading-6 text-[var(--osio-fg-muted)]">
-            This app only opens after your Prismatica account creates a signed workspace handoff.
-          </p>
-          <button
-            type="button"
-            className="mt-5 inline-flex w-full items-center justify-center rounded-md bg-[var(--osio-accent)] px-4 py-2 text-sm font-medium text-[var(--osio-accent-fg)] hover:opacity-90"
-            onClick={() => { globalThis.location.href = PRISMATICA_URL; }}
-          >
-            Go to Prismatica
-          </button>
-          <LegalLinks className="mt-4 justify-center" />
-        </section>
-      </div>
-    );
-  }
+  if (error === "bridge-session-required" || !activeUserId) return <PrivateWorkspaceScreen />;
 
   // A connected machine's folder (ADR-006): signed in, and nothing of the workbench around it.
   if (globalThis.location?.pathname === "/machine") return <LazyMachineView />;
@@ -385,20 +261,7 @@ const App: React.FC = () => {
           </main>
         </div>
 
-        <ThemeSafeModeBanner />
-        <WorkspaceThemePanel />
-        <ToastViewport />
-        <ShareHost />
-        <IssueReportHost />
-        <ExportHost />
-        <ActionGuardHost />
-        <AiInlinePanel />
-        <ContactDock />
-        <QuickCaptureModal />
-        <WorkspaceIntentModal />
-        {/* The profession picker: the Modal primitive returns null until the store's
-            `open` flag is set, so the warm path renders nothing. */}
-        <ProfessionPickerModal />
+        <ShellHosts />
       </div>
     </BindingSourcesProvider>
   );
