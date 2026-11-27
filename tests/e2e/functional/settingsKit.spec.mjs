@@ -8,6 +8,9 @@ import { openFreshPage } from "../../browser/core/app.mjs";
 import { enableAccountDelete } from "../support/accountDelete.mjs";
 import { closeSettings, nav, openSection as openSettingsSection, openSettings, region, searchSettings } from "../support/settingsHelpers.mjs";
 
+// Rendered behind AiWorkspaceGate / the AI-service check (src/features/settings/ai).
+const AI_GATED_SECTIONS = ["ai_agents", "ai_skills", "ai_memory", "ai_connections"];
+
 /** What a token resolves to on this page, so a test compares computed values, not names. */
 function resolvedToken(page, property, token) {
   return page.evaluate(
@@ -117,8 +120,8 @@ test.describe("settings use the kit", () => {
       const nobodyBlocked = sectionId === "moderation" && (await region(page).getByRole("button", { name: "Unblock" }).count()) === 0;
       // Accessibility & voice is two selects and a slider: it has no button at all.
       const noButtonByDesign = sectionId === "accessibility_voice";
-      // AI connections says so, and offers nothing, when the build has no AI service (this one).
-      const aiUnconfigured = sectionId === "ai_connections" && (await region(page).getByText(/The AI service is not configured in this build/).count()) > 0;
+      // The AI workspace sections say so, and offer nothing, when the build has no AI service (this one).
+      const aiUnconfigured = AI_GATED_SECTIONS.includes(sectionId) && (await region(page).getByText(/The AI service is not configured (in|on) this build/).count()) > 0;
       if (!(emptyStateInstead || kitOutsourced || nobodyBlocked || noButtonByDesign || aiUnconfigured)) {
         expect(radii.length, `section ${index} shows buttons`).toBeGreaterThan(0);
         const offRadius = radii.filter((entry) => !segmentLabels.includes(entry.name) && entry.radius !== (entry.isPanel ? panelRadius : radius));
@@ -171,15 +174,16 @@ test.describe("settings use the kit", () => {
     const body = region(page);
     await expect.poll(async () => (await body.boundingBox()).width).toBeGreaterThanOrEqual(300);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const upgrade = body.getByRole("button", { name: "Upgrade" }).first();
-    await upgrade.scrollIntoViewIfNeeded();
-    await expect(upgrade).toBeInViewport({ ratio: 1 });
-
     const rows = nav(page).locator("button[data-settings-section]");
     const count = await rows.count();
     expect(count).toBeGreaterThan(10);
+    // Before any scroll: Overview and Usage sit above Upgrade, so reaching it scrolls the heading away.
     const stripRow = await rows.first().boundingBox();
     expect((await body.getByRole("heading", { level: 1 }).boundingBox()).y).toBeGreaterThan(stripRow.y);
+
+    const upgrade = body.getByRole("button", { name: "Upgrade" }).first();
+    await upgrade.scrollIntoViewIfNeeded();
+    await expect(upgrade).toBeInViewport({ ratio: 1 });
     for (let index = 0; index < count; index += 1) {
       await rows.nth(index).scrollIntoViewIfNeeded();
       await rows.nth(index).click();
