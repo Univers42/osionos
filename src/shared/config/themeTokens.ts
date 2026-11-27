@@ -166,3 +166,8 @@ const BY_KEY = new Map(THEME_TOKENS.map((token) => [token.key, token]));
 export function themeToken(key: string): ThemeToken | undefined {
   return BY_KEY.get(key);
 }
+
+/** The `"key": "value"` line a theme JSON takes, escaped so any value (quotes, backslashes) parses. */
+export function tokenJsonLine(key: string, value: string): string {
+  return `${JSON.stringify(key)}: ${JSON.stringify(value)}`;
+}

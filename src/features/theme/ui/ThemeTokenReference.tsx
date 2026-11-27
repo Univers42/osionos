@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { THEME_TOKENS, type ThemeGroup, type ThemeToken } from '@/shared/config/themeTokens';
+import { THEME_TOKENS, tokenJsonLine, type ThemeGroup, type ThemeToken } from '@/shared/config/themeTokens';
 import { ThemeTokenRow } from './ThemeTokenRow';
 
 const GROUPS: readonly { id: ThemeGroup; label: string }[] = [
@@ -31,7 +31,7 @@ function readValues(tokens: readonly ThemeToken[]): Map<string, string> {
 export const ThemeTokenReference: React.FC = () => {
   const [query, setQuery] = useState('');
   const [opened, setOpened] = useState<ReadonlySet<ThemeGroup>>(new Set());
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState<{ key: string; ok: boolean } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
@@ -42,11 +42,13 @@ export const ThemeTokenReference: React.FC = () => {
     setOpened((prev) => new Set(open ? [...prev, id] : [...prev].filter((group) => group !== id)));
   };
   const copy = (token: ThemeToken, value: string) => {
-    navigator.clipboard.writeText(`"${token.key}": "${value}"`).then(() => {
-      setCopiedKey(token.key);
+    const settle = (ok: boolean) => {
+      setCopied({ key: token.key, ok });
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopiedKey(null), COPIED_MS);
-    }, () => {});
+      timer.current = setTimeout(() => setCopied(null), COPIED_MS);
+    };
+    // A refused clipboard (no permission, insecure origin) is announced, never swallowed.
+    navigator.clipboard.writeText(tokenJsonLine(token.key, value)).then(() => settle(true), () => settle(false));
   };
 
   return (
@@ -67,6 +69,7 @@ export const ThemeTokenReference: React.FC = () => {
       {filtering && found.length === 0 ? (
         <p className="text-sm text-[var(--osio-fg-muted)]">No token matches “{query.trim()}”.</p>
       ) : null}
+      <p role="status" className="sr-only">{copied ? `${copied.ok ? 'Copied' : 'Could not copy'} ${copied.key}` : ''}</p>
       {GROUPS.map(({ id, label }) => {
         const rows = found.filter((token) => token.group === id);
         if (rows.length === 0) return null;
@@ -78,7 +81,7 @@ export const ThemeTokenReference: React.FC = () => {
             {values ? (
               <dl>
                 {rows.map((token) => (
-                  <ThemeTokenRow key={token.key} token={token} value={values.get(token.key) ?? ''} copied={copiedKey === token.key} onCopy={copy} />
+                  <ThemeTokenRow key={token.key} token={token} value={values.get(token.key) ?? ''} copied={copied?.ok === true && copied.key === token.key} onCopy={copy} />
                 ))}
               </dl>
             ) : null}
