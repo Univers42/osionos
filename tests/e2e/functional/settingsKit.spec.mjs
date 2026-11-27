@@ -96,10 +96,11 @@ test.describe("settings use the kit", () => {
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(region(page).locator(`[data-settings-panel="${sectionId}"]`)).toBeVisible();
       // Nav rows and switches are not Buttons. The appearance controls belong to the
-      // theme panel, which is restyled on its own. The avatar and workspace-icon
+      // appearance sections (theme, style, color, layout, motion, accessibility), whose swatches and
+      // segmented tabs are restyled on their own. The avatar and workspace-icon
       // pickers are the picture itself made clickable, shaped by what they show.
       const radii = await region(page)
-        .locator('button:not([role="switch"]):not([aria-label="Settings sections"] *):not([aria-label="Change avatar"]):not([aria-label="Change workspace icon"]):not([data-settings-anchor="appearance"] *)')
+        .locator('button:not([role="switch"]):not([aria-label="Settings sections"] *):not([aria-label="Change avatar"]):not([aria-label="Change workspace icon"]):not(:is([data-settings-anchor="appearance"], [data-settings-anchor="style"], [data-settings-anchor="color"], [data-settings-anchor="layout"], [data-settings-anchor="motion"], [data-settings-anchor="accessibility"]) *)')
         .evaluateAll((nodes) =>
           nodes
             .filter((node) => node.getClientRects().length > 0)

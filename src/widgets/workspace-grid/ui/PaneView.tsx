@@ -14,7 +14,8 @@ import React from "react";
 import { isPaneZoomEnabled } from "@/shared/config/featureFlags";
 import { PaneContent } from "@/widgets/page-renderer/ui/PaneContent";
 import { useWorkspaceLayout } from "../model/workspaceLayout";
-import type { PaneNode } from "../model/layoutTree";
+import type { PaneNode, WorkspaceTab } from "../model/layoutTree";
+import { useReplayPageTransition } from "@/features/theme/model/replayPageTransition";
 import { normalizePaneZoom } from "../model/paneZoom";
 import { keepRecentTabs } from "../model/keptTabs";
 import { TabStrip } from "./TabStrip";
@@ -75,6 +76,19 @@ function useDeferredMount(immediate: boolean): boolean {
 const KEPT_TABS_PER_PANE = 4;
 const HIDDEN_TAB_STYLE: React.CSSProperties = { contentVisibility: "hidden", pointerEvents: "none" };
 
+/** One kept tab. `data-tab-visible` is present only while the tab is the shown one, so the page
+ *  transition (motion.css) starts when the tab is switched to; opening another page in the same
+ *  tab replays it. */
+const TabSlot: React.FC<{ tab: WorkspaceTab; hidden: boolean; children: React.ReactNode }> = ({ tab, hidden, children }) => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  useReplayPageTransition(ref, tab.pageId);
+  return (
+    <div ref={ref} className="absolute inset-0" inert={hidden} data-tab-visible={hidden ? undefined : ""} style={hidden ? HIDDEN_TAB_STYLE : undefined}>
+      {children}
+    </div>
+  );
+};
+
 function useKeptTabs(activeId: string | null, openIds: readonly string[]): readonly string[] {
   const [kept, setKept] = React.useState<readonly string[]>([]);
   const next = keepRecentTabs(kept, activeId, openIds, KEPT_TABS_PER_PANE);
@@ -134,9 +148,9 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
             pane.tabs.filter((tab) => keptTabIds.includes(tab.tabId)).map((tab) => {
               const hidden = tab !== activeTab;
               return (
-                <div key={tab.tabId} className="absolute inset-0" inert={hidden} style={hidden ? HIDDEN_TAB_STYLE : undefined}>
+                <TabSlot key={tab.tabId} tab={tab} hidden={hidden}>
                   <PaneContent tab={tab} paneId={pane.id} chrome="none" />
-                </div>
+                </TabSlot>
               );
             })
           ) : (

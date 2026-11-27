@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test";
 import { openFreshPage } from "../../browser/core/app.mjs";
 import { openSettings } from "../support/settingsHelpers.mjs";
 
-const STYLES = ["Calm", "Paper", "Soft", "Frost", "Aurora"];
+const STYLES = ["Classic", "Paper", "Soft", "Frost", "Aurora"];
 
 /** What the chrome around the page draws now. */
 const chrome = (page) =>

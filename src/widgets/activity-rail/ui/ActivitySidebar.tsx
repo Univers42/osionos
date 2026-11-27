@@ -19,6 +19,7 @@ import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { ActivityRail } from "./ActivityRail";
 import { SidebarPanel } from "./SidebarPanel";
 import { useSidebarResize } from "../model/useSidebarResize";
+import { usePhoneDrawer } from "../model/usePhoneDrawer";
 import { RAIL_WIDTH, PANEL_TRANSITION_WIDTH, RAIL_HIDE_WIDTH } from "../model/railItems";
 import styles from "./ActivitySidebar.module.scss";
 
@@ -53,10 +54,12 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, peek = false 
   const side = useEffectiveSidebarSide();
   const sign = side === "right" ? -1 : 1;
   const panelRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
   const draggingRef = useRef(false);
   // The peek shows the panel whatever mode the docked sidebar was last in.
   const showPanel = peek || sidebarMode === "panel";
   useFoldOnPhoneWhenATabOpens(peek);
+  const { onKeyDown, closeAndRestore } = usePhoneDrawer(asideRef, panelRef, showPanel && !peek, collapseToRail);
 
   // Mount the panel once and keep it mounted (a folded panel costs no renders).
   const [panelMounted, setPanelMounted] = useState(showPanel);
@@ -126,14 +129,14 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, peek = false 
 
   const parts = [
     <ActivityRail key="rail" onOpenSettings={onOpenSettings} />,
-    <div key="panel" ref={panelRef} className={styles.panel} data-osio-sidebar-card hidden={!showPanel}>
+    <div key="panel" ref={panelRef} tabIndex={-1} className={styles.panel} data-osio-sidebar-card hidden={!showPanel}>
       {panelMounted ? (
         <div className={styles.panelInner} style={{ width: sidebarWidth }}>
           <SidebarPanel peek={peek} />
         </div>
       ) : null}
     </div>,
-    showPanel && !peek ? <div key="scrim" className={styles.scrim} aria-hidden onClick={collapseToRail} /> : null,
+    showPanel && !peek ? <div key="scrim" className={styles.scrim} aria-hidden onClick={closeAndRestore} /> : null,
     peek ? null : (
       <div
         key="handle"
@@ -153,7 +156,7 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, peek = false 
   ];
 
   return (
-    <aside className={styles.activitySidebar} aria-label="Sidebar" data-sidebar-mode={peek ? "peek" : sidebarMode} data-sidebar-side={side}>
+    <aside ref={asideRef} onKeyDown={onKeyDown} className={styles.activitySidebar} aria-label="Sidebar" data-sidebar-mode={peek ? "peek" : sidebarMode} data-sidebar-side={side}>
       {side === "right" ? parts.reverse() : parts}
     </aside>
   );

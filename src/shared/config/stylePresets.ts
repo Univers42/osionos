@@ -5,17 +5,19 @@ export type StyleId = "calm" | "paper" | "soft" | "frost" | "aurora";
 export interface StylePreset {
   id: StyleId;
   label: string;
+  /** one line under the name in the picker. */
+  description: string;
   /** Applied in one updateAppearance call. Never palette, mode or accent. */
   patch: Partial<Appearance>;
 }
 
-/** One-click styles over the surface axes and corners, Calm (today's look) first. */
+/** One-click styles over the surface axes and corners, Classic (today's look) first. */
 export const STYLE_PRESETS: readonly StylePreset[] = [
-  { id: "calm", label: "Calm", patch: { surface: "solid", elevation: "default", borders: "default", radius: "default" } },
-  { id: "paper", label: "Paper", patch: { surface: "solid", elevation: "flat", borders: "strong", radius: "sharp" } },
-  { id: "soft", label: "Soft", patch: { surface: "solid", elevation: "deep", borders: "none", radius: "round" } },
-  { id: "frost", label: "Frost", patch: { surface: "frosted", elevation: "default", borders: "default", radius: "default" } },
-  { id: "aurora", label: "Aurora", patch: { surface: "glass", elevation: "deep", borders: "none", radius: "round" } },
+  { id: "calm", label: "Classic", description: "Today's look: soft shadows, thin lines", patch: { surface: "solid", elevation: "default", borders: "default", radius: "default" } },
+  { id: "paper", label: "Paper", description: "Flat, sharp, strong lines", patch: { surface: "solid", elevation: "flat", borders: "strong", radius: "sharp" } },
+  { id: "soft", label: "Soft", description: "Round corners, deep shadows, no lines", patch: { surface: "solid", elevation: "deep", borders: "none", radius: "round" } },
+  { id: "frost", label: "Frost", description: "Frosted, see-through panels", patch: { surface: "frosted", elevation: "default", borders: "default", radius: "default" } },
+  { id: "aurora", label: "Aurora", description: "Glass panels over a glowing canvas", patch: { surface: "glass", elevation: "deep", borders: "none", radius: "round" } },
 ];
 
 /** The id of the style whose surface, depth and borders the appearance matches, or null ("Custom"). Corners are applied by a preset but not compared: a later corner tweak keeps the style. Derived, never stored. */
