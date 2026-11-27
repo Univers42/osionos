@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
-import { BinocleMascot } from "@/shared/ui/mascot/BinocleMascot";
+import { AssistantAvatar } from "@/shared/ui/mascot/AssistantAvatar";
 import type { BinocleMood } from "@/shared/ui/mascot/BinocleMascot";
 import { agentInitials, agentTint } from "../model/brainHome";
 
@@ -16,13 +16,7 @@ interface Props {
 /** Who answers: the binocle for the general assistant, a tinted monogram for an agent. */
 export const AgentAvatar: React.FC<Props> = ({ agent, size = 28, mood = "curious" }) => {
   const box = { width: size, height: size };
-  if (!agent) {
-    return (
-      <span aria-hidden="true" style={box} className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--osio-bg-subtle)]">
-        <BinocleMascot mood={mood} size={Math.round(size * 0.86)} />
-      </span>
-    );
-  }
+  if (!agent) return <AssistantAvatar size={size} mood={mood} />;
   return (
     <span
       aria-hidden="true"

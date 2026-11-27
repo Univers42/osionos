@@ -26,6 +26,7 @@
 import React, { useRef } from 'react';
 import { Send, X } from 'lucide-react';
 
+import { COMPOSER_SEND_CLASS, ComposerCard } from '@/shared/ui/composer/ComposerCard';
 import { ModerationWarningNotice } from '@/shared/moderation/ModerationWarningNotice';
 import { DictationButton } from '@/features/voice/ui/DictationButton';
 import { insertTranscript } from '@/features/voice/model/insertTranscript';
@@ -127,7 +128,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   };
 
   return (
-    <div className={compact ? 'border-t border-[var(--osio-border-default)] p-2' : 'border-t border-[var(--osio-border-default)] p-4'}>
+    <div className={compact ? 'px-2 pb-2 pt-1' : 'px-4 pb-4 pt-2'}>
       <div className={compact ? '' : 'mx-auto max-w-4xl'}>
         {replyTo && (
           <div className="mb-2 flex items-start gap-2 rounded-md border-l-2 border-[var(--osio-accent)] bg-[var(--osio-bg-subtle)] px-2 py-1.5">
@@ -163,10 +164,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         ) : (
           <div className="relative">
           {mention !== null && <MentionAutocomplete query={mention} onPick={pickMention} />}
-          <div
-            data-dictation-composer="channel"
-            className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 focus-within:border-[var(--osio-accent)]"
-          >
+          <ComposerCard data-dictation-composer="channel" className="p-2">
             <textarea name="message"
               ref={textareaRef}
               value={draft.text}
@@ -201,12 +199,12 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 onClick={submit}
                 disabled={!canSend || uploading}
                 aria-label="Send message"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                className={`${COMPOSER_SEND_CLASS} h-9 w-9`}
               >
                 <Send size={16} />
               </button>
             </div>
-          </div>
+          </ComposerCard>
           </div>
         )}
 

@@ -134,5 +134,7 @@ test("MessageRow: icon actions are IconButtons, text actions are Buttons, a reac
   for (const tag of raw) assert.match(tag, /className="osio-chip\b/, "a raw <button> that is not a chip");
   for (const tag of openingTags(messageRow, "Button")) assert.doesNotMatch(tag, /osio-chip/, "a kit Button styled as a chip");
   const names = kitImports(messageRow);
-  assert.ok(names.includes("IconButton") && names.includes("Button"));
+  assert.ok(names.includes("Button"));
+  const toolbar = read("src/widgets/channel-messages/ui/MessageToolbar.tsx");
+  assert.ok(kitImports(toolbar).includes("IconButton"), "the toolbar's icon actions are IconButtons");
 });
