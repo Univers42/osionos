@@ -14,7 +14,7 @@ import { toggleZenWithExitHint, useZenMode } from "@/shared/config/useZenMode";
 import { useUIStore } from "@/shared/config/uiStore";
 import { workbenchAppearanceMenu } from "@/widgets/workbench/model/workbenchMenuActions";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
-import type { MenuSubmenu } from "../menuTypes";
+import type { MenuAction, MenuSubmenu } from "../menuTypes";
 
 /** Tell the user the browser refused full screen (iframe without permission, unsupported). */
 function fullscreenRefused(): void {
@@ -27,10 +27,20 @@ function toggleFullscreen(): void {
   void request.catch(fullscreenRefused);
 }
 
+/** "Move primary side bar right/left": the label names where the click sends it. */
+function sidebarSideRow(): MenuAction {
+  const toRight = useUIStore.getState().sidebarSide !== "right";
+  return {
+    id: "view.sidebar-side", label: toRight ? "Move primary side bar right" : "Move primary side bar left",
+    run: () => useUIStore.getState().toggleSidebarSide(),
+  };
+}
+
 /**
  * View › Appearance: the toggles for the browser and shell regions, each a
  * checkbox row. The side bar is checked only in "panel" mode (the rail mode
- * leaves it collapsed, which `isSidebarOpen` would call open). Full screen
+ * leaves it collapsed, which `isSidebarOpen` would call open). Ctrl+B toggles
+ * it outside text, Ctrl+Alt+B anywhere. Full screen
  * carries no accelerator: F11 is the browser's own key, not an app chord.
  */
 export function appearanceSubmenu(): MenuSubmenu {
@@ -39,10 +49,11 @@ export function appearanceSubmenu(): MenuSubmenu {
       { id: "view.fullscreen", label: "Full screen", run: toggleFullscreen, checked: () => document.fullscreenElement !== null },
       { id: "view.zen", label: "Zen mode", run: toggleZenWithExitHint, checked: () => useZenMode.getState().zen, separatorAfter: true },
       {
-        id: "view.sidebar", label: "Primary side bar", accelerator: "Ctrl+Alt+B",
+        id: "view.sidebar", label: "Primary side bar", accelerator: "Ctrl+B",
         run: () => useUIStore.getState().toggleDocked(),
         checked: () => useUIStore.getState().sidebarMode === "panel",
       },
+      sidebarSideRow(),
       ...workbenchAppearanceMenu(),
     ],
   };

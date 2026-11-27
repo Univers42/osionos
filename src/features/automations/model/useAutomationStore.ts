@@ -5,6 +5,7 @@ import { setItemEvictingPageCaches } from "@/store/pageStore.helpers";
 
 import { comboSteps } from "./combo";
 import { DEFAULT_AUTOMATIONS } from "./defaultAutomations";
+import { mergeAutomations } from "./mergeAutomations";
 import type { Automation } from "./types";
 
 /**
@@ -65,7 +66,7 @@ export const useAutomationStore = create<AutomationStoreState>()(
       custom: [],
       automations: () => {
         const { overrides, custom } = get();
-        return [...DEFAULT_AUTOMATIONS.map((automation) => overrides[automation.id] ?? automation), ...custom];
+        return mergeAutomations(DEFAULT_AUTOMATIONS, overrides, custom);
       },
       updateAutomation: (id, patch) =>
         set((state) => {

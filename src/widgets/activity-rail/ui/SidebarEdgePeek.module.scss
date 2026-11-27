@@ -12,6 +12,16 @@
 }
 
 /* While the reveal delay runs, a thin accent line says something is coming. */
+.edge[data-side="right"] {
+  left: auto;
+  right: 0;
+}
+
+.edge[data-side="right"]::after {
+  left: auto;
+  right: 0;
+}
+
 .edge::after {
   content: "";
   position: absolute;
@@ -45,6 +55,12 @@
   transition:
     transform 160ms var(--osio-ease-standard),
     opacity 160ms var(--osio-ease-standard);
+}
+
+.overlay[data-side="right"] {
+  left: auto;
+  right: var(--osio-frame-gap);
+  transform: translateX(calc(100% + var(--osio-frame-gap)));
 }
 
 .overlay[data-open] {

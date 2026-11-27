@@ -1,0 +1,85 @@
+/* What makes each style visible on the main chrome, not just on menus: surface.css swaps the
+   pane tokens, this sheet changes the canvas, the frame gap, the topbar and the sidebar card.
+   Same keys as surface.css (the <html> attributes, absent at their default, so Calm costs
+   nothing), same !important on tokens a theme may write inline, same exclusions: phone,
+   compact and zen keep their edge-to-edge chrome, peek stays opaque, reduced transparency
+   and forced colours put a solid surface back. Colours derive from the theme's own tokens,
+   so every palette and shipped theme gets its version of the look.
+   Ponytail: the mix percentages are taste constants checked on light, dark and High
+   Contrast; a palette whose canvas already equals its surface shows a weaker Soft tint. */
+
+/* Deep (Soft, Aurora): a wider gap so the lifted cards' shadow has room to read, and a
+   canvas tinted by the accent so borderless cards still separate from it. */
+@media (width > 767.98px) {
+  :root:not([data-density="compact"])[data-elevation="deep"] {
+    --osio-frame-gap: 12px !important;
+  }
+
+  :root:not([data-density="compact"])[data-elevation="deep"] [data-osio-shell] {
+    background-color: color-mix(in srgb, var(--osio-accent) 9%, var(--osio-bg-canvas));
+  }
+}
+
+/* Flat with a border (Paper): one sheet. The canvas takes the surface colour and the
+   topbar sits on it, so the strong borders alone draw the cards; nothing casts a shadow. */
+@media (width > 767.98px) {
+  :root:not([data-density="compact"]):not([data-surface="glass"])[data-elevation="flat"]:not([data-borders="none"]) [data-osio-shell] {
+    background-color: var(--osio-bg-surface);
+  }
+}
+
+/* Frosted (Frost): a light accent wash across the canvas, the topbar and the sidebar card
+   turned to translucent surface over it, and a frosted top edge on the cards. No
+   backdrop-filter: the wash is a static gradient, so a blur behind it would only cost paint.
+   Only at the default depth, so a frosted surface picked with flat or deep keeps that depth. */
+:root[data-surface="frosted"] {
+  --osio-frost-edge: inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+
+:root[data-surface="frosted"][data-theme="dark"] {
+  --osio-frost-edge: inset 0 1px 0 rgb(255 255 255 / 0.09);
+}
+
+:root[data-surface="frosted"] [data-osio-shell] {
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--osio-accent) 14%, var(--osio-bg-canvas)),
+    var(--osio-bg-canvas) 55%,
+    color-mix(in srgb, var(--osio-accent) 7%, var(--osio-bg-canvas))
+  );
+}
+
+:root[data-surface="frosted"] [data-testid="app-topbar"] {
+  background-color: color-mix(in srgb, var(--osio-bg-surface) 55%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--osio-border-default) 70%, transparent);
+}
+
+/* Strong borders (Paper) draw the topbar's lower edge; after the frosted rule so a frosted
+   surface picked with strong borders keeps the strong edge. */
+:root[data-borders="strong"] [data-testid="app-topbar"] {
+  box-shadow: inset 0 -1px 0 var(--osio-border-strong);
+}
+
+@media (width > 767.98px) {
+  :root:not([data-density="compact"])[data-surface="frosted"]:not([data-elevation]) {
+    --osio-pane-shadow: var(--osio-frost-edge), var(--osio-e2) !important;
+  }
+
+  :root:not([data-density="compact"])[data-surface="frosted"] aside:not([data-sidebar-mode="peek"]) [data-osio-sidebar-card] {
+    background-color: color-mix(in srgb, var(--osio-bg-surface) 70%, transparent);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  :root[data-surface="frosted"] [data-osio-shell] {
+    background-image: none;
+  }
+
+  :root[data-surface="frosted"] [data-testid="app-topbar"] {
+    background-color: var(--osio-bg-surface);
+  }
+
+  :root[data-surface="frosted"] aside [data-osio-sidebar-card] {
+    background-color: var(--osio-bg-surface) !important;
+  }
+}
