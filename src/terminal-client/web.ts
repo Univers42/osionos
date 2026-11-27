@@ -11,11 +11,8 @@ import type { TerminalColors, TerminalPtyApi } from "../features/ide/model/termi
 import { linkTerminalToApp, type TerminalAppLink } from "../features/ide/model/terminalAppLink";
 import { PTY_SOCKET_PATH, ptyApiOverWebSocket, type SocketLike } from "../features/ide/model/terminalSocket";
 import { rememberedStoreOver } from "../features/ide/model/terminalCredentials";
-import { pageAppOrigins, selfNode } from "../features/ide/model/nodePage";
+import { forgetOnNode, pageAppOrigins, selfNode } from "../features/ide/model/nodePage";
 
-async function forgetOnNode(device: string): Promise<void> {
-  await fetch("/api/machine/forget", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ device }) });
-}
 
 // The dock shows "connected" once a shell runs, and its fallback when the first one fails.
 function reporting(api: TerminalPtyApi, link: TerminalAppLink): TerminalPtyApi {

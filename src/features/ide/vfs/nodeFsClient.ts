@@ -1,7 +1,8 @@
 // The editor page's socket to this computer's node (devil verdict 2026-11-01 editor on disk, F7,
 // F13): one `ws://<node>/api/fs`, numbered requests, chunked reads and writes, and the node's watch
 // events. It runs only on the node's own page. Its errors are the VFS taxonomy, so the tree and the
-// editor read them as they read any other filesystem.
+// editor read them as they read any other filesystem. A remembered computer opens with its device
+// secret (D1); a refusal forgets whichever secret was refused, and the next opening asks again.
 import { fsError, type FsErrorCode } from "./errors";
 
 const CLOSE_AUTH = 4401;
@@ -14,7 +15,7 @@ const WIRE_ERRORS = new Set<FsErrorCode>([
 export class DiskConflict extends Error {}
 
 /** The socket's first message: one credential and the app origin it was granted under (TB3). */
-export type NodeFsCredential = ({ token: string } | { secret: string }) & { appOrigin: string };
+export type NodeFsCredential = ({ token: string } | { secret: string } | { device: string; assertion: string }) & { appOrigin: string };
 
 export interface NodeFsSocket {
   send(text: string): void;
@@ -32,6 +33,9 @@ export interface NodeFsDeps {
   credential(): Promise<NodeFsCredential>;
   keepSecret(secret: string): void;
   dropSecret(): void;
+  /** The node issued this computer a device secret for the opening's app origin. */
+  keepDevice(device: string): void;
+  dropDevice(): void;
   onState(state: NodeFsState): void;
   /** Waits before a reconnect; injected so tests do not sleep. */
   later?: (run: () => void) => void;
@@ -74,6 +78,7 @@ export function createNodeFsClient(deps: NodeFsDeps): NodeFsClient {
       if (message.op !== "opened") return;
       opened = true;
       if (typeof message.secret === "string") deps.keepSecret(message.secret);
+      if (typeof message.device === "string") deps.keepDevice(message.device);
       deps.onState("open");
       for (const run of waitingForOpen) run();
       waitingForOpen = [];
@@ -99,15 +104,21 @@ export function createNodeFsClient(deps: NodeFsDeps): NodeFsClient {
     deps.onState("connecting");
     const next = deps.open();
     socket = next;
+    let sent: NodeFsCredential | null = null;
     next.onopen = () => {
-      void deps.credential().then((credential) => { if (socket === next) next.send(JSON.stringify(credential)); });
+      void deps.credential().then((credential) => {
+        if (socket !== next) return;
+        sent = credential;
+        next.send(JSON.stringify(credential));
+      });
     };
     next.onmessage = (event) => onMessage(String(event.data));
     next.onclose = (event) => {
       if (socket !== next) return;
       socket = null;
       opened = false;
-      if (event.code === CLOSE_AUTH) deps.dropSecret();
+      if (event.code === CLOSE_AUTH && sent && "device" in sent) deps.dropDevice();
+      else if (event.code === CLOSE_AUTH) deps.dropSecret();
       failAll();
       deps.onState("closed");
       // A node restart or a laptop waking: the page stays and comes back on its own.

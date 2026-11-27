@@ -1,14 +1,16 @@
 // The editor page's link and socket. It links to the app exactly as the terminal page does, so the
-// machine token, the step-up and the node's exact Origin are the same door (F4, F5). No /api/fs
-// opening leaves before the app that frames it has spoken: the opening names that app's origin, and
-// nothing else can (TB4). Frames of this page share the node origin and a channel; a later frame
-// takes the session secret from one already open, so opening a file asks for no second emailed
-// code, but only from a frame pinned to the same app origin (TB3, TB4).
+// machine token, the step-up, the node's exact Origin and a remembered computer are the same door
+// (F4, F5, D1): the device secret is the terminal page's, under the same key in this node origin's
+// storage, and opens the editor beside a resume assertion. No /api/fs opening leaves before the app
+// that frames it has spoken: the opening names that app's origin, and nothing else can (TB4). Frames
+// of this page share a channel; a later frame takes the session secret from one already open, so a
+// file opens without a second emailed code, but only from a frame pinned to the same app origin.
 import { EDITOR_CHANNEL } from "../features/machines/model/editorFrameProtocol";
 import { whoami } from "../features/ide/vscode/machineWhoami";
 import { linkTerminalToApp, type TerminalAppLink, type TerminalAppLinkDeps } from "../features/ide/model/terminalAppLink";
 import { createNodeFsClient, type NodeFsClient, type NodeFsCredential, type NodeFsSocket, type NodeFsState } from "../features/ide/vfs/nodeFsClient";
-import { pageAppOrigins, selfNode } from "../features/ide/model/nodePage";
+import { rememberedStoreOver } from "../features/ide/model/terminalCredentials";
+import { forgetOnNode, pageAppOrigins, selfNode } from "../features/ide/model/nodePage";
 
 // Caveat: a frame busier than this does not answer in time; the asker then opens with a token from
 // the app (one more mint, possibly a step-up), never with a wrong secret.
@@ -67,6 +69,8 @@ export function createEditorSession<Peers extends PeerChannel>(deps: EditorSessi
   let linked: TerminalAppLink | null = null;
   const link = linkTerminalToApp({
     ...linkDeps,
+    // The app answers `ready` with the first grant (#304): asking again would mint twice.
+    readyAsks: true,
     listen: (handler) => listen((event) => {
       handler(event);
       const origin = linked?.appOrigin();
@@ -95,8 +99,7 @@ export function createEditorSession<Peers extends PeerChannel>(deps: EditorSessi
       }
       const taken = await app.credentials.take();
       if ("secret" in taken) return { secret: taken.secret, appOrigin };
-      // This link is given no remembered store, so it never hands over a device secret.
-      if ("device" in taken) throw new Error("the editor opens no remembered computer");
+      if ("device" in taken) return { device: taken.device, assertion: taken.assertion, appOrigin };
       return { token: taken.token, appOrigin };
     }
 
@@ -105,6 +108,8 @@ export function createEditorSession<Peers extends PeerChannel>(deps: EditorSessi
       credential,
       keepSecret: (value) => { secret = value; },
       dropSecret: () => { secret = null; app.credentials.dropSecret(); },
+      keepDevice: (device) => app.credentials.keepDevice(device),
+      dropDevice: () => app.credentials.dropDevice(),
       onState: (state) => {
         if (state === "open") app.report("connected");
         onState(state);
@@ -122,6 +127,9 @@ export async function startEditorSession(onAppMessage: (data: unknown) => boolea
     page: { parent: window.parent, top: window.top, self: window },
     appOrigins: pageAppOrigins(),
     node: self.node,
+    remembers: self.remembers,
+    store: rememberedStoreOver(() => window.localStorage),
+    forgetOnNode,
     post: (message, origin) => window.parent.postMessage(message, origin),
     listen: (handler) => {
       const onMessage = (event: MessageEvent) => handler(event);
