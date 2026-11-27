@@ -212,7 +212,7 @@ test.describe("title-bar menus", () => {
     await expect(menus(page)).toHaveCount(0);
     await sheet.getByText("File", { exact: true }).click();
     await sheet.getByText("Preferences", { exact: true }).click();
-    const settings = sheet.getByRole("tab", { name: "Settings", exact: true });
+    const settings = sheet.getByRole("button", { name: "Settings", exact: true });
     expect((await settings.boundingBox()).height).toBeGreaterThanOrEqual(44);
     expect(await noSideScroll()).toBe(true);
     await page.keyboard.press("Escape");
