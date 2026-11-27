@@ -60,7 +60,7 @@ test.describe("empty workspace", () => {
     await expect(tabs(page).first()).toContainText("Home");
   });
 
-  test("the welcome is chromeless and transparent, and Binocle opens a keyboard menu of actions", async ({ page, baseURL }) => {
+  test("the welcome is chromeless and transparent, and Ask Binocle hands the words to the assistant unsent", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await closeAllTabs(page);
 
@@ -71,21 +71,24 @@ test.describe("empty workspace", () => {
     await expect(pane.locator('button[title="Close pane"]')).toHaveCount(0);
     await expect(emptyWorkspace(page)).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 
-    const mascot = page.getByRole("button", { name: /Binocle/ });
-    await expect(mascot).toHaveAttribute("aria-haspopup", "menu");
-    await mascot.click();
-    const menu = page.getByRole("menu", { name: "Binocle" });
-    await expect(menu).toBeVisible();
-    await expect(menu.getByRole("menuitem")).toHaveCount(5);
-    await expect(menu.getByRole("menuitem").first()).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(menu.getByRole("menuitem").nth(1)).toBeFocused();
-    await page.keyboard.press("Escape");
-    await expect(menu).toHaveCount(0);
-    await expect(mascot).toBeFocused();
-
-    await mascot.click();
-    await page.getByRole("menuitem", { name: "Ask the assistant" }).click();
+    const ask = emptyWorkspace(page).getByRole("textbox", { name: "Ask Binocle" });
+    await ask.fill("Plan my week");
+    await ask.press("Enter");
     await expect(tabs(page)).toHaveCount(1);
+    await expect(page.getByPlaceholder("Ask osionos AI…")).toHaveValue(/Plan my week/, { timeout: 15_000 });
+  });
+
+  test("Recent lists the page just visited and reopens it", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await closeAllTabs(page);
+    await emptyWorkspace(page).getByRole("button", { name: /New page/ }).click();
+    await expect(page.locator(".osionos-page")).toBeVisible();
+    await closeAllTabs(page);
+
+    const recent = emptyWorkspace(page).getByRole("region", { name: "Recent" });
+    await expect(recent.getByRole("button")).not.toHaveCount(0);
+    await recent.getByRole("button").first().click();
+    await expect(tabs(page)).toHaveCount(1);
+    await expect(page.locator(".osionos-page")).toBeVisible();
   });
 });
