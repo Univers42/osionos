@@ -7,7 +7,7 @@ import React from "react";
 
 import { CONNECTOR_DOWNLOAD_URL } from "@/features/machines/model/connector";
 import { TERMINAL_PAGE_URL, terminalFramePanel } from "@/features/machines/model/terminalFrame";
-import { startTerminalFrame, useTerminalFrameStore } from "@/features/machines/model/terminalFrameStore";
+import { startTerminalFrame, terminalRemember, useTerminalFrameStore } from "@/features/machines/model/terminalFrameStore";
 import { SudoPrompt } from "@/features/settings/ui/sudo/SudoPrompt";
 import { LOCAL_NODE_ORIGIN, NODE_FRAME_PERMISSIONS } from "@/features/machines/model/machineWindow";
 import { frameAllow } from "@/shared/lib/dom/frameAllow";
@@ -56,7 +56,7 @@ export const NodeVsCodeTerminal: React.FC = () => {
       />
       {panel && <MachineFramePanel panel={panel} waiting={phase === "idle" || phase === "connecting"} pairing={phase === "no-node" || phase === "other-account"} onTryAgain={() => setAttempt((n) => n + 1)} />}
       {/* The store opens the emailed-code prompt on a step-up; it renders only where it is mounted. */}
-      {phase === "step-up" && <SudoPrompt extra={<RememberComputerChoice />} />}
+      {phase === "step-up" && <SudoPrompt extra={<RememberComputerChoice onShown={terminalRemember.shown} />} />}
     </div>
   );
 };
