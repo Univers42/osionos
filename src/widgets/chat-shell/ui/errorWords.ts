@@ -36,6 +36,7 @@ const WORDS: Record<string, string> = {
   cancelled: "The run was cancelled.",
   timeout: "The model took too long. Try again.",
   internal: "Something went wrong. Try again.",
+  unknown: "The AI service did not answer as expected. Try again, or sign in again if it keeps failing.",
   run_expired: "That answer expired and can no longer be resumed.",
   resume_failed: "The connection dropped and the run could not be resumed.",
   no_stream: "The service answered without a stream.",
