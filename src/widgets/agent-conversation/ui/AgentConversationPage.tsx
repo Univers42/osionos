@@ -44,7 +44,7 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
           onReset={agent.resetConversation}
         />
         <AgentParameters settings={settings} onPatch={agent.patchSettings} onToggleTool={agent.toggleTool} />
-        <AgentMessageList messages={messages} scrollRef={agent.scrollRef} />
+        <AgentMessageList messages={messages} running={agent.running} scrollRef={agent.scrollRef} />
         <AgentComposer draft={agent.draft} running={agent.running} onDraftChange={agent.setDraft} onSend={(prompt) => void agent.runAgent(prompt)} />
       </section>
     </div>

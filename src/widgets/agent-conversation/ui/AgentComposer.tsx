@@ -12,7 +12,11 @@
 
 
 import React from "react";
-import { Loader2, Send, TerminalSquare } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
+
+import { COMPOSER_SEND_CLASS, ComposerCard } from "@/shared/ui/composer/ComposerCard";
+
+import { DEFAULT_PROMPT } from "../model/agentOptions";
 
 interface AgentComposerProps {
   draft: string;
@@ -21,27 +25,29 @@ interface AgentComposerProps {
   onSend: (prompt: string) => void;
 }
 
-/** The message box: Cmd/Ctrl+Enter or the button sends. */
+/**
+ * The message box. Enter sends, Shift+Enter makes a new line, and Enter while an
+ * input method is composing (IME) is left to the method.
+ */
 export const AgentComposer: React.FC<AgentComposerProps> = ({ draft, running, onDraftChange, onSend }) => (
-  <form onSubmit={(event) => { event.preventDefault(); onSend(draft); }} className="border-t border-[var(--osio-border-default)] p-4">
-    <div className="mx-auto flex max-w-4xl items-end gap-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 focus-within:border-[var(--osio-accent)]">
-      <span className="mb-2 ml-1 hidden text-[var(--osio-fg-subtle)] sm:inline-flex"><TerminalSquare size={16} aria-hidden="true" /></span>
+  <form onSubmit={(event) => { event.preventDefault(); onSend(draft); }} className="px-4 pb-4 pt-2">
+    <ComposerCard className="mx-auto flex max-w-3xl items-end gap-2 p-2">
       <textarea name="message-claude-mcp"
+        aria-label="Message Claude"
         value={draft}
         onChange={(event) => onDraftChange(event.target.value)}
         onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-            event.preventDefault();
-            onSend(draft);
-          }
+          if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+          event.preventDefault();
+          onSend(draft);
         }}
         rows={2}
-        placeholder="Message Claude MCP"
-        className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-[var(--osio-fg-subtle)]"
+        placeholder={DEFAULT_PROMPT}
+        className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-[var(--osio-fg-subtle)]"
       />
-      <button type="submit" disabled={running || !draft.trim()} className="mb-0.5 inline-flex h-10 w-10 items-center justify-center rounded-md bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message">
-        {running ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
+      <button type="submit" disabled={running || !draft.trim()} className={`${COMPOSER_SEND_CLASS} h-8 w-8`} aria-label="Send message">
+        {running ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ArrowUp size={16} aria-hidden="true" />}
       </button>
-    </div>
+    </ComposerCard>
   </form>
 );

@@ -19,7 +19,7 @@ import { usePageStore, type PageEntry } from "@/store/usePageStore";
 
 import { createId, nowIso } from "./agentIds";
 import { parseCreatedPageFromToolText } from "./agentBlocks";
-import { CLAUDE_STREAM_ENDPOINT, DEFAULT_PROMPT } from "./agentOptions";
+import { CLAUDE_STREAM_ENDPOINT } from "./agentOptions";
 import { initialMessages, loadMessages, readSettings, writeSettings, writeThread } from "./agentStorage";
 import { resultSummary, toolDetail, updateToolEvent, upsertToolEvent } from "./agentToolEvents";
 import type { AgentMessage, AgentRunSettings, AgentToolEvent, AgentToolKey } from "./types";
@@ -45,7 +45,7 @@ export function useAgentConversation(pageId: string) {
   const jwt = useUserStore((state) => state.activePageJwt() ?? "");
   const workspaceId = page?.workspaceId ?? activeWorkspace?._id ?? "";
   const workspacePages = usePageStore((state) => workspaceId ? state.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES : EMPTY_WORKSPACE_PAGES);
-  const [draft, setDraft] = useState(DEFAULT_PROMPT);
+  const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<AgentMessage[]>(() => loadMessages(pageId));
   const [settings, setSettings] = useState<AgentRunSettings>(() => readSettings(pageId));
   const { send: streamAgent, streaming: running } = useAgentStream({ endpoint: CLAUDE_STREAM_ENDPOINT });
@@ -58,7 +58,7 @@ export function useAgentConversation(pageId: string) {
     setPrevPageId(pageId);
     setMessages(loadMessages(pageId));
     setSettings(readSettings(pageId));
-    setDraft(DEFAULT_PROMPT);
+    setDraft("");
   }
 
   useEffect(() => {

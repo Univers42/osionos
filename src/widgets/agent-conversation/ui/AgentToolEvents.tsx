@@ -12,23 +12,31 @@
 
 
 import React from "react";
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronRight, Loader2, XCircle } from "lucide-react";
 
-import type { AgentToolEvent } from "../model/types";
+import type { AgentToolEvent, AgentToolStatus } from "../model/types";
 
-/** The tools a turn ran, one box each, with their status and detail. */
+/** The status icon of a tool row; the status is also written for screen readers by the caller. */
+const StatusIcon: React.FC<{ status: AgentToolStatus }> = ({ status }) => {
+  if (status === "running") return <Loader2 size={14} className="shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />;
+  if (status === "complete") return <CheckCircle2 size={14} className="shrink-0 text-[var(--osio-success)]" aria-hidden="true" />;
+  return <XCircle size={14} className="shrink-0 text-[var(--osio-danger)]" aria-hidden="true" />;
+};
+
+/** The tools a turn ran: one compact row each, the full detail one click away. */
 export const AgentToolEvents: React.FC<{ events: AgentToolEvent[] }> = ({ events }) => (
-  <div className="mt-3 grid gap-2" data-agent-tool-list="true">
+  <div className="mt-2 grid gap-1" data-agent-tool-list="true">
     {events.map((event) => (
-      <div key={event.id} data-agent-tool={event.name} className="rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2.5 py-2 text-xs text-[var(--osio-fg-muted)]">
-        <div className="mb-1 flex items-center gap-2 font-medium text-[var(--osio-fg-default)]">
-          {event.status === "running" ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : null}
-          {event.status === "complete" ? <CheckCircle2 size={12} aria-hidden="true" /> : null}
-          {event.status === "error" ? <XCircle size={12} aria-hidden="true" /> : null}
-          <span>{event.name}</span>
-        </div>
-        <p>{event.detail}</p>
-      </div>
+      <details key={event.id} data-agent-tool={event.name} className="group rounded-[var(--osio-radius-chip)] bg-[var(--osio-bg-subtle)] text-xs text-[var(--osio-fg-muted)]">
+        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-[var(--osio-radius-chip)] px-2.5 py-1.5 hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] [&::-webkit-details-marker]:hidden">
+          <StatusIcon status={event.status} />
+          <span className="sr-only">{event.status}:</span>
+          <span className="shrink-0 font-medium text-[var(--osio-fg-default)]">{event.name}</span>
+          <span className="min-w-0 flex-1 truncate">{event.detail}</span>
+          <ChevronRight size={12} aria-hidden="true" className="shrink-0 transition-transform group-open:rotate-90 motion-reduce:transition-none" />
+        </summary>
+        <p className="whitespace-pre-wrap break-words px-2.5 pb-2 pt-1">{event.detail}</p>
+      </details>
     ))}
   </div>
 );

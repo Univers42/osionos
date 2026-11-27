@@ -12,7 +12,12 @@
 
 
 import React from "react";
-import { Bot, FilePlus2, RotateCcw } from "lucide-react";
+import { FilePlus2, RotateCcw } from "lucide-react";
+
+import { AssistantAvatar } from "@/shared/ui/mascot/AssistantAvatar";
+import { Tooltip } from "@/shared/ui";
+
+import { GHOST_ICON_BUTTON_CLASS, PILL_CLASS } from "./agentClasses";
 
 interface AgentHeaderProps {
   title: string;
@@ -24,26 +29,26 @@ interface AgentHeaderProps {
 
 /** The page title, what the conversation holds, and its two actions. */
 export const AgentHeader: React.FC<AgentHeaderProps> = ({ title, subtitle, canOpenCreatedPage, onOpenCreatedPage, onReset }) => (
-  <header className="flex min-h-16 items-center justify-between gap-3 border-b border-[var(--osio-border-default)] px-5">
+  <header className="flex min-h-14 items-center justify-between gap-3 border-b border-[var(--osio-border-soft)] px-5">
     <div className="flex min-w-0 items-center gap-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--osio-accent-subtle)] text-[var(--osio-accent)]">
-        <Bot size={18} aria-hidden="true" />
-      </span>
+      <AssistantAvatar size={28} />
       <div className="min-w-0">
-        <h1 className="truncate text-base font-semibold">{title}</h1>
+        <h1 className="truncate text-sm font-semibold leading-5">{title}</h1>
         <p className="truncate text-xs text-[var(--osio-fg-muted)]">{subtitle}</p>
       </div>
     </div>
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1">
       {canOpenCreatedPage ? (
-        <button type="button" onClick={onOpenCreatedPage} className="inline-flex h-9 items-center gap-2 rounded-md border border-[var(--osio-border-default)] px-3 text-xs font-medium text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]">
+        <button type="button" onClick={onOpenCreatedPage} className={`${PILL_CLASS} font-medium`}>
           <FilePlus2 size={14} aria-hidden="true" />
           Open page
         </button>
       ) : null}
-      <button type="button" onClick={onReset} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--osio-border-default)] text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" aria-label="Reset conversation" title="Reset conversation">
-        <RotateCcw size={16} aria-hidden="true" />
-      </button>
+      <Tooltip label="Reset conversation">
+        <button type="button" onClick={onReset} className={GHOST_ICON_BUTTON_CLASS} aria-label="Reset conversation">
+          <RotateCcw size={16} aria-hidden="true" />
+        </button>
+      </Tooltip>
     </div>
   </header>
 );
