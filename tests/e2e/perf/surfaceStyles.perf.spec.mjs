@@ -125,3 +125,24 @@ test("clicking a style preset", async ({ page }) => {
   const stats = await measureToPaint(page, () => frost.check({ force: true }), { runs: 20, warmups: 3, startEvent: "click", until: { selector: 'html[data-surface="frosted"]' }, before: () => calm.check({ force: true }) });
   judge("presetClick", floor, { solid: { stats }, frosted: { stats } });
 });
+
+/** Same click as above while the neon-tokyo theme pins its own surface tokens; p95 must stay within 16 ms of the floor. */
+test("clicking a style preset under neon-tokyo", async ({ page }) => {
+  test.setTimeout(300_000);
+  await bootApp(page);
+  await page.evaluate(async () => {
+    const { SHIPPED_THEMES } = await import("/src/shared/config/themes/index.ts");
+    const { compileTheme } = await import("/src/shared/config/themeDoc.ts");
+    const { applyCompiledTheme } = await import("/src/shared/config/themeApply.ts");
+    applyCompiledTheme(compileTheme(SHIPPED_THEMES.find((theme) => theme.name === "Neon Tokyo")));
+  });
+  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Preferences" }).click();
+  const style = page.getByRole("group", { name: "Style" });
+  const calm = style.getByRole("radio", { name: /Calm/ });
+  const aurora = style.getByRole("radio", { name: /Aurora/ });
+  const floor = await measureFloor(page);
+  const stats = await measureToPaint(page, () => aurora.check({ force: true }), { runs: 20, warmups: 3, startEvent: "click", until: { selector: 'html[data-surface="glass"]' }, before: () => calm.check({ force: true }) });
+  writeReport(SPEC, "presetClickNeonTokyo", { floor, stats });
+  expect(stats.p95, `p95 ${stats.p95} vs floor p95 ${floor.p95} + 16`).toBeLessThanOrEqual(floor.p95 + 16);
+});
