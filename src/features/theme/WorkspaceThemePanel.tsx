@@ -39,6 +39,7 @@ import { useThemeLibrary, resolveTheme } from './model/useThemeLibrary';
 import { ThemeLibraryControls } from './ui/ThemeLibraryControls';
 
 import { AccentControl, CaretControls, ShapeControls, useAppearance } from './AppearanceControls';
+import { MotionControls } from './MotionControls';
 import { StyleControls } from './StyleControls';
 
 interface WorkspaceThemeControlsProps {
@@ -101,6 +102,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
   return (
     <div className={compact ? 'space-y-4' : 'space-y-4 overflow-y-auto p-4'}>
       <StyleControls appearance={appearance} onChange={changeAppearance} />
+      <MotionControls appearance={appearance} onChange={changeAppearance} />
       <ThemeLibraryControls />
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">Mode</p>

@@ -119,17 +119,24 @@ export const AccentControl: React.FC<{ appearance: Appearance; paletteId: string
 
 export function Segmented<T extends string>({
   label,
+  description,
   value,
   options,
   onChange,
-}: Readonly<{ label: string; value: T; options: { value: T; label: string }[]; onChange: (next: T) => void }>) {
+}: Readonly<{ label: string; description?: string; value: T; options: { value: T; label: string }[]; onChange: (next: T) => void }>) {
   const headingId = useId();
+  const descriptionId = useId();
   return (
     <div>
-      <p id={headingId} className={LABEL}>
+      <p id={headingId} className={description ? 'mb-0.5 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]' : LABEL}>
         {label}
       </p>
-      <div role="group" aria-labelledby={headingId} className="inline-flex">
+      {description ? (
+        <p id={descriptionId} className="mb-2 text-xs text-[var(--osio-fg-muted)]">
+          {description}
+        </p>
+      ) : null}
+      <div role="group" aria-labelledby={headingId} aria-describedby={description ? descriptionId : undefined} className="inline-flex">
         <MiniTabs size="sm" value={value} options={options} onChange={onChange} />
       </div>
     </div>
