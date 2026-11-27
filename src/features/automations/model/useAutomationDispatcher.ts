@@ -9,6 +9,7 @@ import { isChordPrefix, matchAutomation } from "./automationMatch";
 import { commandById } from "./commandRegistry";
 import { ariaShortcutsInclude, normalizeComboFromEvent } from "./combo";
 import { isComboRecording } from "./recordingState";
+import { keyIsOwnedElsewhere } from "./dispatchGuards";
 import { useAutomationStore } from "./useAutomationStore";
 import type { Automation, CommandContext } from "./types";
 
@@ -25,6 +26,11 @@ const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta", "OS", "AltGrap
 
 /** How long a chord's first step stays armed (VSCode-ish). */
 const CHORD_WINDOW_MS = 1500;
+
+/** True while a modal dialog is open anywhere in the document. */
+function isModalOpen(): boolean {
+  return document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') !== null;
+}
 
 function buildContext(event: KeyboardEvent): CommandContext {
   const selection = useBlockSelection.getState();
@@ -72,6 +78,7 @@ export function useAutomationDispatcher(): void {
 
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!isAutomationsEnabled() || isComboRecording()) return;
+      if (keyIsOwnedElsewhere(event, isModalOpen())) return;
       if (MODIFIER_KEYS.has(event.key)) return; // a held modifier auto-repeats — never a step
 
       const combo = normalizeComboFromEvent(event);

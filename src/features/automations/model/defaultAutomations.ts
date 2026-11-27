@@ -35,6 +35,17 @@ export const DEFAULT_AUTOMATIONS: Automation[] = [
   shortcut("new-page", "New page", "mod+alt+n", "newPage", "always"),
   // Ctrl+B is Bold and Ctrl+\ splits a pane, so the sidebar joins the Ctrl+Alt family.
   shortcut("toggle-sidebar", "Show or hide the sidebar", "mod+alt+b", "toggleSidebar", "always"),
+  // VS Code view keys. Ctrl+B waits for "notInText" so Bold keeps it inside a text block.
+  shortcut("toggle-sidebar-ctrl-b", "Show or hide the side bar (Ctrl+B)", "mod+b", "toggleSidebar", "notInText"),
+  shortcut("quick-open", "Go to page (Quick Open)", "mod+p", "openSearch", "always"),
+  shortcut("explorer-panel", "Show or hide Explorer", "mod+shift+e", "toggleExplorerPanel", "always"),
+  shortcut("scm-panel", "Show or hide Source Control", "mod+shift+g", "toggleScmPanel", "always"),
+  shortcut("go-back", "Go back", "alt+arrowleft", "goBack", "always"),
+  shortcut("go-back-alt", "Go back (Ctrl+Alt+-)", "mod+alt+-", "goBack", "always"),
+  shortcut("go-forward", "Go forward", "alt+arrowright", "goForward", "always"),
+  shortcut("focus-editor-group-1", "Focus editor group 1", "mod+1", "focusEditorGroup1", "always"),
+  shortcut("focus-editor-group-2", "Focus editor group 2", "mod+2", "focusEditorGroup2", "always"),
+  shortcut("focus-editor-group-3", "Focus editor group 3", "mod+3", "focusEditorGroup3", "always"),
   shortcut("open-search-panel", "Search panel", "mod+shift+f", "openSearchPanel", "always"),
   shortcut("focus-explorer", "Explorer", "mod+alt+e", "focusExplorer", "always"),
   shortcut("focus-conversations", "Conversations", "mod+alt+m", "focusConversations", "always"),

@@ -27,6 +27,7 @@ import { loadActivePage } from "@/store/pageStore.helpers";
 import { ActivitySidebar } from "@/widgets/activity-rail";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
+import { useNavHistoryRecorder } from "@/widgets/workspace-grid/model/useNavHistory";
 import { useDocumentTitle } from "@/widgets/workspace-grid/model/tabTitle";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
@@ -93,6 +94,7 @@ const App: React.FC = () => {
   // zustand + localStorage are the cache. The graph reads these canonical pages via the
   // bridge (GET /api/graph/pages), so no separate note-mirror sync is needed.
   usePageSync();
+  useNavHistoryRecorder();
   useLayoutPagePrune(); // close tab-bar tabs when their page is archived/deleted
   useDocumentTitle();
   useUnreadSync(); // seed per-channel unread badges (mount + 60s + focus)

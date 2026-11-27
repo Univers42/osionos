@@ -30,7 +30,8 @@ function toggleFullscreen(): void {
 /**
  * View › Appearance: the toggles for the browser and shell regions, each a
  * checkbox row. The side bar is checked only in "panel" mode (the rail mode
- * leaves it collapsed, which `isSidebarOpen` would call open). Full screen
+ * leaves it collapsed, which `isSidebarOpen` would call open). Ctrl+B toggles
+ * it outside text, Ctrl+Alt+B anywhere. Full screen
  * carries no accelerator: F11 is the browser's own key, not an app chord.
  */
 export function appearanceSubmenu(): MenuSubmenu {
@@ -39,7 +40,7 @@ export function appearanceSubmenu(): MenuSubmenu {
       { id: "view.fullscreen", label: "Full screen", run: toggleFullscreen, checked: () => document.fullscreenElement !== null },
       { id: "view.zen", label: "Zen mode", run: toggleZenWithExitHint, checked: () => useZenMode.getState().zen, separatorAfter: true },
       {
-        id: "view.sidebar", label: "Primary side bar", accelerator: "Ctrl+Alt+B",
+        id: "view.sidebar", label: "Primary side bar", accelerator: "Ctrl+B",
         run: () => useUIStore.getState().toggleDocked(),
         checked: () => useUIStore.getState().sidebarMode === "panel",
       },
