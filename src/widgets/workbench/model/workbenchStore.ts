@@ -36,6 +36,7 @@ interface WorkbenchState {
   dockPosition: DockPosition;
   dockWidth: number;
   statusBarVisible: boolean;
+  dockMaximized: boolean;
   toggleDock: () => void;
   openDock: (tab?: DockTab) => void;
   closeDock: () => void;
@@ -44,6 +45,7 @@ interface WorkbenchState {
   setDockPosition: (position: DockPosition) => void;
   setDockWidth: (px: number) => void;
   toggleStatusBar: () => void;
+  toggleDockMaximized: () => void;
 }
 
 type PersistedWorkbench = Pick<
@@ -108,9 +110,10 @@ export const useWorkbenchStore = create<WorkbenchState>()(
       dockPosition: "bottom",
       dockWidth: DOCK_DEFAULT_WIDTH,
       statusBarVisible: true,
-      toggleDock: () => set((s) => ({ dockOpen: !s.dockOpen })),
+      dockMaximized: false,
+      toggleDock: () => set((s) => ({ dockOpen: !s.dockOpen, dockMaximized: s.dockOpen ? false : s.dockMaximized })),
       openDock: (tab) => set((s) => ({ dockOpen: true, dockTab: tab ?? s.dockTab })),
-      closeDock: () => set({ dockOpen: false }),
+      closeDock: () => set({ dockOpen: false, dockMaximized: false }),
       setDockTab: (tab) => set({ dockTab: tab }),
       setDockHeight: (px) => set({ dockHeight: clampDockHeight(px, globalThis.innerHeight) }),
       setDockPosition: (position) => {
@@ -118,6 +121,7 @@ export const useWorkbenchStore = create<WorkbenchState>()(
       },
       setDockWidth: (px) => set({ dockWidth: clampDockWidth(px, globalThis.innerWidth) }),
       toggleStatusBar: () => set((s) => ({ statusBarVisible: !s.statusBarVisible })),
+      toggleDockMaximized: () => set((s) => (s.dockOpen ? { dockMaximized: !s.dockMaximized } : { dockOpen: true, dockMaximized: true })),
     }),
     {
       name: WORKBENCH_STORAGE_KEY,

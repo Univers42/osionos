@@ -15,6 +15,7 @@ import { PanelBottom, PanelLeft } from "lucide-react";
 import { useUIStore } from "@/shared/config/uiStore";
 import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";
 import { cx } from "@osionos/ui/shared/classNames";
+import { CustomizeLayoutMenu } from "./CustomizeLayoutMenu";
 
 const BUTTON = "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--osio-radius-chip)] transition-colors duration-[var(--osio-dur-fast)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]";
 
@@ -39,7 +40,7 @@ const Toggle: React.FC<ToggleProps> = ({ label, pressed, onToggle, children }) =
   </button>
 );
 
-/** Primary side bar and bottom panel toggles, the same actions as Ctrl+Alt+B and View › Appearance. */
+/** Primary side bar and bottom panel toggles plus Customize Layout, the same actions as Ctrl+Alt+B and View › Appearance. */
 export const LayoutToggles: React.FC = () => {
   const sidebarPanel = useUIStore((state) => state.sidebarMode === "panel");
   const toggleDocked = useUIStore((state) => state.toggleDocked);
@@ -49,6 +50,7 @@ export const LayoutToggles: React.FC = () => {
     <>
       <Toggle label="Primary side bar" pressed={sidebarPanel} onToggle={toggleDocked}><PanelLeft size={16} aria-hidden /></Toggle>
       <Toggle label="Panel" pressed={dockOpen} onToggle={toggleDock}><PanelBottom size={16} aria-hidden /></Toggle>
+      <CustomizeLayoutMenu />
     </>
   );
 };
