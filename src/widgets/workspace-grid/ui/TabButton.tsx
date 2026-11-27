@@ -49,7 +49,7 @@ export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onCl
       data-tab-id={tab.tabId}
       data-active={active ? "" : undefined}
       className={[
-        "group/tab relative my-1 flex items-center gap-1.5 h-7 pl-3 pr-1.5 max-w-[200px] shrink-0 cursor-pointer select-none rounded-[var(--osio-radius-chip)]",
+        "group/tab relative my-1 pointer-coarse:my-0 flex items-center gap-1.5 h-7 pointer-coarse:h-[var(--osio-touch-target)] pl-3 pr-1.5 max-w-[200px] shrink-0 cursor-pointer select-none rounded-[var(--osio-radius-chip)]",
         "text-xs transition-[background-color,color] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)]",
         active
           ? "bg-[var(--osio-bg-hover)] text-[var(--osio-fg-default)]"
@@ -64,7 +64,7 @@ export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onCl
       <button
         type="button"
         aria-label={`Close ${title}`}
-        className="shrink-0 rounded-[var(--osio-radius-chip)] p-1 text-[var(--osio-fg-muted)] opacity-0 transition-[opacity,background-color,color] duration-[var(--osio-dur-fast)] group-hover/tab:opacity-100 focus-visible:opacity-100 hover:bg-[var(--osio-bg-muted)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)]"
+        className="shrink-0 rounded-[var(--osio-radius-chip)] p-1 pointer-coarse:grid pointer-coarse:min-h-[var(--osio-touch-target)] pointer-coarse:min-w-[var(--osio-touch-target)] pointer-coarse:place-items-center text-[var(--osio-fg-muted)] opacity-0 pointer-coarse:opacity-100 transition-[opacity,background-color,color] duration-[var(--osio-dur-fast)] group-hover/tab:opacity-100 focus-visible:opacity-100 hover:bg-[var(--osio-bg-muted)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)]"
         onClick={(e) => { e.stopPropagation(); onClose(); }}
         title="Close tab"
       >
