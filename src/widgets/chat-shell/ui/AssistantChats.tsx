@@ -90,7 +90,7 @@ export const AssistantChats: React.FC<Props> = ({ conversations, activeId, onOpe
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-3">
         <SectionTitle
           action={
-            <button type="button" onClick={() => openSettings("ai_agents", "ai-agents")} className="rounded-xs px-1 text-2xs text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-default)]">
+            <button type="button" onClick={() => openSettings("ai_agents", "ai-agents")} className="-my-1 inline-flex min-h-6 items-center rounded-xs px-1 text-2xs text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-default)]">
               Manage
             </button>
           }
