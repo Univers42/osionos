@@ -105,18 +105,15 @@ test.describe("theme editor", () => {
     await expect(page.getByText("Draft restored")).toBeVisible({ timeout: 5_000 });
   });
 
-  test("opening Harbor Night and saving creates Harbor Night (copy)", async ({ page, baseURL }) => {
+  test("customizing Harbor Night creates and opens Harbor Night copy", async ({ page, baseURL }) => {
     await page.goto(SETTINGS_URL(baseURL), { waitUntil: "domcontentloaded" });
-    // select Harbor Night in theme dropdown
-    const select = page.locator("#theme-library-select");
-    await select.selectOption("Harbor Night");
-    await page.getByRole("button", { name: "New theme", exact: true }).first().click();
+    const library = page.locator('[data-settings-anchor="theme-json"]');
+    await library.getByRole("radio", { name: "Harbor Night", exact: true }).click();
+    await library.getByRole("button", { name: "Customize", exact: true }).click();
     await page.locator(".monaco-editor textarea").first().waitFor({ state: "attached", timeout: 150_000 });
-    await page.getByRole("button", { name: "Save" }).first().click();
-    await page.waitForTimeout(1000);
     await page.goto(SETTINGS_URL(baseURL), { waitUntil: "domcontentloaded" });
-    const option = page.locator("#theme-library-select option", { hasText: "Harbor Night (copy)" });
-    await expect(option).toHaveCount(1, { timeout: 10_000 });
+    const copy = page.locator('[data-settings-anchor="theme-json"]').getByRole("radio", { name: "Harbor Night copy", exact: true });
+    await expect(copy).toHaveAttribute("aria-checked", "true", { timeout: 10_000 });
   });
 
   test("?theme=safe shows banner and palette value", async ({ page, baseURL }) => {
