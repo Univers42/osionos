@@ -165,6 +165,51 @@ test.describe("motion preferences", () => {
     });
   });
 
+
+  test("Tab dragging previews an option on hover; leaving or Escape reverts it, a click keeps it", async ({ page, baseURL }) => {
+    await seed(page);
+    await openFreshPage(page, baseURL);
+    await openMotionSettings(page);
+    const group = page.getByRole("group", { name: "Tab dragging" });
+    await group.getByRole("tab", { name: "Line" }).hover();
+    await expect(html(page)).toHaveAttribute("data-drag-motion", "line");
+    expect((await storedAppearance(page))?.dragMotion).not.toBe("line");
+    await page.mouse.move(0, 0);
+    await expect(html(page)).not.toHaveAttribute("data-drag-motion", /.*/);
+
+    await group.getByRole("tab", { name: "Line" }).click();
+    expect((await storedAppearance(page)).dragMotion).toBe("line");
+    await group.getByRole("tab", { name: "Slide" }).hover();
+    await expect(html(page)).not.toHaveAttribute("data-drag-motion", /.*/);
+    await page.keyboard.press("Escape");
+    await expect(html(page)).toHaveAttribute("data-drag-motion", "line");
+  });
+
+  test("the tab dragging sample parts the tabs, then lands Plan at the end", async ({ page, baseURL }) => {
+    await seed(page);
+    await openFreshPage(page, baseURL);
+    await openMotionSettings(page);
+    const sample = page.locator("[data-tab-drag-sample]");
+    await expect(sample.locator("[data-drop-item]")).toHaveText(["Notes", "Plan", "Ideas", "Tasks"]);
+    await page.getByRole("button", { name: "Play the tab dragging sample" }).click();
+    await expect(sample.locator("[data-drag-source]")).toHaveText("Plan");
+    await expect(sample.locator(".osio-tab-slot")).toHaveCount(1);
+    await expect(sample.locator("[data-drop-shift]").first()).toBeAttached();
+    await expect(sample.locator("[data-drop-item]")).toHaveText(["Notes", "Ideas", "Tasks", "Plan"], { timeout: 5000 });
+    await expect(sample.locator(".osio-tab-slot")).toHaveCount(0);
+  });
+
+  test("at 400px wide the Tab dragging row and its sample do not overflow", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 400, height: 800 });
+    await seed(page);
+    await openFreshPage(page, baseURL);
+    await openMotionSettings(page);
+    const row = page.locator('[data-settings-anchor="motion-drag"]');
+    await row.scrollIntoViewIfNeeded();
+    const { scrollWidth, clientWidth } = await row.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  });
+
   test("Easing style and Button press pass axe in both themes", async ({ page, baseURL }) => {
     await seed(page);
     await openFreshPage(page, baseURL);

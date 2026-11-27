@@ -138,3 +138,106 @@
   --osio-overlay-from-opacity: 0;
   --osio-overlay-from-transform: scale(0.88);
 }
+
+/* Tab dragging (data-drag-motion, absent at Slide). TabStrip marks the carried tab
+   data-drag-source, the tabs after the drop point data-drop-shift, and the tab that just
+   landed data-settling; .osio-tab-slot marks where the drop lands. Every move is a transform or
+   an opacity except the source's fold, which is a max-width so its neighbours close up; it is
+   never display:none, so the dragged node keeps the drag alive. data-drop-snap turns all of it
+   off for the two frames where the layout and the slide swap places (drag start, drop). */
+.osio-tab {
+  transition:
+    background-color var(--osio-dur-fast) var(--osio-ease-standard),
+    color var(--osio-dur-fast) var(--osio-ease-standard),
+    transform var(--osio-dur-base) var(--osio-ease-emphasized),
+    max-width var(--osio-dur-base) var(--osio-ease-emphasized),
+    padding var(--osio-dur-base) var(--osio-ease-emphasized),
+    margin var(--osio-dur-base) var(--osio-ease-emphasized),
+    opacity var(--osio-dur-fast) var(--osio-ease-standard);
+}
+
+:root:not([data-drag-motion="line"]) .osio-tab[data-drop-shift] {
+  transform: translateX(var(--osio-drag-gap));
+}
+
+:root:not([data-drag-motion="line"]) .osio-tab[data-drag-source] {
+  max-width: 0;
+  padding-inline: 0;
+  margin-inline: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+:root[data-drag-motion="line"] .osio-tab[data-drag-source] {
+  opacity: 0.5;
+}
+
+@keyframes osio-tab-settle {
+  from {
+    opacity: 0.6;
+    transform: scale(0.92);
+  }
+}
+
+.osio-tab[data-settling] {
+  animation: osio-tab-settle var(--osio-dur-base) var(--osio-ease-spring) backwards;
+}
+
+@keyframes osio-slot-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.osio-tab-slot {
+  position: absolute;
+  inset-block: 4px;
+  left: 0;
+  width: var(--osio-drag-gap);
+  pointer-events: none;
+  border-radius: var(--osio-radius-chip);
+  outline: 1.5px dashed var(--osio-accent);
+  outline-offset: -1.5px;
+  background: var(--osio-accent-subtle);
+  transition: transform var(--osio-dur-base) var(--osio-ease-emphasized);
+  animation: osio-slot-in var(--osio-dur-fast) var(--osio-ease-decelerate) backwards;
+}
+
+:root[data-drag-motion="line"] .osio-tab-slot {
+  width: 2px;
+  margin-left: -1px;
+  outline: none;
+  border-radius: 1px;
+  background: var(--osio-accent);
+}
+
+[data-drop-snap] > .osio-tab,
+[data-drop-snap] > .osio-tab-slot {
+  transition: none;
+}
+
+/* Pane drop area (PaneDropOverlay): one box whose inset glides between the five zones, and
+   that grows in when a drag first enters the pane. A pane made by a drop or a split grows in
+   once too (PaneView, data-pane-enter). */
+@keyframes osio-drop-zone-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.osio-drop-zone {
+  transition: inset var(--osio-dur-base) var(--osio-ease-emphasized);
+  animation: osio-drop-zone-in var(--osio-dur-fast) var(--osio-ease-decelerate) backwards;
+}
+
+@keyframes osio-pane-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+[data-pane-enter] {
+  animation: osio-pane-enter var(--osio-dur-base) var(--osio-ease-decelerate) backwards;
+}

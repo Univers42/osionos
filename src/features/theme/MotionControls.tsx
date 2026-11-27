@@ -1,18 +1,19 @@
 /**
- * Settings > Preferences > Motion: how a page or tab comes in, how menus and dialogs open,
- * how fast every animation runs, its easing curve, and how a button feels when pressed. Each row is a Segmented control written to <html>
- * by the appearance store; the CSS lives in app/styles/motion.css. A Preview replays the
- * chosen page transition on a sample card, and a muted line says when a reduced-motion
- * setting turns all of it off.
+ * Settings > Preferences > Motion: how a page or tab comes in, how tabs move while one is
+ * dragged, how menus and dialogs open, how fast every animation runs, its easing curve, and how
+ * a button feels when pressed. Each row is a Segmented control written to <html> by the
+ * appearance store; the CSS lives in app/styles/motion.css. Preview and Play run the chosen
+ * motion on a sample, and a muted line says when a reduced-motion setting turns all of it off.
  */
 
 import React, { useRef, useSyncExternalStore } from 'react';
 
-import type { Appearance, Easing, MotionSpeed, OverlayTransition, PageTransition, PressFeedback } from '@/shared/config/theme';
+import type { Appearance, DragMotion, Easing, MotionSpeed, OverlayTransition, PageTransition, PressFeedback } from '@/shared/config/theme';
 
 import { APPEARANCE_CHOICES } from '@/shared/config/appearanceChoices';
 import { AxisRow } from './ui/AppearanceRow';
 import { Segmented } from './ui/Segmented';
+import { TabDragPreview } from './ui/TabDragPreview';
 import { replayPageTransition } from './model/replayPageTransition';
 
 const REDUCED_QUERY = '(prefers-reduced-motion: reduce)';
@@ -51,7 +52,7 @@ const PagePreview: React.FC = () => {
   );
 };
 
-/** The five motion rows, a preview of the page transition, and a note when reduced motion is on. */
+/** The motion rows, a preview of the page transition, and a note when reduced motion is on. */
 export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch: Partial<Appearance>) => void }> = ({ appearance, onChange }) => {
   const reduced = useMotionReduced(appearance.motion);
   return (
@@ -71,9 +72,30 @@ export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch
             label="Page and tab transition"
             value={appearance.pageTransition}
             options={APPEARANCE_CHOICES.pageTransition.options}
+            previewAxis="pageTransition"
             onChange={(pageTransition) => onChange({ pageTransition })}
           />
           <PagePreview />
+        </div>
+      </AxisRow>
+      <AxisRow
+        anchor="motion-drag"
+        title="Tab dragging"
+        description="How tabs move when you drag one along a tab bar."
+        appearance={appearance}
+        axes={['dragMotion']}
+        onChange={onChange}
+        stack
+      >
+        <div className="space-y-3">
+          <Segmented<DragMotion>
+            label="Tab dragging"
+            value={appearance.dragMotion}
+            options={APPEARANCE_CHOICES.dragMotion.options}
+            previewAxis="dragMotion"
+            onChange={(dragMotion) => onChange({ dragMotion })}
+          />
+          <TabDragPreview />
         </div>
       </AxisRow>
       <AxisRow anchor="motion-overlay" title="Menus and dialogs" description="How popovers, menus and dialogs open." appearance={appearance} axes={['overlayTransition']} onChange={onChange}>
@@ -81,6 +103,7 @@ export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch
           label="Menus and dialogs"
           value={appearance.overlayTransition}
           options={APPEARANCE_CHOICES.overlayTransition.options}
+          previewAxis="overlayTransition"
           onChange={(overlayTransition) => onChange({ overlayTransition })}
         />
       </AxisRow>
@@ -89,6 +112,7 @@ export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch
           label="Animation speed"
           value={appearance.motionSpeed}
           options={APPEARANCE_CHOICES.motionSpeed.options}
+          previewAxis="motionSpeed"
           onChange={(motionSpeed) => onChange({ motionSpeed })}
         />
       </AxisRow>
@@ -97,6 +121,7 @@ export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch
           label="Easing style"
           value={appearance.easing}
           options={APPEARANCE_CHOICES.easing.options}
+          previewAxis="easing"
           onChange={(easing) => onChange({ easing })}
         />
       </AxisRow>
@@ -105,6 +130,7 @@ export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch
           label="Button press"
           value={appearance.pressFeedback}
           options={APPEARANCE_CHOICES.pressFeedback.options}
+          previewAxis="pressFeedback"
           onChange={(pressFeedback) => onChange({ pressFeedback })}
         />
       </AxisRow>

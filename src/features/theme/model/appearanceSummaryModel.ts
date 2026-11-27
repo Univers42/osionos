@@ -29,6 +29,7 @@ export function sectionFor(axis: string): string {
     case 'motionSpeed':
     case 'easing':
     case 'pressFeedback':
+    case 'dragMotion':
       return 'motion';
     case 'linkUnderline':
     case 'motion':
@@ -54,6 +55,8 @@ export function rowAnchorFor(axis: string): string | null {
       return 'motion-easing';
     case 'pressFeedback':
       return 'motion-press';
+    case 'dragMotion':
+      return 'motion-drag';
     default:
       return null;
   }

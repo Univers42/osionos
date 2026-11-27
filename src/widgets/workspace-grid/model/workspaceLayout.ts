@@ -21,6 +21,7 @@ import { emptyLayout, freshLayout, layoutScope, loadLayout, saveLayout } from ".
 import { activePageToTab } from "./pageToTab";
 import { mirrorActiveTab } from "./layoutSync";
 import { normalizePaneZoom, stepPaneZoom, withPaneZoom, type PaneZoomChange } from "./paneZoom";
+import { markFreshPane } from "./freshPanes";
 
 interface LayoutState {
   root: LayoutNode;
@@ -253,6 +254,7 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
     splitWith: (paneId, direction, tab, side) => {
       const newPane: PaneNode = { type: "pane", id: genId("pane"), tabs: [tab], activeTabId: tab.tabId };
       const root = splitPane(get().root, paneId, direction, newPane, side);
+      markFreshPane(newPane.id);
       commit(root, newPane.id, tab);
     },
 
@@ -267,6 +269,7 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
         return { ...p, tabs, activeTabId: p.activeTabId === tabId ? (tabs[0]?.tabId ?? null) : p.activeTabId };
       });
       if (findPane(root, fromPaneId)?.tabs.length === 0) root = removePane(root, fromPaneId) ?? root;
+      markFreshPane(newPane.id);
       commit(root, newPane.id, moved);
     },
 

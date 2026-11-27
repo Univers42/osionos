@@ -25,12 +25,19 @@ interface Props {
   onClose: () => void;
   /** Highlighted as the drop target that will be REPLACED by a dragged file. */
   replaceTarget?: boolean;
+  /** The tab being carried: folded away (Slide) or dimmed (Line) until the drop. */
+  dragSource?: boolean;
+  /** Sits after the drop gap: slid aside by the gap's width. */
+  dropShift?: boolean;
+  /** Just landed: plays the settle-in once, then `onSettled`. */
+  settling?: boolean;
+  onSettled?: () => void;
 }
 
 /** One onglet: draggable between panes, click to focus, × to close. The Home tab
  *  is a normal tab now — its variant picker (Dashboard / Second Brain / Database /
  *  Gallery) moved to the activity rail's Home button (RailHomeButton). */
-export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onClose, replaceTarget }) => {
+export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onClose, replaceTarget, dragSource, dropShift, settling, onSettled }) => {
   const beginTabDrag = useDragSession((s) => s.beginTabDrag);
   const endDrag = useDragSession((s) => s.endDrag);
   const title = tab.title || (tab.kind === "home" ? "Home" : "Untitled");
@@ -41,16 +48,20 @@ export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onCl
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData(TAB_DND_MIME, JSON.stringify({ paneId, tabId: tab.tabId, tab }));
-        beginTabDrag();
+        beginTabDrag(tab.tabId, e.currentTarget.offsetWidth);
       }}
       onDragEnd={endDrag}
+      onAnimationEnd={settling ? (e) => { if (e.target === e.currentTarget) onSettled?.(); } : undefined}
       onClick={onSelect}
       title={title}
       data-tab-id={tab.tabId}
       data-active={active ? "" : undefined}
+      data-drop-item
+      data-drag-source={dragSource ? "" : undefined}
+      data-drop-shift={dropShift ? "" : undefined}
+      data-settling={settling ? "" : undefined}
       className={[
-        "group/tab relative my-1 pointer-coarse:my-0 flex items-center gap-1.5 h-7 pointer-coarse:h-[var(--osio-touch-target)] pl-3 pr-1.5 max-w-[200px] shrink-0 cursor-pointer select-none rounded-[var(--osio-radius-chip)]",
-        "text-xs transition-[background-color,color] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)]",
+        "osio-tab group/tab relative my-1 pointer-coarse:my-0 flex items-center gap-1.5 h-7 pointer-coarse:h-[var(--osio-touch-target)] pl-3 pr-1.5 max-w-[200px] shrink-0 cursor-pointer select-none rounded-[var(--osio-radius-chip)] text-xs",
         active
           ? "bg-[var(--osio-bg-hover)] text-[var(--osio-fg-default)]"
           : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]",

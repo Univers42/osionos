@@ -115,6 +115,7 @@ export function inlineSettings(): InlineSetting[] {
     axisSetting("motionSpeed", ["animation", "duration"]),
     axisSetting("easing", ["animation", "curve", "bounce", "spring"]),
     axisSetting("pressFeedback", ["animation", "click", "squish", "tap"]),
+    axisSetting("dragMotion", ["animation", "drag", "tab", "reorder"]),
     axisSetting("animatedImages", ["gif", "accessibility"]),
     axisSetting("hovercards", ["preview", "hover"]),
     axisSetting("urlPaste", ["url", "paste"]),

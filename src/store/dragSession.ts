@@ -38,8 +38,13 @@ interface DragSessionState {
   dropMode: DropMode | null;
   /** Monotonic signal: bump to collapse every expanded folder in the tree. */
   collapseToken: number;
+  /** The pane tab being dragged, set a frame after the drag starts so the browser
+   *  has already taken its drag image when the strip folds the tab away. */
+  dragTabId: string | null;
+  /** That tab's width at drag start: the gap a strip opens for it. 0 when unknown. */
+  dragTabWidth: number;
   beginDrag: (id: string) => void;
-  beginTabDrag: () => void;
+  beginTabDrag: (tabId?: string, width?: number) => void;
   endDrag: () => void;
   setDropTarget: (id: string | null, mode: DropMode | null) => void;
   bumpCollapse: () => void;
@@ -72,21 +77,33 @@ function armDragEndSafety(endDrag: () => void): void {
   globalThis.addEventListener("dragend", finish, true);
 }
 
+// Bumped per tab drag, so a frame callback left over from a drag that already ended
+// cannot mark a tab of the next one.
+let tabDragSerial = 0;
+
 export const useDragSession = create<DragSessionState>((set, get) => ({
   draggingId: null,
   dragKind: null,
   dropTargetId: null,
   dropMode: null,
   collapseToken: 0,
+  dragTabId: null,
+  dragTabWidth: 0,
   beginDrag: (id) => {
     armDragEndSafety(() => get().endDrag());
     set({ draggingId: id, dragKind: "page", dropTargetId: null, dropMode: null });
   },
-  beginTabDrag: () => {
+  beginTabDrag: (tabId, width = 0) => {
     armDragEndSafety(() => get().endDrag());
-    set({ dragKind: "tab", dropTargetId: null, dropMode: null });
+    set({ dragKind: "tab", dropTargetId: null, dropMode: null, dragTabId: null, dragTabWidth: width });
+    if (tabId === undefined) return;
+    const serial = ++tabDragSerial;
+    const nextFrame = globalThis.requestAnimationFrame ?? ((run: () => void) => setTimeout(run, 16));
+    nextFrame(() => {
+      if (serial === tabDragSerial && get().dragKind === "tab") set({ dragTabId: tabId });
+    });
   },
-  endDrag: () => set({ draggingId: null, dragKind: null, dropTargetId: null, dropMode: null }),
+  endDrag: () => set({ draggingId: null, dragKind: null, dropTargetId: null, dropMode: null, dragTabId: null, dragTabWidth: 0 }),
   setDropTarget: (dropTargetId, dropMode) => set({ dropTargetId, dropMode }),
   bumpCollapse: () => set((state) => ({ collapseToken: state.collapseToken + 1 })),
 }));

@@ -23,6 +23,9 @@ import { caretBox, needsDrawnCaret } from "@/features/theme/model/drawnCaret";
 import {
   DEFAULT_APPEARANCE,
   applyAppearance,
+  previewAppearance,
+  readCurrentAppearance,
+  subscribeAppearance,
   parseAppearance,
   updateAppearance,
 } from "../../src/shared/config/theme.ts";
@@ -172,4 +175,36 @@ test("only a shape or a steady caret is drawn, and each shape sits on the caret'
   assert.deepEqual(caretBox(line, "thick", 8), { x: 98.5, y: 40, width: 3, height: 20 });
   assert.deepEqual(caretBox(line, "block", 8), { x: 100, y: 40, width: 8, height: 20 });
   assert.deepEqual(caretBox(line, "underscore", 8), { x: 100, y: 58, width: 8, height: 2 });
+});
+
+test("previewAppearance never lifts reduced motion or still images, even when asked to (D6)", () => {
+  withRoot((root) => {
+    applyAppearance({ ...DEFAULT_APPEARANCE, motion: "reduce", animatedImages: "still" });
+    previewAppearance({ motion: "full", animatedImages: "play", pageTransition: "slide" });
+    assert.equal(root.dataset.motion, "reduce");
+    assert.equal(root.dataset.animatedImages, "still");
+    assert.equal(root.dataset.pageTransition, "slide");
+    previewAppearance(null);
+  });
+});
+
+test("previewAppearance shows a choice on <html> without storing or announcing it, and null puts the live one back", () => {
+  withRoot((root) => {
+    applyAppearance({ ...DEFAULT_APPEARANCE, overlayTransition: "fade" });
+    let notified = 0;
+    const unsubscribe = subscribeAppearance(() => { notified += 1; });
+    try {
+      previewAppearance({ dragMotion: "line", overlayTransition: "zoom" });
+      assert.equal(root.dataset.dragMotion, "line");
+      assert.equal(root.dataset.overlayTransition, "zoom");
+      assert.equal(readCurrentAppearance().dragMotion, "slide");
+      assert.equal(readCurrentAppearance().overlayTransition, "fade");
+      previewAppearance(null);
+      assert.equal(root.dataset.dragMotion, undefined);
+      assert.equal(root.dataset.overlayTransition, "fade");
+      assert.equal(notified, 0);
+    } finally {
+      unsubscribe();
+    }
+  });
 });

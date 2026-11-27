@@ -56,7 +56,7 @@
 						surface: ['frosted', 'glass'], elevation: ['flat', 'deep'], borders: ['none', 'strong'],
 						pageTransition: ['fade', 'blur', 'slide', 'scale'], overlayTransition: ['none', 'fade', 'blur', 'zoom'],
 						motionSpeed: ['slow', 'fast'], easing: ['snappy', 'smooth', 'bouncy'],
-						pressFeedback: ['none', 'squish'] };
+						pressFeedback: ['none', 'squish'], dragMotion: ['line'] };
 					for (var k in axes) if (axes[k].indexOf(a[k]) > -1) ds[k] = a[k];
 					if (typeof a.accent === 'string' && /^[a-z]+$/.test(a.accent) && a.accent !== 'cobalt') ds.accent = a.accent;
 					var h = typeof a.hue === 'number' ? Math.round(a.hue) : -1;

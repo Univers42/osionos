@@ -10,7 +10,7 @@ import { expect, test } from "@playwright/test";
 import { openFreshPage } from "../../browser/core/app.mjs";
 
 const WCAG_AA = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
-const ANCHORS = ["appearance", "style", "color", "layout", "motion-page", "motion-overlay", "motion-speed", "accessibility", "appearance-backup", "input-options", "language-time", "desktop-app", "privacy"];
+const ANCHORS = ["appearance", "style", "color", "layout", "motion-page", "motion-overlay", "motion-speed", "motion-drag", "accessibility", "appearance-backup", "input-options", "language-time", "desktop-app", "privacy"];
 const html = (page) => page.locator("html");
 const storedAppearance = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("osionos:appearance") ?? "null"));
 const region = (page) => page.getByRole("region", { name: "Settings", exact: true });

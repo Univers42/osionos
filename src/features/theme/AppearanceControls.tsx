@@ -107,6 +107,7 @@ export const LayoutSettings: React.FC<{ appearance: Appearance; onChange: Change
         label="Corners"
         value={appearance.radius}
         options={APPEARANCE_CHOICES.radius.options}
+        previewAxis="radius"
         onChange={(radius) => onChange({ radius })}
       />
     </AxisRow>

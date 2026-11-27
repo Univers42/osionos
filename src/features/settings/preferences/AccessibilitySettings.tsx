@@ -39,6 +39,7 @@ export const AccessibilitySettings: React.FC = () => {
           label="Link underlines"
           value={appearance.linkUnderline}
           options={APPEARANCE_CHOICES.linkUnderline.options}
+          previewAxis="linkUnderline"
           onChange={(linkUnderline) => change({ linkUnderline })}
         />
       </AxisRow>

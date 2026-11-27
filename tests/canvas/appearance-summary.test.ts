@@ -2,6 +2,7 @@
 // section, labels read like the rows, and the jump scrolls instantly under reduced motion.
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { DEFAULT_APPEARANCE } from "../../src/shared/config/theme.ts";
@@ -36,6 +37,16 @@ test("known axes land in the section that renders them", () => {
 test("motion axes with a row anchor use it, the rest do not", () => {
   assert.equal(rowAnchorFor("motionSpeed"), "motion-speed");
   assert.equal(rowAnchorFor("radius"), null);
+});
+
+test("every motion axis jumps to the Motion row that renders it", () => {
+  const controls = readFileSync("src/features/theme/MotionControls.tsx", "utf8");
+  const motionAxes = Object.keys(DEFAULT_APPEARANCE).filter((axis) => sectionFor(axis) === "motion");
+  assert.ok(motionAxes.includes("dragMotion"));
+  for (const axis of motionAxes) {
+    const anchor = rowAnchorFor(axis);
+    assert.ok(anchor && controls.includes(`anchor="${anchor}"`), `${axis} -> ${anchor}`);
+  }
 });
 
 test("labels follow the rows, with a readable fallback", () => {

@@ -75,6 +75,9 @@ export type Easing = (typeof EASINGS)[number];
 /** What a button does while it is pressed. */
 export const PRESS_FEEDBACKS = ["default", "none", "squish"] as const;
 export type PressFeedback = (typeof PRESS_FEEDBACKS)[number];
+/** How a dragged tab moves through a tab strip: the tabs part to open a gap, or a thin line marks the spot. */
+export const DRAG_MOTIONS = ["slide", "line"] as const;
+export type DragMotion = (typeof DRAG_MOTIONS)[number];
 
 export interface Appearance {
   /** a preset id, or "custom" to use `hue`. */
@@ -100,6 +103,7 @@ export interface Appearance {
   motionSpeed: MotionSpeed;
   easing: Easing;
   pressFeedback: PressFeedback;
+  dragMotion: DragMotion;
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -124,6 +128,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   motionSpeed: "default",
   easing: "standard",
   pressFeedback: "default",
+  dragMotion: "slide",
 };
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
@@ -167,5 +172,6 @@ export function parseAppearance(raw: string | null): Appearance {
     motionSpeed: oneOf(stored.motionSpeed, MOTION_SPEEDS, DEFAULT_APPEARANCE.motionSpeed),
     easing: oneOf(stored.easing, EASINGS, DEFAULT_APPEARANCE.easing),
     pressFeedback: oneOf(stored.pressFeedback, PRESS_FEEDBACKS, DEFAULT_APPEARANCE.pressFeedback),
+    dragMotion: oneOf(stored.dragMotion, DRAG_MOTIONS, DEFAULT_APPEARANCE.dragMotion),
   };
 }
