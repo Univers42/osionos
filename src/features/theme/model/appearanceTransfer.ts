@@ -5,15 +5,17 @@
  */
 
 import { DEFAULT_APPEARANCE, PALETTES, parseAppearance, type Appearance, type ThemeMode } from '../../../shared/config/theme';
+import { parseThemeDoc, type ThemeDoc } from '../../../shared/config/themeDoc';
+import { isShippedThemeName } from '../../../shared/config/themes';
 
 export const APPEARANCE_KIND = 'osionos-appearance';
 export const APPEARANCE_VERSION = 1;
-export const MAX_IMPORT_CHARS = 20_000;
+export const MAX_IMPORT_CHARS = 150_000;
 
 const MODES: readonly ThemeMode[] = ['light', 'dark', 'system'];
 
 export type ImportResult =
-  | { ok: true; appearance: Appearance; palette?: string; mode?: ThemeMode; count: number }
+  | { ok: true; appearance: Appearance; palette?: string; mode?: ThemeMode; theme?: ThemeDoc; themeName?: string; warnings: string[]; count: number }
   | { ok: false; error: string };
 
 const axisNames = (): (keyof Appearance)[] => Object.keys(DEFAULT_APPEARANCE) as (keyof Appearance)[];
@@ -39,10 +41,12 @@ export function defaultsFor(keys: readonly (keyof Appearance)[]): Partial<Appear
   return patch as Partial<Appearance>;
 }
 
-/** The appearance, the colour theme and the mode as pretty JSON; defaults are left out of `appearance`. */
-export function exportAppearance(input: { appearance: Appearance; palette: string; mode: ThemeMode }): string {
+/** The appearance, the colour theme and the mode as pretty JSON; defaults are left out of `appearance`. An own `theme` travels whole, a shipped one by `themeName`. */
+export function exportAppearance(input: { appearance: Appearance; palette: string; mode: ThemeMode; theme?: ThemeDoc | null }): string {
+  const theme = input.theme ?? null;
+  const themeKeys = theme ? (isShippedThemeName(theme.name) ? { themeName: theme.name } : { theme }) : {};
   return JSON.stringify(
-    { kind: APPEARANCE_KIND, version: APPEARANCE_VERSION, appearance: diffFromDefault(input.appearance), palette: input.palette, mode: input.mode },
+    { kind: APPEARANCE_KIND, version: APPEARANCE_VERSION, appearance: diffFromDefault(input.appearance), palette: input.palette, mode: input.mode, ...themeKeys },
     null,
     2,
   );
@@ -58,6 +62,22 @@ function parseJson(text: string): unknown {
   }
 }
 
+type ThemePart = { theme?: ThemeDoc; themeName?: string; warnings: string[] };
+
+/** The theme an export carries: a valid own doc, or a shipped name; anything else is dropped, with a warning when a doc was present but invalid. */
+function readTheme(doc: Record<string, unknown>): ThemePart {
+  const warnings: string[] = [];
+  let theme: ThemeDoc | undefined;
+  if (doc.theme !== undefined) {
+    const parsed = parseThemeDoc(doc.theme);
+    const error = parsed.issues.find((issue) => issue.severity === 'error');
+    if (parsed.doc && !error) theme = parsed.doc;
+    else warnings.push(`The theme in this file was skipped: ${error ? `${error.path.join('.') || 'theme'}: ${error.message}` : 'not a theme'}`);
+  }
+  const themeName = typeof doc.themeName === 'string' && isShippedThemeName(doc.themeName) ? doc.themeName : undefined;
+  return { theme, themeName: theme ? undefined : themeName, warnings };
+}
+
 /** Validates exported text. Unknown palette ids and modes are dropped, junk axis values fall back to their default; `count` is the number of axes that end up off default. */
 export function importAppearance(text: string): ImportResult {
   if (text.length > MAX_IMPORT_CHARS) return { ok: false, error: `That is too long: the limit is ${MAX_IMPORT_CHARS} characters.` };
@@ -69,5 +89,5 @@ export function importAppearance(text: string): ImportResult {
   const appearance = parseAppearance(JSON.stringify({ ...DEFAULT_APPEARANCE, ...axes }));
   const palette = PALETTES.find((candidate) => candidate.id === doc.palette)?.id;
   const mode = MODES.find((candidate) => candidate === doc.mode);
-  return { ok: true, appearance, palette, mode, count: Object.keys(diffFromDefault(appearance)).length };
+  return { ok: true, appearance, palette, mode, ...readTheme(doc), count: Object.keys(diffFromDefault(appearance)).length };
 }

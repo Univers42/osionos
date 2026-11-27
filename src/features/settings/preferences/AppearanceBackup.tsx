@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 
 import { Button, Input, Textarea } from '@/shared/ui';
+import { downloadText } from '@/shared/lib/download/downloadText';
 import { DEFAULT_APPEARANCE, DEFAULT_PALETTE, updateAppearance } from '@/shared/config/theme';
 import { useAppearance } from '@/features/theme/AppearanceControls';
 import {
@@ -9,21 +10,33 @@ import {
   importAppearance,
   MAX_IMPORT_CHARS,
 } from '@/features/theme/model/appearanceTransfer';
+import { uniqueThemeName } from '@/features/theme/model/themeNaming';
+import { resolveTheme, useThemeLibrary } from '@/features/theme/model/useThemeLibrary';
+import type { ThemeDoc } from '@/shared/config/themeDoc';
 import type { ThemeSelection } from '@/features/theme/model/useThemeSelection';
 import { ConfirmModal } from '../ui/ConfirmModals';
 import { Section, SettingRow } from '../ui/settingsKit';
 
-const plural = (count: number) => `${count} setting${count === 1 ? '' : 's'}`;
+const sameDoc = (first: ThemeDoc, second: ThemeDoc) => JSON.stringify(first, Object.keys(first).sort()) === JSON.stringify(second, Object.keys(second).sort());
 
-/** Offers `text` as a file download through a short-lived object URL. */
-function downloadText(name: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
+/**
+ * Makes an imported theme the active one: an own theme with the same content is reused, else
+ * the doc is saved under a free name. Returns a warning when the library refused it.
+ */
+function adoptTheme(theme: ThemeDoc): string {
+  const { themes, saveTheme, setActiveTheme } = useThemeLibrary.getState();
+  const existing = Object.values(themes).find((own) => sameDoc(own, theme));
+  if (existing) {
+    setActiveTheme(existing.name);
+    return '';
+  }
+  const name = uniqueThemeName(theme.name, Object.values(themes).map((own) => own.name));
+  const saved = saveTheme({ ...theme, name });
+  if (saved.ok) setActiveTheme(name);
+  return saved.ok ? '' : `The theme in this file was not saved: ${saved.message}`;
 }
+
+const plural = (count: number) => `${count} setting${count === 1 ? '' : 's'}`;
 
 /**
  * "Your appearance": how many settings differ from the default, copy / download the whole
@@ -39,7 +52,8 @@ export const AppearanceBackup: React.FC<{ theme: ThemeSelection }> = ({ theme })
 
   const differing =
     Object.keys(diffFromDefault(appearance)).length + (theme.palette === DEFAULT_PALETTE ? 0 : 1) + (theme.mode === 'system' ? 0 : 1);
-  const exported = () => exportAppearance({ appearance, palette: theme.palette, mode: theme.mode });
+  const activeTheme = useThemeLibrary((state) => state.activeTheme);
+  const exported = () => exportAppearance({ appearance, palette: theme.palette, mode: theme.mode, theme: resolveTheme(activeTheme) });
   const report = (ok: string, bad = '') => {
     setMessage(ok);
     setError(bad);
@@ -57,8 +71,11 @@ export const AppearanceBackup: React.FC<{ theme: ThemeSelection }> = ({ theme })
     updateAppearance(result.appearance);
     if (result.palette) theme.selectPalette(result.palette);
     if (result.mode) theme.selectMode(result.mode);
+    const warnings = [...result.warnings];
+    if (result.theme) warnings.push(adoptTheme(result.theme));
+    else if (result.themeName) useThemeLibrary.getState().setActiveTheme(result.themeName);
     setText('');
-    report(`Imported ${plural(result.count)}`);
+    report(`Imported ${plural(result.count)}`, warnings.filter(Boolean).join(' '));
   };
 
   const applyFile = async (file: File | undefined) => {
