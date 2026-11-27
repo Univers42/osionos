@@ -10,6 +10,7 @@ import React, { useId } from 'react';
 import { STYLE_PRESETS, activeStyleId, type StyleId } from '@/shared/config/stylePresets';
 import type { Appearance, Borders, Elevation, Surface } from '@/shared/config/theme';
 
+import { APPEARANCE_CHOICES } from '@/shared/config/appearanceChoices';
 import { AppearanceRow, AxisRow } from './ui/AppearanceRow';
 import { Segmented } from './ui/Segmented';
 
@@ -96,11 +97,7 @@ export const StyleControls: React.FC<{ appearance: Appearance; onChange: (patch:
         <Segmented<Surface>
           label="Surface"
           value={appearance.surface}
-          options={[
-            { value: 'solid', label: 'Solid' },
-            { value: 'frosted', label: 'Frosted' },
-            { value: 'glass', label: 'Glass' },
-          ]}
+          options={APPEARANCE_CHOICES.surface.options}
           onChange={(surface) => onChange({ surface })}
         />
       </AxisRow>
@@ -108,11 +105,7 @@ export const StyleControls: React.FC<{ appearance: Appearance; onChange: (patch:
         <Segmented<Elevation>
           label="Depth"
           value={appearance.elevation}
-          options={[
-            { value: 'flat', label: 'Flat' },
-            { value: 'default', label: 'Default' },
-            { value: 'deep', label: 'Deep' },
-          ]}
+          options={APPEARANCE_CHOICES.elevation.options}
           onChange={(elevation) => onChange({ elevation })}
         />
       </AxisRow>
@@ -120,11 +113,7 @@ export const StyleControls: React.FC<{ appearance: Appearance; onChange: (patch:
         <Segmented<Borders>
           label="Borders"
           value={appearance.borders}
-          options={[
-            { value: 'none', label: 'None' },
-            { value: 'default', label: 'Default' },
-            { value: 'strong', label: 'Strong' },
-          ]}
+          options={APPEARANCE_CHOICES.borders.options}
           onChange={(borders) => onChange({ borders })}
         />
       </AxisRow>

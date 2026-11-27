@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { Appearance } from "@/shared/config/theme";
+import { APPEARANCE_CHOICES } from "@/shared/config/appearanceChoices";
 import {
   readCurrentAppearance,
   subscribeAppearance,
@@ -26,11 +27,11 @@ export interface UserStoreState {
 type StoreLike<S> = { getState(): S; subscribe(listener: (state: S, previous: S) => void): () => void };
 
 const ACCESSIBILITY_FIELDS: readonly FieldSpec[] = [
-  { key: "linkUnderline", display: "segmented", label: "Link underlines", options: [{ value: "default", label: "Default" }, { value: "always", label: "Always" }] },
-  { key: "motion", display: "segmented", label: "Motion", options: [{ value: "system", label: "System" }, { value: "reduce", label: "Reduce" }, { value: "full", label: "Full" }] },
-  { key: "animatedImages", display: "segmented", label: "Animated images", options: [{ value: "play", label: "Play" }, { value: "system", label: "System" }, { value: "still", label: "Still" }] },
-  { key: "hovercards", display: "switch", label: "Hovercards" },
-  { key: "urlPaste", display: "segmented", label: "Paste a link", options: [{ value: "link", label: "Link" }, { value: "plain", label: "Plain" }] },
+  { key: "linkUnderline", display: "segmented", ...APPEARANCE_CHOICES.linkUnderline },
+  { key: "motion", display: "segmented", ...APPEARANCE_CHOICES.motion },
+  { key: "animatedImages", display: "segmented", ...APPEARANCE_CHOICES.animatedImages },
+  { key: "hovercards", display: "switch", label: APPEARANCE_CHOICES.hovercards.label },
+  { key: "urlPaste", display: "segmented", ...APPEARANCE_CHOICES.urlPaste },
 ];
 
 function resolveAppearanceStore(deps: {

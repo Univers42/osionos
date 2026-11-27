@@ -20,6 +20,7 @@ import React from 'react';
 
 import { Toggle } from '@/shared/ui';
 import { useAppearance } from '@/features/theme/AppearanceControls';
+import { APPEARANCE_CHOICES } from '@/shared/config/appearanceChoices';
 import { AxisRow } from '@/features/theme/ui/AppearanceRow';
 import { Segmented } from '@/features/theme/ui/Segmented';
 import { Section } from '../ui/settingsKit';
@@ -37,7 +38,7 @@ export const AccessibilitySettings: React.FC = () => {
         <Segmented
           label="Link underlines"
           value={appearance.linkUnderline}
-          options={[{ value: 'default', label: 'Default' }, { value: 'always', label: 'Always' }]}
+          options={APPEARANCE_CHOICES.linkUnderline.options}
           onChange={(linkUnderline) => change({ linkUnderline })}
         />
       </AxisRow>
@@ -45,7 +46,7 @@ export const AccessibilitySettings: React.FC = () => {
         <Segmented
           label="Motion"
           value={appearance.motion}
-          options={[{ value: 'system', label: 'System' }, { value: 'reduce', label: 'Reduce' }, { value: 'full', label: 'Full' }]}
+          options={APPEARANCE_CHOICES.motion.options}
           onChange={(motion) => change({ motion })}
         />
       </AxisRow>
@@ -53,7 +54,7 @@ export const AccessibilitySettings: React.FC = () => {
         <Segmented
           label="Animated images"
           value={appearance.animatedImages}
-          options={[{ value: 'play', label: 'Play' }, { value: 'system', label: 'System' }, { value: 'still', label: 'Still' }]}
+          options={APPEARANCE_CHOICES.animatedImages.options}
           onChange={(animatedImages) => change({ animatedImages })}
         />
       </AxisRow>
@@ -64,7 +65,7 @@ export const AccessibilitySettings: React.FC = () => {
         <Segmented
           label="Paste a link"
           value={appearance.urlPaste}
-          options={[{ value: 'link', label: 'Link' }, { value: 'plain', label: 'Plain' }]}
+          options={APPEARANCE_CHOICES.urlPaste.options}
           onChange={(urlPaste) => change({ urlPaste })}
         />
       </AxisRow>

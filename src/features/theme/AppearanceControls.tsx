@@ -19,6 +19,7 @@ import {
   type UiScale,
 } from '@/shared/config/theme';
 
+import { APPEARANCE_CHOICES } from '@/shared/config/appearanceChoices';
 import { AxisRow } from './ui/AppearanceRow';
 import { CaretSettings } from './ui/CaretSettings';
 import { Segmented } from './ui/Segmented';
@@ -97,10 +98,7 @@ export const LayoutSettings: React.FC<{ appearance: Appearance; onChange: Change
       <Segmented<Density>
         label="Density"
         value={appearance.density}
-        options={[
-          { value: 'comfortable', label: 'Comfortable' },
-          { value: 'compact', label: 'Compact' },
-        ]}
+        options={APPEARANCE_CHOICES.density.options}
         onChange={(density) => onChange({ density })}
       />
     </AxisRow>
@@ -108,11 +106,7 @@ export const LayoutSettings: React.FC<{ appearance: Appearance; onChange: Change
       <Segmented<Roundness>
         label="Corners"
         value={appearance.radius}
-        options={[
-          { value: 'sharp', label: 'Sharp' },
-          { value: 'default', label: 'Default' },
-          { value: 'round', label: 'Round' },
-        ]}
+        options={APPEARANCE_CHOICES.radius.options}
         onChange={(radius) => onChange({ radius })}
       />
     </AxisRow>
@@ -120,11 +114,7 @@ export const LayoutSettings: React.FC<{ appearance: Appearance; onChange: Change
       <Segmented<UiScale>
         label="Text size"
         value={appearance.uiScale}
-        options={[
-          { value: 'small', label: 'Small' },
-          { value: 'default', label: 'Default' },
-          { value: 'large', label: 'Large' },
-        ]}
+        options={APPEARANCE_CHOICES.uiScale.options}
         onChange={(uiScale) => onChange({ uiScale })}
       />
     </AxisRow>

@@ -10,6 +10,7 @@ import React, { useRef, useSyncExternalStore } from 'react';
 
 import type { Appearance, MotionSpeed, OverlayTransition, PageTransition } from '@/shared/config/theme';
 
+import { APPEARANCE_CHOICES } from '@/shared/config/appearanceChoices';
 import { AxisRow } from './ui/AppearanceRow';
 import { Segmented } from './ui/Segmented';
 import { replayPageTransition } from './model/replayPageTransition';
@@ -29,28 +30,6 @@ function useMotionReduced(motion: Appearance['motion']): boolean {
   const system = useSyncExternalStore(subscribeReduced, systemPrefersReduced, () => false);
   return motion === 'reduce' || (system && motion !== 'full');
 }
-
-const PAGE_OPTIONS: { value: PageTransition; label: string }[] = [
-  { value: 'none', label: 'None' },
-  { value: 'fade', label: 'Fade' },
-  { value: 'blur', label: 'Blur' },
-  { value: 'slide', label: 'Slide' },
-  { value: 'scale', label: 'Scale' },
-];
-
-const OVERLAY_OPTIONS: { value: OverlayTransition; label: string }[] = [
-  { value: 'default', label: 'Default' },
-  { value: 'none', label: 'None' },
-  { value: 'fade', label: 'Fade' },
-  { value: 'blur', label: 'Blur' },
-  { value: 'zoom', label: 'Zoom' },
-];
-
-const SPEED_OPTIONS: { value: MotionSpeed; label: string }[] = [
-  { value: 'slow', label: 'Slow' },
-  { value: 'default', label: 'Default' },
-  { value: 'fast', label: 'Fast' },
-];
 
 /** A small card that wears the chosen page transition; Preview replays it. */
 const PagePreview: React.FC = () => {
@@ -91,7 +70,7 @@ export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch
           <Segmented<PageTransition>
             label="Page and tab transition"
             value={appearance.pageTransition}
-            options={PAGE_OPTIONS}
+            options={APPEARANCE_CHOICES.pageTransition.options}
             onChange={(pageTransition) => onChange({ pageTransition })}
           />
           <PagePreview />
@@ -101,7 +80,7 @@ export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch
         <Segmented<OverlayTransition>
           label="Menus and dialogs"
           value={appearance.overlayTransition}
-          options={OVERLAY_OPTIONS}
+          options={APPEARANCE_CHOICES.overlayTransition.options}
           onChange={(overlayTransition) => onChange({ overlayTransition })}
         />
       </AxisRow>
@@ -109,7 +88,7 @@ export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch
         <Segmented<MotionSpeed>
           label="Animation speed"
           value={appearance.motionSpeed}
-          options={SPEED_OPTIONS}
+          options={APPEARANCE_CHOICES.motionSpeed.options}
           onChange={(motionSpeed) => onChange({ motionSpeed })}
         />
       </AxisRow>
