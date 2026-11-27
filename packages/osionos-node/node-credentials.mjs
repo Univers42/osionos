@@ -15,7 +15,9 @@
 // owner's bridge-signed token, spent once through the shared verifySession (one jti guard for the
 // node, so a token spent on either route is refused by the other), or the session secret this gate
 // gave that frame. Each service holds its own gate, so a secret opens only the service that issued
-// it. A session lives while one of its sockets is open; the last close forgets it.
+// it. A session lives while one of its sockets is open; the last close forgets it. A session
+// remembers the app origin it opened under, and its secret opens nothing under another (devil
+// verdict 2026-11-27, TB3): the production app's secret never opens the beta's editor.
 //
 // A gate given `devices` (remembered-computers.mjs) and `verifyResume` also admits a remembered
 // computer (devil verdict 2026-11-01, Amendment 1): its device secret opens only beside a fresh
@@ -23,6 +25,8 @@
 // (R1, R3), and only under the app origin it was issued to (R4). A device secret is issued only on
 // a token open whose token carries the person's remember choice (R6), never from a session secret
 // or a remembered open, and never rotated on use: two tabs opening at once would lock each other out.
+// One store and one jti guard serve both services (TB1). A session keeps the hash of the record it
+// opened or issued, and its last close slides that record's idle window (TB8, devices.touch).
 import { createHash, randomBytes } from 'node:crypto';
 
 const secretKey = (secret) => createHash('sha256').update(secret).digest('hex');
@@ -35,9 +39,9 @@ const isOwners = (claims, ownerId, isRevoked) => claims.userId === ownerId && !i
 export function createCredentialGate({ ideOrigin, ownerId, verifySession, isRevoked, verifyResume = null, devices = null, newSecret = freshSecret }) {
 	// One per frame, keyed by the secret's hash so a lookup never compares the secret itself.
 	const sessions = new Map();
-	const fresh = (rememberFor) => {
+	const fresh = (appOrigin, rememberFor, deviceHash) => {
 		const secret = newSecret();
-		return { secret, key: secretKey(secret), conns: new Set(), fresh: true, rememberFor };
+		return { secret, key: secretKey(secret), conns: new Set(), fresh: true, appOrigin, rememberFor, deviceHash };
 	};
 
 	// The assertion first, so a stolen device secret tried with a replayed assertion still spends nothing new.
@@ -45,21 +49,30 @@ export function createCredentialGate({ ideOrigin, ownerId, verifySession, isRevo
 		if (!verifyResume || !devices) return null;
 		let claims;
 		try { claims = verifyResume(auth.assertion, { ideOrigin }); } catch { return null; }
-		return isOwners(claims, ownerId, isRevoked) && devices.open(auth.device, auth.appOrigin) ? fresh(null) : null;
+		return isOwners(claims, ownerId, isRevoked) && devices.open(auth.device, auth.appOrigin) ? fresh(auth.appOrigin, null, secretKey(auth.device)) : null;
 	}
 
 	/** The session this opening names, or null. A token yields a fresh session, kept only on `join`. */
 	function admit(auth) {
-		if (auth.kind === 'secret') return sessions.get(secretKey(auth.secret)) ?? null;
+		if (auth.kind === 'secret') {
+			const session = sessions.get(secretKey(auth.secret)) ?? null;
+			// A pty frame names no origin with its secret; an fs frame always does.
+			return session && (auth.appOrigin === undefined || auth.appOrigin === session.appOrigin) ? session : null;
+		}
 		if (auth.kind === 'remembered') return admitRemembered(auth);
 		let token;
 		try { token = verifySession(auth.token, { ideOrigin }); } catch { return null; }
 		if (!isOwners(token, ownerId, isRevoked)) return null;
-		return fresh(token.remember === true && devices ? auth.appOrigin ?? null : null);
+		const appOrigin = auth.appOrigin ?? null;
+		return fresh(appOrigin, token.remember === true && devices ? appOrigin : null, null);
 	}
 
 	/** A device secret for a session that a remembering token just opened (R6), or null. */
-	const issueDevice = (session) => (session.rememberFor ? devices.issue(session.rememberFor) : null);
+	function issueDevice(session) {
+		const device = session.rememberFor ? devices.issue(session.rememberFor) : null;
+		if (device) session.deviceHash = secretKey(device);
+		return device;
+	}
 
 	/** Binds an open socket to its session; true when the frame must be told the new secret. */
 	function join(session, conn) {
@@ -72,7 +85,9 @@ export function createCredentialGate({ ideOrigin, ownerId, verifySession, isRevo
 	function leave(session, conn) {
 		if (!session) return;
 		session.conns.delete(conn);
-		if (session.conns.size === 0) sessions.delete(session.key);
+		if (session.conns.size > 0) return;
+		sessions.delete(session.key);
+		if (session.deviceHash) devices?.touch(session.deviceHash);
 	}
 
 	return { admit, join, leave, issueDevice, clear: () => sessions.clear(), size: () => sessions.size };

@@ -19,6 +19,8 @@
 // desktop pty port's contract (ADR 0039, T2) passes: write, resize, ack. Exact keys, exact bounds;
 // anything else is null.
 
+import { MACHINE_TOKEN, RESUME_ASSERTION, SESSION_SECRET, hasExactly, parseObject } from './wire-credentials.mjs';
+
 export const PTY_LIMITS = Object.freeze({
 	maxShells: 8,
 	maxPending: 4,
@@ -42,12 +44,6 @@ export const PTY_LIMITS = Object.freeze({
 
 export const PTY_CLOSE = Object.freeze({ protocol: 4400, auth: 4401, full: 4429, unavailable: 4503 });
 
-// The bridge-signed machine token only (scripts/ide-machine-protocol.mjs): the shared-secret
-// osionos_ide1 token opens no shell (W3).
-const MACHINE_TOKEN = /^osionos_mc1\.[a-z2-7]{8}\.[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{1,200}$/;
-const RESUME_ASSERTION = /^osionos_mr1\.[a-z2-7]{8}\.[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{1,200}$/;
-// 32 random bytes, base64url without padding: the session secret and the device secret alike.
-const SESSION_SECRET = /^[A-Za-z0-9_-]{43}$/;
 // Any app origin's shape, scheme to port: a frame under a dev app (http://localhost) names its origin
 // too, and simply gets no device secret. The remember origins themselves are https (cli.mjs).
 const APP_ORIGIN = /^[a-z][a-z0-9+.-]{0,15}:\/\/[a-z0-9.-]{1,200}(?::\d{1,5})?$/;
@@ -56,17 +52,6 @@ const REMEMBER_ORIGIN = /^https:\/\/[a-z0-9.-]{1,200}(?::\d{1,5})?$/;
 export const isRememberOrigin = (value) => typeof value === 'string' && REMEMBER_ORIGIN.test(value);
 
 const isSize = (n) => Number.isInteger(n) && n >= 1 && n <= PTY_LIMITS.maxSize;
-
-function parseObject(text) {
-	let value;
-	try { value = JSON.parse(text); } catch { return null; }
-	return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null;
-}
-
-const hasExactly = (value, keys) => {
-	const own = Object.keys(value);
-	return own.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
-};
 
 /** The opening message, or null. Over 4 KiB is refused before it is parsed. */
 export function readPtyAuth(text) {

@@ -12,8 +12,10 @@
 
 // The editor page's disk (devil verdict 2026-11-01 editor on disk, F4-F13, F17; groot ADR 0044). The
 // node's own /editor/ page opens `ws://<node>/api/fs`; the upgrade needs the node's exact Origin, and
-// the first message is the owner's bridge-signed token or this service's session secret, through
-// the gate /api/pty shares (node-credentials.mjs), plus the app origin the page pinned. Then each
+// the first message is the owner's bridge-signed token, this service's session secret, or a
+// remembered computer's device secret beside a fresh resume assertion, through the gate /api/pty
+// shares (node-credentials.mjs; devil verdict 2026-11-27, TB1), plus the app origin the page pinned.
+// The first socket a remembering token opens is told a device secret, once, as a shell's is. Then each
 // message is one request on the folders that app origin opened. A socket lives until it closes, the
 // node stops, or the owner is revoked; its watches and staged save die with it.
 // Caveat: an op that outlives its 10 s is answered Interrupted but keeps its node-wide slot until
@@ -51,10 +53,10 @@ export function createLimiter(size) {
 	};
 }
 
-export function createFsService({ ideOrigin, ownerId, verifySession, isRevoked, accept, roots, home, appOrigins, ops = { ...diskOps, save }, hub = createWatchHub(), newSecret, opTimeoutMs = 10_000, nodeWide = createLimiter(2) }) {
+export function createFsService({ ideOrigin, ownerId, verifySession, verifyResume = null, devices = null, isRevoked, accept, roots, home, appOrigins, ops = { ...diskOps, save }, hub = createWatchHub(), newSecret, opTimeoutMs = 10_000, nodeWide = createLimiter(2) }) {
 	const pending = new Set();
 	const live = new Set();
-	const gate = createCredentialGate({ ideOrigin, ownerId, verifySession, isRevoked, newSecret });
+	const gate = createCredentialGate({ ideOrigin, ownerId, verifySession, verifyResume, devices, isRevoked, newSecret });
 	const realHome = () => realpath(home);
 	const label = async (record) => { const rel = relative(await realHome(), record.realpath); return rel && !rel.startsWith('..') ? `~/${rel}` : record.realpath; };
 
@@ -146,6 +148,12 @@ export function createFsService({ ideOrigin, ownerId, verifySession, isRevoked, 
 		gate.leave(record.session, record.conn);
 	}
 
+	function openedFor(session, conn) {
+		if (!gate.join(session, conn)) return { op: 'opened' };
+		const device = gate.issueDevice(session);
+		return device ? { op: 'opened', secret: session.secret, device } : { op: 'opened', secret: session.secret };
+	}
+
 	function open(conn, auth) {
 		if (!appOrigins.includes(auth.appOrigin)) return conn.close(FS_CLOSE.auth);
 		const found = gate.admit(auth);
@@ -158,7 +166,7 @@ export function createFsService({ ideOrigin, ownerId, verifySession, isRevoked, 
 		live.add(record);
 		conn.on('message', (data, isBinary) => onMessage(record, data, isBinary));
 		conn.on('close', () => end(record));
-		send(record, gate.join(found, conn) ? { op: 'opened', secret: found.secret } : { op: 'opened' });
+		send(record, openedFor(found, conn));
 	}
 
 	/** A socket that passed the upgrade: it has 5 s and 4 KiB to open. */
