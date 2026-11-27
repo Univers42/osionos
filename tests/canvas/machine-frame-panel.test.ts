@@ -18,3 +18,14 @@ test("D5: the not-running panel shows how to start the Connector before offering
   assert.ok(html.includes("launchctl load ~/Library/LaunchAgents/com.osionos.node.plist"));
   assert.ok(start < html.indexOf("Download osionos Connector"), "starting comes before installing");
 });
+
+test("the pairing-code field leads the start lines, so a short dock panel still shows the one input", () => {
+  // The pairing lines name the bridge, which falls back to the page's origin.
+  Object.defineProperty(globalThis, "location", { configurable: true, writable: true, value: new URL("http://localhost/") });
+  const panel = terminalFramePanel("no-node", "https://example.test/connector");
+  assert.ok(panel);
+  const html = renderToStaticMarkup(React.createElement(MachineFramePanel, { panel, waiting: false, pairing: true, onTryAgain: () => {} }));
+  const field = html.indexOf('id="machine-pair-code"');
+  assert.ok(field >= 0, "the code field is shown");
+  assert.ok(field < html.indexOf("Already set up on this computer? Start it:"), "the input comes before the reference lines");
+});
