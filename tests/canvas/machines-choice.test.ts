@@ -16,7 +16,6 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 
 import type { Machine } from "../../src/features/machines/api/machinesApi.ts";
 import {
@@ -77,18 +76,6 @@ test("the one command installs, pairs and serves, and pastes as it is", () => {
   const command = connectCommand("https://baas.example:10000", "https://app.example");
   assert.match(command, /^curl -fsSL https:\/\/\S+\/install\.sh \| sh -s -- --bridge https:\/\/baas\.example:10000 --app-origin https:\/\/app\.example$/);
   assert.doesNotMatch(command, /[<>]/);
-});
-
-// For a node installed before local=1, whose page reads only `node`: the id it should name.
-test("the node hint is the machine /machine would open, else the default, else the only one", () => {
-  assert.equal(localNodeHint([A, B]), B.id);
-  assert.equal(localNodeHint([A]), A.id);
-  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false)]), "m-cccccccccccccccc");
-  assert.equal(localNodeHint([A, machine("m-cccccccccccccccc", false, true)]), A.id);
-  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false), machine("m-dddddddddddddddd", false, true)]), "m-dddddddddddddddd");
-  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false), machine("m-dddddddddddddddd", false)]), null);
-  assert.equal(localNodeHint([]), null);
-  assert.equal(localNodeHint(null), null);
 });
 
 // For a node installed before local=1, whose page reads only `node`: the id it should name.
