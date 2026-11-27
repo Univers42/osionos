@@ -32,7 +32,7 @@ test("clicking the Aurora preset", async ({ page }) => {
   const floor = await measureFloor(page);
   const stats = await measureToPaint(page, () => style.getByRole("radio", { name: /Aurora/ }).check({ force: true }), {
     runs: 20, warmups: 3, startEvent: "click", until: { selector: 'html[data-surface="glass"]' },
-    before: () => style.getByRole("radio", { name: /Calm/ }).check({ force: true }),
+    before: () => style.getByRole("radio", { name: /Classic/ }).check({ force: true }),
   });
   judge("presetClick", floor, stats);
 });
