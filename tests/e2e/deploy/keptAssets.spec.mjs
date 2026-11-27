@@ -93,7 +93,7 @@ test("a tab open across a deploy lazy-loads its build's chunks: no console noise
   await stubOtherOrigins(context, baseURL);
   await seedSession(page, {});
   await page.goto(baseURL, { waitUntil: "load" });
-  await expect(page.getByRole("button", { name: "Settings", exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("tab", { name: "Settings", exact: true }).first()).toBeVisible({ timeout: 30_000 });
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 30_000 });
   const tabBuild = await page.locator('meta[name="osionos-build"]').getAttribute("content");
   const documentsBefore = seen.documents.length;

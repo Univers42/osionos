@@ -99,7 +99,7 @@ for (const theme of ["light", "dark"]) {
 
     test("the settings pane has no AA violation", async ({ page, baseURL }) => {
       await openFreshPage(page, baseURL);
-      await page.getByRole("button", { name: /settings/i }).first().click();
+      await page.getByRole("tab", { name: "Settings", exact: true }).click();
       await expect(page.getByRole("button", { name: "Preferences" })).toBeVisible();
       expect(await violations(page)).toEqual([]);
     });
@@ -151,7 +151,7 @@ for (const theme of ["light", "dark"]) {
 
     test("the marketplace has no AA violation", async ({ page, baseURL }) => {
       await openFreshPage(page, baseURL);
-      await page.getByRole("button", { name: "Marketplace", exact: true }).first().click();
+      await page.getByRole("tab", { name: "Marketplace", exact: true }).click();
       await expect(page.getByRole("region", { name: "Marketplace" }).or(page.getByRole("tab", { name: /Marketplace/ })).first()).toBeVisible();
       expect(await violations(page)).toEqual([]);
     });

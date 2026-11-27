@@ -31,8 +31,6 @@ const HIDE_DELAY_MS = 300;
 
 interface Props {
   onOpenSettings?: () => void;
-  onOpenTrash?: () => void;
-  onOpenConsole?: () => void;
 }
 
 /** True when `clientX` is on the content side of `rect`: right of it for a left side bar, left of it for a right one. */

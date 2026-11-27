@@ -227,7 +227,7 @@ for (const mode of ["light", "dark"]) {
     test.setTimeout(120_000);
     await page.addInitScript((value) => localStorage.setItem("osionos:theme-mode", value), mode);
     await bootExplorer(page);
-    await page.getByRole("button", { name: "Panel", exact: true }).click();
+    await page.getByTestId("workbench-statusbar").getByRole("button", { name: "Panel", exact: true }).click();
     const state = page.getByTestId("workbench-dock").getByRole("status").filter({ hasText: /this computer/, has: page.getByRole("button", { name: "Try again" }) });
     await expect(state).toBeVisible({ timeout: 30_000 });
     await expect(state.locator("svg").first()).toBeVisible();

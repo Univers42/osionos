@@ -135,7 +135,6 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     subtitle: "Manage your workspace name, domains, and more", icon: Settings,
     anchors: [
       { id: "workspace-settings", label: "Workspace settings", keywords: ["workspace", "name", "icon", "landing page", "variables", "env.json", "environment"] },
-      { id: "sidebar", label: "Sidebar", keywords: ["sidebar", "apps", "calendar", "mail"] },
       { id: "export", label: "Export", keywords: ["export", "members", "workspace content"] },
       { id: "analytics", label: "Analytics", keywords: ["page views", "analytics", "views"] },
       { id: "danger-zone", label: "Delete workspace", keywords: ["danger", "delete", "workspace"] },

@@ -42,7 +42,7 @@ export async function openSection(page, label) {
 
 /** Open the settings tab, then the named section when one is given. */
 export async function openSettings(page, label) {
-  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+  await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
   await region(page).waitFor();
   if (label) await openSection(page, label);
 }

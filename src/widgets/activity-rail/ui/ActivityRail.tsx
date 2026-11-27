@@ -19,8 +19,8 @@ import { usePlatformRole, useUserStore } from "@/features/auth";
 import { useAutomationStore } from "@/features/automations/model/useAutomationStore";
 import { shortcutLabel } from "@/features/automations/model/shortcutLabel";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
-import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
-import { aiHubTab, mailTab, calendarTab, whiteboardTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
+import { profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useUnreadStore } from "@/store/chat/useUnreadStore";
 import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps";
 import { isListableApp } from "@/features/marketplace/model/launchPolicy";
@@ -28,20 +28,13 @@ import { installedTab, railInstalledApps } from "@/features/marketplace/model/in
 import { RailIcon } from "./RailIcon";
 import { RailHomeButton } from "./RailHomeButton";
 import { prefetchPanel } from "./panelLoaders";
-import { RAIL_GROUPS, visibleRailItems, type RailApp, type RailItem } from "../model/railItems";
+import { RAIL_GROUPS, isRailItemActive, visibleRailItems, type RailItem } from "../model/railItems";
 import { useConnectionNotifications, useIncomingInviteCount } from "@/widgets/notifications/model/useConnectionNotifications";
 import { useNotificationsStore } from "@/store/chat/useNotificationsStore";
 
 interface Props {
   onOpenSettings?: () => void;
 }
-
-const APP_TABS: Record<RailApp, () => WorkspaceTab> = {
-  mail: mailTab,
-  calendar: calendarTab,
-  whiteboard: whiteboardTab,
-  "ai-hub": aiHubTab,
-};
 
 const Separator: React.FC = () => <div aria-hidden className="my-1 h-px w-6 shrink-0 bg-[var(--osio-border-default)]" />;
 
@@ -53,6 +46,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
   const sidebarMode = useUIStore((s) => s.sidebarMode);
   const activePanel = useUIStore((s) => s.activePanel);
   const selectPanel = useUIStore((s) => s.selectPanel);
+  const activePageId = useWorkspaceLayout((s) => activeTabOf(s.root, s.activePaneId)?.pageId);
   const installedMap = useInstalledApps((s) => s.installed);
   const automations = useAutomationStore(useShallow((s) => s.automations()));
   const unread = useUnreadStore((s) => Object.values(s.counts).reduce((sum, count) => sum + (count > 0 ? count : 0), 0));
@@ -77,11 +71,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
         selectPanel(item.action.panel);
         return;
       }
-      if (item.action.kind === "workspaceTab") {
-        useWorkspaceLayout.getState().openTab(item.action.makeTab());
-        return;
-      }
-      useWorkspaceLayout.getState().openTab(APP_TABS[item.action.app]());
+      useWorkspaceLayout.getState().openTab(item.action.makeTab());
     },
     [selectPanel],
   );
@@ -99,8 +89,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
     buttons[(next + buttons.length) % buttons.length]?.focus();
   }, []);
 
-  const isActive = (item: RailItem) =>
-    item.action.kind === "panel" && sidebarMode !== "rail" && activePanel === item.action.panel;
+  const location = { activePanel, panelShown: sidebarMode !== "rail", activePageId };
   const badgeOf = (item: RailItem) => {
     if (item.id === "notifications") return inviteCount + notificationsUnread;
     if (item.id === "conversations") return unread;
@@ -128,7 +117,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
                 label={item.label}
                 Icon={item.Icon}
                 keys={showKeys && item.commandId ? shortcutLabel(automations, item.commandId) ?? undefined : undefined}
-                active={isActive(item)}
+                active={isRailItemActive(item, location)}
                 badge={badgeOf(item)}
                 onClick={() => runItem(item)}
                 onIntent={item.prefetch ?? (panel ? () => prefetchPanel(panel) : undefined)}

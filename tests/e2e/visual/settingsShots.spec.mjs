@@ -30,7 +30,7 @@ const OUT = "target/shots/settings";
 
 // The rail renders Settings as a tab on a narrow viewport and a button on a wide one.
 async function openSettingsTab(page) {
-  await page.getByRole("tab", { name: "Settings", exact: true }).or(page.getByRole("button", { name: "Settings", exact: true })).first().click();
+  await page.getByRole("tab", { name: "Settings", exact: true }).or(page.getByRole("tab", { name: "Settings", exact: true })).first().click();
   await region(page).waitFor();
 }
 

@@ -170,7 +170,7 @@ test("open settings", async ({ page }) => {
       if (await close.count()) await close.click();
       await expect(page.getByRole("region", { name: "Settings", exact: true })).toHaveCount(0);
     },
-    action: () => page.getByRole("button", { name: "Settings", exact: true }).first().click(),
+    action: () => page.getByRole("tab", { name: "Settings", exact: true }).first().click(),
     // Only inside the tab's view: the search role renders with the lazy chunk,
     // so the measurement covers the chunk fetch, not just the tab opening.
     until: { selector: '[role="region"][aria-label="Settings"] [role="search"]' },

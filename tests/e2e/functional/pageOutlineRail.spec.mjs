@@ -173,7 +173,7 @@ test.describe("page outline rail", () => {
     await writeLongPage(page, baseURL);
     const pageTab = page.locator("[data-osio-tabstrip] [data-tab-id][data-active]");
     const pageTabId = await pageTab.getAttribute("data-tab-id");
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     const search = page.getByRole("searchbox", { name: "Search settings" });
     await search.fill("table of contents");
     await search.press("Enter");
