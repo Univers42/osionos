@@ -26,6 +26,50 @@
      mirrors that button's h-12/w-12 by hand; a resized launcher leaves the
      wrong gap here. */
   --osio-statusbar-end: calc(var(--osio-space-4) * 2 + 3rem);
+  /* The notch and home-indicator insets (index.html asks for viewport-fit=cover);
+     0 on every screen without them, so desktop is unchanged. */
+  --osio-safe-top: env(safe-area-inset-top, 0px);
+  --osio-safe-right: env(safe-area-inset-right, 0px);
+  --osio-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --osio-safe-left: env(safe-area-inset-left, 0px);
+  --osio-touch-target: 44px;
+}
+
+/* The shell pads by the insets, so the top bar, the sidebar drawer, the dock and
+   the status bar all stay clear of the notch and the home indicator. */
+[data-osio-shell] {
+  padding: var(--osio-safe-top) var(--osio-safe-right) var(--osio-safe-bottom) var(--osio-safe-left);
+}
+
+/* A finger needs 44px. The top bar, the rail and the status bar keep their look and
+   grow only the hit area (a centred ::before); the dock tabs sit in a scrolling strip
+   that would clip one, so they grow instead. A phone also needs 16px in a field, or
+   iOS zooms the page on focus. */
+@media (pointer: coarse) {
+  :is([data-testid="app-topbar"] button, aside[aria-label="Sidebar"] [role="tab"], [data-testid="workbench-statusbar"] button):not(.absolute, .fixed) {
+    position: relative;
+  }
+
+  :is([data-testid="app-topbar"] button, aside[aria-label="Sidebar"] [role="tab"], [data-testid="workbench-statusbar"] button)::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--osio-touch-target));
+    height: max(100%, var(--osio-touch-target));
+    transform: translate(-50%, -50%);
+  }
+
+  [role="tablist"][aria-label="Panel tabs"] [role="tab"] {
+    min-width: var(--osio-touch-target);
+    min-height: var(--osio-touch-target);
+  }
+}
+
+@media (pointer: coarse) and (max-width: 767.98px) {
+  :is(input, textarea, select):not([type="checkbox"], [type="radio"], [type="range"], [type="color"]) {
+    font-size: 16px;
+  }
 }
 
 /* Edge to edge, the outline would be clipped by the window at the outer

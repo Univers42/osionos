@@ -13,6 +13,8 @@
 import React from "react";
 import { useWorkspaceLayout } from "../model/workspaceLayout";
 import type { LayoutNode, SplitNode } from "../model/layoutTree";
+import { useMediaQuery } from "@/shared/config/useMediaQuery";
+import { PHONE_QUERY } from "@/shared/config/useResponsiveSidebar";
 import { PaneView } from "./PaneView";
 import { PaneSplitter } from "./PaneSplitter";
 import { usePaneZoomGestures } from "./usePaneZoomGestures";
@@ -24,7 +26,9 @@ const LayoutNodeView: React.FC<{ node: LayoutNode }> = ({ node }) =>
 
 const SplitView: React.FC<{ split: SplitNode }> = ({ split }) => {
   const resize = useWorkspaceLayout((s) => s.resize);
-  const isRow = split.direction === "row";
+  const phone = useMediaQuery(PHONE_QUERY);
+  const direction = phone ? "column" : split.direction;
+  const isRow = direction === "row";
   // Sizes captured at pointer-down; the divider reports an ABSOLUTE delta from there, so the
   // drag accumulates instead of jittering back to the start size on every store re-render.
   const dragStartSizes = React.useRef<number[]>(split.sizes);
@@ -103,7 +107,7 @@ const SplitView: React.FC<{ split: SplitNode }> = ({ split }) => {
           </div>
           {index < split.children.length - 1 && (
             <PaneSplitter
-              direction={split.direction}
+              direction={direction}
               onResizeStart={() => { dragStartSizes.current = [...split.sizes]; }}
               onResize={(deltaFraction) => applyResize(index, deltaFraction)}
               onResizeEnd={commitResize}
