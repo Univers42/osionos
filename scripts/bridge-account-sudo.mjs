@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/22 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/11/27 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,6 +38,7 @@
  */
 
 import { clientMeta, grantSudo, rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
+import { maskAddress } from './bridge-mask-address.mjs';
 import { createOtpClient } from './bridge-account-otp.mjs';
 import { createPasswordGate } from './bridge-account-sudo-password.mjs';
 import { readGotrueUser } from './bridge-gotrue-user.mjs';
@@ -105,20 +106,7 @@ export function noContent(response, config) {
 	return true;
 }
 
-/**
- * The masked form of an address: the first character of the local part, the first
- * character of the first domain label, and the last label — `dylan@gmail.com` reads
- * `d•••@g•••.com`. An address with no dot after the `@` has no last label.
- */
-export function maskAddress(value) {
-	const address = String(value ?? '').trim();
-	const at = address.lastIndexOf('@');
-	if (at < 1) return '•••';
-	const labels = address.slice(at + 1).split('.');
-	const first = labels[0] ?? '';
-	const last = labels.length > 1 ? labels[labels.length - 1] : '';
-	return `${address.slice(0, 1)}•••@${first.slice(0, 1)}•••${last ? `.${last}` : ''}`;
-}
+export { maskAddress };
 
 /** The secret the proof is signed with — the one the bridge mints its tokens with. */
 function proofSecret(env) {
