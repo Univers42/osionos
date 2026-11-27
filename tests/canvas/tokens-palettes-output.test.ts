@@ -49,7 +49,7 @@ test("the picker's palette ids are the CSS's [data-palette] ids, the default hav
   );
   assert.ok(!css.includes(`[data-palette="${defaultPalette.id}"]`));
   assert.deepEqual(PALETTES.map(idOf), [
-    "warm", "mono", "contrast", "maximal", "nord", "solarized", "midnight", "rose", "ember",
+    "warm", "mono", "contrast", "maximal", "nord", "solarized", "midnight", "rose", "ember", "fjord", "orchid", "sage", "dusk",
   ]);
 });
 

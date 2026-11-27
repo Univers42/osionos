@@ -105,3 +105,18 @@ test("a broken profile names the path that is wrong", () => {
     assert.ok(errors.some((message: string) => message.includes(path)), `${path}: ${errors.join(" | ")}`);
   }
 });
+
+test("the corner-scale wrapper is the one var() a value may hold", () => {
+  assert.equal(isSafeTokenValue("calc(8px * var(--osio-radius-scale, 1))"), true);
+  assert.equal(isSafeTokenValue("calc(0.5rem * var(--osio-radius-scale, 1))"), true);
+  for (const value of [
+    "calc(8px * var(--osio-other, 1))",
+    "calc(8px * var(--osio-radius-scale, 1)) !important",
+    "calc(8px * var(--osio-radius-scale, 1));",
+    "calc(8px * var(--osio-radius-scale, url(x)))",
+    "calc(8vh * var(--osio-radius-scale, 1))",
+    "var(--osio-radius-scale)",
+  ]) {
+    assert.equal(isSafeTokenValue(value), false, value);
+  }
+});
