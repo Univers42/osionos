@@ -13,6 +13,8 @@
 import React from "react";
 import { ArrowUp, Square } from "lucide-react";
 
+import { COMPOSER_SEND_CLASS } from "@/shared/ui/composer/ComposerCard";
+
 interface Props {
   streaming?: boolean;
   canSend: boolean;
@@ -37,7 +39,7 @@ export const ComposerSendStop: React.FC<Props> = ({ streaming, canSend, onSend, 
       aria-label="Send message"
       onClick={onSend}
       disabled={!canSend}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] transition-colors hover:bg-[var(--osio-accent-hover,var(--osio-accent))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] disabled:opacity-40"
+      className={`${COMPOSER_SEND_CLASS} h-8 w-8`}
     >
       <ArrowUp size={16} />
     </button>

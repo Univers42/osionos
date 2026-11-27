@@ -193,7 +193,7 @@ export function renderCitedAnswer(
  * from, because there is no page to open. A web source is a link that shows
  * its domain and opens the page in a new tab.
  */
-const SOURCE_CHIP = "inline-block max-w-64 truncate rounded-full border px-2.5 py-1";
+const SOURCE_CHIP = "osio-chip max-w-64 border text-xs";
 
 export function renderCitationSources(
   citations: Citation[],
@@ -219,13 +219,13 @@ export function renderCitationSources(
                   className: `${SOURCE_CHIP} border-transparent bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)] no-underline transition-colors hover:border-[var(--osio-accent)] hover:text-[var(--osio-accent-text)]`,
                   "data-testid": "chat-web-source",
                 },
-                `${citation.n}. ${citation.domain}`,
+                React.createElement("span", { className: "truncate" }, `${citation.n}. ${citation.domain}`),
               )
             : citation.collection === "pack"
             ? React.createElement(
                 "span",
                 { className: `${SOURCE_CHIP} border-dashed border-[var(--osio-border-default)] text-[var(--osio-fg-muted)]`, title: citation.snippet },
-                `${citation.n}. ${citation.title} · osionos docs`,
+                React.createElement("span", { className: "truncate" }, `${citation.n}. ${citation.title} · osionos docs`),
               )
             : React.createElement(
                 "button",
@@ -236,7 +236,7 @@ export function renderCitationSources(
                   "aria-label": `Open source ${citation.n}: ${citation.title}`,
                   onClick: () => onOpen(citation),
                 },
-                `${citation.n}. ${citation.title}`,
+                React.createElement("span", { className: "truncate" }, `${citation.n}. ${citation.title}`),
               ),
         ),
       ),

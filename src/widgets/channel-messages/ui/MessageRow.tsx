@@ -11,22 +11,18 @@
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
-import { Flag, Pencil, Reply, SmilePlus, Sparkles, Trash2 } from 'lucide-react';
 
 import { renderInlineToReact } from '@osionos/markdown-engine/react';
 import type { ChatMessage } from '@/shared/chat/messageApi';
-import { Button, IconButton } from '@/shared/ui';
-import { isAiConfigured } from '@/features/ai/api/aiClient';
-import { quoteForAssistant } from '@/features/chat/model/assistantHandoff';
-import { openAssistantWith } from '@/features/chat/model/openAssistantWith';
+import { Button } from '@/shared/ui';
+import { AssistantAvatar } from '@/shared/ui/mascot/AssistantAvatar';
 
 import type { SendOutcome } from '../model/channelWrites';
 import { MessageAttachments } from './attachments/MessageAttachments';
 import { LinkPreviewCard } from './attachments/LinkPreviewCard';
 import { MessageEditForm } from './MessageEditForm';
 import { MessageTicks } from './MessageTicks';
-
-const QUICK_EMOJI = ['👍', '❤️', '🔥', '🎉'];
+import { MessageToolbar } from './MessageToolbar';
 
 interface MessageRowProps {
   message: ChatMessage;
@@ -54,6 +50,8 @@ interface MessageRowProps {
 // Hoisted: constructing an Intl.DateTimeFormat is one of the pricier JS built-ins;
 // one shared instance serves every row instead of a fresh one per row per render.
 const TIME_FORMAT = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
+/** Short 24h time for the 36px avatar gutter of a grouped row. */
+const GUTTER_TIME_FORMAT = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 function formatTime(value: string) {
   return TIME_FORMAT.format(new Date(value));
 }
@@ -89,6 +87,11 @@ function contentLinks(message: ChatMessage): string[] {
   return links.slice(0, 3);
 }
 
+const AI_BODY = 'whitespace-pre-wrap break-words rounded-xl bg-[color-mix(in_srgb,var(--osio-accent)_6%,transparent)] px-3 py-2 text-sm leading-6';
+const HUMAN_BODY = 'whitespace-pre-wrap break-words text-sm leading-6';
+const ROW_PLAIN = 'hover:bg-[var(--osio-bg-hover)]';
+const ROW_MENTIONED = 'bg-[color-mix(in_srgb,var(--osio-accent)_8%,transparent)] shadow-[inset_2px_0_0_var(--osio-accent)]';
+
 const MENTION_TOKEN = /(?<![\w@])(@[a-z0-9_]+(?:\.[a-z0-9_]+)*)/gi;
 
 /** Render message text, chipping @handles; the rest goes through markengine. */
@@ -97,7 +100,7 @@ function renderContent(content: string): React.ReactNode {
   if (parts.length === 1) return renderInlineToReact(content);
   return parts.map((part, index) =>
     /^@[a-z0-9_.]+$/i.test(part)
-      ? <span key={index} className="rounded-xs bg-[var(--osio-accent)]/15 px-0.5 font-medium text-[var(--osio-accent)]">{part}</span>
+      ? <span key={index} className="rounded-xs bg-[var(--osio-accent)]/15 px-0.5 font-medium text-[var(--osio-accent-text)]">{part}</span>
       : <React.Fragment key={index}>{renderInlineToReact(part)}</React.Fragment>,
   );
 }
@@ -109,18 +112,19 @@ function askedBy(message: ChatMessage, userId: string, askerName?: string): stri
 
 const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInteract, userId, grouped, onEdit, onDelete, onReact, onReply, onOpenThread, askerName, onReport }) => {
   const [editing, setEditing] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const isMentioned = Boolean(message.mentions?.includes(userId));
 
   return (
-    <article className={`group relative flex gap-3 rounded-md px-2 py-1.5 hover:bg-[var(--osio-bg-hover)] ${isMentioned ? 'border-l-2 border-[var(--osio-accent)] bg-[var(--osio-accent)]/5' : ''}`}>
+    <article className={`group relative flex gap-3 rounded-md px-2 py-1.5 ${isMentioned ? ROW_MENTIONED : ROW_PLAIN}`}>
       {grouped ? (
-        <div className="h-9 w-9 shrink-0" aria-hidden />
+        <div className="flex h-9 w-9 shrink-0 items-start justify-end pt-1" aria-hidden>
+          <time className="text-3xs tabular-nums text-[var(--osio-fg-subtle)] opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">{GUTTER_TIME_FORMAT.format(new Date(message.createdAt))}</time>
+        </div>
+      ) : message.isAi ? (
+        <div className="mt-0.5 shrink-0"><AssistantAvatar size={36} /></div>
       ) : (
         <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--osio-accent)] text-xs font-semibold text-[var(--osio-accent-fg)]">
-          {message.isAi
-            ? <Sparkles size={16} aria-hidden />
-            : message.authorAvatar
+          {message.authorAvatar
               ? <img src={message.authorAvatar} alt="" className="h-full w-full object-cover" />
               : message.authorName.slice(0, 1).toUpperCase()}
         </div>
@@ -154,7 +158,7 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
           />
         ) : (
           // OB4: an AI answer stays plain text, so markdown cannot inline an image.
-          <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.isAi ? message.content : renderContent(message.content)}</p>
+          <p className={message.isAi ? AI_BODY : HUMAN_BODY}>{message.isAi ? message.content : renderContent(message.content)}</p>
         )}
         {!message.isAi && <MessageAttachments attachments={message.attachments} />}
         {!editing && contentLinks(message).map((url) => (
@@ -187,42 +191,7 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
         )}
       </div>
       {canInteract && (
-        <div className="absolute -top-2 right-2 hidden items-center gap-0.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-0.5 shadow-osio-menu group-hover:flex">
-          <IconButton size="xs" label="Reply" onClick={() => onReply(message)}><Reply size={14} /></IconButton>
-          <IconButton size="xs" label="Add reaction" onClick={() => setPickerOpen((open) => !open)}><SmilePlus size={14} /></IconButton>
-          {isAiConfigured() && (
-            <IconButton size="xs" label="Ask AI about this message" onClick={() => openAssistantWith({ text: quoteForAssistant([{ author: message.authorName, text: message.content }]) })}>
-              <Sparkles size={14} />
-            </IconButton>
-          )}
-          {isAuthor && !message.isAi && (
-            <IconButton size="xs" label="Edit message" onClick={() => setEditing(true)}><Pencil size={14} /></IconButton>
-          )}
-          {message.isAi && onReport && (
-            <IconButton size="xs" label="Report AI answer" onClick={() => onReport(message)}><Flag size={14} /></IconButton>
-          )}
-          {isAuthor && (
-            <IconButton size="xs" label="Delete message" onClick={() => onDelete(message.id)}><Trash2 size={14} /></IconButton>
-          )}
-          {pickerOpen && (
-            <div className="absolute right-0 top-7 z-10 flex gap-1 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 shadow-[var(--osio-shadow-menu)]">
-              {QUICK_EMOJI.map((emoji) => (
-                <IconButton
-                  key={emoji}
-                  size="xs"
-                  label={`React with ${emoji}`}
-                  className="text-sm"
-                  onClick={() => {
-                    onReact(message.id, emoji, !message.reactions.some((r) => r.userId === userId && r.emoji === emoji));
-                    setPickerOpen(false);
-                  }}
-                >
-                  {emoji}
-                </IconButton>
-              ))}
-            </div>
-          )}
-        </div>
+        <MessageToolbar message={message} isAuthor={isAuthor} userId={userId} onReply={onReply} onEdit={() => setEditing(true)} onDelete={onDelete} onReact={onReact} onReport={onReport} />
       )}
     </article>
   );

@@ -20,6 +20,7 @@
 
 import React from 'react';
 
+import { TypingDots } from '@/shared/ui/typing/TypingDots';
 import { useReceiptsStore } from '@/store/chat/useReceiptsStore';
 
 import { typingPhrase } from '../model/aiTyping';
@@ -35,7 +36,8 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ channelId, nam
   if (typers.length === 0) return null;
 
   return (
-    <div className="px-1 pb-1 text-xs italic text-[var(--osio-fg-muted)]" aria-live="polite">
+    <div className="flex items-center gap-1.5 px-1 pb-1 text-xs italic text-[var(--osio-fg-muted)]" aria-live="polite">
+      <TypingDots />
       {typingPhrase(typers, names)}
     </div>
   );

@@ -18,6 +18,7 @@ import { OfflineModelPicker } from "./OfflineModelPicker";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { AttachButton } from "./AttachButton";
 import { ResearchToggle, WebToggle } from "./WebToggle";
+import { ComposerCard } from "@/shared/ui/composer/ComposerCard";
 import { AgentChip } from "./AgentChip";
 import { ComposerChips } from "./ComposerChips";
 import { ComposerSendStop } from "./ComposerSendStop";
@@ -187,11 +188,7 @@ export const ChatComposer: React.FC<Props> = ({
   };
 
   return (
-    <div
-      ref={rootRef}
-      data-dictation-composer="assistant"
-      className="relative rounded-2xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-sm)] focus-within:border-[var(--osio-accent)]"
-    >
+    <ComposerCard ref={rootRef} data-dictation-composer="assistant">
       <ComposerChips chips={chips} hint={picker.hint} onRemove={picker.remove} />
       {previewing && value.trim() ? (
         <div className="max-h-60 overflow-y-auto px-4 pt-3 text-sm text-[var(--osio-fg-default)]" data-testid="composer-preview">
@@ -275,6 +272,6 @@ export const ChatComposer: React.FC<Props> = ({
           onClose={() => picker.close()}
         />
       ) : null}
-    </div>
+    </ComposerCard>
   );
 };

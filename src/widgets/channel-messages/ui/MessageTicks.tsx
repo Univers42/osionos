@@ -40,6 +40,7 @@ export const MessageTicks: React.FC<MessageTicksProps> = ({ messageId }) => {
     <span
       className="inline-flex items-center"
       style={{ color }}
+      role="img"
       aria-label={LABEL[status]}
       title={LABEL[status]}
     >

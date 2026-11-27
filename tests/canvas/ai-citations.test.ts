@@ -159,14 +159,14 @@ test("a pack source is a plain line with its snippet, not a button", () => {
     React.createElement("div", null, renderCitationSources([PACK_SOURCE], () => undefined)),
   );
   assert.doesNotMatch(html, /<button/, "a pack passage is not a page to open");
-  assert.match(html, /<span[^>]*title="the pack passage"[^>]*>2\. Getting started · osionos docs<\/span>/);
+  assert.match(html, /<span[^>]*title="the pack passage"[^>]*><span class="truncate">2\. Getting started · osionos docs<\/span><\/span>/);
 });
 
 test("a page source is still a button", () => {
   const html = renderToStaticMarkup(
     React.createElement("div", null, renderCitationSources([SOURCE_ONE], () => undefined)),
   );
-  assert.match(html, /<button[^>]*>1\. Alpha<\/button>/);
+  assert.match(html, /<button[^>]*><span class="truncate">1\. Alpha<\/span><\/button>/);
 });
 
 test("a pack title is plain text — never an element", () => {
