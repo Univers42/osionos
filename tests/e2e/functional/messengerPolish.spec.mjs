@@ -56,8 +56,14 @@ test.describe("messenger polish: channel", () => {
     await root.getByRole("textbox").focus();
     const style = await root.locator("[data-dictation-composer]").evaluate((el) => {
       const s = getComputedStyle(el);
-      return { border: s.borderTopColor, shadow: s.boxShadow, accent: getComputedStyle(document.documentElement).getPropertyValue("--osio-accent") };
+      const probe = document.createElement("i");
+      probe.style.color = "var(--osio-accent)";
+      el.appendChild(probe);
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      return { border: s.borderTopColor, shadow: s.boxShadow, accent };
     });
+    expect(style.border).toBe(style.accent);
     expect(style.shadow).not.toBe("none");
     expect(style.shadow).toContain("0px 0px 0px 2px");
   });
@@ -71,7 +77,7 @@ test.describe("messenger polish: channel", () => {
     await expect.poll(() => time.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
     expect((await row.boundingBox()).height).toBe(before);
     await page.mouse.move(0, 0);
-    await row.getByRole("toolbar").getByRole("button").first().focus();
+    await row.getByRole("group", { name: "Message actions" }).getByRole("button").first().focus();
     await expect.poll(() => time.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
     expect((await row.boundingBox()).height).toBe(before);
   });
@@ -94,6 +100,64 @@ test.describe("messenger polish: channel", () => {
   test("an AI row carries the assistant avatar", async ({ page }) => {
     const row = page.locator("article", { hasText: "An AI answer about the roadmap" });
     await expect(row.getByTestId("assistant-avatar")).toHaveCount(1);
+  });
+
+  test("forced-colors: the focused Send button keeps a visible outline", async ({ page }) => {
+    await page.emulateMedia({ forcedColors: "active" });
+    const root = page.getByTestId("pm-composer-full");
+    await root.getByRole("textbox").fill("hello");
+    const send = root.getByRole("button", { name: /send/i });
+    await root.getByRole("textbox").focus();
+    for (let i = 0; i < 8 && !(await send.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+    await expect(send).toBeFocused();
+    const outline = await send.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { style: s.outlineStyle, width: parseFloat(s.outlineWidth) };
+    });
+    expect(outline.style).not.toBe("none");
+    expect(outline.width).toBeGreaterThan(0);
+  });
+
+  test("forced-colors: the mentioned row keeps a visible edge without shifting text", async ({ page }) => {
+    const row = page.locator("article", { hasText: "can you look at this" });
+    const plain = page.locator("article", { hasText: "First message from Ada" });
+    const textLeft = (r) => r.locator("p, div").filter({ hasText: /\w/ }).last().evaluate((el) => el.getBoundingClientRect().left - el.closest("article").getBoundingClientRect().left);
+    const before = await textLeft(row);
+    await page.emulateMedia({ forcedColors: "active" });
+    const edge = await row.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { width: parseFloat(s.borderLeftWidth), style: s.borderLeftStyle, color: s.borderLeftColor };
+    });
+    expect(edge.width).toBeGreaterThan(0);
+    expect(edge.style).not.toBe("none");
+    expect(edge.color).not.toBe("rgba(0, 0, 0, 0)");
+    expect(await textLeft(row)).toBe(before);
+    expect(await plain.evaluate((el) => parseFloat(getComputedStyle(el).borderLeftWidth))).toBe(0);
+  });
+
+  test("the reaction picker closes on Escape, returning focus to its trigger", async ({ page }) => {
+    const row = page.locator("article", { hasText: "First message from Ada" });
+    await row.hover();
+    const toolbar = row.getByTestId("message-toolbar");
+    const trigger = toolbar.getByRole("button", { name: "Add reaction" });
+    await trigger.click();
+    await expect(toolbar.getByRole("button", { name: /React with/ }).first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(toolbar.getByRole("button", { name: /React with/ })).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  });
+
+  test("the reaction picker closes on a click outside, and the pill unpins", async ({ page }) => {
+    const row = page.locator("article", { hasText: "First message from Ada" });
+    const toolbar = row.getByTestId("message-toolbar");
+    await row.hover();
+    await toolbar.getByRole("button", { name: "Add reaction" }).click();
+    await expect(toolbar.getByRole("button", { name: /React with/ }).first()).toBeVisible();
+    await page.mouse.click(1, 1);
+    await expect(toolbar.getByRole("button", { name: /React with/ })).toHaveCount(0);
+    await page.mouse.move(0, 0);
+    await page.getByTestId("pm-channel").evaluate((el) => el.ownerDocument.activeElement?.blur());
+    await expect.poll(() => toolbar.evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
   });
 
   test("axe: no violations in the channel", async ({ page }) => {

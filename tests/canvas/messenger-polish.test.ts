@@ -2,6 +2,7 @@
 // assistant avatar, worn by both surfaces. A static render pins their roles and labels.
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 const React = (await import("react")).default;
 const { renderToStaticMarkup } = await import("react-dom/server");
@@ -61,3 +62,9 @@ for (const compact of [false, true]) {
     assert.equal(/max-w-4xl/.test(html), !compact);
   });
 }
+
+test("the typing live region stays mounted when no one is typing", () => {
+  const src = readFileSync(new URL("../../src/widgets/channel-messages/ui/TypingIndicator.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(src, /return null/, "an unmounting live region is not announced");
+  assert.match(src, /aria-live="polite"/);
+});

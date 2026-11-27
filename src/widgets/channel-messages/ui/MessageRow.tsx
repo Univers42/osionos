@@ -90,7 +90,7 @@ function contentLinks(message: ChatMessage): string[] {
 const AI_BODY = 'whitespace-pre-wrap break-words rounded-xl bg-[color-mix(in_srgb,var(--osio-accent)_6%,transparent)] px-3 py-2 text-sm leading-6';
 const HUMAN_BODY = 'whitespace-pre-wrap break-words text-sm leading-6';
 const ROW_PLAIN = 'hover:bg-[var(--osio-bg-hover)]';
-const ROW_MENTIONED = 'bg-[color-mix(in_srgb,var(--osio-accent)_8%,transparent)] shadow-[inset_2px_0_0_var(--osio-accent)]';
+const ROW_MENTIONED = 'bg-[color-mix(in_srgb,var(--osio-accent)_8%,transparent)] shadow-[inset_2px_0_0_var(--osio-accent)] border-l-2 border-transparent pl-1.5 forced-colors:border-[CanvasText]';
 
 const MENTION_TOKEN = /(?<![\w@])(@[a-z0-9_]+(?:\.[a-z0-9_]+)*)/gi;
 

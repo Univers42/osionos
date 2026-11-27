@@ -137,7 +137,7 @@ test("the sources are listed under the answer, with the snippet as a tooltip", (
   assert.match(html, /Sources/);
   assert.match(html, /1\. Alpha/);
   assert.match(html, /2\. Beta/);
-  assert.match(html, /title="the first source"/, "the snippet is the tooltip");
+  assert.match(html, /title="1\. Alpha — the first source"/, "the tooltip is the full label, then the snippet");
 });
 
 test("a title and a snippet are plain text — never an element", () => {
@@ -159,7 +159,7 @@ test("a pack source is a plain line with its snippet, not a button", () => {
     React.createElement("div", null, renderCitationSources([PACK_SOURCE], () => undefined)),
   );
   assert.doesNotMatch(html, /<button/, "a pack passage is not a page to open");
-  assert.match(html, /<span[^>]*title="the pack passage"[^>]*><span class="truncate">2\. Getting started · osionos docs<\/span><\/span>/);
+  assert.match(html, /<span[^>]*title="2\. Getting started · osionos docs — the pack passage"[^>]*><span class="truncate">2\. Getting started · osionos docs<\/span><\/span>/);
 });
 
 test("a page source is still a button", () => {

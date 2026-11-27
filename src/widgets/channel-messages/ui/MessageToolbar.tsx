@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Flag, Pencil, Reply, SmilePlus, Sparkles, Trash2 } from 'lucide-react';
 
 import type { ChatMessage } from '@/shared/chat/messageApi';
@@ -44,10 +44,29 @@ interface MessageToolbarProps {
  */
 export const MessageToolbar: React.FC<MessageToolbarProps> = ({ message, isAuthor, onReply, onEdit, onDelete, onReact, onReport, userId }) => {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const pillRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setPickerOpen(false);
+      triggerRef.current?.focus();
+    };
+    const onPointer = (e: PointerEvent) => {
+      if (!pillRef.current?.contains(e.target as Node)) setPickerOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [pickerOpen]);
   return (
-    <div data-testid="message-toolbar" role="toolbar" aria-label="Message actions" className={`${PILL_BASE} ${pickerOpen ? PILL_SHOWN : PILL_HIDDEN}`}>
+    <div ref={pillRef} data-testid="message-toolbar" role="group" aria-label="Message actions" className={`${PILL_BASE} ${pickerOpen ? PILL_SHOWN : PILL_HIDDEN}`}>
       <IconButton size="xs" className={BUTTON_CLASS} label="Reply" onClick={() => onReply(message)}><Reply size={14} /></IconButton>
-      <IconButton size="xs" className={BUTTON_CLASS} label="Add reaction" onClick={() => setPickerOpen((open) => !open)}><SmilePlus size={14} /></IconButton>
+      <IconButton ref={triggerRef} size="xs" className={BUTTON_CLASS} label="Add reaction" onClick={() => setPickerOpen((open) => !open)}><SmilePlus size={14} /></IconButton>
       {isAiConfigured() && (
         <IconButton size="xs" className={BUTTON_CLASS} label="Ask AI about this message" onClick={() => openAssistantWith({ text: quoteForAssistant([{ author: message.authorName, text: message.content }]) })}>
           <Sparkles size={14} />

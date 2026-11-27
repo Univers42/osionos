@@ -29,7 +29,7 @@ export const ComposerSendStop: React.FC<Props> = ({ streaming, canSend, onSend, 
       type="button"
       aria-label="Stop the answer"
       onClick={() => onStop?.()}
-      className="inline-flex items-center gap-1 rounded-full border border-[var(--osio-border-default)] px-3 py-1.5 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+      className="inline-flex items-center gap-1 rounded-full border border-[var(--osio-border-default)] px-3 py-1.5 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
     >
       <Square size={12} /> Stop
     </button>

@@ -13,8 +13,8 @@
 /**
  * "X is typing…" line shown just above the composer. Reads the ephemeral
  * useReceiptsStore typing map for this channel; entries self-expire on the
- * timer in useChannelReceipts, so this stays purely presentational. Renders
- * nothing when no one is typing. Names are resolved best-effort from the
+ * timer in useChannelReceipts, so this stays purely presentational. The live region stays mounted
+ * (empty when no one is typing) so screen readers announce changes. Names are resolved best-effort from the
  * current message list (id → authorName); falls back to "Someone".
  */
 
@@ -33,12 +33,12 @@ interface TypingIndicatorProps {
 
 export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ channelId, names = {} }) => {
   const typers = useReceiptsStore((s) => s.typing[channelId]) ?? [];
-  if (typers.length === 0) return null;
+  const typing = typers.length > 0;
 
   return (
-    <div className="flex items-center gap-1.5 px-1 pb-1 text-xs italic text-[var(--osio-fg-muted)]" aria-live="polite">
-      <TypingDots />
-      {typingPhrase(typers, names)}
+    <div className={typing ? 'flex items-center gap-1.5 px-1 pb-1 text-xs italic text-[var(--osio-fg-muted)]' : undefined} aria-live="polite">
+      {typing && <TypingDots />}
+      {typing && typingPhrase(typers, names)}
     </div>
   );
 };

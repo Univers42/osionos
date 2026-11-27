@@ -26,7 +26,7 @@ export const COMPOSER_CARD_CLASS =
 
 /** The round accent send button; a disabled one is muted to the surface, not just dimmed. */
 export const COMPOSER_SEND_CLASS =
-  "inline-flex shrink-0 items-center justify-center rounded-full bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] transition-colors hover:bg-[var(--osio-accent-hover,var(--osio-accent))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-surface)] disabled:cursor-not-allowed disabled:bg-[var(--osio-bg-muted)] disabled:text-[var(--osio-fg-subtle)] disabled:hover:bg-[var(--osio-bg-muted)]";
+  "inline-flex shrink-0 items-center justify-center rounded-full bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] transition-colors hover:bg-[var(--osio-accent-hover,var(--osio-accent))] focus-visible:outline-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-surface)] disabled:cursor-not-allowed disabled:bg-[var(--osio-bg-muted)] disabled:text-[var(--osio-fg-subtle)] disabled:hover:bg-[var(--osio-bg-muted)]";
 
 type ComposerCardProps = React.ComponentPropsWithRef<"div">;
 
