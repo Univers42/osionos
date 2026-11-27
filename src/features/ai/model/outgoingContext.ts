@@ -1,5 +1,5 @@
 /**
- * What the NEXT message sends, and to whom: the rows the AI Hub shows.
+ * What the NEXT message sends, and to whom: the rows Settings › osionos AI shows.
  *
  * Every row mirrors the service (services/osionos-ai/src/runs) or, for a
  * "This device" run, the device port (deviceInferencePort.ts). The citations

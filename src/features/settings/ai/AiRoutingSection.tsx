@@ -1,4 +1,4 @@
-// The AI Hub's "Routing": the models a run moves on to when the chosen one cannot answer
+// Settings › osionos AI › Routing: the models a run moves on to when the chosen one cannot answer
 // (rate limit, upstream error). The chain is a device preference, sent with every run.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAiConfigured, listConnections, listModels } from "@/features/ai/api/aiClient";
@@ -13,8 +13,10 @@ import {
   type AiFallbackChoice,
 } from "@/features/ai/model/aiSelection";
 import { fallbackModels } from "@/features/ai/model/modelMenu";
-import { Dropdown } from "@/shared/ui";
-import { Section, SettingRow } from "@/features/settings/ui/settingsKit";
+import { Button, Dropdown } from "@/shared/ui";
+import { Section, SettingRow } from "../ui/settingsKit";
+import { AI_NOT_CONFIGURED } from "./AiStatusCards";
+import { MCP_TEXT_MUTED_SM } from "./aiPanelClasses";
 
 type ModelsByConnection = Record<string, AiModel[]>;
 
@@ -93,21 +95,16 @@ export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, mod
                 onChange={(model) => onChange(index, { connectionId: entry.connectionId, model })}
                 placeholder="Model"
               />
-              <button type="button" className="text-sm text-[var(--osio-fg-muted)] hover:underline" onClick={() => onRemove(index)}>
+              <Button tone="ghost" size="sm" onClick={() => onRemove(index)}>
                 Remove
-              </button>
+              </Button>
             </>
           }
         />
       ))}
-      <button
-        type="button"
-        disabled={chain.length >= MAX_AI_FALLBACKS}
-        onClick={onAdd}
-        className="mt-2 rounded-md border border-[var(--osio-border-default)] px-3 py-1.5 text-sm text-[var(--osio-fg-default)] disabled:cursor-not-allowed disabled:opacity-50"
-      >
+      <Button className="mt-2" disabled={chain.length >= MAX_AI_FALLBACKS} onClick={onAdd}>
         Add a fallback
-      </button>
+      </Button>
     </Section>
     {sendsToPlatform(primary, chain) ? (
       <p role="note" className="text-sm text-[var(--osio-fg-muted)]" data-testid="routing-privacy-note">
@@ -117,7 +114,7 @@ export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, mod
   </div>
 );
 
-export const HubRoutingSection: React.FC = () => {
+export const AiRoutingSection: React.FC = () => {
   const [connections, setConnections] = useState<AiConnection[]>([]);
   const [models, setModels] = useState<ModelsByConnection>({});
   const [primary] = useState<AiFallbackChoice>(() => {
@@ -160,7 +157,7 @@ export const HubRoutingSection: React.FC = () => {
   }, [primary]);
 
   if (!configured) {
-    return <p className="text-sm text-[var(--osio-fg-muted)]">The AI service is not configured on this build</p>;
+    return <p className={MCP_TEXT_MUTED_SM}>{AI_NOT_CONFIGURED}</p>;
   }
   // A connection whose models have not loaded yet has no default model to save.
   const replaceAt = (index: number, next: AiFallbackChoice) => {

@@ -8,6 +8,8 @@
  * reason.
  */
 
+import type { SettingsSectionId } from "@/features/settings/model/sectionTypes";
+
 export type SlashActionTarget =
   | { kind: "open"; selector: string }
   | { kind: "focus"; selector: string }
@@ -24,6 +26,20 @@ export function slashActionTarget(name: string): SlashActionTarget | null {
   if (name === "attach") return { kind: "attach" };
   if (name === "effort") return { kind: "focus", selector: `${EFFORT_GROUP} [role="radio"][aria-checked="true"]` };
   return null;
+}
+
+/** The Settings section (and anchor) each settings "/" action opens. */
+const SETTINGS_ACTIONS: Readonly<Record<string, { section: SettingsSectionId; anchor: string | undefined }>> = {
+  skills: { section: "ai_skills", anchor: "ai-skills" },
+  memory: { section: "ai_memory", anchor: "ai-memory" },
+  mcp: { section: "ai_connections", anchor: "mcp-servers" },
+  routing: { section: "ai", anchor: "ai-routing" },
+  hub: { section: "ai", anchor: undefined },
+};
+
+/** Where a "/" action lands in Settings, or null for an action that stays in the composer. */
+export function slashSettingsTarget(name: string): { section: SettingsSectionId; anchor: string | undefined } | null {
+  return Object.hasOwn(SETTINGS_ACTIONS, name) ? SETTINGS_ACTIONS[name] : null;
 }
 
 /** Whether the palette offers an action: its control is drawn inside the composer. */

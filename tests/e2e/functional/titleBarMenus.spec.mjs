@@ -152,7 +152,7 @@ test.describe("title-bar menus", () => {
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("agent button: Ask an agent opens the assistant composer; the caret lists agents, hub and settings", async ({ page, baseURL }) => {
+  test("agent button: Ask an agent opens the assistant composer; the caret lists agents, AI settings and Manage agents", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
     const ask = bar(page).getByRole("button", { name: "Ask an agent" });
     const caret = bar(page).getByRole("button", { name: "Choose an agent" });
@@ -162,7 +162,7 @@ test.describe("title-bar menus", () => {
     await expect(composer(page)).toBeFocused();
     await caret.click();
     await expect(menus(page)).toHaveCount(1);
-    await expect(page.getByRole("menuitem", { name: "AI hub" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "AI settings" })).toBeVisible();
     await page.getByRole("menuitem", { name: "Manage agents…" }).click();
     await expect(page.locator('[data-osio-tabstrip] [data-tab-id][title="Settings"]')).toHaveCount(1);
   });
