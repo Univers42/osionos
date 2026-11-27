@@ -23,8 +23,8 @@ import { accountAddress, accountError, callerSession, clientMetaOf, noContent, r
 import { clientAddress, clientMeta, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { writeJsonResponse } from './bridge-json-response.mjs';
 import { sendJson } from './bridge-social-core.mjs';
-import { fromB64url, verifyMessage } from './ide-agent-frames.mjs';
-import { heartbeatMessage, isLoopbackIdeOrigin, newMachineId, signMachineToken, signResumeAssertion, whoamiMessage } from './ide-machine-protocol.mjs';
+import { fromB64url, signMessage, verifyMessage } from './ide-agent-frames.mjs';
+import { goneMessage, heartbeatMessage, isLoopbackIdeOrigin, newMachineId, signMachineToken, signResumeAssertion, whoamiMessage } from './ide-machine-protocol.mjs';
 import { createMachinePairing } from './bridge-machines-pairing.mjs';
 import { createSlidingLimiter } from './ide-relay-limits.mjs';
 import { acceptHeartbeatTs, bridgeKeysOf, dropPresence, machineSetup, readPresence, writePresence } from './bridge-machines-presence.mjs';
@@ -88,14 +88,30 @@ function createOpenRoutes({ config, pg, kv, pairing, now }) {
 		if (!approved) return openJson(ctx.response, 202, { status: 'pending' });
 		return openJson(ctx.response, 200, { ...approved, bridgeKeys: bridgeKeysOf(ctx.setup) });
 	}
-	// Unknown and revoked ids are one answer, so a heartbeat is no probe of what exists (condition 6).
+	// Unknown and revoked ids are one answer to anyone without the machine's key, so a heartbeat is
+	// no probe of what exists (condition 6, TB12). Only a revoked row's own key, on a fresh ts, gets
+	// the same 410 with a gone signed by the current bridge key (TB13): the node then unpairs itself.
+	// An unknown id never gets one, so a signed gone is never a probe answer either.
+	// Caveat: an erased account deletes its rows, so its machines only ever get the unsigned 410 and
+	// keep their identity until unpaired by hand (TB18, connector-guide.md).
+	const notPaired = () => accountError(410, 'gone', 'This machine is not paired.');
+	async function goneFor(ctx, row, { machineId, ideOrigin, ts, sig }) {
+		const message = heartbeatMessage({ origin: ctx.setup.origin, machineId, ideOrigin, ts });
+		if (!verifyMessage(fromB64url(row.pubkey), message, sig)) throw notPaired();
+		try { await acceptHeartbeatTs(kv, machineId, ts, ctx.now); } catch { throw notPaired(); }
+		const { origin, current } = ctx.setup;
+		const gone = { machineId, kid: current.kid, ts, sig: signMessage(current.privateKey, goneMessage({ origin, machineId, ts })) };
+		return openJson(ctx.response, 410, { ok: false, code: 'gone', message: 'This machine is not paired.', gone });
+	}
 	async function heartbeat(ctx) {
-		const { machineId, ideOrigin, ts, sig } = await openBody(ctx.request);
+		const body = await openBody(ctx.request);
+		const { machineId, ideOrigin, ts, sig } = body;
 		if (typeof machineId !== 'string' || !MACHINE_ID.test(machineId) || !isLoopbackIdeOrigin(ideOrigin)) throw badRequest();
 		const clientKey = clientAddress(ctx.request, { ipHeader: config.clientIpHeader });
 		if ((clientKey && !beatsPerClient.take(clientKey)) || !beatsGlobal.take('global')) throw beatLimited();
 		const row = await readMachine({ pg, id: machineId });
-		if (!row || row.revoked_at != null) throw accountError(410, 'gone', 'This machine is not paired.');
+		if (!row) throw notPaired();
+		if (row.revoked_at != null) return goneFor(ctx, row, { machineId, ideOrigin, ts, sig });
 		const message = heartbeatMessage({ origin: ctx.setup.origin, machineId, ideOrigin, ts });
 		if (!verifyMessage(fromB64url(row.pubkey), message, sig)) throw accountError(401, 'bad_signature', 'The signature does not verify.');
 		await acceptHeartbeatTs(kv, machineId, ts, ctx.now);
