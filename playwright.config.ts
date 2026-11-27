@@ -99,10 +99,10 @@ const chromiumExecutablePath = process.env.PW_CHROMIUM_PATH || undefined;
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: aiStub ? ["**/ai-stub/**/*.spec.mjs"] : bridgeStub ? ["**/bridge-stub/**/*.spec.mjs"] : undefined,
+  testMatch: aiStub ? ["**/ai-stub/**/*.spec.mjs", "**/perf/agentPage.perf.spec.mjs"] : bridgeStub ? ["**/bridge-stub/**/*.spec.mjs"] : undefined,
   testIgnore: [
     ...(bridgeStub ? [] : ["**/bridge-stub/**"]),
-    ...(aiStub ? [] : ["**/ai-stub/**"]),
+    ...(aiStub ? [] : ["**/ai-stub/**", "**/perf/agentPage.perf.spec.mjs"]),
     ...(legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`)),
     ...(perfRun ? [] : ["**/perf/**"]),
     ...(coeditRun ? [] : ["**/latency/**"]),

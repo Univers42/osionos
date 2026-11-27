@@ -65,6 +65,15 @@ function isRunExpired(error: unknown): boolean {
 }
 
 /**
+ * A resume that finds no run (404) after a start that failed: the run never existed,
+ * so the start's failure is the one worth telling. Ponytail: a run lost on the
+ * service between two resumes also answers 404 and keeps its earlier failure.
+ */
+function isNeverStarted(failure: unknown, attempt: number, error: unknown): boolean {
+  return attempt > 0 && failure !== undefined && failureOf(error).status === 404;
+}
+
+/**
  * Runs a run to its end, resuming it when the connection drops.
  *
  * The rules, in order: relay every frame exactly once; when the stream ends
@@ -110,7 +119,7 @@ export async function streamRun(options: StreamRunOptions): Promise<void> {
         const { status } = failureOf(error);
         if (status !== undefined && status >= 400 && status < 500) throw error;
       }
-      failure = error;
+      if (!isNeverStarted(failure, attempt, error)) failure = error;
       // A run whose stream is gone cannot be picked up again — say so, once.
       if (attempt > 0 && isRunExpired(error)) {
         onEvent("error", { code: "run_expired", message: "This run expired and cannot be resumed." });

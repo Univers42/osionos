@@ -14,6 +14,7 @@ import React, { Suspense, useState } from "react";
 
 import { ErrorBoundary, LoadingPane } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 import { tabToActivePage } from "@/widgets/workspace-grid/model/layoutSync";
 import { HomeTabView } from "./HomeTabView";
@@ -59,7 +60,7 @@ const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string; chrome?: "bar"
 
   if (!page) return <LoadingPane />;
   if (page.surface === "agent") {
-    return <div className="h-full overflow-hidden"><LazyAgentConversationPage pageId={tab.pageId} /></div>;
+    return <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">{isAiConfigured() ? <LazyChatShell /> : <LazyAgentConversationPage pageId={tab.pageId} />}</div>;
   }
   // IDE code file: line-based Monaco editor instead of the block editor.
   if (page.surface === "code") {
