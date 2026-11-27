@@ -4,6 +4,7 @@ import test, { afterEach } from "node:test";
 import { PenTool } from "lucide-react";
 
 import { RAIL_GROUPS, visibleRailItems } from "../../src/widgets/activity-rail/model/railItems.ts";
+import { whiteboardTab } from "../../src/widgets/workspace-grid/model/layoutPersist.ts";
 
 const appsGroup = RAIL_GROUPS.find((group) => group.id === "apps");
 
@@ -16,7 +17,7 @@ test("the apps group has exactly one static Whiteboard item that opens its tab",
   assert.equal(items.length, 1);
   assert.equal(items[0].label, "Whiteboard");
   assert.equal(items[0].Icon, PenTool);
-  assert.deepEqual(items[0].action, { kind: "tab", app: "whiteboard" });
+  assert.equal(items[0].action.kind === "workspaceTab" && items[0].action.makeTab, whiteboardTab);
   assert.ok(appsGroup?.items.includes(items[0]));
 });
 
@@ -32,8 +33,9 @@ test("the osio.whiteboard kill-switch hides only the Whiteboard icon", () => {
   assert.deepEqual(ids, appsGroup.items.map((item) => item.id).filter((id) => id !== "whiteboard"));
 });
 
-test("every other group shows all of its items", () => {
+test("every other group shows all of its ungated items", () => {
   for (const group of RAIL_GROUPS.filter((candidate) => candidate.id !== "apps")) {
-    assert.deepEqual(visibleRailItems(group), group.items);
+    const ungated = group.items.filter((item) => !item.isAvailable);
+    assert.deepEqual(visibleRailItems(group).filter((item) => !item.isAvailable), ungated);
   }
 });

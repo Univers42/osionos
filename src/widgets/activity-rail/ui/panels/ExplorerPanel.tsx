@@ -33,9 +33,6 @@ import type { ExplorerMenuRequest } from "@/features/ide/ui/useExplorerControlle
 import { useCanInviteMembers } from "@/features/settings/people/useCanInviteMembers";
 
 interface Props {
-  onOpenSettings?: () => void;
-  onOpenTrash?: () => void;
-  onOpenConsole?: () => void;
   /** Opens a tree entry. The rel-path to page/editor mapping is the caller's. */
   onOpenFile?: (relPath: string, kind: "page" | "code") => void;
 }
@@ -49,7 +46,7 @@ const SECTION_HINTS = {
 
 /** Explorer rail panel hosting the VFS explorer: the VFS tree plus
  *  a compact Recents strip. */
-export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole, onOpenFile = NOOP_OPEN }) => {
+export const ExplorerPanel: React.FC<Props> = ({ onOpenFile = NOOP_OPEN }) => {
   const explorerView = useExplorerView((s) => s.view);
   const { activeWorkspaceId, jwt } = useFetchActiveWorkspacePages();
   const { ops, importFolder, exportProject } = useWorkspaceFileOps();
@@ -145,9 +142,6 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
       </nav>
       </ExplorerSources>
       <SidebarFooter
-        onOpenSettings={onOpenSettings}
-        onOpenTrash={onOpenTrash}
-        onOpenConsole={onOpenConsole}
         showInviteCTA={showInviteCTA && canInvite}
         onDismissInvite={() => setShowInviteCTA(false)}
       />

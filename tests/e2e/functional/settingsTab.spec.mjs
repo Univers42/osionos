@@ -30,7 +30,7 @@ function region(page) {
 test.describe("the settings tab", () => {
   test("the rail opens a Settings tab with its region; clicking again focuses, never duplicates", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
 
     await expect(settingsTabInStrip(page)).toHaveCount(1);
     await expect(region(page)).toBeVisible();
@@ -52,7 +52,7 @@ test.describe("the settings tab", () => {
 
   test("search 'passkey' + Enter lands on Profile at the Account security anchor", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     await region(page).waitFor();
 
     const search = page.getByRole("searchbox", { name: "Search settings" });
@@ -65,7 +65,7 @@ test.describe("the settings tab", () => {
 
   test("Close Settings removes the region", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     await expect(region(page)).toBeVisible();
 
     await page.getByRole("button", { name: "Close Settings" }).click();
@@ -79,7 +79,7 @@ test.describe("the settings tab", () => {
     });
 
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     await expect(region(page)).toBeVisible();
 
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -89,7 +89,7 @@ test.describe("the settings tab", () => {
 
   test("at a phone width the section strip sits above the panel and nothing overflows", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     await expect(region(page)).toBeVisible();
 
     // The tab is arranged at the default viewport: at a phone width the rail's
@@ -107,7 +107,7 @@ test.describe("the settings tab", () => {
   test("in a split pane the nav stacks above the body and the Mode control fits its card", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     await expect(region(page)).toBeVisible();
 
     // Splitting duplicates the active tab: two settings panes, each 555px wide.

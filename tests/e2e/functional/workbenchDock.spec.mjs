@@ -258,7 +258,7 @@ test.describe("editor title bar", () => {
     await openFreshPage(page, baseURL);
     const page_ = await rect(page.locator("[data-osio-editor-titlebar] > div").first());
     const crumb = await rect(page.getByRole("navigation", { name: "Page breadcrumbs" }).locator("button, span").first());
-    await page.getByRole("button", { name: "Archived files" }).click();
+    await page.getByRole("tab", { name: "Archived files", exact: true }).click();
     const plain = page.locator("[data-osio-editor-titlebar]").filter({ hasText: /rash|rchived/ }).locator("> div").first();
     await expect(plain).toBeVisible();
     const box = await rect(plain);

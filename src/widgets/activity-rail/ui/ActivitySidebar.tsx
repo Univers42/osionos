@@ -24,8 +24,6 @@ import styles from "./ActivitySidebar.module.scss";
 
 interface Props {
   onOpenSettings?: () => void;
-  onOpenTrash?: () => void;
-  onOpenConsole?: () => void;
   /** Rendered as the hidden-mode peek overlay: no resize edge, a pin to dock. */
   peek?: boolean;
 }
@@ -45,7 +43,7 @@ interface Props {
  * once something opens or the page beside it is tapped: pushed in beside the
  * rail it left the page 67px wide.
  */
-export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole, peek = false }) => {
+export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, peek = false }) => {
   const sidebarMode = useUIStore((s) => s.sidebarMode);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
@@ -131,7 +129,7 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
     <div key="panel" ref={panelRef} className={styles.panel} data-osio-sidebar-card hidden={!showPanel}>
       {panelMounted ? (
         <div className={styles.panelInner} style={{ width: sidebarWidth }}>
-          <SidebarPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} peek={peek} />
+          <SidebarPanel peek={peek} />
         </div>
       ) : null}
     </div>,
