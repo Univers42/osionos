@@ -72,7 +72,7 @@ export const AgentButton: React.FC<{ ctx: MenuContext }> = ({ ctx }) => {
           className={cx(PART, "h-11 min-w-11 gap-1.5 rounded-l-[var(--osio-radius-chip)] px-2 text-sm sm:h-7 sm:min-w-7")}
         >
           <Sparkles size={14} aria-hidden />
-          <span className="hidden lg:inline" aria-hidden>Ask agent</span>
+          <span className="hidden lg:inline" aria-hidden>Ask an agent</span>
         </button>
         <button
           type="button"
