@@ -34,6 +34,7 @@
 /* Accent presets and the density, corner and text-size axes: attribute blocks on <html>. */
 @import "./appearance.css";
 @import "./surface.css";
+@import "./presets.css";
 /* Member identity colours, the ink printed on them, and remote-caret motion. */
 @import "./collab.css";
 /* Typing indicator and the flash over a block a collaborator just edited. */
