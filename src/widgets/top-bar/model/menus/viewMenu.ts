@@ -20,6 +20,7 @@ import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import type { MenuAction, MenuGroup } from "../menuTypes";
 import { whiteboardViewItems } from "../whiteboardMenuItems";
 import { appearanceSubmenu } from "./appearanceMenu";
+import { editorLayoutSubmenu } from "./editorLayoutMenu";
 import { layout, openTabAction, palette } from "./menuActions";
 
 /** The quick light/dark flip, which says why it does nothing while the active theme sets the mode. */
@@ -63,6 +64,7 @@ export function viewMenu(): MenuGroup {
       { id: "view.palette", label: "Command palette…", accelerator: "⌘⇧P", run: () => palette().openCommand(), separatorAfter: true },
       ...sidebarPanelRows(),
       appearanceSubmenu(),
+      editorLayoutSubmenu(),
       { id: "view.theme", label: "Toggle theme", run: toggleThemeFromMenu, separatorAfter: true },
       ...workbenchViewMenu(),
       openTabAction("view.home", "Home", homeTab),

@@ -112,7 +112,26 @@ test.describe("vscode shell keybindings", () => {
     await page.keyboard.press("Control+2");
     await expect(panes(page).nth(1)).toHaveAttribute("data-osio-pane-active", "");
   });
+
+  test("View > Editor layout > Single returns to one pane and loses no tab", async ({ page, baseURL }) => {
+    await openDesktop(page, baseURL);
+    await page.locator("body").press("Escape");
+    await chooseEditorLayout(page, "Split left");
+    await expect(panes(page)).toHaveCount(2);
+    await chooseEditorLayout(page, "Split down");
+    await expect(panes(page)).toHaveCount(3);
+    const tabs = await page.locator("[data-tab-id]").count();
+    await chooseEditorLayout(page, "Single");
+    await expect(panes(page)).toHaveCount(1);
+    await expect(page.locator("[data-tab-id]")).toHaveCount(tabs);
+  });
 });
+
+async function chooseEditorLayout(page, rowName) {
+  await page.getByTestId("app-topbar").getByRole("button", { name: "View", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Editor layout" }).click();
+  await page.getByRole("menuitem", { name: rowName, exact: true }).click();
+}
 
 async function chooseViewAppearance(page, rowName) {
   await page.getByTestId("app-topbar").getByRole("button", { name: "View", exact: true }).click();
