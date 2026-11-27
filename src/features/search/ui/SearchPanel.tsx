@@ -30,6 +30,7 @@ const FlagButton: React.FC<{ active: boolean; title: string; onClick: () => void
   <button
     type="button"
     aria-pressed={active}
+    data-touch-hit
     title={title}
     onClick={onClick}
     className={cx(
@@ -108,7 +109,7 @@ export const SearchPanel: React.FC = () => {
           <input name="search-query"
             value={s.query}
             onChange={(e) => s.patch({ query: e.target.value })}
-            placeholder="Search"
+            placeholder="Search all pages"
             aria-label="Search query"
             className={cx(inputClass, "pr-20", s.status === "error" && "border-[var(--osio-danger)]")}
           />
@@ -141,7 +142,7 @@ export const SearchPanel: React.FC = () => {
           </div>
         </div>
 
-        <button type="button" onClick={() => s.patch({ showOptions: !s.showOptions })} className="flex items-center gap-1 px-1 text-xs text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]">
+        <button type="button" data-touch-hit onClick={() => s.patch({ showOptions: !s.showOptions })} className="flex items-center gap-1 px-1 text-xs text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]">
           <Settings2 size={12} /> {s.showOptions ? "Hide" : "More"} options
         </button>
         {s.showOptions ? (

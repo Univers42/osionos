@@ -50,7 +50,7 @@ export const SettingsSearch: React.FC = () => {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Search actions..."
+          placeholder="Search settings"
           className="min-w-0 flex-1 bg-transparent text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
         />
       </label>

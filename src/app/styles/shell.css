@@ -43,8 +43,10 @@
 
 /* A finger needs 44px. The top bar, the rail and the status bar keep their look and
    grow only the hit area (a centred ::before); the dock tabs sit in a scrolling strip
-   that would clip one, so they grow instead. A phone also needs 16px in a field, or
-   iOS zooms the page on focus. */
+   that would clip one, so they grow instead (the workspace tab strip does the same,
+   in TabButton/TabStrip). Menu rows grow to the target, and a menu with no submenu is
+   capped to the screen and scrolls; the search panel's toggles take a ::before. A phone
+   also needs 16px in a field, or iOS zooms the page on focus. */
 @media (pointer: coarse) {
   :is([data-testid="app-topbar"] button, aside[aria-label="Sidebar"] [role="tab"], [data-testid="workbench-statusbar"] button):not(.absolute, .fixed) {
     position: relative;
@@ -63,6 +65,30 @@
   [role="tablist"][aria-label="Panel tabs"] [role="tab"] {
     min-width: var(--osio-touch-target);
     min-height: var(--osio-touch-target);
+  }
+
+  .osio-menu-item {
+    height: auto;
+    min-height: var(--osio-touch-target);
+  }
+
+  [role="menu"][data-menu-level="0"]:not(:has([aria-haspopup="menu"])) {
+    max-height: calc(100dvh - 5rem);
+    overflow-y: auto;
+  }
+
+  [data-touch-hit]:not(.absolute, .fixed) {
+    position: relative;
+  }
+
+  [data-touch-hit]::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--osio-touch-target));
+    height: max(100%, var(--osio-touch-target));
+    transform: translate(-50%, -50%);
   }
 }
 
