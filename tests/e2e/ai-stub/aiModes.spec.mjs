@@ -133,7 +133,8 @@ async function reloadAndExpectUndone(page, seen) {
   const reads = () => seen.filter((s) => s.call === `GET /conversations/${SERVER_ID}/applied`).length;
   const before = reads();
   await page.reload({ waitUntil: "domcontentloaded" });
-  // The Assistant tab comes back open: pick the conversation from its own history.
+  // The Assistant tab comes back open: pick the conversation from the sidebar's Assistant panel.
+  await page.getByRole("button", { name: "Show chats and context" }).click();
   await page.getByRole("navigation", { name: "Chat history" }).getByRole("button", { name: TITLE }).click();
   await expect(menu(page)).toBeEnabled();
   const rows = page.getByTestId("chat-applied-write").filter({ visible: true });

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { RAIL_GROUPS, isRailItemActive, visibleRailItems, type RailItem } from "../../src/widgets/activity-rail/model/railItems.ts";
-import { aiHubTab, consoleTab, mailTab, trashTab } from "../../src/widgets/workspace-grid/model/layoutPersist.ts";
+import { consoleTab, libraryTab, mailTab, trashTab } from "../../src/widgets/workspace-grid/model/layoutPersist.ts";
 
 const ALL = RAIL_GROUPS.flatMap((group) => group.items);
 const item = (id: string): RailItem => {
@@ -31,9 +31,9 @@ test("a panel item is active only while its panel is shown", () => {
 });
 
 test("a tab item is active while its tab is the focused one", () => {
-  assert.equal(isRailItemActive(item("ai-hub"), { ...SHOWN, activePageId: aiHubTab().pageId }), true);
-  assert.equal(isRailItemActive(item("ai-hub"), { ...SHOWN, activePageId: mailTab().pageId }), false);
-  assert.equal(isRailItemActive(item("ai-hub"), SHOWN), false);
+  assert.equal(isRailItemActive(item("library"), { ...SHOWN, activePageId: libraryTab().pageId }), true);
+  assert.equal(isRailItemActive(item("library"), { ...SHOWN, activePageId: mailTab().pageId }), false);
+  assert.equal(isRailItemActive(item("library"), SHOWN), false);
 });
 
 test("archived files is a rail entry of the workspace group, opening the trash tab", () => {

@@ -40,7 +40,7 @@ import type { ActivePanel } from "@/shared/config/uiStore";
 import type { CommandId } from "@/features/automations/model/types";
 import { roleAtLeast, type PlatformRole } from "@/features/auth/model/platformRole";
 import {
-  adminTab, aiHubTab, calendarTab, consoleTab, libraryTab, mailTab, trashTab, whiteboardTab,
+  adminTab, calendarTab, consoleTab, libraryTab, mailTab, trashTab, whiteboardTab,
 } from "@/widgets/workspace-grid/model/layoutPersist";
 import { prefetchPageLibraryView } from "@/widgets/page-renderer/ui/lazyViews";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
@@ -123,7 +123,7 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
     label: "Conversations",
     items: [
       { id: "conversations", label: "Conversations", Icon: MessagesSquare, action: { kind: "panel", panel: "conversations" }, commandId: "focusConversations" },
-      { id: "ai-hub", label: "AI Hub", Icon: Sparkles, action: { kind: "workspaceTab", makeTab: aiHubTab } },
+      { id: "assistant", label: "Assistant", Icon: Sparkles, action: { kind: "panel", panel: "assistant" } },
       { id: "notifications", label: "Notifications", Icon: Bell, action: { kind: "panel", panel: "notifications" } },
     ],
   },

@@ -33,7 +33,7 @@ async function stubChat(page) {
 
 /** The rail's panels and tabs other than Conversations and Calendar, which have their own tests. */
 const RAIL_SURFACES = ["Explorer", "Search", "Databases", "My Tasks", "Shared", "Library", "Source Control", "Run",
-  "Problems", "Issues", "AI Hub", "Notifications", "Marketplace", "Settings"];
+  "Problems", "Issues", "Assistant", "Notifications", "Marketplace", "Settings"];
 
 /** openSignedIn, minus its wait on the first "Settings" button, which a phone lays out hidden. */
 async function openSignedIn(page, baseURL) {

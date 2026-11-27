@@ -1,5 +1,5 @@
 import React, { useId, useState } from "react";
-import { BookOpen, CircleCheck, CircleX, FileText, Globe, Layers, LoaderCircle, X } from "lucide-react";
+import { BookOpen, CircleCheck, CircleX, FileText, Globe, Layers, LoaderCircle } from "lucide-react";
 
 import type { ContextChip } from "@/features/ai/model/aiContext";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
@@ -17,7 +17,6 @@ interface Props {
   selection: AiSelection;
   sources: readonly TrailSource[];
   activities: readonly TrailActivity[];
-  onClose: () => void;
 }
 
 const Empty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -131,8 +130,8 @@ const ActivityTab: React.FC<{ activities: readonly TrailActivity[] }> = ({ activ
   );
 };
 
-/** The right panel: what the chat reads and sends, the sources it cited, and what it did. */
-export const BrainContextPanel: React.FC<Props> = ({ chips, selection, sources, activities, onClose }) => {
+/** What the open chat reads and sends, the sources it cited, and what it did. */
+export const ChatContextTabs: React.FC<Props> = ({ chips, selection, sources, activities }) => {
   const [tab, setTab] = useState<Tab>("context");
   const baseId = useId();
   const tabs: Array<{ id: Tab; label: string; count?: number }> = [
@@ -141,7 +140,7 @@ export const BrainContextPanel: React.FC<Props> = ({ chips, selection, sources, 
     { id: "activity", label: "Activity", count: activities.length },
   ];
   return (
-    <aside aria-label="Chat context" className="flex h-full w-80 shrink-0 flex-col border-l border-[var(--osio-border-soft)] bg-[var(--osio-bg-panel)]">
+    <div className="flex flex-col">
       <div className="flex items-center gap-1 border-b border-[var(--osio-border-soft)] px-2 py-1.5">
         <div role="tablist" aria-label="Chat context" className="flex flex-1 gap-0.5">
           {tabs.map((entry) => (
@@ -162,15 +161,12 @@ export const BrainContextPanel: React.FC<Props> = ({ chips, selection, sources, 
             </button>
           ))}
         </div>
-        <button type="button" onClick={onClose} aria-label="Close the context panel" className="rounded-md p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]">
-          <X size={15} aria-hidden="true" />
-        </button>
       </div>
-      <div id={`${baseId}-panel`} role="tabpanel" aria-labelledby={`${baseId}-${tab}`} className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div id={`${baseId}-panel`} role="tabpanel" aria-labelledby={`${baseId}-${tab}`} className="max-h-80 overflow-y-auto p-3">
         {tab === "context" ? <ContextTab chips={chips} selection={selection} /> : null}
         {tab === "sources" ? <SourcesTab sources={sources} /> : null}
         {tab === "activity" ? <ActivityTab activities={activities} /> : null}
       </div>
-    </aside>
+    </div>
   );
 };
