@@ -78,6 +78,9 @@ test("Go back is Alt+Left and Ctrl+Alt+-, Go forward is Alt+Right", () => {
   assert.equal(commandFor("alt+arrowleft"), "goBack");
   assert.equal(commandFor("mod+alt+-"), "goBack");
   assert.equal(commandFor("alt+arrowright"), "goForward");
+  assert.equal(commandFor("alt+arrowleft", true), null);
+  assert.equal(commandFor("alt+arrowright", true), null);
+  assert.equal(commandFor("mod+alt+-", true), "goBack");
 });
 
 test("Ctrl+Shift+- stays pane zoom-out and never means Go forward", () => {

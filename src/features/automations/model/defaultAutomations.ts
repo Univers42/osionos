@@ -40,9 +40,10 @@ export const DEFAULT_AUTOMATIONS: Automation[] = [
   shortcut("quick-open", "Go to page (Quick Open)", "mod+p", "openSearch", "always"),
   shortcut("explorer-panel", "Show or hide Explorer", "mod+shift+e", "toggleExplorerPanel", "always"),
   shortcut("scm-panel", "Show or hide Source Control", "mod+shift+g", "toggleScmPanel", "always"),
-  shortcut("go-back", "Go back", "alt+arrowleft", "goBack", "always"),
+  // Alt+Arrow stays the caret's word jump inside text (macOS Option+Arrow).
+  shortcut("go-back", "Go back", "alt+arrowleft", "goBack", "notInText"),
   shortcut("go-back-alt", "Go back (Ctrl+Alt+-)", "mod+alt+-", "goBack", "always"),
-  shortcut("go-forward", "Go forward", "alt+arrowright", "goForward", "always"),
+  shortcut("go-forward", "Go forward", "alt+arrowright", "goForward", "notInText"),
   shortcut("focus-editor-group-1", "Focus editor group 1", "mod+1", "focusEditorGroup1", "always"),
   shortcut("focus-editor-group-2", "Focus editor group 2", "mod+2", "focusEditorGroup2", "always"),
   shortcut("focus-editor-group-3", "Focus editor group 3", "mod+3", "focusEditorGroup3", "always"),

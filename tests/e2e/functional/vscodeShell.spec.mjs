@@ -93,7 +93,7 @@ test.describe("vscode shell keybindings", () => {
     const b = await activeTabId(page);
     expect(b).not.toBe(a);
     expect(await goBackAndForwardRows(page)).toEqual({ back: null, forward: "true" });
-    await page.locator("body").press("Escape");
+    await page.evaluate(() => document.activeElement?.blur());
     await page.keyboard.press("Alt+ArrowLeft");
     await expect.poll(() => activeTabId(page)).toBe(a);
     expect(await goBackAndForwardRows(page)).toMatchObject({ forward: null });
