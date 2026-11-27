@@ -136,7 +136,7 @@ test.describe("title-bar menus", () => {
     const before = await toggle.getAttribute("aria-pressed");
     await openMenu(page, "View");
     await page.getByRole("menuitem", { name: "Appearance" }).hover();
-    const row = page.getByRole("menuitemcheckbox", { name: "Panel" });
+    const row = page.getByRole("menuitemcheckbox", { name: /^Panel\b/ });
     await expect(row).toHaveAttribute("aria-checked", before);
     await row.click();
     await expect(toggle).toHaveAttribute("aria-pressed", before === "true" ? "false" : "true");
