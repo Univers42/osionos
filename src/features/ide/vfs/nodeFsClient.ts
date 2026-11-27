@@ -13,7 +13,8 @@ const WIRE_ERRORS = new Set<FsErrorCode>([
 /** The node's own word for a save over a file that changed: not an error, a choice for the person. */
 export class DiskConflict extends Error {}
 
-export type NodeFsCredential = { token: string } | { secret: string };
+/** The socket's first message: one credential and the app origin it was granted under (TB3). */
+export type NodeFsCredential = ({ token: string } | { secret: string }) & { appOrigin: string };
 
 export interface NodeFsSocket {
   send(text: string): void;
@@ -31,7 +32,6 @@ export interface NodeFsDeps {
   credential(): Promise<NodeFsCredential>;
   keepSecret(secret: string): void;
   dropSecret(): void;
-  appOrigin: string;
   onState(state: NodeFsState): void;
   /** Waits before a reconnect; injected so tests do not sleep. */
   later?: (run: () => void) => void;
@@ -100,7 +100,7 @@ export function createNodeFsClient(deps: NodeFsDeps): NodeFsClient {
     const next = deps.open();
     socket = next;
     next.onopen = () => {
-      void deps.credential().then((credential) => next.send(JSON.stringify({ ...credential, appOrigin: deps.appOrigin })));
+      void deps.credential().then((credential) => { if (socket === next) next.send(JSON.stringify(credential)); });
     };
     next.onmessage = (event) => onMessage(String(event.data));
     next.onclose = (event) => {
