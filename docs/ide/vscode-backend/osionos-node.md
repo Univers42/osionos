@@ -19,6 +19,9 @@ It installs or updates osionos-node, pairs this machine, renewing a code that ex
 serves it. Leave it running. Enter the code in the app's Terminal panel. Running it again
 updates the checkout and rebuilds the pages, which is the fix for a node older than the app.
 
+Pairing once, reopening without a code, `osionos status`, repair and removal:
+[connector-guide.md](connector-guide.md).
+
 ## Run it by hand
 
 ```sh
