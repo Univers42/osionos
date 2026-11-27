@@ -27,6 +27,12 @@ export const DOCK_MARGIN: Readonly<Record<DockPosition, string>> = Object.freeze
   left: "my-[var(--osio-frame-gap)] ml-[var(--osio-frame-gap)]",
 });
 
+/** The dock card while maximized: it fills the body with the gap on all four sides. */
+export const DOCK_MAXIMIZED = "m-[var(--osio-frame-gap)] min-h-0 min-w-0 flex-1";
+
+/** The dock card at its stored size: it never flexes. */
+export const DOCK_SIZED = "shrink-0";
+
 /** The dock's inline size: a height at the bottom, a width on a side. Both are clamped to the
  *  window now, because a stored size can predate a smaller one. */
 export function dockSizeStyle(position: DockPosition, height: number, width: number): CSSProperties {

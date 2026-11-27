@@ -29,8 +29,9 @@ import { IdeProblemsPanel } from "@/features/ide/ui/IdeProblemsPanel";
 import { SandboxUnavailable } from "@/features/ide/ui/SandboxUnavailable";
 import { DOCK_TABS, type DockPosition, type DockTab } from "@/widgets/workbench/model/workbenchLayout";
 import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";
+import { DockMaximizeButton } from "./DockMaximizeButton";
 import { DockPositionMenu } from "./DockPositionMenu";
-import { DOCK_MARGIN, dockSizeStyle } from "./dockFrame";
+import { DOCK_MARGIN, DOCK_MAXIMIZED, DOCK_SIZED, dockSizeStyle } from "./dockFrame";
 import { ICON_BTN } from "./dockIconButton";
 
 // Lazy so xterm.js (~250KB) loads only when the terminal first opens.
@@ -201,7 +202,7 @@ const DockTabs: React.FC<{ active: DockTab; conflicts: number }> = ({ active, co
 
 /** The dock, at the bottom or on a side: Terminal / Problems / Output / Ports. The terminal
  *  stays MOUNTED (hidden) on other tabs so its PTY socket and scrollback survive. */
-export const WorkbenchDock: React.FC<{ position: DockPosition }> = ({ position }) => {
+export const WorkbenchDock: React.FC<{ position: DockPosition; maximized?: boolean }> = ({ position, maximized = false }) => {
   const active = useWorkbenchStore((s) => s.dockTab);
   const closeDock = useWorkbenchStore((s) => s.closeDock);
   const height = useWorkbenchStore((s) => s.dockHeight);
@@ -216,10 +217,10 @@ export const WorkbenchDock: React.FC<{ position: DockPosition }> = ({ position }
       data-testid="workbench-dock"
       data-code-theme="app"
       data-osio-code-chrome
-      style={dockSizeStyle(position, height, width)}
+      style={maximized ? undefined : dockSizeStyle(position, height, width)}
       // A card like a pane: it clips the terminal to its corners, sits the same
       // gutter in from the canvas, and the splitter above it is the gap.
-      className={`${DOCK_MARGIN[position]} flex shrink-0 flex-col overflow-hidden rounded-[var(--osio-radius-pane)] border-[length:var(--osio-dock-border-width)] border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-dock-shadow)]`}
+      className={`${maximized ? DOCK_MAXIMIZED : `${DOCK_MARGIN[position]} ${DOCK_SIZED}`} flex flex-col overflow-hidden rounded-[var(--osio-radius-pane)] border-[length:var(--osio-dock-border-width)] border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-dock-shadow)]`}
     >
       {/* The tabs scroll sideways when the actions would otherwise be pushed out of the card (phone width). */}
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-2 text-xs text-[var(--osio-code-fg-muted)]">
@@ -230,6 +231,7 @@ export const WorkbenchDock: React.FC<{ position: DockPosition }> = ({ position }
         {active === "terminal" && vsCodePanel && <ComputerActions />}
         {active === "output" && <OutputActions />}
         <DockPositionMenu />
+        <DockMaximizeButton position={position} />
         <Tooltip label="Hide panel" side="bottom">
           <button type="button" aria-label="Hide panel" onClick={closeDock} className={ICON_BTN}>
             <X size={14} />
