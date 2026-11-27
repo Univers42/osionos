@@ -1,8 +1,9 @@
 // The live wiring of the web dock's terminal frame (terminalFrame.ts): the account's machines, the
 // bridge's mint and identity check, the app's step-up prompt, and the phase the status bar's
 // "This computer" chip shows. One frame per dock; the panel starts and stops it. `remember` is the
-// step-up dialog's "Remember this computer" box, on by default (owner, 2026-11-01): a token minted
-// while it is checked lets the node give the terminal frame a device secret (Amendment 1, R6).
+// step-up dialog's "Remember this computer" box, on by default (owner, 2026-11-01). Its checked state
+// is consent only for the mint right after the step-up that showed it (ADR 0041 R6,
+// rememberConsent.ts): any other mint, as one with no step-up at all, carries remember: false.
 import { create } from "zustand";
 
 import { newNonce } from "@/features/ide/vscode/ideFrameProtocol";
@@ -10,9 +11,13 @@ import type { TerminalColors } from "@/features/ide/model/terminalPort";
 import { onSudoGranted, useSudoPromptStore } from "@/features/settings/ui/sudo/sudoPromptModel";
 import { mintMachineToken, mintResumeAssertion, verifyMachineIdentity } from "../api/machinesApi";
 import { lookupOwnMachine } from "./machineWindowStore";
+import { createRememberConsent } from "./rememberConsent";
 import { createTerminalFrame, type LocalNetworkState, type TerminalFramePhase, type TerminalFrameDeps } from "./terminalFrame";
 
 export const useTerminalFrameStore = create<{ phase: TerminalFramePhase | "idle"; remember: boolean }>()(() => ({ phase: "idle", remember: true }));
+
+/** The dock terminal's consent: its step-up box calls `shown`, its mint reads `remember`. */
+export const terminalRemember = createRememberConsent(() => useTerminalFrameStore.getState().remember);
 
 // Chrome names the permission "local-network-access"; a browser without it rejects the query.
 export async function localNetwork(): Promise<LocalNetworkState> {
@@ -71,8 +76,11 @@ export function startMachineFrame({ frame, probeOldNode, colors, theme, onConnec
 export function startTerminalFrame(hooks: FrameHooks): () => void {
   const { stop } = startMachineFrame({
     ...hooks,
-    onPhase: (phase) => useTerminalFrameStore.setState({ phase }),
-    remember: () => useTerminalFrameStore.getState().remember,
+    onPhase: (phase) => {
+      terminalRemember.onPhase(phase);
+      useTerminalFrameStore.setState({ phase });
+    },
+    remember: terminalRemember.remember,
   });
   return () => {
     stop();

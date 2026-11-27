@@ -160,3 +160,19 @@ test("the download button appears only when its address is set; try again is alw
   assert.equal(terminalFramePanel("connecting", "").tryAgain, false);
   assert.equal(terminalFramePanel("other-account", "").pair, true);
 });
+
+// D5 (devil verdict 2026-11-27): a Connector installed but stopped is started, not reinstalled. The
+// commands stay out of the title and detail (W14) and are their own copyable lines.
+test("D5: not running offers the start commands for Linux and macOS before the install pitch; no other panel does", () => {
+  const panel = terminalFramePanel("no-node", "https://example.test/connector");
+  assert.deepEqual(panel?.start, {
+    lead: "Already set up on this computer? Start it:",
+    commands: [
+      { label: "Linux", command: "systemctl --user start osionos-node" },
+      { label: "macOS", command: "launchctl load ~/Library/LaunchAgents/com.osionos.node.plist" },
+    ],
+  });
+  assert.equal(panel?.download, "https://example.test/connector", "the install pitch stays");
+  const others: TerminalFramePhase[] = ["connecting", "step-up", "lna-blocked", "old-node", "other-account", "mismatch", "unavailable", "error"];
+  for (const phase of others) assert.equal(terminalFramePanel(phase, "https://example.test/connector")?.start, null, phase);
+});

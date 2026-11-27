@@ -15,6 +15,7 @@ import { openMachineFile } from "../model/machineFileTab";
 import { useMachineExplorer } from "../model/machineExplorerStore";
 import { terminalFramePanel } from "../model/terminalFrame";
 import { localNetwork } from "../model/terminalFrameStore";
+import { RememberComputerChoice } from "./RememberComputerChoice";
 
 export const MachineExplorerSection: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   const used = useMachineExplorer((state) => state.used);
@@ -49,7 +50,7 @@ export const MachineExplorerSection: React.FC<{ collapsed: boolean }> = ({ colla
   const mayPromptStepUp = React.useCallback(() => asked.current, []);
 
   const armed = allowed && everOpened;
-  const { frameRef, attempt, phase, ready, post, tryAgain } = useEditorFrame({ armed, mayPromptStepUp, onMessage });
+  const { frameRef, attempt, phase, ready, post, rememberShown, tryAgain } = useEditorFrame({ armed, mayPromptStepUp, onMessage });
 
   React.useEffect(() => {
     if (!ready || handled.current === openFolderRequests) return;
@@ -70,7 +71,7 @@ export const MachineExplorerSection: React.FC<{ collapsed: boolean }> = ({ colla
         className="absolute inset-0 h-full w-full border-0 bg-transparent"
       />
       {panel && <MachineFramePanel tone="sidebar" panel={panel} waiting={phase === "connecting"} pairing={phase === "no-node" || phase === "other-account"} onTryAgain={tryAgain} />}
-      {phase === "step-up" && <SudoPrompt />}
+      {phase === "step-up" && <SudoPrompt extra={<RememberComputerChoice onShown={rememberShown} />} />}
     </div>
   );
 };
