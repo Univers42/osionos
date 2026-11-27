@@ -126,7 +126,7 @@ export const ThemeSettings: React.FC<{ theme: ThemeSelection }> = ({ theme }) =>
         <PaletteGrid palette={theme.palette} onSelect={theme.selectPalette} />
       </AppearanceRow>
       <div className="border-t border-[var(--osio-border-default)] py-3 empty:hidden">
-        <ThemeLibraryControls />
+        <ThemeLibraryControls mode={theme.mode} />
       </div>
     </>
   );
