@@ -39,8 +39,10 @@ export function loadMachine(file) {
 	if (!existsSync(file)) return null;
 	assertPrivateFolder(dirname(file));
 	assertPrivateFile(file);
-	const value = JSON.parse(readFileSync(file, 'utf8'));
-	if (!isMachine(value)) throw new Error(`${file} is not a machine identity; pair again (osionos-node pair)`);
+	// TB22: JSON.parse quotes the text around a fault, which here can be the private key.
+	let value = null;
+	try { value = JSON.parse(readFileSync(file, 'utf8')); } catch { value = null; }
+	if (!isMachine(value)) throw new Error(`${file}: machine.json is unreadable; remove the machine in the app, move this file aside, and run the install line again`);
 	return value;
 }
 

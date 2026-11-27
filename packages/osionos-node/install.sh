@@ -228,7 +228,7 @@ if [ "$(uname -s)" = Darwin ]; then
 <key>Label</key><string>com.osionos.node</string>
 <key>ProgramArguments</key><array><string>$START</string></array>
 <key>RunAtLoad</key><true/>
-<key>KeepAlive</key><true/>
+<key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
 </dict></plist>
 PLIST_BODY
     launchctl unload "$PLIST" 2>/dev/null || true

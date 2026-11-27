@@ -1,6 +1,6 @@
 // `osionos-node pair` and the heartbeat (own-machines plan, devil verdict 2026-10-31, 3, 4, 6, 7),
 // against a fake bridge: the machine signs what the contract says, writes its identity only after
-// the owner accepts the account, and leaves on a 410.
+// the owner accepts the account, and stays paired on an unsigned 410.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, existsSync, statSync, readFileSync } from 'node:fs';
@@ -124,13 +124,11 @@ test('a reply that lists none of the pinned keys changes nothing', async (t) => 
 	assert.deepEqual(loadMachine(file).bridgeKeys, { [KEY.kid]: KEY.publicKey });
 });
 
-test('a 410 removes machine.json and calls onGone', async (t) => {
+test('an unsigned 410 keeps machine.json and never calls onGone (TB15)', async (t) => {
 	const { file } = pairedFile(t);
-	let gone = false;
-	const beat = createHeartbeat({ file, keys: { [KEY.kid]: KEY.publicKey }, ideOrigin: 'http://127.0.0.1:4100', fetchImpl: async () => reply(410, { code: 'gone' }), onGone: () => { gone = true; } });
-	assert.equal(await beat.once(), 'gone');
-	assert.equal(gone, true);
-	assert.equal(existsSync(file), false);
+	const beat = createHeartbeat({ file, keys: { [KEY.kid]: KEY.publicKey }, ideOrigin: 'http://127.0.0.1:4100', log: () => {}, fetchImpl: async () => reply(410, { code: 'gone' }), onGone: () => assert.fail('not gone') });
+	assert.equal(await beat.once(), 'refused');
+	assert.equal(existsSync(file), true);
 });
 
 test('an unreachable bridge is not a revocation', async (t) => {
