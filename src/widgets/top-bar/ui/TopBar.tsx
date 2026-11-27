@@ -10,12 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { SettingsSectionId } from "@/features/settings/model/sections";
 import { useUIStore } from "@/shared/config/uiStore";
 import { buildCommands, type PaletteCommand } from "../model/commands";
 import { buildMenus } from "../model/menus";
 import { usePalette, useTopBarHotkeys } from "../model/usePalette";
+import type { SettingsTable } from "../model/usePaletteResults";
 import { SharedSpacePresenceBar } from "@/features/collab/ui/SharedSpacePresenceBar";
 import { AgentButton } from "./AgentButton";
 import { LayoutToggles } from "./LayoutToggles";
@@ -62,6 +63,21 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
     });
   }, [paletteOpen, settingsCommands]);
 
+  // The ':' table loads the same way, on its own: a failure shows in the ':'
+  // rows instead of taking the commands down with it.
+  const [inlineSettings, setInlineSettings] = useState<SettingsTable>("loading");
+  const settingsRequested = useRef(false);
+  useEffect(() => {
+    if (!paletteOpen || settingsRequested.current) return;
+    settingsRequested.current = true;
+    import("@/features/settings/model/inlineSettings")
+      .then((module) => setInlineSettings(module.inlineSettings()))
+      .catch(() => {
+        console.warn("[top-bar] inline settings failed to load");
+        setInlineSettings("failed");
+      });
+  }, [paletteOpen]);
+
   return (
     <header
       data-testid="app-topbar"
@@ -73,7 +89,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
       </div>
 
       <div className="flex min-w-0 flex-1 justify-center px-3">
-        <TopBarSearch commands={commands} />
+        <TopBarSearch commands={commands} settings={inlineSettings} />
       </div>
 
       <AgentButton ctx={ctx} />

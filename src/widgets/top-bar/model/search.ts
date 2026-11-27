@@ -25,7 +25,9 @@ export interface PaletteResult {
   title: string;
   subtitle?: string;
   accelerator?: string;
-  kind: "page" | "command" | "person" | "message";
+  kind: "page" | "command" | "person" | "message" | "setting" | "mode";
+  /** Set on a row that narrows the bar instead of acting: choosing it replaces the query with this text. */
+  refine?: string;
   run: () => void;
 }
 

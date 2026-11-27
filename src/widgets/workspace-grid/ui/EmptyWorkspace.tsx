@@ -11,15 +11,14 @@
 /* ************************************************************************** */
 
 // What a pane shows with nothing open, like VS Code's empty editor: a greeting,
-// one field to ask Binocle, then two columns, the ways to start (each with its
-// keys) and the pages visited last. Nothing is opened for the user.
+// then two columns, the ways to start (each with its keys) and the pages
+// visited last. Nothing is opened for the user. Asking Binocle starts in the
+// top bar, the app's one entry point, not in a field of its own here.
 
 import React, { useState } from "react";
-import { ArrowUp } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { useUserStore } from "@/features/auth";
-import { openAssistantWith } from "@/features/chat/model/openAssistantWith";
 import { isAutomationsEnabled } from "@/shared/config/featureFlags";
 import { useAutomationStore } from "@/features/automations/model/useAutomationStore";
 import { shortcutLabel } from "@/features/automations/model/shortcutLabel";
@@ -63,33 +62,6 @@ const Keys: React.FC<{ label: string }> = ({ label }) => (
     ))}
   </span>
 );
-
-/** Enter hands the words to the Assistant's composer and opens it; nothing is
- *  sent until the user presses Send there (the C419 hand-off). */
-const AskBinocle: React.FC = () => {
-  const [text, setText] = useState("");
-  const submit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    openAssistantWith({ text: text.trim() });
-  };
-  return (
-    <form aria-label="Ask Binocle" onSubmit={submit} className="osio-welcome-ask">
-      <input
-        type="text"
-        name="welcome-ask"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        aria-label="Ask Binocle"
-        placeholder="Ask Binocle anything…"
-        autoComplete="off"
-        className="min-w-0 flex-1 bg-transparent text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
-      />
-      <button type="submit" aria-label="Open the assistant" className="osio-welcome-ask-send">
-        <ArrowUp size={16} aria-hidden />
-      </button>
-    </form>
-  );
-};
 
 const StartList: React.FC<{ automations: readonly Automation[]; showKeys: boolean }> = ({ automations, showKeys }) => {
   const headingId = React.useId();
@@ -139,7 +111,6 @@ export const EmptyWorkspace: React.FC = () => {
             <p className="mt-0.5 text-sm text-[var(--osio-fg-muted)]">What would you like to work on?</p>
           </div>
         </div>
-        <AskBinocle />
         <div className="osio-welcome-columns">
           <StartList automations={automations} showKeys={showKeys} />
           <WelcomeRecents headingClass={HEADING} />

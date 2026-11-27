@@ -100,8 +100,7 @@ export const DIR_ACTIONS: PageMenuAction[] = [
         return;
       }
       // Open the palette pre-scoped to this folder's name (instant page search).
-      usePalette.getState().openSearch();
-      usePalette.getState().setQuery(ctx.page.title || "");
+      usePalette.getState().openSearch(ctx.page.title || "");
     },
   },
   {

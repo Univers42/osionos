@@ -7,7 +7,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { openFreshPage, waitForRenderStability } from "../../browser/core/app.mjs";
+import { closeAllTabs, openFreshPage } from "../../browser/core/app.mjs";
 import { openSettings } from "../support/settingsHelpers.mjs";
 import { chooseViewAppearance } from "../support/viewMenu.mjs";
 
@@ -17,15 +17,6 @@ const AI_SECTIONS = ["osionos AI", "AI agents", "AI skills", "AI memory", "AI co
 async function violations(page) {
   const { violations: found } = await new AxeBuilder({ page }).withTags(WCAG_AA).analyze();
   return found.map((v) => ({ id: v.id, help: v.help, nodes: v.nodes.slice(0, 4).map((n) => n.target.join(" ")), count: v.nodes.length }));
-}
-
-async function closeAllTabs(page) {
-  const tabs = page.locator("[data-tab-id]");
-  for (let guard = 0; guard < 10 && (await tabs.count()) > 0; guard += 1) {
-    await tabs.first().getByTitle("Close tab").click({ force: true });
-    await waitForRenderStability(page);
-  }
-  await expect(tabs).toHaveCount(0);
 }
 
 for (const theme of ["light", "dark"]) {

@@ -232,6 +232,17 @@ export async function waitForRenderStability(page) {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
 }
 
+/** Closes every tab, Home included, through each tab's own close button, leaving the
+ *  welcome. Bounded at 10 tabs: a test that opens more fails on the count below. */
+export async function closeAllTabs(page) {
+  const tabs = page.locator("[data-tab-id]");
+  for (let guard = 0; guard < 10 && (await tabs.count()) > 0; guard += 1) {
+    await tabs.first().getByTitle("Close tab").click({ force: true });
+    await waitForRenderStability(page);
+  }
+  await expect(tabs).toHaveCount(0);
+}
+
 export async function selectText(editor, text, occurrence = 0) {
   const content = await editorText(editor);
   let startIndex = -1;

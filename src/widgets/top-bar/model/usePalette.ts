@@ -14,6 +14,7 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { isAutomationsEnabled } from "@/shared/config/featureFlags";
+import { literalQuery } from "./paletteModes";
 
 interface PaletteState {
   open: boolean;
@@ -22,7 +23,10 @@ interface PaletteState {
   focusSeq: number;
   setQuery: (query: string) => void;
   setOpen: (open: boolean) => void;
-  openSearch: () => void;
+  /** Opens a search for `text` as written: a title starting with a prefix ("#1 roadmap") is not read as a mode. */
+  openSearch: (text?: string) => void;
+  /** Opens the bar in one mode, the caret after its prefix. */
+  openWith: (prefix: string) => void;
   openCommand: () => void;
   close: () => void;
 }
@@ -33,15 +37,11 @@ export const usePalette = create<PaletteState>((set) => ({
   focusSeq: 0,
   setQuery: (query) => set({ query }),
   setOpen: (open) => set({ open }),
-  openSearch: () => set((state) => ({ open: true, query: "", focusSeq: state.focusSeq + 1 })),
+  openSearch: (text = "") => set((state) => ({ open: true, query: literalQuery(text), focusSeq: state.focusSeq + 1 })),
+  openWith: (prefix) => set((state) => ({ open: true, query: prefix, focusSeq: state.focusSeq + 1 })),
   openCommand: () => set((state) => ({ open: true, query: ">", focusSeq: state.focusSeq + 1 })),
   close: () => set({ open: false }),
 }));
-
-/** Command mode is active when the query starts with '>'. */
-export function isCommandMode(query: string): boolean {
-  return query.startsWith(">");
-}
 
 /**
  * Global top-bar chords, mounted once by TopBar: ⌘K search, ⌘⇧P command,

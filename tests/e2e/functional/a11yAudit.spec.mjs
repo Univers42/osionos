@@ -124,6 +124,16 @@ for (const theme of ["light", "dark"]) {
       expect(await violations(page)).toEqual([]);
     });
 
+    // The settings, ask and help modes add their own chip, hint and rows to the bar.
+    for (const prefix of [":", "/", "?"]) {
+      test(`the bar's "${prefix}" mode has no AA violation`, async ({ page, baseURL }) => {
+        await openFreshPage(page, baseURL);
+        await page.getByRole("combobox", { name: "Search pages or run a command" }).fill(prefix);
+        await expect(page.getByRole("option").first()).toBeVisible();
+        expect(await violations(page)).toEqual([]);
+      });
+    }
+
     // The Connect button sat inside each person option: a control in a control, out of
     // keyboard reach, since focus stays on the combobox. The option opens the profile tab,
     // which carries the reachable Connect button (#224).
