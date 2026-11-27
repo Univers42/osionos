@@ -142,6 +142,18 @@ test.describe("title-bar menus", () => {
     await expect(toggle).toHaveAttribute("aria-pressed", before === "true" ? "false" : "true");
   });
 
+  // Pointing at a submenu row opens it, so the click that follows must not toggle it shut.
+  test("clicking a submenu row the pointer already opened keeps it open", async ({ page, baseURL }) => {
+    await openPage(page, baseURL);
+    await openMenu(page, "View");
+    const appearance = page.getByRole("menuitem", { name: "Appearance" });
+    await appearance.hover();
+    await expect(appearance).toHaveAttribute("aria-expanded", "true");
+    await appearance.click();
+    await expect(appearance).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("menuitemcheckbox", { name: /^Panel\b/ })).toBeVisible();
+  });
+
   test("the Primary side bar toggle hides and restores the sidebar", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
     const toggle = bar(page).getByRole("button", { name: "Primary side bar", exact: true });

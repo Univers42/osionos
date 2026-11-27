@@ -70,7 +70,9 @@ interface SubmenuRowProps {
   onSub: (id: string | null) => void;
 }
 
-/** A row that opens a one-level panel to its right while `open`. */
+/** A row that opens a one-level panel to its right while `open`. A click only
+ *  opens: the pointer that clicks has already opened it on enter, so a toggle
+ *  shut it whenever the hover render committed before the click. */
 const SubmenuRow: React.FC<SubmenuRowProps> = ({ item, open, onSelect, onSub }) => (
   <div className="relative" onPointerEnter={() => onSub(item.id)}>
     <button
@@ -81,7 +83,7 @@ const SubmenuRow: React.FC<SubmenuRowProps> = ({ item, open, onSelect, onSub }) 
       tabIndex={-1}
       data-menu-id={item.id}
       data-menu-label={item.label}
-      onClick={() => onSub(open ? null : item.id)}
+      onClick={() => onSub(item.id)}
       className={cx("osio-menu-item justify-between", open && "bg-[var(--osio-bg-hover)]")}
     >
       <span>{item.label}</span>
