@@ -68,4 +68,32 @@ export const GENERATED_PALETTES: readonly PaletteMeta[] = [
     signatureMode: "light",
     swatches: ["#F2F0EC", "#FFFFFF", "#9C4426", "#1B1A18"],
   },
+  {
+    id: "fjord",
+    label: "Fjord",
+    description: "Cold slate surfaces with a glacier-teal accent: a deep, quiet dark and a crisp pale light.",
+    signatureMode: "dark",
+    swatches: ["#0C151B", "#1E2326", "#63B5B0", "#DFECF4"],
+  },
+  {
+    id: "orchid",
+    label: "Orchid",
+    description: "Lilac-tinted greys with a clear violet accent: soft and floral without turning pink.",
+    signatureMode: "light",
+    swatches: ["#F2EFF5", "#FFFFFF", "#6C46B7", "#1B191C"],
+  },
+  {
+    id: "sage",
+    label: "Sage",
+    description: "Green-grey surfaces with a deep forest accent: a calm, grounded light and a mossy dark.",
+    signatureMode: "light",
+    swatches: ["#EDF2EE", "#FFFFFF", "#1D7446", "#191A19"],
+  },
+  {
+    id: "dusk",
+    label: "Dusk",
+    description: "Plum-blue surfaces lit by a warm amber accent, like a window after sunset.",
+    signatureMode: "dark",
+    swatches: ["#19101B", "#242025", "#CE9959", "#F2E5F4"],
+  },
 ];
