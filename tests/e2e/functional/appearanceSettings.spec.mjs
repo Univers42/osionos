@@ -112,7 +112,7 @@ test.describe("appearance settings", () => {
     expect(stored.motionSpeed).toBe("default");
     const axes = await page.evaluate(() => Object.keys(document.documentElement.dataset).filter((key) => key !== "theme" && key !== "palette"));
     expect(axes).toEqual([]);
-    await expect(region(page).getByText("Everything is at its default.")).toBeVisible();
+    await expect(region(page).locator('[data-settings-anchor="appearance-backup"]').getByText("Everything is at its default.")).toBeVisible();
   });
 
   for (const [transition, fromOpacity] of [["blur", "0"], ["none", "1"]]) {
