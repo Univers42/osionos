@@ -42,6 +42,12 @@
   box-shadow: var(--osio-pane-shadow);
 }
 
+/* On the right the panel's content edge faces left, so the border colours swap. */
+.activitySidebar[data-sidebar-side="right"] .panel {
+  border-right-color: var(--osio-pane-border);
+  border-left-color: var(--osio-sidebar-border-end);
+}
+
 .activitySidebar[data-sidebar-mode="peek"] .panel {
   border: 0;
   border-radius: 0;
@@ -88,6 +94,18 @@
   width: 1px;
   background: transparent;
   transition: background-color var(--osio-motion-fast);
+}
+
+/* Mirrored: the handle is first in the DOM and the gap lies to its left. */
+.activitySidebar[data-sidebar-side="right"] .resizeHandle::before {
+  left: auto;
+  right: calc(var(--osio-frame-gap) / 2);
+  transform: translateX(50%);
+}
+
+.activitySidebar[data-sidebar-side="right"] .resizeHandle::after {
+  left: auto;
+  right: calc(var(--osio-frame-gap) / 2);
 }
 
 .resizeHandle:hover::after,

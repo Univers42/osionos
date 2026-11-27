@@ -14,7 +14,7 @@ import { toggleZenWithExitHint, useZenMode } from "@/shared/config/useZenMode";
 import { useUIStore } from "@/shared/config/uiStore";
 import { workbenchAppearanceMenu } from "@/widgets/workbench/model/workbenchMenuActions";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
-import type { MenuSubmenu } from "../menuTypes";
+import type { MenuAction, MenuSubmenu } from "../menuTypes";
 
 /** Tell the user the browser refused full screen (iframe without permission, unsupported). */
 function fullscreenRefused(): void {
@@ -25,6 +25,15 @@ function fullscreenRefused(): void {
 function toggleFullscreen(): void {
   const request = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   void request.catch(fullscreenRefused);
+}
+
+/** "Move primary side bar right/left": the label names where the click sends it. */
+function sidebarSideRow(): MenuAction {
+  const toRight = useUIStore.getState().sidebarSide !== "right";
+  return {
+    id: "view.sidebar-side", label: toRight ? "Move primary side bar right" : "Move primary side bar left",
+    run: () => useUIStore.getState().toggleSidebarSide(),
+  };
 }
 
 /**
@@ -44,6 +53,7 @@ export function appearanceSubmenu(): MenuSubmenu {
         run: () => useUIStore.getState().toggleDocked(),
         checked: () => useUIStore.getState().sidebarMode === "panel",
       },
+      sidebarSideRow(),
       ...workbenchAppearanceMenu(),
     ],
   };

@@ -113,3 +113,55 @@ test.describe("vscode shell keybindings", () => {
     await expect(panes(page).nth(1)).toHaveAttribute("data-osio-pane-active", "");
   });
 });
+
+async function chooseViewAppearance(page, rowName) {
+  await page.getByTestId("app-topbar").getByRole("button", { name: "View", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Appearance" }).click();
+  await page.getByRole("menuitem", { name: rowName }).click();
+}
+
+const railBox = (page) => page.getByRole("tablist", { name: "Activity bar" }).first().boundingBox();
+const mainBox = (page) => page.locator("#osio-main").boundingBox();
+
+test.describe("primary side bar side", () => {
+  test("Move primary side bar right puts the rail right of main, survives reload, and moves back", async ({ page, baseURL }) => {
+    await openDesktop(page, baseURL);
+    const before = await railBox(page);
+    expect(before.x).toBeLessThan((await mainBox(page)).x);
+    await chooseViewAppearance(page, "Move primary side bar right");
+    await expect.poll(async () => (await railBox(page)).x).toBeGreaterThan((await mainBox(page)).x);
+    await expect(sidebar(page)).toHaveAttribute("data-sidebar-side", "right");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(sidebar(page)).toHaveAttribute("data-sidebar-side", "right");
+    expect((await railBox(page)).x).toBeGreaterThan((await mainBox(page)).x);
+    await chooseViewAppearance(page, "Move primary side bar left");
+    await expect(sidebar(page)).toHaveAttribute("data-sidebar-side", "left");
+  });
+
+  test("on the right the resize handle comes first in the DOM and dragging it left widens the panel", async ({ page, baseURL }) => {
+    await openDesktop(page, baseURL);
+    await chooseViewAppearance(page, "Move primary side bar right");
+    await expect(sidebar(page)).toHaveAttribute("data-sidebar-side", "right");
+    const order = await sidebar(page).evaluate((el) => Array.from(el.children).map((c) => c.getAttribute("role") ?? c.tagName));
+    expect(order[0]).toBe("separator");
+    const handle = page.getByRole("separator", { name: "Resize sidebar" });
+    const width = async () => Number(await handle.getAttribute("aria-valuenow"));
+    const start = await width();
+    const box = await handle.boundingBox();
+    await page.mouse.move(box.x - 2, box.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(box.x - 42, box.y + 200, { steps: 6 });
+    await page.mouse.up();
+    await expect.poll(width).toBeGreaterThan(start);
+  });
+
+  test("a phone ignores the setting and never scrolls sideways", async ({ page, baseURL }) => {
+    await openDesktop(page, baseURL);
+    await chooseViewAppearance(page, "Move primary side bar right");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(sidebar(page)).toHaveAttribute("data-sidebar-side", "left");
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    expect((await railBox(page)).x).toBeLessThan((await mainBox(page)).x + 1);
+  });
+});

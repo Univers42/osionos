@@ -16,7 +16,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import { useUIStore } from "@/shared/config/uiStore";
+import { useUIStore, type SidebarSide } from "@/shared/config/uiStore";
+import { useEffectiveSidebarSide } from "@/shared/config/useSidebarSide";
 import { ActivitySidebar } from "./ActivitySidebar";
 import styles from "./SidebarEdgePeek.module.scss";
 
@@ -34,8 +35,15 @@ interface Props {
   onOpenConsole?: () => void;
 }
 
+/** True when `clientX` is on the content side of `rect`: right of it for a left side bar, left of it for a right one. */
+function isTowardContent(rect: DOMRect | undefined, clientX: number, side: SidebarSide): boolean {
+  if (!rect) return false;
+  return side === "right" ? clientX < rect.left : clientX > rect.right;
+}
+
 export const SidebarEdgePeek: React.FC<Props> = (props) => {
   const hidden = useUIStore((s) => s.sidebarMode === "hidden");
+  const side = useEffectiveSidebarSide();
   const [arming, setArming] = useState(false);
   const [open, setOpen] = useState(false);
   const [pointerWasAway, setPointerWasAway] = useState(false);
@@ -70,12 +78,11 @@ export const SidebarEdgePeek: React.FC<Props> = (props) => {
   useEffect(() => {
     if (!hidden || pointerWasAway) return undefined;
     const onMove = (event: PointerEvent) => {
-      const right = edgeRef.current?.getBoundingClientRect().right ?? 0;
-      if (event.clientX > right) setPointerWasAway(true);
+      if (isTowardContent(edgeRef.current?.getBoundingClientRect(), event.clientX, side)) setPointerWasAway(true);
     };
     document.addEventListener("pointermove", onMove);
     return () => document.removeEventListener("pointermove", onMove);
-  }, [hidden, pointerWasAway]);
+  }, [hidden, pointerWasAway, side]);
 
   const onEdgeEnter = () => {
     if (!pointerWasAway) return;
@@ -109,13 +116,12 @@ export const SidebarEdgePeek: React.FC<Props> = (props) => {
   useEffect(() => {
     if (!open) return undefined;
     const onMove = (event: PointerEvent) => {
-      const right = overlayRef.current?.getBoundingClientRect().right ?? 0;
-      if (event.clientX > right) scheduleHide();
+      if (isTowardContent(overlayRef.current?.getBoundingClientRect(), event.clientX, side)) scheduleHide();
       else cancelHide();
     };
     document.addEventListener("pointermove", onMove);
     return () => document.removeEventListener("pointermove", onMove);
-  }, [open, scheduleHide, cancelHide]);
+  }, [open, scheduleHide, cancelHide, side]);
 
   if (!hidden) return null;
 
@@ -125,6 +131,7 @@ export const SidebarEdgePeek: React.FC<Props> = (props) => {
         ref={edgeRef}
         aria-hidden
         data-sidebar-edge
+        data-side={side}
         data-arming={arming ? "" : undefined}
         className={styles.edge}
         onPointerEnter={onEdgeEnter}
@@ -133,6 +140,7 @@ export const SidebarEdgePeek: React.FC<Props> = (props) => {
       <div
         ref={overlayRef}
         data-sidebar-peek
+        data-side={side}
         data-open={open ? "" : undefined}
         className={styles.overlay}
         inert={!open}

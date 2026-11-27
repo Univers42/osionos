@@ -24,13 +24,12 @@ import { useZenMode } from "@/shared/config/useZenMode";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
 import { usePageStore } from "@/store/usePageStore";
 import { loadActivePage } from "@/store/pageStore.helpers";
-import { ActivitySidebar } from "@/widgets/activity-rail";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
 import { useNavHistoryRecorder } from "@/widgets/workspace-grid/model/useNavHistory";
 import { useDocumentTitle } from "@/widgets/workspace-grid/model/tabTitle";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
-import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
+import { SidebarHosts } from "./SidebarHosts";
 import { LazyCanvasDebugRoute, LazyMachineView, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
 import { syncObjectDbForAccount } from "./objectDbAccountSync";
 import { PrivateWorkspaceScreen, SigningInScreen } from "./SessionGateScreens";
@@ -216,6 +215,12 @@ const App: React.FC = () => {
   // A connected machine's folder (ADR-006): signed in, and nothing of the workbench around it.
   if (globalThis.location?.pathname === "/machine") return <LazyMachineView />;
 
+  const sidebarHandlers = {
+    onOpenSettings: () => openSettings(),
+    onOpenTrash: () => useWorkspaceLayout.getState().openTab(trashTab()),
+    onOpenConsole: () => useWorkspaceLayout.getState().openTab(consoleTab()),
+  };
+
   return (
     <BindingSourcesProvider>
       <div
@@ -236,19 +241,7 @@ const App: React.FC = () => {
         <TopBar onOpenSettings={openSettings} />
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          {/* Left sidebar */}
-          <ActivitySidebar
-            onOpenSettings={() => openSettings()}
-            onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
-            onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
-          />
-
-          {/* Hidden sidebar: the left edge reveals it over the page (no floating button). */}
-          <SidebarEdgePeek
-            onOpenSettings={() => openSettings()}
-            onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
-            onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
-          />
+          <SidebarHosts edge="left" {...sidebarHandlers} />
 
           {/* Content area — the unified workbench (grid + dock + status bar), or the
               no-access screen when a shared link pointed at an unreadable page. */}
@@ -261,6 +254,8 @@ const App: React.FC = () => {
               <LazyWorkbench />
             )}
           </main>
+
+          <SidebarHosts edge="right" {...sidebarHandlers} />
         </div>
 
         <ShellHosts />

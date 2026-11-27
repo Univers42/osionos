@@ -48,3 +48,21 @@ test("migrateUiState v0 maps the old open flag and leaves a docked mode to retur
   assert.equal(v1.lastDockedMode, "panel");
   assert.ok(v1.sidebarWidth <= 480);
 });
+
+test("migrateUiState gives every older blob the left side and keeps a stored right", () => {
+  assert.equal(migrateUiState({ sidebarMode: "panel", activePanel: "files" }, 2).sidebarSide, "left");
+  assert.equal(migrateUiState({ isSidebarOpen: false }, 0).sidebarSide, "left");
+  assert.equal(migrateUiState({ sidebarMode: "rail" }, 1).sidebarSide, "left");
+  assert.equal(migrateUiState({ sidebarSide: "right" }, 3).sidebarSide, "right");
+  assert.equal(migrateUiState({ sidebarSide: "sideways" }, 3).sidebarSide, "left");
+  assert.equal(migrateUiState(undefined, 2).sidebarSide, "left");
+});
+
+test("the store flips the side and back", async () => {
+  const { useUIStore } = await import("../../src/shared/config/uiStore.ts");
+  assert.equal(useUIStore.getState().sidebarSide, "left");
+  useUIStore.getState().toggleSidebarSide();
+  assert.equal(useUIStore.getState().sidebarSide, "right");
+  useUIStore.getState().setSidebarSide("left");
+  assert.equal(useUIStore.getState().sidebarSide, "left");
+});

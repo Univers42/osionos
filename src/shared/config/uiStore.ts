@@ -34,6 +34,9 @@ export type ActivePanel =
   | 'problems'
   | 'issues';
 
+/** Which edge of the workbench the primary side bar docks to (VS Code: Move Primary Side Bar Right). */
+export type SidebarSide = 'left' | 'right';
+
 /** Panel-width bounds (px). The rail itself is a fixed ~48px, set in CSS. */
 /** Where Ctrl+Alt+B goes from `mode`: a docked sidebar (panel or rail) hides,
  *  a hidden one comes back as it was docked last. */
@@ -64,6 +67,10 @@ const clampPanelWidth = (width: number) =>
 interface UIStore {
   // --- VSCode-style sidebar state machine -------------------------------
   sidebarMode: SidebarMode;
+  /** Persisted; a phone ignores it (the drawer opens from the left). */
+  sidebarSide: SidebarSide;
+  setSidebarSide: (side: SidebarSide) => void;
+  toggleSidebarSide: () => void;
   activePanel: ActivePanel;
   setSidebarMode: (mode: SidebarMode) => void;
   setActivePanel: (panel: ActivePanel) => void;
@@ -89,7 +96,7 @@ interface UIStore {
 /** Persisted-state migration. v0 → v1: the old {isSidebarOpen, width} blob
  *  maps onto the mode machine. v1 → v2: the panel id "messenger" became
  *  "conversations" and Ctrl+Alt+B remembers the docked mode. */
-export function migrateUiState(persisted: unknown, version: number): UIStore {
+function migrateDocking(persisted: unknown, version: number): UIStore {
   const prev = (persisted ?? {}) as Partial<UIStore>;
   if (version < 1) {
     const open = prev.isSidebarOpen !== false;
@@ -113,6 +120,12 @@ export function migrateUiState(persisted: unknown, version: number): UIStore {
   return prev as UIStore;
 }
 
+/** v2 → v3 adds `sidebarSide`: every older blob (and any unknown value) docks left, as before. */
+export function migrateUiState(persisted: unknown, version: number): UIStore {
+  const docked = migrateDocking(persisted, version);
+  return { ...docked, sidebarSide: docked.sidebarSide === 'right' ? 'right' : 'left' };
+}
+
 /**
  * Shared store for layout and UI state, persisted to localStorage so the
  * sidebar mode/width survive reloads. The sidebar is a small state machine
@@ -130,6 +143,9 @@ export const useUIStore = create<UIStore>()(
 
       return {
         sidebarMode: 'panel',
+        sidebarSide: 'left',
+        setSidebarSide: (side) => set({ sidebarSide: side }),
+        toggleSidebarSide: () => set({ sidebarSide: get().sidebarSide === 'right' ? 'left' : 'right' }),
         lastDockedMode: 'panel',
         activePanel: 'files',
         isSidebarOpen: true,
@@ -171,7 +187,7 @@ export const useUIStore = create<UIStore>()(
     {
       name: 'ui-storage', // key in localStorage
       storage: noticingJsonStorage('Sidebar layout'),
-      version: 2,
+      version: 3,
       // Map the old {isSidebarOpen, sidebarWidth, ...} blob onto the new shape
       // so existing users keep their width and aren't reset to defaults.
       migrate: migrateUiState,
