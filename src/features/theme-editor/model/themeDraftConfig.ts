@@ -12,7 +12,7 @@
 
 import { applyCompiledTheme, applyStoredTheme } from "@/shared/config/themeApply";
 import { compileTheme } from "@/shared/config/themeDoc";
-import { readStoredPalette, readStoredThemeMode } from "@/shared/config/theme";
+import { readCurrentPalette, readCurrentThemeMode } from "@/shared/config/theme";
 import { listThemes, resolveTheme } from "@/features/theme/model/useThemeLibrary";
 import { isShippedThemeName } from "@/shared/config/themes";
 import { useThemeLibrary } from "@/features/theme/model/useThemeLibrary";
@@ -61,14 +61,14 @@ function currentBase(): "light" | "dark" {
   if (typeof document !== "undefined" && (document.documentElement.dataset.theme === "dark" || document.documentElement.dataset.theme === "light")) {
     return document.documentElement.dataset.theme as "light" | "dark";
   }
-  return readStoredThemeMode() === "dark" ? "dark" : "light";
+  return readCurrentThemeMode() === "dark" ? "dark" : "light";
 }
 
 function skeletonDoc(): ThemeDoc {
   return {
     name: uniqueMyThemeName(),
     base: currentBase(),
-    palette: readStoredPalette(),
+    palette: readCurrentPalette(),
     colors: {
       "bg-page": liveValue("bg-page"),
       "fg-default": liveValue("fg-default"),
@@ -97,7 +97,7 @@ export function themeDraftConfig(target: ThemeJsonTarget, pageId: string): Draft
     initialDoc.name = uniqueMyThemeName();
     if (!activeDoc) {
       initialDoc.base = currentBase();
-      initialDoc.palette = readStoredPalette();
+      initialDoc.palette = readCurrentPalette();
       initialDoc.colors = {
         "bg-page": liveValue("bg-page"),
         "fg-default": liveValue("fg-default"),

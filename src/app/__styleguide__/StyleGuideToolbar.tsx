@@ -6,7 +6,7 @@ import {
   PALETTES,
   persistPalette,
   persistThemeMode,
-  readStoredPalette,
+  readCurrentPalette,
 } from "@/shared/config/theme";
 
 const CONTROL =
@@ -61,7 +61,7 @@ const ModeToggle: React.FC<ModeToggleProps> = ({ mode, onChange }) => (
 );
 
 export const StyleGuideToolbar: React.FC = () => {
-  const [palette, setPalette] = useState(readStoredPalette);
+  const [palette, setPalette] = useState(readCurrentPalette);
   const [mode, setMode] = useState<"light" | "dark">(() =>
     document.documentElement.dataset.theme === "dark" ? "dark" : "light",
   );

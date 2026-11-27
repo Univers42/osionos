@@ -101,6 +101,10 @@ const PaletteGrid: React.FC<{ palette: string; onSelect: (id: string) => void }>
 export const ThemeSettings: React.FC<{ theme: ThemeSelection }> = ({ theme }) => {
   const activeThemeName = useThemeLibrary((s) => s.activeTheme);
   const activeThemeDoc = activeThemeName ? resolveTheme(activeThemeName) : null;
+  // Caveat: the theme document is read as well as the runtime pin (theme.ts
+  // isThemeBasePinned) so this panel re-renders when the theme changes; for the
+  // moment between choosing a theme and themeApply pinning it, this panel says
+  // "Set by" while the top bar's ':' rows do not yet.
   const pinnedBase = Boolean(activeThemeDoc?.base) || isThemeBasePinned();
   const pinnedPalette = Boolean(activeThemeDoc?.palette);
   return (
