@@ -89,6 +89,21 @@ test("each theme shows off the part of the format it is named for", () => {
   assert.ok(paper["font-family-serif"] || paper["font-family-sans"]);
 });
 
+const toMs = (value: string | undefined): number => {
+  const match = /^(\d*\.?\d+)(ms|s)$/.exec(value ?? "");
+  return match ? Number(match[1]) * (match[2] === "s" ? 1000 : 1) : Number.NaN;
+};
+
+for (const { name, raw } of themes) {
+  test(`${name}: sets its own motion, instant to slow in order`, () => {
+    const layout = raw.layout ?? {};
+    assert.ok(layout["ease-standard"], "sets ease-standard");
+    const steps = ["dur-instant", "dur-fast", "dur-base", "dur-slow"].map((key) => toMs(layout[key]));
+    assert.ok(steps.every((ms) => !Number.isNaN(ms)), `durations ${steps.join(", ")}`);
+    assert.deepEqual([...steps].sort((a, b) => a - b), steps);
+  });
+}
+
 for (const { name, raw } of themes) {
   test(`${name}: code text is AA wherever the theme sets both colours`, () => {
     const colors = raw.colors ?? {};

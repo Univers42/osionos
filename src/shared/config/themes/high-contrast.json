@@ -31,7 +31,13 @@
   "layout": {
     "focus-ring-width": "3px",
     "focus-ring-offset": "2px",
-    "border-width": "2px"
+    "border-width": "2px",
+    "ease-standard": "linear",
+    "ease-spring": "linear",
+    "dur-instant": "0ms",
+    "dur-fast": "60ms",
+    "dur-base": "90ms",
+    "dur-slow": "140ms"
   },
   "fonts": {
     "font-size-ui": "16px",

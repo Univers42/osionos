@@ -28,7 +28,13 @@
     "danger-fg": "#ffffff"
   },
   "layout": {
-    "page-max-width": "760px"
+    "page-max-width": "760px",
+    "ease-standard": "cubic-bezier(.4,0,.2,1)",
+    "ease-spring": "cubic-bezier(.4,0,.2,1)",
+    "dur-instant": "64ms",
+    "dur-fast": "160ms",
+    "dur-base": "256ms",
+    "dur-slow": "416ms"
   },
   "fonts": {
     "font-family-sans": "\"Newsreader\", Georgia, \"Iowan Old Style\", serif",
