@@ -81,3 +81,33 @@ test("setDockPosition ignores an invalid position and setDockWidth clamps with t
     useWorkbenchStore.setState({ dockPosition: "bottom", dockWidth: 420 });
   }
 });
+
+test("maximize toggles, closeDock and a closing toggleDock reset it, setDockPosition keeps it", () => {
+  const api = useWorkbenchStore;
+  try {
+    api.setState({ dockOpen: true, dockMaximized: false });
+    api.getState().toggleDockMaximized();
+    assert.equal(api.getState().dockMaximized, true);
+    api.getState().setDockPosition("right");
+    assert.equal(api.getState().dockMaximized, true);
+    api.getState().closeDock();
+    assert.deepEqual([api.getState().dockOpen, api.getState().dockMaximized], [false, false]);
+    api.setState({ dockOpen: true, dockMaximized: true });
+    api.getState().toggleDock();
+    assert.deepEqual([api.getState().dockOpen, api.getState().dockMaximized], [false, false]);
+    api.getState().toggleDock();
+    assert.equal(api.getState().dockMaximized, false);
+    api.getState().closeDock();
+    api.getState().toggleDockMaximized();
+    assert.deepEqual([api.getState().dockOpen, api.getState().dockMaximized], [true, true]);
+  } finally {
+    api.setState({ dockOpen: false, dockMaximized: false, dockPosition: "bottom" });
+  }
+});
+
+test("maximize is never persisted: sanitizePersisted ignores it and partialize omits it", () => {
+  assert.equal("dockMaximized" in sanitizePersisted({ dockMaximized: true }, 1000), false);
+  const options = useWorkbenchStore.persist.getOptions();
+  const saved = options.partialize?.({ ...useWorkbenchStore.getState(), dockMaximized: true });
+  assert.equal(saved !== undefined && "dockMaximized" in saved, false);
+});

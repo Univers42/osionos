@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { DockTab } from "@/widgets/workbench/model/workbenchLayout";
+import type { DockPosition, DockTab } from "@/widgets/workbench/model/workbenchLayout";
 import type { MenuAction } from "./menuTypes";
 
 /**
@@ -33,11 +33,13 @@ export function terminalMenuAction(
 
 export interface WorkbenchViewActionMap {
   toggleDock: () => void;
+  toggleDockMaximized: () => void;
   toggleStatusBar: () => void;
   openProblems: () => void;
   openOutput: () => void;
   openPorts: () => void;
   isDockOpen: () => boolean;
+  isDockMaximized: () => boolean;
   isStatusBarVisible: () => boolean;
 }
 
@@ -49,8 +51,21 @@ export interface WorkbenchViewActionMap {
 export function workbenchAppearanceItems(actions: WorkbenchViewActionMap): MenuAction[] {
   return [
     { id: "view.panel", label: "Panel", accelerator: "⌃J", run: actions.toggleDock, checked: actions.isDockOpen },
+    { id: "view.panel-maximize", label: "Maximize panel", run: actions.toggleDockMaximized, checked: actions.isDockMaximized },
     { id: "view.statusbar", label: "Status bar", run: actions.toggleStatusBar, checked: actions.isStatusBarVisible },
   ];
+}
+
+const POSITION_LABEL: ReadonlyArray<readonly [DockPosition, string]> = [["bottom", "Bottom"], ["left", "Left"], ["right", "Right"]];
+
+/**
+ * The "Panel position" group of Customize Layout: Bottom, Left, Right, the one
+ * matching `current()` checked. Pure over its two injected functions.
+ */
+export function panelPositionItems(current: () => DockPosition, setPosition: (position: DockPosition) => void): MenuAction[] {
+  return POSITION_LABEL.map(([position, label]) => ({
+    id: `layout.panel-position.${position}`, label, run: () => setPosition(position), checked: () => current() === position,
+  }));
 }
 
 /**

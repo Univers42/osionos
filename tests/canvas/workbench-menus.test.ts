@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  terminalMenuAction, workbenchAppearanceItems, workbenchViewItems, type WorkbenchViewActionMap,
+  panelPositionItems, terminalMenuAction, workbenchAppearanceItems, workbenchViewItems, type WorkbenchViewActionMap,
 } from "../../src/widgets/top-bar/model/workbenchMenuItems.ts";
 
 test("terminalMenuAction: split always returns split", () => {
@@ -38,9 +38,11 @@ test("terminalMenuAction: new with dock open on terminal returns new", () => {
 });
 
 /** An action map whose every action records its name, and whose region readers answer from `state`. */
-function recordingActions(calls: string[], state = { dock: false, status: false }): WorkbenchViewActionMap {
+function recordingActions(calls: string[], state = { dock: false, status: false, maximized: false }): WorkbenchViewActionMap {
   return {
     toggleDock: () => calls.push("toggleDock"),
+    toggleDockMaximized: () => calls.push("toggleDockMaximized"),
+    isDockMaximized: () => state.maximized,
     toggleStatusBar: () => calls.push("toggleStatusBar"),
     openProblems: () => calls.push("openProblems"),
     openOutput: () => calls.push("openOutput"),
@@ -66,10 +68,11 @@ test("workbenchViewItems: one separator closes the dock-tab group", () => {
   assert.deepEqual(items.map((i) => i.separatorAfter === true), [false, false, true]);
 });
 
-test("workbenchAppearanceItems: Panel and Status bar keep their old ids, Panel carries ⌃J", () => {
+test("workbenchAppearanceItems: Panel and Status bar keep their old ids, Panel carries ⌃J, Maximize panel sits between", () => {
   const items = workbenchAppearanceItems(recordingActions([]));
   assert.deepEqual(items.map((i) => [i.id, i.label, i.accelerator]), [
     ["view.panel", "Panel", "⌃J"],
+    ["view.panel-maximize", "Maximize panel", undefined],
     ["view.statusbar", "Status bar", undefined],
   ]);
 });
@@ -77,14 +80,26 @@ test("workbenchAppearanceItems: Panel and Status bar keep their old ids, Panel c
 test("workbenchAppearanceItems: each row calls its action once", () => {
   const calls: string[] = [];
   for (const item of workbenchAppearanceItems(recordingActions(calls))) item.run();
-  assert.deepEqual(calls, ["toggleDock", "toggleStatusBar"]);
+  assert.deepEqual(calls, ["toggleDock", "toggleDockMaximized", "toggleStatusBar"]);
 });
 
 test("workbenchAppearanceItems: checked is read from the region readers when asked, not when built", () => {
-  const state = { dock: false, status: true };
+  const state = { dock: false, status: true, maximized: false };
   const items = workbenchAppearanceItems(recordingActions([], state));
-  assert.deepEqual(items.map((i) => i.checked?.()), [false, true]);
+  assert.deepEqual(items.map((i) => i.checked?.()), [false, false, true]);
   state.dock = true;
+  state.maximized = true;
   state.status = false;
-  assert.deepEqual(items.map((i) => i.checked?.()), [true, false]);
+  assert.deepEqual(items.map((i) => i.checked?.()), [true, true, false]);
+});
+
+test("panelPositionItems: Bottom, Left, Right with exactly the current one checked, each running setPosition", () => {
+  for (const current of ["bottom", "left", "right"] as const) {
+    const set: string[] = [];
+    const items = panelPositionItems(() => current, (position) => set.push(position));
+    assert.deepEqual(items.map((i) => i.label), ["Bottom", "Left", "Right"]);
+    assert.deepEqual(items.map((i) => i.checked?.()), ["bottom", "left", "right"].map((id) => id === current));
+    for (const item of items) item.run();
+    assert.deepEqual(set, ["bottom", "left", "right"]);
+  }
 });
