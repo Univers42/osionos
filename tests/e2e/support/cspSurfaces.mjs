@@ -150,7 +150,7 @@ export const SURFACES = [
     run: async ({ page, baseURL }) => {
       await stubWorld(page, baseURL);
       await page.goto(new URL("/?settings=preferences", baseURL).toString(), { waitUntil: "domcontentloaded" });
-      await page.getByRole("button", { name: "Advanced (JSON)" }).first().click();
+      await page.getByRole("button", { name: "New theme", exact: true }).first().click();
       await page.locator(".monaco-editor textarea").first().waitFor({ state: "attached", timeout: 150_000 });
       await page.locator(".monaco-editor .view-lines").first().click();
       await page.keyboard.press("Control+A");
