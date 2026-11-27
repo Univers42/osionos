@@ -104,7 +104,7 @@ test.describe("the settings tab", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 
-  test("in a split pane the nav stacks above the body and the Mode control fits its card", async ({ page, baseURL }) => {
+  test("in a split pane the nav stacks above the body and the Mode control fits its section", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openFreshPage(page, baseURL);
     await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
@@ -126,20 +126,19 @@ test.describe("the settings tab", () => {
       expect(navBox.y + navBox.height, `pane ${index}: the nav is above the body`).toBeLessThanOrEqual(bodyBox.y + 1);
     }
 
-    // The Preferences panel's Mode control stays inside its card.
+    // The Preferences panel's Mode control stays inside its Theme section.
     for (let index = 0; index < 2; index += 1) {
       const pane = region(page).nth(index);
       await pane.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Preferences", exact: true }).click();
       await expect(pane.locator('[data-settings-panel="preferences"]')).toBeVisible();
       const fit = await pane.evaluate((root) => {
-        const system = [...root.querySelectorAll("button")].find((button) => button.textContent?.trim() === "System");
-        const control = system?.parentElement;
-        const card = control?.parentElement?.closest("div.rounded-lg.border");
-        if (!control || !card) return null;
-        return { controlRight: control.getBoundingClientRect().right, cardRight: card.getBoundingClientRect().right };
+        const control = root.querySelector('[role="group"][aria-label="Mode"]');
+        const section = control?.closest("section");
+        if (!control || !section) return null;
+        return { controlRight: control.getBoundingClientRect().right, sectionRight: section.getBoundingClientRect().right };
       });
       expect(fit, `pane ${index}: the Mode control is measurable`).not.toBeNull();
-      expect(fit.controlRight, `pane ${index}: the Mode control fits its card`).toBeLessThanOrEqual(fit.cardRight + 1);
+      expect(fit.controlRight, `pane ${index}: the Mode control fits its section`).toBeLessThanOrEqual(fit.sectionRight + 1);
     }
   });
 });
