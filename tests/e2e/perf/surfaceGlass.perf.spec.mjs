@@ -26,13 +26,13 @@ function judge(name, floor, stats) {
 test("clicking the Aurora preset", async ({ page }) => {
   test.setTimeout(300_000);
   await bootApp(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+  await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Preferences" }).click();
   const style = page.getByRole("group", { name: "Style" });
   const floor = await measureFloor(page);
   const stats = await measureToPaint(page, () => style.getByRole("radio", { name: /Aurora/ }).check({ force: true }), {
     runs: 20, warmups: 3, startEvent: "click", until: { selector: 'html[data-surface="glass"]' },
-    before: () => style.getByRole("radio", { name: /Calm/ }).check({ force: true }),
+    before: () => style.getByRole("radio", { name: /Classic/ }).check({ force: true }),
   });
   judge("presetClick", floor, stats);
 });

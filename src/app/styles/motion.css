@@ -1,0 +1,94 @@
+/* Motion preferences: the three axes written to <html> by applyAppearance
+   (data-page-transition, data-overlay-transition, data-motion-speed). Each is absent at its
+   default, so a person who never chose one gets today's pixels. Everything here is a plain
+   CSS animation or a token, so the reduced-motion reset at the end of global.css (durations
+   forced to 0.01ms) covers it without a rule of its own. */
+
+/* Animation speed: the four duration tokens, scaled. Nothing else moves. */
+:root[data-motion-speed="slow"] {
+  --osio-dur-instant: 128ms;
+  --osio-dur-fast: 192ms;
+  --osio-dur-base: 288ms;
+  --osio-dur-slow: 416ms;
+}
+
+:root[data-motion-speed="fast"] {
+  --osio-dur-instant: 48ms;
+  --osio-dur-fast: 72ms;
+  --osio-dur-base: 108ms;
+  --osio-dur-slow: 156ms;
+}
+
+/* Page and tab transition: one keyframe per style on the visible tab container (PaneView sets
+   data-tab-visible only while a tab is the shown one, so the animation starts when a tab is
+   switched to). Fill mode is backwards, never forwards: a leftover filter or transform would
+   make the container a containing block and shift position:fixed popovers inside the page. */
+@keyframes osio-page-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes osio-page-blur {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+  }
+}
+
+@keyframes osio-page-slide {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@keyframes osio-page-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+:root[data-page-transition="fade"] [data-tab-visible],
+:root[data-page-transition="fade"] [data-motion-sample] {
+  animation: osio-page-fade var(--osio-dur-slow) var(--osio-ease-decelerate) backwards;
+}
+
+:root[data-page-transition="blur"] [data-tab-visible],
+:root[data-page-transition="blur"] [data-motion-sample] {
+  animation: osio-page-blur var(--osio-dur-slow) var(--osio-ease-decelerate) backwards;
+}
+
+:root[data-page-transition="slide"] [data-tab-visible],
+:root[data-page-transition="slide"] [data-motion-sample] {
+  animation: osio-page-slide var(--osio-dur-slow) var(--osio-ease-decelerate) backwards;
+}
+
+:root[data-page-transition="scale"] [data-tab-visible],
+:root[data-page-transition="scale"] [data-motion-sample] {
+  animation: osio-page-scale var(--osio-dur-slow) var(--osio-ease-decelerate) backwards;
+}
+
+/* Menus and dialogs: osio-pop-in and osio-modal-in (global.css) read their start state from
+   these variables, falling back to today's values, so the default sets nothing. */
+:root[data-overlay-transition="none"] {
+  --osio-overlay-from-opacity: 1;
+  --osio-overlay-from-transform: none;
+}
+
+:root[data-overlay-transition="fade"] {
+  --osio-overlay-from-opacity: 0;
+  --osio-overlay-from-transform: none;
+}
+
+:root[data-overlay-transition="blur"] {
+  --osio-overlay-from-opacity: 0;
+  --osio-overlay-from-transform: none;
+  --osio-overlay-from-filter: blur(6px);
+}
+
+:root[data-overlay-transition="zoom"] {
+  --osio-overlay-from-opacity: 0;
+  --osio-overlay-from-transform: scale(0.88);
+}

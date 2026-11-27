@@ -5,7 +5,6 @@ import type { ChatMessage, Conversation } from "@/features/chat/model/chatTypes"
 import { greetingFor } from "@/shared/lib/date/greeting";
 import { agentInitials, agentTint, groupConversations, STARTER_GROUPS } from "@/widgets/chat-shell/model/brainHome";
 import { activitiesOf, sourcesOf } from "@/widgets/chat-shell/model/conversationTrail";
-import { brainLayout, paneSize, togglePanel, toggleRail } from "@/widgets/chat-shell/model/brainLayout";
 
 const conversation = (id: string, updatedAt: string): Conversation => ({
   id,
@@ -96,30 +95,4 @@ test("the activity of a conversation keeps every tool call in order, with its an
     activitiesOf(messages).map((entry) => [entry.messageId, entry.activity.toolCallId]),
     [["a1", "t1"], ["a2", "t2"]],
   );
-});
-
-test("the chat list and the context panel sit beside the chat while it keeps its width, and slide over it below", () => {
-  assert.deepEqual([paneSize(600), paneSize(1000), paneSize(1400)], ["narrow", "medium", "wide"]);
-  assert.deepEqual(brainLayout(1400, null, null), { railOpen: true, railOverlay: false, panelOpen: true, panelOverlay: false });
-  assert.deepEqual(brainLayout(1000, null, null), { railOpen: true, railOverlay: false, panelOpen: false, panelOverlay: true });
-  assert.deepEqual(brainLayout(600, null, null), { railOpen: false, railOverlay: true, panelOpen: false, panelOverlay: true });
-  const listShut = brainLayout(1000, { open: false, size: "medium" }, { open: true, size: "medium" });
-  assert.equal(listShut.panelOverlay, false, "with the list shut, the panel fits beside the chat");
-});
-
-test("a choice holds while the pane keeps its size; resized past it, the width decides again", () => {
-  const openedWide = { open: true, size: "wide" } as const;
-  assert.equal(brainLayout(1300, null, { open: false, size: "wide" }).panelOpen, false, "shut on a wide pane stays shut");
-  assert.equal(brainLayout(600, null, openedWide).panelOpen, false, "a panel opened wide does not cover a narrow pane");
-});
-
-test("opening one side folds the other away when only one fits beside the chat, never when both fit", () => {
-  const crowded = brainLayout(1000, null, null);
-  assert.deepEqual(togglePanel(1000, crowded), { rail: { open: false, size: "medium" }, panel: { open: true, size: "medium" } }, "the panel does not cover the answer");
-  const panelBeside = brainLayout(1000, { open: false, size: "medium" }, { open: true, size: "medium" });
-  assert.deepEqual(toggleRail(1000, panelBeside), { rail: { open: true, size: "medium" }, panel: { open: false, size: "medium" } });
-  const wide = brainLayout(1400, null, { open: false, size: "wide" });
-  assert.deepEqual(togglePanel(1400, wide), { panel: { open: true, size: "wide" } }, "room for both: the list stays");
-  assert.deepEqual(togglePanel(600, brainLayout(600, null, null)), { panel: { open: true, size: "narrow" } }, "too narrow for either: the panel slides over");
-  assert.deepEqual(togglePanel(1000, brainLayout(1000, null, { open: true, size: "medium" })), { panel: { open: false, size: "medium" } }, "shutting never moves the other side");
 });

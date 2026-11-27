@@ -21,7 +21,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { activateFirstEditor, explorerRow, openFreshPage, openPageMenuPanel } from "../../browser/core/app.mjs";
+import { activateFirstEditor, openFreshPage, openPageMenuPanel } from "../../browser/core/app.mjs";
 import { insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 /** Computed `property` of a throwaway element declaring `property: value`,
@@ -343,13 +343,5 @@ test.describe("type scale", () => {
     expect(sectionLook).toEqual({ textTransform: "none", letterSpacing: "normal", fontWeight: "500", fontSize: "12px" });
     // The panel title is a section label too: it must not shout above its sections.
     expect(await styleOf(panelTitle, ...look)).toEqual(sectionLook);
-  });
-
-  test("sidebar action rows are as tall as page rows", async ({ page, baseURL }) => {
-    await openFreshPage(page, baseURL);
-    const heightOf = (locator) => locator.evaluate((element) => element.getBoundingClientRect().height);
-    const pageRow = explorerRow(page, "Getting Started").locator("> div");
-    const sharedRow = page.getByRole("button", { name: "Archived files" });
-    expect(await heightOf(sharedRow)).toBe(await heightOf(pageRow));
   });
 });

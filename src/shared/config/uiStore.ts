@@ -23,6 +23,7 @@ export type ActivePanel =
   | 'marketplace'
   | 'agents'
   | 'conversations'
+  | 'assistant'
   | 'notifications'
   | 'tasks'
   | 'public'
@@ -51,7 +52,7 @@ export function migratePanelId(panel: unknown): ActivePanel {
 }
 
 const KNOWN_PANELS = new Set<ActivePanel>([
-  'files', 'search', 'marketplace', 'agents', 'conversations', 'notifications', 'tasks', 'public', 'database', 'templates',
+  'files', 'search', 'marketplace', 'agents', 'conversations', 'assistant', 'notifications', 'tasks', 'public', 'database', 'templates',
   'scm', 'run', 'problems', 'issues',
 ]);
 
@@ -71,6 +72,9 @@ interface UIStore {
   sidebarSide: SidebarSide;
   setSidebarSide: (side: SidebarSide) => void;
   toggleSidebarSide: () => void;
+  /** Persisted: the title bar slides away and comes back when the pointer reaches the top edge. */
+  topBarAutoHide: boolean;
+  toggleTopBarAutoHide: () => void;
   activePanel: ActivePanel;
   setSidebarMode: (mode: SidebarMode) => void;
   setActivePanel: (panel: ActivePanel) => void;
@@ -146,6 +150,8 @@ export const useUIStore = create<UIStore>()(
         sidebarSide: 'left',
         setSidebarSide: (side) => set({ sidebarSide: side }),
         toggleSidebarSide: () => set({ sidebarSide: get().sidebarSide === 'right' ? 'left' : 'right' }),
+        topBarAutoHide: false,
+        toggleTopBarAutoHide: () => set({ topBarAutoHide: !get().topBarAutoHide }),
         lastDockedMode: 'panel',
         activePanel: 'files',
         isSidebarOpen: true,

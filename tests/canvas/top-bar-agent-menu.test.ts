@@ -32,9 +32,9 @@ const activeId = (): string | undefined => {
   return activeTabOf(state.root, state.activePaneId)?.pageId;
 };
 
-test("no agents: a disabled placeholder, then the hub and the manage rows", () => {
+test("no agents: a disabled placeholder, then the AI settings and the manage rows", () => {
   const rows = agentMenuItems([], ctx);
-  assert.deepEqual(rows.map((row) => row.label), ["No agents yet", "AI hub", "Manage agents…"]);
+  assert.deepEqual(rows.map((row) => row.label), ["No agents yet", "AI settings", "Manage agents…"]);
   assert.equal(rows[0].disabled?.(), true);
   assert.equal(rows[0].separatorAfter, true);
 });
@@ -55,7 +55,10 @@ test("an agent row queues the request and opens the assistant", () => {
   assert.equal(activeId(), chatTab().pageId);
 });
 
-test("Manage agents opens the AI settings section", () => {
-  agentMenuItems([], ctx).at(-1)?.run();
-  assert.deepEqual(settingsCalls, ["ai"]);
+test("AI settings opens the AI section, Manage agents the agents section", () => {
+  settingsCalls.length = 0;
+  const rows = agentMenuItems([], ctx);
+  rows.find((row) => row.label === "AI settings")?.run();
+  rows.at(-1)?.run();
+  assert.deepEqual(settingsCalls, ["ai", "ai_agents"]);
 });

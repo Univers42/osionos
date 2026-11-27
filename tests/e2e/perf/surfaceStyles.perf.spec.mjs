@@ -116,10 +116,10 @@ test("opening the page menu on frosted", async ({ page }) => {
 test("clicking a style preset", async ({ page }) => {
   test.setTimeout(300_000);
   await bootApp(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+  await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Preferences" }).click();
   const style = page.getByRole("group", { name: "Style" });
-  const calm = style.getByRole("radio", { name: /Calm/ });
+  const calm = style.getByRole("radio", { name: /Classic/ });
   const frost = style.getByRole("radio", { name: /Frost/ });
   const floor = await measureFloor(page);
   const stats = await measureToPaint(page, () => frost.check({ force: true }), { runs: 20, warmups: 3, startEvent: "click", until: { selector: 'html[data-surface="frosted"]' }, before: () => calm.check({ force: true }) });
@@ -136,10 +136,10 @@ test("clicking a style preset under neon-tokyo", async ({ page }) => {
     const { applyCompiledTheme } = await import("/src/shared/config/themeApply.ts");
     applyCompiledTheme(compileTheme(SHIPPED_THEMES.find((theme) => theme.name === "Neon Tokyo")));
   });
-  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+  await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Preferences" }).click();
   const style = page.getByRole("group", { name: "Style" });
-  const calm = style.getByRole("radio", { name: /Calm/ });
+  const calm = style.getByRole("radio", { name: /Classic/ });
   const aurora = style.getByRole("radio", { name: /Aurora/ });
   const floor = await measureFloor(page);
   const stats = await measureToPaint(page, () => aurora.check({ force: true }), { runs: 20, warmups: 3, startEvent: "click", until: { selector: 'html[data-surface="glass"]' }, before: () => calm.check({ force: true }) });

@@ -10,51 +10,31 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useRef } from "react";
+import React from "react";
 
-import { BrainContextPanel } from "./BrainContextPanel";
+import { useUIStore } from "@/shared/config/uiStore";
 import { BrainHeader } from "./BrainHeader";
 import { BrainLens } from "./BrainLens";
-import { BrainRail } from "./BrainRail";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
 import { ConnectionOnboarding } from "./ConnectionOnboarding";
 import { EmptyStateHero } from "./EmptyStateHero";
 import { useChatShell } from "../model/useChatShell";
 
-/** The assistant: the chats and agents on the left, the conversation in the middle, and what it
- *  reads and does on the right. Talking without a connection triggers a guided setup; once
- *  connected, the pending message is sent automatically. State lives in `useChatShell`. */
+/** The assistant's conversation. The chats, who answers and what the chat reads live in the
+ *  sidebar's Assistant panel (`AssistantPanel`). Talking without a connection triggers a guided
+ *  setup; once connected, the pending message is sent automatically. State lives in `useChatShell`. */
 export const ChatShell: React.FC = () => {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const shell = useChatShell(rootRef);
-  const { composerProps, messages, streaming, railOpen, railOverlay, panelOpen, panelOverlay, onboarding } = shell;
-  const overlay = "absolute inset-y-0 z-30 shadow-osio-e4";
+  const shell = useChatShell();
+  const { composerProps, messages, streaming, onboarding } = shell;
   return (
-    <div ref={rootRef} className="relative flex h-full w-full bg-[var(--osio-bg-page)]">
-      {railOpen ? (
-        <div className={railOverlay ? `${overlay} left-0` : "h-full"}>
-          <BrainRail
-            conversations={shell.history}
-            activeId={shell.activeId}
-            onOpen={shell.openConversation}
-            onNew={shell.newConversation}
-            agents={shell.agents}
-            agentId={shell.agentId}
-            onPickAgent={shell.setAgentId}
-          />
-        </div>
-      ) : null}
-
+    <div className="relative flex h-full w-full bg-[var(--osio-bg-page)]">
       <section className="@container flex min-w-0 flex-1 flex-col">
         <BrainHeader
           title={messages.length === 0 ? "New chat" : shell.active?.title ?? "New chat"}
           agent={shell.nextAgent}
-          railOpen={railOpen}
-          onToggleRail={shell.onToggleRail}
-          panelOpen={panelOpen}
-          onTogglePanel={shell.onTogglePanel}
-          trailCount={shell.sources.length + shell.activities.length}
+          trailCount={shell.trailCount}
+          onShowPanel={() => useUIStore.getState().expandToPanel("assistant")}
           onNew={() => shell.createConversation()}
         />
         {messages.length === 0 ? (
@@ -77,18 +57,6 @@ export const ChatShell: React.FC = () => {
           </>
         )}
       </section>
-
-      {panelOpen ? (
-        <div className={panelOverlay ? `${overlay} right-0` : "h-full"}>
-          <BrainContextPanel
-            chips={shell.chips}
-            selection={shell.selection}
-            sources={shell.sources}
-            activities={shell.activities}
-            onClose={() => shell.setPanelChoice(shell.shut)}
-          />
-        </div>
-      ) : null}
 
       <ConnectionOnboarding
         key={onboarding ?? "closed"}

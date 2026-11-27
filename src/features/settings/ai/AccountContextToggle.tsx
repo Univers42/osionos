@@ -1,5 +1,5 @@
-// The "Account context" switch, and the setting behind it: rendered by Settings › AI and by the
-// AI Hub's "Context & privacy" section, which also reads the setting to show what is sent.
+// The "Account context" switch, and the setting behind it: rendered by Settings › AI, whose
+// "What your next message sends" block also reads the setting to show what is sent.
 import { useUserStore } from '@/features/auth';
 import { useAiSettingsStore } from '@/store/settings';
 import { Toggle } from '@/shared/ui';

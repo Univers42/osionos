@@ -11,11 +11,11 @@
 /* ************************************************************************** */
 
 import {
-  aiHubTab, chatTab, collabTab, homeTab, libraryTab, messagesTab, trashTab,
+  chatTab, collabTab, homeTab, libraryTab, messagesTab, trashTab,
 } from "@/widgets/workspace-grid/model/layoutPersist";
 import { collectPanes } from "@/widgets/workspace-grid/model/layoutTree";
 import { canGoInHistory, useNavHistory } from "@/widgets/workspace-grid/model/useNavHistory";
-import type { MenuAction, MenuGroup } from "../menuTypes";
+import type { MenuAction, MenuContext, MenuGroup } from "../menuTypes";
 import { cycleTabAction, layout, openTabAction, palette } from "./menuActions";
 
 /** Go › Switch group rows: Ctrl+1/2/3 focus editor group 1/2/3, disabled while that group is not open. */
@@ -33,11 +33,11 @@ function groupAction(position: number): MenuAction {
 
 /**
  * Go: back and forward through the pages visited, jump to a page (Ctrl+P),
- * step between the tabs of the active pane, open a top-level tab. Next and
+ * step between the tabs of the active pane, open a top-level tab or the AI settings. Next and
  * Previous tab carry no accelerator: Ctrl+Tab is the browser's own and cannot
  * be bound. Back and Forward are disabled while no existing page lies that way.
  */
-export function goMenu(): MenuGroup {
+export function goMenu(ctx: MenuContext): MenuGroup {
   return {
     id: "go", label: "Go", items: [
       { id: "go.back", label: "Back", accelerator: "Alt+←", disabled: () => !canGoInHistory(-1), run: () => useNavHistory.getState().go(-1) },
@@ -50,7 +50,7 @@ export function goMenu(): MenuGroup {
       openTabAction("go.library", "Library", libraryTab),
       openTabAction("go.messages", "Messages", messagesTab),
       openTabAction("go.assistant", "Assistant", chatTab),
-      openTabAction("go.ai-hub", "AI hub", aiHubTab),
+      { id: "go.ai-settings", label: "AI settings", run: () => ctx.openSettings("ai") },
       openTabAction("go.discover", "Discover", collabTab),
       openTabAction("go.trash", "Trash", trashTab),
     ],

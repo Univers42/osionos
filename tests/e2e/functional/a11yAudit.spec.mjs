@@ -99,7 +99,7 @@ for (const theme of ["light", "dark"]) {
 
     test("the settings pane has no AA violation", async ({ page, baseURL }) => {
       await openFreshPage(page, baseURL);
-      await page.getByRole("button", { name: /settings/i }).first().click();
+      await page.getByRole("tab", { name: "Settings", exact: true }).click();
       await expect(page.getByRole("button", { name: "Preferences" })).toBeVisible();
       expect(await violations(page)).toEqual([]);
     });
@@ -123,6 +123,16 @@ for (const theme of ["light", "dark"]) {
       await expect(page.getByRole("option").first()).toBeVisible();
       expect(await violations(page)).toEqual([]);
     });
+
+    // The settings, ask and help modes add their own chip, hint and rows to the bar.
+    for (const prefix of [":", "/", "?"]) {
+      test(`the bar's "${prefix}" mode has no AA violation`, async ({ page, baseURL }) => {
+        await openFreshPage(page, baseURL);
+        await page.getByRole("combobox", { name: "Search pages or run a command" }).fill(prefix);
+        await expect(page.getByRole("option").first()).toBeVisible();
+        expect(await violations(page)).toEqual([]);
+      });
+    }
 
     // The Connect button sat inside each person option: a control in a control, out of
     // keyboard reach, since focus stays on the combobox. The option opens the profile tab,
@@ -151,7 +161,7 @@ for (const theme of ["light", "dark"]) {
 
     test("the marketplace has no AA violation", async ({ page, baseURL }) => {
       await openFreshPage(page, baseURL);
-      await page.getByRole("button", { name: "Marketplace", exact: true }).first().click();
+      await page.getByRole("tab", { name: "Marketplace", exact: true }).click();
       await expect(page.getByRole("region", { name: "Marketplace" }).or(page.getByRole("tab", { name: /Marketplace/ })).first()).toBeVisible();
       expect(await violations(page)).toEqual([]);
     });

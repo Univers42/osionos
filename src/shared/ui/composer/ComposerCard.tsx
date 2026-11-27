@@ -14,7 +14,7 @@ import React from "react";
 
 /**
  * The one look of a message composer: a floating rounded card on the overlay
- * tokens, so the Style presets (Calm/Paper/Soft/Frost/Aurora) restyle it, with an
+ * tokens, so the Style presets (Classic/Paper/Soft/Frost/Aurora) restyle it, with an
  * accent border and a soft ring while the caret is inside. The channel composer
  * and the AI chat composer both wear it.
  *

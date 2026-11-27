@@ -35,6 +35,7 @@
 @import "./appearance.css";
 @import "./surface.css";
 @import "./presets.css";
+@import "./motion.css";
 /* Member identity colours, the ink printed on them, and remote-caret motion. */
 @import "./collab.css";
 /* Typing indicator and the flash over a block a collaborator just edited. */
@@ -850,8 +851,9 @@ body {
 
 @keyframes osio-pop-in {
   from {
-    opacity: 0;
-    transform: translateY(4px) scale(0.98);
+    opacity: var(--osio-overlay-from-opacity, 0);
+    transform: var(--osio-overlay-from-transform, translateY(4px) scale(0.98));
+    filter: var(--osio-overlay-from-filter, none);
   }
 
   to {
@@ -876,8 +878,9 @@ body {
 
 @keyframes osio-modal-in {
   from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.975);
+    opacity: var(--osio-overlay-from-opacity, 0);
+    transform: var(--osio-overlay-from-transform, translateY(8px) scale(0.975));
+    filter: var(--osio-overlay-from-filter, none);
   }
 
   to {
@@ -930,6 +933,40 @@ body {
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
+}
+
+/* ==========================================================================
+   Auto-hide title bar (View › Appearance, uiStore.topBarAutoHide). The bar
+   leaves the layout so the workbench takes its 40px, and slides up out of
+   view. Its ::after is a 6px strip left at the top edge: hovering it (it is
+   part of the bar) brings the bar back, and so do focus inside the bar and an
+   open menu, so keyboard users and a pointer inside a dropdown keep it.
+   Only for a hovering pointer: a touch screen has no way to reveal it, so the
+   bar stays in place there. `:root` outranks the frosted preset's background.
+   ========================================================================== */
+@media (hover: hover) {
+  :root [data-topbar-autohide="1"] [data-testid="app-topbar"] {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    z-index: var(--osio-z-popover);
+    background-color: var(--osio-bg-surface);
+    transform: translateY(-100%);
+    transition: transform var(--osio-dur-fast) ease-out;
+  }
+
+  :root [data-topbar-autohide="1"] [data-testid="app-topbar"]::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    height: 6px;
+  }
+
+  :root [data-topbar-autohide="1"] [data-testid="app-topbar"]:is(:hover, :focus-within, :has([aria-expanded="true"])) {
+    transform: none;
+    box-shadow: var(--osio-shadow-menu);
+  }
 }
 
 /* ==========================================================================

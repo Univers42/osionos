@@ -136,10 +136,22 @@ test.describe("title-bar menus", () => {
     const before = await toggle.getAttribute("aria-pressed");
     await openMenu(page, "View");
     await page.getByRole("menuitem", { name: "Appearance" }).hover();
-    const row = page.getByRole("menuitemcheckbox", { name: "Panel" });
+    const row = page.getByRole("menuitemcheckbox", { name: /^Panel\b/ });
     await expect(row).toHaveAttribute("aria-checked", before);
     await row.click();
     await expect(toggle).toHaveAttribute("aria-pressed", before === "true" ? "false" : "true");
+  });
+
+  // Pointing at a submenu row opens it, so the click that follows must not toggle it shut.
+  test("clicking a submenu row the pointer already opened keeps it open", async ({ page, baseURL }) => {
+    await openPage(page, baseURL);
+    await openMenu(page, "View");
+    const appearance = page.getByRole("menuitem", { name: "Appearance" });
+    await appearance.hover();
+    await expect(appearance).toHaveAttribute("aria-expanded", "true");
+    await appearance.click();
+    await expect(appearance).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("menuitemcheckbox", { name: /^Panel\b/ })).toBeVisible();
   });
 
   test("the Primary side bar toggle hides and restores the sidebar", async ({ page, baseURL }) => {
@@ -152,7 +164,7 @@ test.describe("title-bar menus", () => {
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("agent button: Ask an agent opens the assistant composer; the caret lists agents, hub and settings", async ({ page, baseURL }) => {
+  test("agent button: Ask an agent opens the assistant composer; the caret lists agents, AI settings and Manage agents", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
     const ask = bar(page).getByRole("button", { name: "Ask an agent" });
     const caret = bar(page).getByRole("button", { name: "Choose an agent" });
@@ -162,7 +174,7 @@ test.describe("title-bar menus", () => {
     await expect(composer(page)).toBeFocused();
     await caret.click();
     await expect(menus(page)).toHaveCount(1);
-    await expect(page.getByRole("menuitem", { name: "AI hub" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "AI settings" })).toBeVisible();
     await page.getByRole("menuitem", { name: "Manage agents…" }).click();
     await expect(page.locator('[data-osio-tabstrip] [data-tab-id][title="Settings"]')).toHaveCount(1);
   });

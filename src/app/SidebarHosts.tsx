@@ -21,8 +21,6 @@ interface Props {
   /** The edge of the workbench this instance stands for; it renders only while the side bar is docked there. */
   edge: "left" | "right";
   onOpenSettings: () => void;
-  onOpenTrash: () => void;
-  onOpenConsole: () => void;
 }
 
 /**

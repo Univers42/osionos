@@ -12,6 +12,7 @@ import { NODE_FRAME_PERMISSIONS } from "../model/machineWindow";
 import { EDITOR_OPEN, EDITOR_TITLE, type EditorToApp } from "../model/editorFrameProtocol";
 import { markMachineFile } from "../model/machineFileTab";
 import { terminalFramePanel } from "../model/terminalFrame";
+import { RememberComputerChoice } from "./RememberComputerChoice";
 
 const onMessage = (message: EditorToApp): void => {
   if (message.type === EDITOR_TITLE) markMachineFile(message.key, message.title, message.dirty);
@@ -19,7 +20,7 @@ const onMessage = (message: EditorToApp): void => {
 const mayPrompt = (): boolean => true;
 
 export const MachineFileTab: React.FC<{ fileKey: string }> = ({ fileKey }) => {
-  const { frameRef, attempt, phase, ready, post, tryAgain } = useEditorFrame({ armed: true, mayPromptStepUp: mayPrompt, onMessage });
+  const { frameRef, attempt, phase, ready, post, rememberShown, tryAgain } = useEditorFrame({ armed: true, mayPromptStepUp: mayPrompt, onMessage });
 
   React.useEffect(() => {
     if (ready) post({ type: EDITOR_OPEN, key: fileKey });
@@ -30,7 +31,7 @@ export const MachineFileTab: React.FC<{ fileKey: string }> = ({ fileKey }) => {
     <div className="relative h-full min-h-0 w-full bg-[var(--osio-code-bg)]">
       <iframe key={attempt} ref={frameRef} src={`${EDITOR_PAGE_URL}?view=file`} title="File on this computer" allow={frameAllow(NODE_FRAME_PERMISSIONS)} className="absolute inset-0 h-full w-full border-0" />
       {panel && <MachineFramePanel panel={panel} waiting={phase === "connecting"} pairing={false} onTryAgain={tryAgain} />}
-      {phase === "step-up" && <SudoPrompt />}
+      {phase === "step-up" && <SudoPrompt extra={<RememberComputerChoice onShown={rememberShown} />} />}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 /* The empty workspace: dotted paper and a soft glow behind a frosted card
-   that holds Binocle, the greeting and the ways to start. Tokens only. */
+   that holds the greeting, the field to ask Binocle, and the Start and Recent
+   columns. Tokens only. */
 
 .osio-empty-workspace {
   position: relative;
@@ -27,7 +28,7 @@
 }
 
 .osio-welcome-card {
-  max-width: 34rem;
+  max-width: 44rem;
   padding: 1.75rem;
   background: color-mix(in srgb, var(--osio-bg-surface) 62%, transparent);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
@@ -55,7 +56,7 @@
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
 @media (max-width: 480px) {
@@ -65,31 +66,10 @@
   }
 }
 
-.osio-welcome-mascot {
-  display: inline-flex;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-  border-radius: var(--osio-radius-card);
-  transition: transform var(--osio-dur-fast) var(--osio-ease-out);
-}
-
-.osio-welcome-mascot:hover {
-  transform: translateY(-2px);
-}
-
-.osio-welcome-mascot:focus-visible {
-  outline: var(--osio-focus-ring-width) solid var(--osio-accent);
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .osio-welcome-mascot {
-    transition: none;
-  }
-
-  .osio-welcome-mascot:hover {
-    transform: none;
-  }
+/* Side by side when both fit, stacked on a narrow pane. */
+.osio-welcome-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem 1.5rem;
+  margin-top: 1.25rem;
 }

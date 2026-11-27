@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// The per-device AI switches and the sentiment section, rendered by Settings › AI. The Hub's
-// "Context & privacy" section renders AccountContextToggle and SentimentSection only: the other device switches change no behaviour.
+// The per-device AI switches and the sentiment section, rendered by Settings › AI. They are the
+// only copy of each control: "What your next message sends" lists their effect, not the switches.
 // The two agent switches are the server's (C335): AgentSwitchRows reads and writes them there, not in the store.
 import { useUserStore } from '@/features/auth';
 import { useAiSettingsStore } from '@/store/settings';

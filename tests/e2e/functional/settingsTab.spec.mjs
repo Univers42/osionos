@@ -30,7 +30,7 @@ function region(page) {
 test.describe("the settings tab", () => {
   test("the rail opens a Settings tab with its region; clicking again focuses, never duplicates", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
 
     await expect(settingsTabInStrip(page)).toHaveCount(1);
     await expect(region(page)).toBeVisible();
@@ -52,7 +52,7 @@ test.describe("the settings tab", () => {
 
   test("search 'passkey' + Enter lands on Profile at the Account security anchor", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     await region(page).waitFor();
 
     const search = page.getByRole("searchbox", { name: "Search settings" });
@@ -65,7 +65,7 @@ test.describe("the settings tab", () => {
 
   test("Close Settings removes the region", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     await expect(region(page)).toBeVisible();
 
     await page.getByRole("button", { name: "Close Settings" }).click();
@@ -79,7 +79,7 @@ test.describe("the settings tab", () => {
     });
 
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     await expect(region(page)).toBeVisible();
 
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -89,7 +89,7 @@ test.describe("the settings tab", () => {
 
   test("at a phone width the section strip sits above the panel and nothing overflows", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     await expect(region(page)).toBeVisible();
 
     // The tab is arranged at the default viewport: at a phone width the rail's
@@ -104,10 +104,10 @@ test.describe("the settings tab", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 
-  test("in a split pane the nav stacks above the body and the Mode control fits its card", async ({ page, baseURL }) => {
+  test("in a split pane the nav stacks above the body and the Mode control fits its section", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
     await expect(region(page)).toBeVisible();
 
     // Splitting duplicates the active tab: two settings panes, each 555px wide.
@@ -126,20 +126,19 @@ test.describe("the settings tab", () => {
       expect(navBox.y + navBox.height, `pane ${index}: the nav is above the body`).toBeLessThanOrEqual(bodyBox.y + 1);
     }
 
-    // The Preferences panel's Mode control stays inside its card.
+    // The Preferences panel's Mode control stays inside its Theme section.
     for (let index = 0; index < 2; index += 1) {
       const pane = region(page).nth(index);
       await pane.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Preferences", exact: true }).click();
       await expect(pane.locator('[data-settings-panel="preferences"]')).toBeVisible();
       const fit = await pane.evaluate((root) => {
-        const system = [...root.querySelectorAll("button")].find((button) => button.textContent?.trim() === "System");
-        const control = system?.parentElement;
-        const card = control?.parentElement?.closest("div.rounded-lg.border");
-        if (!control || !card) return null;
-        return { controlRight: control.getBoundingClientRect().right, cardRight: card.getBoundingClientRect().right };
+        const control = root.querySelector('[role="group"][aria-label="Mode"]');
+        const section = control?.closest("section");
+        if (!control || !section) return null;
+        return { controlRight: control.getBoundingClientRect().right, sectionRight: section.getBoundingClientRect().right };
       });
       expect(fit, `pane ${index}: the Mode control is measurable`).not.toBeNull();
-      expect(fit.controlRight, `pane ${index}: the Mode control fits its card`).toBeLessThanOrEqual(fit.cardRight + 1);
+      expect(fit.controlRight, `pane ${index}: the Mode control fits its section`).toBeLessThanOrEqual(fit.sectionRight + 1);
     }
   });
 });

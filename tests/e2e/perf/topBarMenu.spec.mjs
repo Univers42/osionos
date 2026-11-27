@@ -97,7 +97,7 @@ test.describe("title-bar menu latency", () => {
     test.setTimeout(120_000);
     const floor = await boot(page);
     const stats = await measureToPaint(page, () => page.keyboard.press("ArrowDown"), {
-      until: { selector: '[role="menu"]', text: "AI hub" },
+      until: { selector: '[role="menu"]', text: "AI settings" },
       before: async () => { await closeAnyMenu(page); await trigger(page, "Choose an agent").focus(); },
     });
     await judge(page, "agent.open", stats, floor);

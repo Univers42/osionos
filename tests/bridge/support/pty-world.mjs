@@ -1,7 +1,7 @@
 // A paired osionos-node with the web terminal on a real loopback port (devil verdict 2026-11-01):
 // the shell sockets are FakeConns, the pty host records spawns, and tokens are bridge-signed with a
 // throwaway seed. `remember` (a list of origins) gives it a remembered-computers file in a fresh
-// private folder.
+// private folder, on the clock `now`; `disk` (a list of app origins) gives it the editor's /api/fs.
 import { randomBytes } from 'node:crypto';
 import { chmodSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { createIdeOriginServer } from '../../../packages/osionos-node/ide-origin.mjs';
 import { createMachineSession } from '../../../packages/osionos-node/machine-identity.mjs';
 import { createRememberedComputers } from '../../../packages/osionos-node/remembered-computers.mjs';
+import { createRootStore } from '../../../packages/osionos-node/fs-roots.mjs';
 import { bridgeKeyFromSeed, signMachineToken, signResumeAssertion } from '../../../scripts/ide-machine-protocol.mjs';
 import { FakeConn, fakeHost, settle } from './pty-fakes.mjs';
 import { MACHINE, OWNER, freeLoopbackOrigin, pairedMachine } from './paired-node.mjs';
@@ -28,24 +29,35 @@ function acceptLikeWs(socket, accepted) {
 	return conn;
 }
 
-function rememberedIn(t, origins) {
-	const dir = mkdtempSync(join(tmpdir(), 'pty-remember-'));
+function privateDir(t, prefix) {
+	const dir = mkdtempSync(join(tmpdir(), prefix));
 	chmodSync(dir, 0o700);
 	t.after(() => rmSync(dir, { recursive: true, force: true }));
-	const file = join(dir, 'remembered-computers.json');
-	return { file, devices: createRememberedComputers({ file, owner: OWNER, machine: MACHINE, origins }) };
+	return dir;
 }
 
-export async function world(t, { paired = true, remember = null } = {}) {
+function rememberedIn(t, origins, now) {
+	const file = join(privateDir(t, 'pty-remember-'), 'remembered-computers.json');
+	return { file, devices: createRememberedComputers({ file, owner: OWNER, machine: MACHINE, origins, now }) };
+}
+
+function diskIn(t, appOrigins, accepted) {
+	const home = privateDir(t, 'fs-home-');
+	const roots = createRootStore({ file: join(home, '.osionos', 'roots.json'), home, nodeHome: join(home, '.osionos') });
+	return { accept: (req, socket) => Promise.resolve(acceptLikeWs(socket, accepted)), roots, home, appOrigins };
+}
+
+export async function world(t, { paired = true, remember = null, disk = null, now = Date.now } = {}) {
 	const host = fakeHost();
 	const accepted = [];
 	const { port, origin: ideOrigin } = await freeLoopbackOrigin();
 	const session = paired ? createMachineSession({ machine: pairedMachine(KEY, 'https://bridge.example:10000'), home: '/home/owner' }) : null;
-	const memory = remember ? rememberedIn(t, remember) : { file: null, devices: null };
+	const memory = remember ? rememberedIn(t, remember, now) : { file: null, devices: null };
 	const origin = createIdeOriginServer({
 		...(session ? session.originOptions : { secret: 'k'.repeat(32) }), ownerId: OWNER, ideOrigin, commit: 'c'.repeat(40),
 		nodes: { [MACHINE]: { socketPath: '/nonexistent.sock', extensionRoots: [] } },
 		pty: paired ? { host, accept: (req, socket) => Promise.resolve(acceptLikeWs(socket, accepted)) } : undefined,
+		fs: paired && disk ? diskIn(t, disk, accepted) : undefined,
 		devices: memory.devices,
 	});
 	await new Promise((resolve) => origin.server.listen(port, '127.0.0.1', resolve));

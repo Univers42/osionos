@@ -15,19 +15,10 @@
 
 import { expect, test } from "@playwright/test";
 
-import { openFreshPage, waitForRenderStability } from "../../browser/core/app.mjs";
+import { closeAllTabs, openFreshPage, waitForRenderStability } from "../../browser/core/app.mjs";
 
 const emptyWorkspace = (page) => page.getByTestId("empty-workspace");
 const tabs = (page) => page.locator("[data-tab-id]");
-
-async function closeAllTabs(page) {
-  for (let guard = 0; guard < 10 && (await tabs(page).count()) > 0; guard += 1) {
-    // The tab's own close button, never another "Close …" control in the shell.
-    await tabs(page).first().getByTitle("Close tab").click({ force: true });
-    await waitForRenderStability(page);
-  }
-  await expect(tabs(page)).toHaveCount(0);
-}
 
 test.describe("empty workspace", () => {
   test("closing every tab, Home included, leaves an empty workspace that stays empty after a reload", async ({ page, baseURL }) => {
@@ -60,7 +51,7 @@ test.describe("empty workspace", () => {
     await expect(tabs(page).first()).toContainText("Home");
   });
 
-  test("the welcome is chromeless and transparent, and Binocle opens a keyboard menu of actions", async ({ page, baseURL }) => {
+  test("the welcome is chromeless and transparent, and its Ask Binocle opens the top bar in ask mode", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await closeAllTabs(page);
 
@@ -71,21 +62,24 @@ test.describe("empty workspace", () => {
     await expect(pane.locator('button[title="Close pane"]')).toHaveCount(0);
     await expect(emptyWorkspace(page)).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 
-    const mascot = page.getByRole("button", { name: /Binocle/ });
-    await expect(mascot).toHaveAttribute("aria-haspopup", "menu");
-    await mascot.click();
-    const menu = page.getByRole("menu", { name: "Binocle" });
-    await expect(menu).toBeVisible();
-    await expect(menu.getByRole("menuitem")).toHaveCount(5);
-    await expect(menu.getByRole("menuitem").first()).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(menu.getByRole("menuitem").nth(1)).toBeFocused();
-    await page.keyboard.press("Escape");
-    await expect(menu).toHaveCount(0);
-    await expect(mascot).toBeFocused();
+    await expect(emptyWorkspace(page).getByRole("textbox")).toHaveCount(0);
+    await emptyWorkspace(page).getByRole("button", { name: /^Ask Binocle/ }).click();
+    const bar = page.getByRole("combobox", { name: "Search pages or run a command" });
+    await expect(bar).toBeFocused();
+    await expect(bar).toHaveValue("/");
+  });
 
-    await mascot.click();
-    await page.getByRole("menuitem", { name: "Ask the assistant" }).click();
+  test("Recent lists the page just visited and reopens it", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await closeAllTabs(page);
+    await emptyWorkspace(page).getByRole("button", { name: /New page/ }).click();
+    await expect(page.locator(".osionos-page")).toBeVisible();
+    await closeAllTabs(page);
+
+    const recent = emptyWorkspace(page).getByRole("region", { name: "Recent" });
+    await expect(recent.getByRole("button")).not.toHaveCount(0);
+    await recent.getByRole("button").first().click();
     await expect(tabs(page)).toHaveCount(1);
+    await expect(page.locator(".osionos-page")).toBeVisible();
   });
 });

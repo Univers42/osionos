@@ -34,6 +34,12 @@
     "space-3": "14px",
     "space-4": "18px",
     "control-h-md": "32px",
-    "field-h": "32px"
+    "field-h": "32px",
+    "ease-standard": "cubic-bezier(.33,1,.68,1)",
+    "ease-spring": "cubic-bezier(.33,1,.68,1)",
+    "dur-instant": "80ms",
+    "dur-fast": "200ms",
+    "dur-base": "320ms",
+    "dur-slow": "520ms"
   }
 }

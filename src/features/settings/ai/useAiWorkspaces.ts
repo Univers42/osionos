@@ -1,5 +1,5 @@
 // The workspaces an AI access token, skill or memory may reach: the ones the user owns
-// and the ones they are a member of (G4a). Shared by Settings and the AI Hub.
+// and the ones they are a member of (G4a). Shared by the AI sections of Settings.
 import { useMemo } from "react";
 import { useUserStore } from "@/features/auth";
 import type { AccessTokenWorkspace } from "./AccessTokensPanel";

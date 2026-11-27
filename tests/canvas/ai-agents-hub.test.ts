@@ -1,5 +1,5 @@
 /* ************************************************************************** */
-/*  ai-agents-hub.test.ts — the AI Hub creates, edits and picks custom       */
+/*  ai-agents-hub.test.ts — Settings creates, edits and picks custom         */
 /*  agents (D3 B2): the list never shows instructions (C300), create sends   */
 /*  the strict body, PATCH carries expectedVersion and a conflict keeps the  */
 /*  draft, a 404 hides the part, the switches read the server (C335), the    */

@@ -37,12 +37,32 @@ let overrides: ThemeOverrides | null = null;
 
 export function setThemeOverrides(next: ThemeOverrides | null) {
   overrides = next?.base || next?.palette ? { ...next } : null;
-  applyTheme(readStoredThemeMode());
-  applyPalette(readStoredPalette());
+  applyTheme(readCurrentThemeMode());
+  applyPalette(readCurrentPalette());
 }
 
 export function isThemeBasePinned(): boolean {
   return Boolean(overrides?.base);
+}
+
+export function isThemePalettePinned(): boolean {
+  return Boolean(overrides?.palette);
+}
+
+/** Who shows the chosen mode or palette (Settings, the top bar) re-reads it on
+ *  this signal, so a change made on one surface is not undone by a stale copy
+ *  on another. Returns the unsubscribe. */
+const themeChoiceListeners = new Set<() => void>();
+
+export function subscribeThemeChoice(listener: () => void): () => void {
+  themeChoiceListeners.add(listener);
+  return () => {
+    themeChoiceListeners.delete(listener);
+  };
+}
+
+function notifyThemeChoice() {
+  for (const listener of themeChoiceListeners) listener();
 }
 
 export function applyTheme(mode: ThemeMode) {
@@ -57,7 +77,7 @@ export function watchSystemTheme(): () => void {
   if (globalThis.window === undefined) return () => undefined;
   const query = globalThis.matchMedia(OS_DARK);
   const follow = () => {
-    if (readStoredThemeMode() === "system") applyTheme("system");
+    if (readCurrentThemeMode() === "system") applyTheme("system");
   };
   query.addEventListener("change", follow);
   return () => query.removeEventListener("change", follow);
@@ -68,15 +88,14 @@ export function watchSystemTheme(): () => void {
  *  permanent choice is made in Settings. While a theme pins the base it does
  *  nothing and returns the stored mode (the caller says why). */
 export function toggleThemeMode(): ThemeMode {
-  if (isThemeBasePinned()) return readStoredThemeMode();
+  if (isThemeBasePinned()) return readCurrentThemeMode();
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   const mode: ThemeMode = next === osTheme() ? "system" : next;
-  applyTheme(mode);
-  persistThemeMode(mode);
+  setThemeMode(mode);
   return mode;
 }
 
-export function readStoredThemeMode(): ThemeMode {
+function readStoredThemeMode(): ThemeMode {
   if (globalThis.window === undefined) return "system";
   const stored = globalThis.localStorage.getItem(THEME_STORAGE_KEY);
   if (stored === "light" || stored === "dark" || stored === "system") {
@@ -85,10 +104,30 @@ export function readStoredThemeMode(): ThemeMode {
   return "system";
 }
 
+/** The mode and palette this tab chose. Storage is read once; after that the
+ *  value set here wins, because a write that a full storage refuses
+ *  (noticingWrite) leaves the new choice on screen but not on disk, and every
+ *  surface that shows the choice must show what is on screen. */
+let chosenThemeMode: ThemeMode | null = null;
+let chosenPalette: string | null = null;
+
+export function readCurrentThemeMode(): ThemeMode {
+  chosenThemeMode ??= readStoredThemeMode();
+  return chosenThemeMode;
+}
+
 const writeTheme = noticingWriter('Theme');
 
 export function persistThemeMode(mode: ThemeMode) {
+  chosenThemeMode = mode;
   writeTheme(THEME_STORAGE_KEY, mode);
+  notifyThemeChoice();
+}
+
+/** Light, dark or follow the OS, shown and kept. A theme that pins the base still wins on screen. */
+export function setThemeMode(mode: ThemeMode) {
+  applyTheme(mode);
+  persistThemeMode(mode);
 }
 
 /* ── Palette (color scheme) — orthogonal to light/dark ──────────────────────
@@ -121,14 +160,26 @@ export function applyPalette(id: string) {
   document.documentElement.dataset.palette = overrides?.palette ?? (id || DEFAULT_PALETTE);
 }
 
-export function readStoredPalette(): string {
+function readStoredPalette(): string {
   if (globalThis.window === undefined) return DEFAULT_PALETTE;
   const stored = globalThis.localStorage.getItem(PALETTE_STORAGE_KEY) ?? "";
   return PALETTES.some((p) => p.id === stored) ? stored : DEFAULT_PALETTE;
 }
 
+export function readCurrentPalette(): string {
+  chosenPalette ??= readStoredPalette();
+  return chosenPalette;
+}
+
+/** The palette on screen: the active theme's when it pins one, else the chosen one. */
+export function readEffectivePalette(): string {
+  return overrides?.palette ?? readCurrentPalette();
+}
+
 export function persistPalette(id: string) {
+  chosenPalette = id;
   writeTheme(PALETTE_STORAGE_KEY, id);
+  notifyThemeChoice();
 }
 
 export * from "./appearance";
@@ -159,6 +210,7 @@ export function persistAppearance(appearance: Appearance) {
 const ATTRIBUTE_AXES = [
   "accent", "density", "radius", "uiScale", "linkUnderline", "motion", "animatedImages", "hovercards",
   "caretColor", "caretShape", "caretBlink", "surface", "elevation", "borders",
+  "pageTransition", "overlayTransition", "motionSpeed",
 ] as const;
 
 /** The appearance as it stands. applyAppearance() keeps it up to date, so a
@@ -210,7 +262,7 @@ export function updateAppearance(patch: Partial<Appearance>): Appearance {
 
 /** Apply every axis at boot from storage (call once on app init). */
 export function applyStoredAppearance() {
-  applyTheme(readStoredThemeMode());
-  applyPalette(readStoredPalette());
+  applyTheme(readCurrentThemeMode());
+  applyPalette(readCurrentPalette());
   applyAppearance(readStoredAppearance());
 }

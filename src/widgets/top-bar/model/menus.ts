@@ -27,5 +27,5 @@ export type { MenuAction, MenuContext, MenuGroup, MenuItem, MenuSubmenu } from "
  * button, and none depends on a preserved editor text selection.
  */
 export function buildMenus(ctx: MenuContext): MenuGroup[] {
-  return [fileMenu(ctx), editMenu(), selectionMenu(), viewMenu(), goMenu(), terminalMenu(), helpMenu(ctx)];
+  return [fileMenu(ctx), editMenu(), selectionMenu(), viewMenu(), goMenu(ctx), terminalMenu(), helpMenu(ctx)];
 }

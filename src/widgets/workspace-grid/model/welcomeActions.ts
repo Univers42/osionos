@@ -10,16 +10,19 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// The ways to start from the empty workspace, defined once: the action list
-// and Binocle's menu both read this table.
+// The ways to start from the empty workspace, in display order. Asking Binocle
+// opens the top bar in its '/' mode, so the question is typed where every
+// other entry starts.
 
 import type React from "react";
-import { Bot, FilePlus2, FolderPlus, Home, Search, SquareTerminal } from "lucide-react";
+import { FilePlus2, FolderPlus, Home, Search, Sparkles, SquareTerminal } from "lucide-react";
 
 import type { CommandId } from "@/features/automations/model/types";
+import { useZenMode } from "@/shared/config/useZenMode";
+import { openAssistant } from "@/widgets/top-bar/model/agentMenu";
 import { usePalette } from "@/widgets/top-bar/model/usePalette";
 
-import { openAssistantChat, openHome, startNewFolder, startNewPage } from "./startActions";
+import { openHome, startNewFolder, startNewPage } from "./startActions";
 
 export interface StartAction {
   id: string;
@@ -27,16 +30,19 @@ export interface StartAction {
   Icon: React.ComponentType<{ size?: number; "aria-hidden"?: boolean }>;
   run: () => void;
   commandId?: CommandId;
-  inList: boolean;
-  inMenu: boolean;
 }
 
-/** Every start action, in display order; `inList`/`inMenu` pick where it shows. */
+/** Zen hides the top bar, and a hidden input cannot take the caret: open the assistant itself. */
+function askBinocle(): void {
+  if (useZenMode.getState().zen) openAssistant();
+  else usePalette.getState().openWith("/");
+}
+
 export const START_ACTIONS: readonly StartAction[] = [
-  { id: "assistant", label: "Ask the assistant", Icon: Bot, run: openAssistantChat, inList: false, inMenu: true },
-  { id: "new-page", label: "New page", Icon: FilePlus2, run: () => void startNewPage(), commandId: "newPage", inList: true, inMenu: true },
-  { id: "new-folder", label: "New folder", Icon: FolderPlus, run: () => void startNewFolder(), inList: true, inMenu: false },
-  { id: "search", label: "Search pages", Icon: Search, run: () => usePalette.getState().openSearch(), commandId: "openSearch", inList: true, inMenu: true },
-  { id: "palette", label: "Command palette", Icon: SquareTerminal, run: () => usePalette.getState().openCommand(), commandId: "openPalette", inList: true, inMenu: true },
-  { id: "home", label: "Open Home", Icon: Home, run: openHome, inList: true, inMenu: true },
+  { id: "ask", label: "Ask Binocle", Icon: Sparkles, run: askBinocle },
+  { id: "new-page", label: "New page", Icon: FilePlus2, run: () => void startNewPage(), commandId: "newPage" },
+  { id: "new-folder", label: "New folder", Icon: FolderPlus, run: () => void startNewFolder() },
+  { id: "search", label: "Search pages", Icon: Search, run: () => usePalette.getState().openSearch(), commandId: "openSearch" },
+  { id: "palette", label: "Command palette", Icon: SquareTerminal, run: () => usePalette.getState().openCommand(), commandId: "openPalette" },
+  { id: "home", label: "Open Home", Icon: Home, run: openHome },
 ];

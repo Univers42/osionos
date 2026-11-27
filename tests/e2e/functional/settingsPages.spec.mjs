@@ -106,7 +106,7 @@ async function stubTheBridge(page, { pages = FIXTURE_PAGES, refusal = null } = {
 }
 
 async function openPublishedPages(page) {
-  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+  await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
   await region(page).waitFor();
   await nav(page).getByRole("button", { name: "Published pages", exact: true }).click();
   await expect(region(page).locator('[data-settings-panel="public_pages"]')).toBeVisible();

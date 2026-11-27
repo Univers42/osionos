@@ -38,7 +38,7 @@ test.describe("another person's README", () => {
   test("renders the projected blocks, offers no owner controls, and never reads the page", async ({ page, baseURL }) => {
     const pageReads = await openBob(page, baseURL, READMES.blocks);
     await expect(page.getByRole("region", { name: "README" })).toContainText("Hello from Bob's README");
-    await expect(page.getByRole("button", { name: "Customize" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Customize", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Edit profile" })).toHaveCount(0);
     expect(pageReads.filter((url) => url.includes(README_ID))).toEqual([]);
   });

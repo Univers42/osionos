@@ -100,9 +100,13 @@ export function createTerminalFrame(deps: TerminalFrameDeps) {
   return { retry: link.retry, stop: link.stop };
 }
 
+export type StartCommands = { lead: string; commands: ReadonlyArray<{ label: string; command: string }> };
+
 export type TerminalFramePanel = {
   title: string;
   detail: string | null;
+  /** A Connector installed but stopped is started, not reinstalled: these come before the download. */
+  start: StartCommands | null;
   /** The Connector's download address, or null when there is none to offer. */
   download: string | null;
   tryAgain: boolean;
@@ -111,9 +115,18 @@ export type TerminalFramePanel = {
   confirm: boolean;
 };
 
+// The service names install.sh writes: the systemd user unit and the launchd agent's plist.
+const START_CONNECTOR: StartCommands = {
+  lead: "Already set up on this computer? Start it:",
+  commands: [
+    { label: "Linux", command: "systemctl --user start osionos-node" },
+    { label: "macOS", command: "launchctl load ~/Library/LaunchAgents/com.osionos.node.plist" },
+  ],
+};
+
 const ALLOW_LOCAL = "If your browser asked to connect to apps on this device and it was blocked, allow it in the site settings (the icon left of the address), then try again.";
 
-const PANELS: Record<Exclude<TerminalFramePhase, "connected">, Omit<TerminalFramePanel, "download" | "confirm"> & { offersDownload: boolean }> = {
+const PANELS: Record<Exclude<TerminalFramePhase, "connected">, Omit<TerminalFramePanel, "download" | "confirm" | "start"> & { offersDownload: boolean }> = {
   connecting: { title: "Connecting to this computer…", detail: "Your browser may ask to let osionos connect to apps on this device. Allow it to open your terminal here.", tryAgain: false, pair: false, offersDownload: false },
   "step-up": { title: "Confirm it's you", detail: "We email you a six-digit code. Enter it, and your terminal opens right here.", tryAgain: false, pair: false, offersDownload: false },
   "no-node": { title: "osionos Connector isn't running on this computer.", detail: ALLOW_LOCAL, tryAgain: true, pair: false, offersDownload: true },
@@ -129,5 +142,5 @@ const PANELS: Record<Exclude<TerminalFramePhase, "connected">, Omit<TerminalFram
 export function terminalFramePanel(phase: TerminalFramePhase, downloadUrl: string): TerminalFramePanel | null {
   if (phase === "connected") return null;
   const { offersDownload, ...panel } = PANELS[phase];
-  return { ...panel, download: offersDownload && downloadUrl ? downloadUrl : null, confirm: phase === "step-up" };
+  return { ...panel, start: phase === "no-node" ? START_CONNECTOR : null, download: offersDownload && downloadUrl ? downloadUrl : null, confirm: phase === "step-up" };
 }

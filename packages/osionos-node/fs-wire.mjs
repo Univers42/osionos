@@ -11,10 +11,13 @@
 /* ************************************************************************** */
 
 // What the node's editor page may send on /api/fs (devil verdict 2026-11-01 editor on disk, F6, F7,
-// F11; groot ADR 0044). The first message opens the socket: a bridge-signed machine token or the
-// session secret this node gave that frame, and the app origin the frame pinned (roots are bound to
-// it, F9). After it, one request per message, exact keys per op, every path `{root, rel}` and never
+// F11; groot ADR 0044). The first message opens the socket: a bridge-signed machine token, the
+// session secret this node gave that frame, or a remembered computer's device secret beside a fresh
+// resume assertion (devil verdict 2026-11-27, TB2), always with the app origin the frame pinned
+// (roots are bound to it, F9). After it, one request per message, exact keys per op, every path `{root, rel}` and never
 // absolute. Anything else is null and closes the socket.
+
+import { MACHINE_TOKEN, RESUME_ASSERTION, SESSION_SECRET, hasExactly, parseObject } from './wire-credentials.mjs';
 
 export const FS_LIMITS = Object.freeze({
 	maxPending: 4,
@@ -45,24 +48,11 @@ export const FS_CLOSE = Object.freeze({ protocol: 4400, auth: 4401, full: 4429 }
 // whose loaded hash no longer matches the disk (F13). It is not an FsError: the editor offers a choice.
 export const FS_ERRORS = Object.freeze(['NotFound', 'PermissionDenied', 'NotADirectory', 'IsADirectory', 'NotEmpty', 'AlreadyExists', 'Loop', 'NoSpace', 'ReadOnly', 'TooLarge', 'Interrupted', 'Unsupported', 'Io', 'Conflict']);
 
-const MACHINE_TOKEN = /^osionos_mc1\.[a-z2-7]{8}\.[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{1,200}$/;
-const SESSION_SECRET = /^[A-Za-z0-9_-]{43}$/;
 const APP_ORIGIN = /^(?:https?:\/\/[A-Za-z0-9.-]{1,253}(?::\d{1,5})?|app:\/\/[a-z0-9-]{1,63})$/;
 const ROOT_ID = /^[a-f0-9]{16}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 const NUL = /\u0000/;
-
-function parseObject(text) {
-	let value;
-	try { value = JSON.parse(text); } catch { return null; }
-	return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null;
-}
-
-const hasExactly = (value, keys) => {
-	const own = Object.keys(value);
-	return own.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
-};
 
 /** A path under a root: "" is the root itself; no empty, `.` or `..` segment, no NUL, bounded. */
 export function isFsRel(rel) {
@@ -83,6 +73,10 @@ export function readFsAuth(text) {
 	if (!m || typeof m.appOrigin !== 'string' || !APP_ORIGIN.test(m.appOrigin)) return null;
 	if (hasExactly(m, ['token', 'appOrigin']) && typeof m.token === 'string' && MACHINE_TOKEN.test(m.token)) return { kind: 'token', token: m.token, appOrigin: m.appOrigin };
 	if (hasExactly(m, ['secret', 'appOrigin']) && typeof m.secret === 'string' && SESSION_SECRET.test(m.secret)) return { kind: 'secret', secret: m.secret, appOrigin: m.appOrigin };
+	if (hasExactly(m, ['device', 'assertion', 'appOrigin']) && typeof m.device === 'string' && SESSION_SECRET.test(m.device)
+		&& typeof m.assertion === 'string' && RESUME_ASSERTION.test(m.assertion)) {
+		return { kind: 'remembered', device: m.device, assertion: m.assertion, appOrigin: m.appOrigin };
+	}
 	return null;
 }
 

@@ -21,6 +21,7 @@ export const PANEL_LOADERS = {
   search: () => import("@/features/search/ui/SearchPanel").then((m) => ({ default: m.SearchPanel })),
   agents: () => import("./panels/AgentsPanel").then((m) => ({ default: m.AgentsPanel })),
   conversations: () => import("./panels/ConversationsPanel").then((m) => ({ default: m.ConversationsPanel })),
+  assistant: () => import("@/widgets/chat-shell/ui/AssistantPanel").then((m) => ({ default: m.AssistantPanel })),
   public: () => import("./panels/PublicSwitcherPanel").then((m) => ({ default: m.PublicSwitcherPanel })),
   marketplace: () => import("./panels/MarketplacePanel").then((m) => ({ default: m.MarketplacePanel })),
   database: () => import("@/widgets/database-view/ui/DatabasesPanel").then((m) => ({ default: m.DatabasesPanel })),

@@ -5,7 +5,7 @@ import React from "react";
 
 import { Button } from "@osionos/ui/atoms/Button";
 import type { TerminalFramePanel } from "@/features/machines/model/terminalFrame";
-import { MachineCommands } from "@/features/machines/ui/MachineCommands";
+import { CommandLine, MachineCommands } from "@/features/machines/ui/MachineCommands";
 import { PairCodeField } from "@/features/machines/ui/PairCodeField";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { useSudoPromptStore } from "@/features/settings/ui/sudo/sudoPromptModel";
@@ -34,10 +34,19 @@ export const MachineFramePanel: React.FC<{ panel: TerminalFramePanel; waiting: b
         actions={<PanelActions panel={panel} onTryAgain={onTryAgain} buttonClass={tone === "code" ? CODE_BUTTON : undefined} />}
       >
         {panel.detail && <p>{panel.detail}</p>}
+        {/* The code field is the one input here: it leads, so a short dock panel still shows it. */}
         {pairing && (
           <div className="mt-3 w-full space-y-3 text-left">
             <PairCodeField onPaired={onTryAgain} />
             <MachineCommands name="" />
+          </div>
+        )}
+        {panel.start && (
+          <div className="mt-3 w-full space-y-2 text-left">
+            <p>{panel.start.lead}</p>
+            <ul className="space-y-2">
+              {panel.start.commands.map(({ label, command }) => <CommandLine key={label} label={label} command={command} />)}
+            </ul>
           </div>
         )}
       </StateBlock>

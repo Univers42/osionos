@@ -23,13 +23,12 @@ import type { PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
 import { ConversationRow } from "@/features/chat/ui/ConversationRow";
 import { useChatStore, conversationsOf, isUntouchedConversation } from "@/features/chat/model/useChatStore";
+import { openAiChat, startAiChat } from "@/features/chat/model/openAssistantWith";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { matchingByName } from "@/shared/lib/text/matchingByName";
 import { usePageStore } from "@/store/usePageStore";
 import { ChannelList } from "@/widgets/channel-list";
 import { DmList } from "@/widgets/dm-list";
-import { chatTab } from "@/widgets/workspace-grid/model/layoutPersist";
-import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { PanelSectionLabel } from "@/shared/ui";
 
 type Kind = "all" | "people" | "channels" | "ai";
@@ -43,16 +42,6 @@ const KINDS: readonly { id: Kind; label: string }[] = [
 
 const NO_PAGES: readonly PageEntry[] = [];
 const RECENT_AI_CHATS = 8;
-
-function openAiChat(conversationId: string): void {
-  useChatStore.getState().setActive(conversationId);
-  useWorkspaceLayout.getState().openTab(chatTab());
-}
-
-function startAiChat(): void {
-  const conversation = useChatStore.getState().createConversation();
-  openAiChat(conversation.id);
-}
 
 const rowClass =
   "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)]";

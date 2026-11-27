@@ -57,7 +57,8 @@ Object.assign(globalThis, {
   matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
 });
 
-const { applyTheme, setThemeOverrides, toggleThemeMode, isThemeBasePinned } = await import("../../src/shared/config/theme.ts");
+const { applyTheme, persistPalette, persistThemeMode, setThemeOverrides, toggleThemeMode, isThemeBasePinned } =
+  await import("../../src/shared/config/theme.ts");
 const { THEME_VARS_KEY, applyCompiledTheme, applyStoredTheme, isThemeSafeMode, persistCompiledTheme, readCompiledTheme } =
   await import("../../src/shared/config/themeApply.ts");
 const { listThemes, resolveTheme, useThemeLibrary } = await import("../../src/features/theme/model/useThemeLibrary.ts");
@@ -80,8 +81,10 @@ test("a second theme sets what changed, removes what it dropped, and touches not
   assert.deepEqual(writes, []);
 });
 
-test("a pinned base wins over the stored mode, and the quick toggle leaves it in place", () => {
-  stored.set("osionos:theme-mode", "light");
+// The chosen mode and palette are set through the module: storage is read once per tab,
+// so seeding it here mid-run would not reach a module that has already read it.
+test("a pinned base wins over the chosen mode, and the quick toggle leaves it in place", () => {
+  persistThemeMode("light");
   setThemeOverrides({ base: "dark" });
   assert.equal(html.dataset.theme, "dark");
   assert.equal(isThemeBasePinned(), true);
@@ -96,7 +99,7 @@ test("a pinned base wins over the stored mode, and the quick toggle leaves it in
 });
 
 test("a pinned palette wins over the palette preference until the theme goes", () => {
-  stored.set("osionos:palette", "rose");
+  persistPalette("rose");
   setThemeOverrides({ palette: "nord" });
   assert.equal(html.dataset.palette, "nord");
   setThemeOverrides(null);

@@ -20,7 +20,13 @@ const { goMenu } = await import("@/widgets/top-bar/model/menus/goMenu");
 const { useNavHistory } = await import("@/widgets/workspace-grid/model/useNavHistory");
 const { isSubmenu } = await import("@/widgets/top-bar/model/menuTypes");
 
-const rows = () => goMenu().items.filter((item) => !isSubmenu(item));
+const opened: (string | undefined)[] = [];
+const rows = () => goMenu({ openSettings: (section) => void opened.push(section) }).items.filter((item) => !isSubmenu(item));
+
+test("AI settings opens the AI section of Settings", () => {
+  rows().find((r) => r.label === "AI settings")?.run();
+  assert.deepEqual(opened, ["ai"]);
+});
 
 test("Back and Forward carry accelerators and start disabled", () => {
   const back = rows().find((r) => r.id === "go.back");

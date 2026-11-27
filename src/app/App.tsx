@@ -21,14 +21,13 @@ import { useNotifyLive } from "@/store/chat/useNotifyLive";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { useZenMode } from "@/shared/config/useZenMode";
+import { useUIStore } from "@/shared/config/uiStore";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
 import { usePageStore } from "@/store/usePageStore";
 import { loadActivePage } from "@/store/pageStore.helpers";
-import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
 import { useNavHistoryRecorder } from "@/widgets/workspace-grid/model/useNavHistory";
 import { useDocumentTitle } from "@/widgets/workspace-grid/model/tabTitle";
-import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarHosts } from "./SidebarHosts";
 import { LazyCanvasDebugRoute, LazyMachineView, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
 import { syncObjectDbForAccount } from "./objectDbAccountSync";
@@ -122,6 +121,7 @@ const App: React.FC = () => {
   // Zen (focus) mode — Ctrl+K Ctrl+Z. Drives [data-zen] on the shell; global.css
   // hides every chrome region off it. Session-only: a reload always exits zen.
   const zen = useZenMode((s) => s.zen);
+  const topBarAutoHide = useUIStore((s) => s.topBarAutoHide);
 
   // Database automations → app services: notify events become toasts; webhook
   // actions route through the bridge's SSRF-guarded proxy endpoint.
@@ -215,11 +215,7 @@ const App: React.FC = () => {
   // A connected machine's folder (ADR-006): signed in, and nothing of the workbench around it.
   if (globalThis.location?.pathname === "/machine") return <LazyMachineView />;
 
-  const sidebarHandlers = {
-    onOpenSettings: () => openSettings(),
-    onOpenTrash: () => useWorkspaceLayout.getState().openTab(trashTab()),
-    onOpenConsole: () => useWorkspaceLayout.getState().openTab(consoleTab()),
-  };
+  const onOpenSettings = () => openSettings();
 
   return (
     <BindingSourcesProvider>
@@ -227,6 +223,7 @@ const App: React.FC = () => {
         data-testid="app-shell"
         data-osio-shell
         data-zen={zen ? "1" : undefined}
+        data-topbar-autohide={topBarAutoHide ? "1" : undefined}
         className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
       >
         {/* First stop of the Tab order, shown only when focused: past the top bar and the sidebar (RGAA 12.7). */}
@@ -241,7 +238,7 @@ const App: React.FC = () => {
         <TopBar onOpenSettings={openSettings} />
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          <SidebarHosts edge="left" {...sidebarHandlers} />
+          <SidebarHosts edge="left" onOpenSettings={onOpenSettings} />
 
           {/* Content area — the unified workbench (grid + dock + status bar), or the
               no-access screen when a shared link pointed at an unreadable page. */}
@@ -255,7 +252,7 @@ const App: React.FC = () => {
             )}
           </main>
 
-          <SidebarHosts edge="right" {...sidebarHandlers} />
+          <SidebarHosts edge="right" onOpenSettings={onOpenSettings} />
         </div>
 
         <ShellHosts />

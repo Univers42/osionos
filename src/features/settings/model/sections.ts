@@ -29,11 +29,9 @@ import {
   LayoutGrid,
   Mail,
   Palette,
-  Plug,
   Settings,
   Shield,
   SlidersHorizontal,
-  Sparkles,
   Terminal,
   User,
   UserPlus,
@@ -44,6 +42,7 @@ import {
 
 import { isAccountDeleteEnabled } from "@/shared/config/featureFlags";
 
+import { AI_SETTINGS_SECTIONS } from "./aiSections";
 import type { SettingsAnchor, SettingsSection } from "./sectionTypes";
 
 export { SETTINGS_GROUPS } from "./sectionTypes";
@@ -72,9 +71,17 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     subtitle: "Choose how you want osionos to look and behave", icon: SlidersHorizontal,
     anchors: [
       { id: "appearance", label: "Theme", keywords: ["appearance", "theme", "dark", "light"] },
+      { id: "style", label: "Style", keywords: ["preset", "classic", "paper", "soft", "frost", "frosted", "aurora", "glass", "surface", "depth", "shadow", "borders"] },
+      { id: "color", label: "Color", keywords: ["accent", "caret", "cursor", "color", "colour", "hue"] },
+      { id: "layout", label: "Layout and text", keywords: ["density", "compact", "corners", "radius", "round", "text size", "font size", "zoom"] },
+      { id: "motion-page", label: "Page and tab transition", keywords: ["motion", "animation", "transition", "fade", "blur", "slide", "scale", "page", "tab"] },
+      { id: "motion-overlay", label: "Menus and dialogs", keywords: ["motion", "animation", "transition", "popover", "menu", "dialog", "zoom", "blur", "fade"] },
+      { id: "motion-speed", label: "Animation speed", keywords: ["motion", "animation", "speed", "slow", "fast", "duration"] },
+      { id: "theme-tokens", label: "Theme tokens", keywords: ["tokens", "json", "reference", "variables", "css variables", "keys", "custom theme", "theme format"], description: "Every key a theme JSON accepts, with its current value." },
       { id: "theme-json", label: "Advanced theme (JSON)", keywords: ["json", "custom theme", "tokens", "css variables", "colors", "spacing", "fonts"] },
       { id: "input-options", label: "Input options", keywords: ["enter", "newline", "send"] },
       { id: "accessibility", label: "Accessibility", keywords: ["motion", "animation", "underline", "links", "hovercard", "gif", "paste", "url"] },
+      { id: "appearance-backup", label: "Your appearance", keywords: ["export", "import", "backup", "json", "reset", "share", "copy", "download"] },
       { id: "language-time", label: "Language and time", keywords: ["language", "number", "date", "timezone", "week"] },
       { id: "desktop-app", label: "Desktop app", keywords: ["startup", "open", "last visited"] },
       { id: "privacy", label: "Privacy", keywords: ["cookies", "view history", "discoverability"] },
@@ -135,7 +142,6 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     subtitle: "Manage your workspace name, domains, and more", icon: Settings,
     anchors: [
       { id: "workspace-settings", label: "Workspace settings", keywords: ["workspace", "name", "icon", "landing page", "variables", "env.json", "environment"] },
-      { id: "sidebar", label: "Sidebar", keywords: ["sidebar", "apps", "calendar", "mail"] },
       { id: "export", label: "Export", keywords: ["export", "members", "workspace content"] },
       { id: "analytics", label: "Analytics", keywords: ["page views", "analytics", "views"] },
       { id: "danger-zone", label: "Delete workspace", keywords: ["danger", "delete", "workspace"] },
@@ -171,19 +177,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: Keyboard,
     anchors: [{ id: "keyboard-shortcuts", label: "Keyboard shortcuts", keywords: ["shortcut", "shortcuts", "keyboard", "keybinding", "hotkey", "automation", "combo", "vscode"], description: "Rebind, add, and export keyboard shortcuts." }],
   },
-  {
-    id: "ai", group: "features", label: "osionos AI", title: "osionos AI",
-    subtitle: "Search everywhere, automate meeting notes and configure AI features", icon: Sparkles,
-    anchors: [{ id: "osionos-ai", label: "osionos AI", keywords: ["ai", "agents", "meeting notes", "summaries", "search"] }],
-  },
-  {
-    id: "ai_connections", group: "features", label: "AI connections", title: "AI connections",
-    subtitle: "Bring your own model access — your keys stay on the server", icon: Plug,
-    anchors: [
-      { id: "ai-connections", label: "AI connections", keywords: ["openrouter", "model", "provider", "api key", "byok", "connect"] },
-      { id: "ai-access-tokens", label: "AI access tokens", keywords: ["token", "access token", "pat", "api", "assistant"] },
-    ],
-  },
+  ...AI_SETTINGS_SECTIONS,
   {
     id: "mcp", group: "features", label: "osionos MCP", title: "osionos MCP",
     subtitle: "Connect osionos to your AI tools to summarize, search, and move faster", icon: Bot,

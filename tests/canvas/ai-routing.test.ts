@@ -21,9 +21,8 @@ import { DEVICE_CONNECTION_ID } from "@/features/ai/model/deviceEngine";
 import type { ChatMessage } from "@/features/chat/model/chatTypes";
 import { dispatchRunEvent, type RunEventActions } from "@/features/chat/model/runEventDispatch";
 import { RouteNote, routeNoteText } from "@/features/chat/ui/MessageActions";
-import { HUB_SECTIONS } from "@/widgets/ai-hub/ui/hubSections";
-import { HubSectionBody } from "@/widgets/ai-hub/ui/HubSectionBody";
-import { RoutingEditor } from "@/widgets/ai-hub/ui/HubRoutingSection";
+import { SETTINGS_SECTIONS } from "@/features/settings/model/sections";
+import { AiRoutingSection, RoutingEditor } from "@/features/settings/ai/AiRoutingSection";
 
 const A = { connectionId: "platform", model: "m-a" };
 const B = { connectionId: "c-1", model: "m-b" };
@@ -132,14 +131,13 @@ function editor(primary: typeof A, chain: typeof A[]) {
   );
 }
 
-test("Routing is a Hub section right after Connections", () => {
-  const ids = HUB_SECTIONS.map((section) => section.id);
-  assert.equal(ids.indexOf("routing"), ids.indexOf("connections") + 1);
-  assert.equal(HUB_SECTIONS.find((section) => section.id === "routing")?.label, "Routing");
+test("Routing is an anchor of Settings › osionos AI that \"fallback\" finds", () => {
+  const anchor = SETTINGS_SECTIONS.find((section) => section.id === "ai")?.anchors.find((entry) => entry.id === "ai-routing");
+  assert.ok(anchor?.keywords.includes("fallback"));
 });
 
 test("the section says so when the build has no AI service", () => {
-  const html = renderToStaticMarkup(React.createElement(HubSectionBody, { id: "routing" }));
+  const html = renderToStaticMarkup(React.createElement(AiRoutingSection));
   assert.ok(html.includes("The AI service is not configured on this build"));
 });
 

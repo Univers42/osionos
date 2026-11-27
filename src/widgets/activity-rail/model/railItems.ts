@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import {
+  Archive,
   Bell,
   Bug,
   CalendarRange,
@@ -27,6 +28,7 @@ import {
   PenTool,
   Play,
   Search,
+  Server,
   Shield,
   Sparkles,
   Store,
@@ -37,7 +39,9 @@ import { isLayoutModesEnabled } from "@/shared/config/featureFlags";
 import type { ActivePanel } from "@/shared/config/uiStore";
 import type { CommandId } from "@/features/automations/model/types";
 import { roleAtLeast, type PlatformRole } from "@/features/auth/model/platformRole";
-import { adminTab, libraryTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import {
+  adminTab, calendarTab, consoleTab, libraryTab, mailTab, trashTab, whiteboardTab,
+} from "@/widgets/workspace-grid/model/layoutPersist";
 import { prefetchPageLibraryView } from "@/widgets/page-renderer/ui/lazyViews";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 import { isWhiteboardReady } from "@/features/whiteboard/model/whiteboardAvailability";
@@ -50,13 +54,9 @@ export const PANEL_TRANSITION_WIDTH = 140;
 /** Dragging the rail's edge left past this (toward 0) hides the sidebar. */
 export const RAIL_HIDE_WIDTH = 24;
 
-/** The apps whose rail item opens a tab of its own. */
-export type RailApp = "mail" | "calendar" | "whiteboard" | "ai-hub";
-
-/** A rail item selects a side panel or opens an embedded app tab. */
+/** A rail item selects a side panel or opens a tab (stable pageId: a second click focuses it). */
 export type RailAction =
   | { kind: "panel"; panel: ActivePanel }
-  | { kind: "tab"; app: RailApp }
   | { kind: "workspaceTab"; makeTab: () => WorkspaceTab };
 
 export interface RailItem {
@@ -102,6 +102,7 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
       { id: "public", label: "Shared", Icon: Globe, action: { kind: "panel", panel: "public" } },
       { id: "library", label: "Library", Icon: Library, action: { kind: "workspaceTab", makeTab: libraryTab }, prefetch: prefetchPageLibraryView },
       // The moderator's entry too: the sections inside the space are what the role gates.
+      { id: "trash", label: "Archived files", Icon: Archive, action: { kind: "workspaceTab", makeTab: trashTab } },
       { id: "admin", label: "Admin", Icon: Shield, action: { kind: "workspaceTab", makeTab: adminTab }, requiredRole: "moderator" },
     ],
   },
@@ -113,6 +114,8 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
       { id: "run", label: "Run", Icon: Play, action: { kind: "panel", panel: "run" } },
       { id: "problems", label: "Problems", Icon: CircleAlert, action: { kind: "panel", panel: "problems" } },
       { id: "issues", label: "Issues", Icon: Bug, action: { kind: "panel", panel: "issues" } },
+      // Only with a configured project: a stock build (no VITE_BAAS_URL) has no console to open.
+      { id: "console", label: "BaaS Console", Icon: Server, action: { kind: "workspaceTab", makeTab: consoleTab }, isAvailable: () => Boolean((import.meta.env ?? {}).VITE_BAAS_URL) },
     ],
   },
   {
@@ -120,7 +123,7 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
     label: "Conversations",
     items: [
       { id: "conversations", label: "Conversations", Icon: MessagesSquare, action: { kind: "panel", panel: "conversations" }, commandId: "focusConversations" },
-      { id: "ai-hub", label: "AI Hub", Icon: Sparkles, action: { kind: "tab", app: "ai-hub" } },
+      { id: "assistant", label: "Assistant", Icon: Sparkles, action: { kind: "panel", panel: "assistant" } },
       { id: "notifications", label: "Notifications", Icon: Bell, action: { kind: "panel", panel: "notifications" } },
     ],
   },
@@ -129,9 +132,9 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
     label: "Apps",
     items: [
       { id: "marketplace", label: "Marketplace", Icon: Store, action: { kind: "panel", panel: "marketplace" } },
-      { id: "mail", label: "Mail", Icon: Mail, action: { kind: "tab", app: "mail" }, isAvailable: () => mailAppUrl() !== "" },
-      { id: "calendar", label: "Calendar", Icon: CalendarRange, action: { kind: "tab", app: "calendar" }, isAvailable: () => calendarAppUrl() !== "" },
-      { id: "whiteboard", label: "Whiteboard", Icon: PenTool, action: { kind: "tab", app: "whiteboard" }, isAvailable: isWhiteboardReady },
+      { id: "mail", label: "Mail", Icon: Mail, action: { kind: "workspaceTab", makeTab: mailTab }, isAvailable: () => mailAppUrl() !== "" },
+      { id: "calendar", label: "Calendar", Icon: CalendarRange, action: { kind: "workspaceTab", makeTab: calendarTab }, isAvailable: () => calendarAppUrl() !== "" },
+      { id: "whiteboard", label: "Whiteboard", Icon: PenTool, action: { kind: "workspaceTab", makeTab: whiteboardTab }, isAvailable: isWhiteboardReady },
     ],
   },
 ];
@@ -145,4 +148,19 @@ export function visibleRailItems(group: RailGroup, role?: PlatformRole | null): 
     if (role !== undefined && item.requiredRole && !roleAtLeast(role, item.requiredRole)) return false;
     return item.isAvailable?.() ?? true;
   });
+}
+
+/** What the rail shows as "you are here". */
+export interface RailLocation {
+  activePanel: ActivePanel;
+  /** False while the side panel is folded to the bare rail. */
+  panelShown: boolean;
+  /** The focused tab's pageId. */
+  activePageId: string | undefined;
+}
+
+/** A panel item is active while its panel is shown; a tab item while its tab is the focused one. */
+export function isRailItemActive(item: RailItem, at: RailLocation): boolean {
+  if (item.action.kind === "panel") return at.panelShown && at.activePanel === item.action.panel;
+  return at.activePageId !== undefined && item.action.makeTab().pageId === at.activePageId;
 }

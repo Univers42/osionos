@@ -1,4 +1,4 @@
-/** The AI Hub's "Context & privacy": every claim is pinned to the service line that makes it true. */
+/** "What your next message sends": every claim is pinned to the service line that makes it true. */
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -10,8 +10,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { AiConnection, AiProvider } from "@/features/ai/api/aiContract";
 import { outgoingContext, recipientOf } from "@/features/ai/model/outgoingContext";
-import { HubPrivacySection } from "@/widgets/ai-hub/ui/HubPrivacySection";
-import { HubSectionBody } from "@/widgets/ai-hub/ui/HubSectionBody";
+import { AiPanel } from "@/features/settings/ai/AiPanel";
+import { OutgoingContextSection } from "@/features/settings/ai/OutgoingContextSection";
 
 const PLATFORM = { connectionId: "platform", model: "auto" };
 const rowOf = (accountContext: boolean, id: string, selection = PLATFORM) =>
@@ -93,19 +93,20 @@ test("the recipient: platform, a user connection, this device", () => {
   assert.match(recipientOf({ connectionId: "device", model: "m" }, [], []).text, /^Stays on this device/);
 });
 
-test("the section markup: recipient, every row label, and the toggle", () => {
-  const html = renderToStaticMarkup(React.createElement(HubPrivacySection));
+test("the section markup: recipient and every row label, under its anchor", () => {
+  const html = renderToStaticMarkup(React.createElement(OutgoingContextSection));
+  assert.match(html, /data-settings-anchor="ai-privacy"/);
   assert.ok(html.includes("osionos sends this to OpenRouter"));
   for (const label of [
     "Your message and this conversation", "Account context", "Pages you add with @",
     "Search results from your workspace", "Approved memories", "Attached files and images",
   ]) assert.ok(html.includes(label), label);
-  assert.match(html, /aria-label="Account context"/);
   assert.match(html, /data-testid="outgoing-account"[^>]*>Sent</);
-  assert.ok(!html.includes("Meeting notes auto-record"), "no-op switches are not in the Hub");
+  assert.ok(!html.includes("Meeting notes auto-record"), "no-op switches are not in the block");
+  assert.ok(!html.includes('aria-label="Account context"'), "the switch is AiSwitches' row, drawn once");
 });
 
-test("the Hub's privacy section renders the new section", () => {
-  const html = renderToStaticMarkup(React.createElement(HubSectionBody, { id: "privacy" }));
+test("Settings › osionos AI renders the block", () => {
+  const html = renderToStaticMarkup(React.createElement(AiPanel));
   assert.ok(html.includes("What your next message sends"));
 });

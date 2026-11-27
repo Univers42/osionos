@@ -35,7 +35,7 @@ const SURFACES = {
   },
   settings: async (page, baseURL) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: /settings/i }).first().click();
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Preferences" }).waitFor();
   },
   chat: async (page, baseURL) => {

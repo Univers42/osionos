@@ -60,6 +60,16 @@ export type Elevation = (typeof ELEVATIONS)[number];
 export const BORDERS = ["default", "none", "strong"] as const;
 export type Borders = (typeof BORDERS)[number];
 
+/** How a page or tab comes in when it becomes the visible one. */
+export const PAGE_TRANSITIONS = ["none", "fade", "blur", "slide", "scale"] as const;
+export type PageTransition = (typeof PAGE_TRANSITIONS)[number];
+/** How popovers, menus and dialogs open: today's pop, or another entrance. */
+export const OVERLAY_TRANSITIONS = ["default", "none", "fade", "blur", "zoom"] as const;
+export type OverlayTransition = (typeof OVERLAY_TRANSITIONS)[number];
+/** A scale on every animation duration. */
+export const MOTION_SPEEDS = ["default", "slow", "fast"] as const;
+export type MotionSpeed = (typeof MOTION_SPEEDS)[number];
+
 export interface Appearance {
   /** a preset id, or "custom" to use `hue`. */
   accent: string;
@@ -79,6 +89,9 @@ export interface Appearance {
   surface: Surface;
   elevation: Elevation;
   borders: Borders;
+  pageTransition: PageTransition;
+  overlayTransition: OverlayTransition;
+  motionSpeed: MotionSpeed;
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -98,6 +111,9 @@ export const DEFAULT_APPEARANCE: Appearance = {
   surface: "solid",
   elevation: "default",
   borders: "default",
+  pageTransition: "none",
+  overlayTransition: "default",
+  motionSpeed: "default",
 };
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
@@ -136,5 +152,8 @@ export function parseAppearance(raw: string | null): Appearance {
     surface: oneOf(stored.surface, SURFACES, DEFAULT_APPEARANCE.surface),
     elevation: oneOf(stored.elevation, ELEVATIONS, DEFAULT_APPEARANCE.elevation),
     borders: oneOf(stored.borders, BORDERS, DEFAULT_APPEARANCE.borders),
+    pageTransition: oneOf(stored.pageTransition, PAGE_TRANSITIONS, DEFAULT_APPEARANCE.pageTransition),
+    overlayTransition: oneOf(stored.overlayTransition, OVERLAY_TRANSITIONS, DEFAULT_APPEARANCE.overlayTransition),
+    motionSpeed: oneOf(stored.motionSpeed, MOTION_SPEEDS, DEFAULT_APPEARANCE.motionSpeed),
   };
 }

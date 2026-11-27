@@ -29,7 +29,6 @@ export const CALENDAR_TAB_ID = "__calendar__";
 export const CHAT_TAB_ID = "__chat__";
 export const WHITEBOARD_TAB_ID = "__whiteboard__";
 export const SETTINGS_TAB_ID = "__settings__";
-export const AI_HUB_TAB_ID = "__ai_hub__";
 export const PAGE_LIBRARY_TAB_ID = "__page_library__";
 
 const STORAGE_KEY = "osionos.workspace.layout.v2";
@@ -139,12 +138,6 @@ export function settingsTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: SETTINGS_TAB_ID, workspaceId: "", kind: "settings", title: "Settings", icon: "icon:settings" };
 }
 
-/** The AI Hub tab — health, model, spend and every AI setting in one pane. Stable
- *  pageId, so a second open focuses the existing tab. */
-export function aiHubTab(): WorkspaceTab {
-  return { tabId: genId("tab"), pageId: AI_HUB_TAB_ID, workspaceId: "", kind: "ai-hub", title: "AI Hub", icon: "icon:sparkles" };
-}
-
 /** The Library tab — every workspace page as a tree. Stable pageId, so a second
  *  open focuses the existing tab. */
 export function libraryTab(): WorkspaceTab {
@@ -200,13 +193,38 @@ function migrateLegacyTab(tab: WorkspaceTab): WorkspaceTab {
   return (tab.kind as string) === "draw" ? { ...whiteboardTab(), tabId: tab.tabId } : tab;
 }
 
-export function migrateLegacyTabs(node: LayoutNode): LayoutNode {
-  if (node.type === "split") {
-    const children = node.children.map(migrateLegacyTabs);
-    return children.every((child, index) => child === node.children[index]) ? node : { ...node, children };
-  }
-  const tabs = node.tabs.map(migrateLegacyTab);
-  return tabs.every((tab, index) => tab === node.tabs[index]) ? node : { ...node, tabs };
+// The AI Hub tab became Settings sections. Its saved tab reopens as THE Settings tab
+// (same tabId); when the tree already has one, the Hub tab is dropped, because a tree
+// with two Settings tabs is one openTab can never produce. It lands on Profile: the
+// section lives in features/settings, which a layout model does not import.
+const RETIRED_AI_HUB_KIND = "ai-hub";
+
+const hasSettingsTab = (node: LayoutNode): boolean =>
+  node.type === "split" ? node.children.some(hasSettingsTab) : node.tabs.some((tab) => tab.kind === "settings");
+
+function migratePane(pane: PaneNode, settings: { present: boolean }): PaneNode {
+  const tabs = pane.tabs.flatMap((tab): WorkspaceTab[] => {
+    if ((tab.kind as string) !== RETIRED_AI_HUB_KIND) return [migrateLegacyTab(tab)];
+    if (settings.present) return [];
+    settings.present = true;
+    return [{ ...settingsTab(), tabId: tab.tabId }];
+  });
+  if (tabs.length === pane.tabs.length && tabs.every((tab, index) => tab === pane.tabs[index])) return pane;
+  // A dropped Hub tab may have been the active one: point at the Settings tab it folded into.
+  const activeTabId = tabs.some((tab) => tab.tabId === pane.activeTabId)
+    ? pane.activeTabId
+    : (tabs.find((tab) => tab.kind === "settings") ?? tabs[0])?.tabId ?? null;
+  return { ...pane, tabs, activeTabId };
+}
+
+function migrateNode(node: LayoutNode, settings: { present: boolean }): LayoutNode {
+  if (node.type === "pane") return migratePane(node, settings);
+  const children = node.children.map((child) => migrateNode(child, settings));
+  return children.every((child, index) => child === node.children[index]) ? node : { ...node, children };
+}
+
+export function migrateLegacyTabs(root: LayoutNode): LayoutNode {
+  return migrateNode(root, { present: hasSettingsTab(root) });
 }
 
 export function loadLayout(scope: string): { root: LayoutNode; activePaneId: string } {

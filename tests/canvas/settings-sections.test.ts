@@ -41,7 +41,7 @@ function srcFiles(base = SRC_ROOT): string[] {
   return files;
 }
 
-test("the registry lists exactly the 19 legacy section ids, the 2 AI ones, moderation, developer and machines, all unique", () => {
+test("the registry lists exactly the 19 legacy section ids, the 5 AI ones, moderation, developer and machines, all unique", () => {
   const ids = SETTINGS_SECTIONS.map((section) => section.id);
   assert.equal(new Set(ids).size, ids.length, "a section id appears twice");
   const LEGACY_IDS = [
@@ -55,6 +55,8 @@ test("the registry lists exactly the 19 legacy section ids, the 2 AI ones, moder
     "developer",
     // Own machines (docs/ide/vscode-backend/own-machines-plan.md §6).
     "machines",
+    // The retired AI Hub tab's workspace panels, each behind the shared AI guard.
+    "ai_agents", "ai_skills", "ai_memory",
   ];
   for (const id of LEGACY_IDS) assert.ok(ids.includes(id), `${id} left the registry`);
   assert.equal(ids.length, LEGACY_IDS.length + 1);
