@@ -1,6 +1,6 @@
 // The node's remembered computers (devil verdict 2026-11-01, Amendment 1, R4, R5 as overridden by
 // groot ADR 0041, R7, R8): a hash per device secret, bound to owner, machine and app origin, in a
-// 0600 file; 30 days idle, 90 days absolute, at most 8.
+// 0600 file; 12 hours idle, 30 days absolute (devil 2026-11-27, TB7), at most 8.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -8,7 +8,7 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { REMEMBER_LIMITS, createRememberedComputers } from '../../packages/osionos-node/remembered-computers.mjs';
+import { REMEMBER_LIMITS, createRememberedComputers, deviceHash, readRememberedSummary } from '../../packages/osionos-node/remembered-computers.mjs';
 
 const OWNER = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
 const MACHINE = 'm-abcdefghijklmnop';
@@ -25,28 +25,91 @@ function world(t, over = {}) {
 	return { file, clock, make, store: make() };
 }
 
-test('R7: used at 29 days idle it opens and slides; 31 days idle is refused and dropped', (t) => {
+const HOUR = 3_600_000;
+
+test('TB7: 12 hours idle opens and slides; 12 hours and 1 ms idle is refused and dropped', (t) => {
 	const { clock, store } = world(t);
 	const secret = store.issue(PROD);
 	assert.match(secret, /^[A-Za-z0-9_-]{43}$/);
-	clock.at += 29 * DAY;
+	clock.at += 12 * HOUR;
 	assert.equal(store.open(secret, PROD), true);
-	clock.at += 29 * DAY;
+	clock.at += 12 * HOUR;
 	assert.equal(store.open(secret, PROD), true, 'the use slid the idle window');
-	clock.at += 31 * DAY;
+	clock.at += 12 * HOUR + 1;
 	assert.equal(store.open(secret, PROD), false);
 	assert.equal(store.count(), 0);
+	assert.equal(REMEMBER_LIMITS.idleMs, 12 * HOUR);
 });
 
-test('R7: past 90 days from its issue it is refused, however often it was used', (t) => {
+test('TB7: 30 days from its issue it still opens; 30 days and 1 ms is refused, however often it was used', (t) => {
 	const { clock, store } = world(t);
+	const issuedAt = clock.at;
 	const secret = store.issue(PROD);
-	for (let day = 0; day < 90; day += 20) {
-		clock.at += 20 * DAY;
-		assert.equal(store.open(secret, PROD), day + 20 <= 90, `day ${day + 20}`);
+	while (clock.at + 11 * HOUR < issuedAt + 30 * DAY) {
+		clock.at += 11 * HOUR;
+		assert.equal(store.open(secret, PROD), true);
 	}
-	assert.equal(REMEMBER_LIMITS.absoluteMs, 90 * DAY);
-	assert.equal(REMEMBER_LIMITS.idleMs, 30 * DAY);
+	clock.at = issuedAt + 30 * DAY;
+	assert.equal(store.open(secret, PROD), true, 'exactly 30 days');
+	clock.at += 1;
+	assert.equal(store.open(secret, PROD), false);
+	assert.equal(REMEMBER_LIMITS.absoluteMs, 30 * DAY);
+});
+
+test('TB7: a record on disk is judged again at load, at both limits, to the millisecond', (t) => {
+	const { clock, file, make } = world(t);
+	const at = clock.at;
+	const record = (hash, createdAt, lastUsedAt) => ({ hash: hash.repeat(64), owner: OWNER, machine: MACHINE, appOrigin: PROD, createdAt, lastUsedAt });
+	writeFileSync(file, JSON.stringify({ computers: [
+		record('a', at - DAY, at - 12 * HOUR),
+		record('b', at - DAY, at - 12 * HOUR - 1),
+		record('c', at - 30 * DAY, at),
+		record('d', at - 30 * DAY - 1, at),
+	] }), { mode: 0o600 });
+	make();
+	assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).computers.map((kept) => kept.hash[0]), ['a', 'c']);
+});
+
+test('TB8: touch slides only a live record it still holds, and never writes after forget, clear or expiry', (t) => {
+	const { clock, file, store } = world(t);
+	const secret = store.issue(PROD);
+	const hash = deviceHash(secret);
+	clock.at += 11 * HOUR;
+	store.touch(hash);
+	clock.at += 11 * HOUR;
+	assert.equal(store.open(secret, PROD), true, 'the touch slid the idle window');
+	const createdAt = JSON.parse(readFileSync(file, 'utf8')).computers[0].createdAt;
+	store.touch(hash);
+	assert.equal(JSON.parse(readFileSync(file, 'utf8')).computers[0].createdAt, createdAt, 'createdAt never moves');
+
+	store.forget(secret);
+	store.touch(hash);
+	assert.equal(existsSync(file), false, 'after forget');
+
+	const again = store.issue(PROD);
+	store.clear();
+	store.touch(deviceHash(again));
+	assert.equal(existsSync(file), false, 'after clear');
+
+	const stale = store.issue(PROD);
+	clock.at += 12 * HOUR + 1;
+	store.touch(deviceHash(stale));
+	assert.equal(store.open(stale, PROD), false, 'a touch does not revive an expired record');
+	assert.equal(existsSync(file), false, 'after expiry');
+	store.touch('not a hash');
+});
+
+test('TB23: the summary reads counts, origins and ages, never a hash, and writes nothing', (t) => {
+	const { clock, file, store } = world(t);
+	store.issue(PROD);
+	clock.at += HOUR;
+	store.issue(BETA);
+	const before = readFileSync(file, 'utf8');
+	const summary = readRememberedSummary(file, clock.at);
+	assert.deepEqual(summary, [{ appOrigin: PROD, idleMs: HOUR, ageMs: HOUR }, { appOrigin: BETA, idleMs: 0, ageMs: 0 }]);
+	assert.equal(JSON.stringify(summary).includes(JSON.parse(before).computers[0].hash), false);
+	assert.equal(readFileSync(file, 'utf8'), before);
+	assert.deepEqual(readRememberedSummary(join(file, 'missing'), clock.at), []);
 });
 
 test('R7: a 9th record evicts the oldest', (t) => {

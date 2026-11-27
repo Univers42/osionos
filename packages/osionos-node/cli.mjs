@@ -31,6 +31,7 @@ import { createIdeOriginServer } from './ide-origin.mjs';
 import { createMachineSession, loadMachine } from './machine-identity.mjs';
 import { pairMachine } from './pair.mjs';
 import { createRememberedComputers } from './remembered-computers.mjs';
+import { readStatus } from './status.mjs';
 import { SERVER_PIN } from './pin.mjs';
 import { createPtyHost, serverSocketAcceptor } from './pty-runtime.mjs';
 import { isRememberOrigin } from './pty-wire.mjs';
@@ -115,11 +116,11 @@ const machineFile = (env) => join(env.HOME ?? homedir(), '.osionos', 'machine.js
 const rememberedFile = (env) => join(env.HOME ?? homedir(), '.osionos', 'remembered-computers.json');
 
 // Loaded on every paired start, even with no --remember-origin, so dropping an origin deletes the
-// computers it remembered (R5, R7); offered to the terminal only when an origin remains.
+// computers it remembered (R5, R7), and a removal can clear it (TB9); offered to the services only
+// when an origin remains.
 function rememberedFor(config, env) {
 	if (!config.machine) return null;
-	const devices = createRememberedComputers({ file: rememberedFile(env), owner: config.ownerId, machine: config.node, origins: config.rememberOrigins });
-	return config.rememberOrigins.length > 0 ? devices : null;
+	return createRememberedComputers({ file: rememberedFile(env), owner: config.ownerId, machine: config.node, origins: config.rememberOrigins });
 }
 
 // The web terminal of a paired machine (ADR 0041): shells run as this user, in $HOME, with the
@@ -181,6 +182,7 @@ async function serve(argv, env) {
 	const terminal = terminalFor(config, home, serverEnv(env, loginShell));
 	const disk = diskFor(config, home, env);
 	const diskRoots = disk?.roots;
+	const remembered = rememberedFor(config, env);
 	const origin = createIdeOriginServer({
 		...(session ? session.originOptions : { secret: config.secret }),
 		ownerId: config.ownerId, ideOrigin: config.ideOrigin, commit: SERVER_PIN.server.commit,
@@ -188,7 +190,7 @@ async function serve(argv, env) {
 		client: createClientHandler({ root: config.client, terminalRoot: config.terminal, editorRoot: existsSync(join(DEFAULT_EDITOR, 'index.html')) ? DEFAULT_EDITOR : null, appOrigins: config.appOrigins }),
 		pty: terminal.pty,
 		fs: disk,
-		devices: terminal.pty ? rememberedFor(config, env) : null,
+		devices: (terminal.pty || disk) && config.rememberOrigins.length > 0 ? remembered : null,
 	});
 	await new Promise((resolve, reject) => origin.server.once('error', reject).listen(config.listen.port, config.listen.host, resolve));
 	console.log(`osionos-node: ${config.node} on ${config.ideOrigin} (server ${server.reused ? 'reused' : `pid ${server.pid}`})`);
@@ -196,8 +198,14 @@ async function serve(argv, env) {
 	const stop = async () => { control?.close(); origin.close(); terminal.host?.stop(); await server.stop(); process.exit(0); };
 	if (session) {
 		const beat = createHeartbeat({
-			file: machineFile(env), keys: session.keys, ideOrigin: config.ideOrigin, forget: [rememberedFile(env)],
-			onGone: () => { console.error('osionos-node: this machine was removed from its account; it forgot its identity'); void stop(); },
+			file: machineFile(env), keys: session.keys, ideOrigin: config.ideOrigin,
+			// TB15: the identity is already archived; then the computers, the roots, and a clean exit.
+			onGone: async () => {
+				console.error('osionos-node: this machine was removed from its account; its identity is archived beside machine.json');
+				remembered?.clear();
+				await diskRoots?.forget();
+				await stop();
+			},
 		});
 		beat.start();
 	}
@@ -205,11 +213,16 @@ async function serve(argv, env) {
 	process.once('SIGTERM', stop);
 }
 
+async function printStatus(env) {
+	console.log(await readStatus({ home: env.HOME ?? homedir() }));
+}
+
 const USAGE = [
 	'usage: osionos-node connect --bridge <url> --app-origin <origin>... [--remember-origin <origin>...] [--name <name>] [--pair-only]',
 	'       osionos-node pair --bridge <url> --name <name> [--accept-account <email>]',
 	'       osionos-node serve --server <lib dir> --app-origin <origin>... [--remember-origin <origin>...] [--listen 127.0.0.1:4100] [--client <dist-ide>] [--terminal <build/terminal>]',
 	'       (unpaired, milestone 1: add --node <id> and OSIONOS_IDE_TOKEN_SECRET / OSIONOS_IDE_OWNER)',
+	'       osionos-node status',
 	'       osionos-node update',
 ].join('\n');
 
@@ -254,6 +267,12 @@ async function connect(argv, env) {
 	} });
 	if (!values.bridge) throw new Error('--bridge must be the osionos bridge URL');
 	if (!values['app-origin']?.length) throw new Error('--app-origin must name the app');
+	// TB16: a service manager restarting an unpaired node (after a removal) must not start a pairing
+	// nobody is there to confirm; exit 0 so neither systemd nor launchd restarts it.
+	if (!loadMachine(machineFile(env)) && !process.stdin.isTTY) {
+		console.log('osionos-node: not paired: run the install line');
+		return;
+	}
 	while (!loadMachine(machineFile(env))) {
 		try {
 			await pair(['--bridge', values.bridge, '--name', values.name ?? shortHostName()], env);
@@ -270,7 +289,7 @@ async function connect(argv, env) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
 	const [command, ...rest] = process.argv.slice(2);
-	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env), connect: () => connect(rest, process.env), open: () => openFolder(rest, process.env), update: () => updateNode(rest, process.env) };
+	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env), connect: () => connect(rest, process.env), status: () => printStatus(process.env), open: () => openFolder(rest, process.env), update: () => updateNode(rest, process.env) };
 	const run = commands[command]?.() ?? Promise.reject(new Error(USAGE));
 	run.catch((error) => { console.error(`osionos-node: ${error.message}`); process.exit(1); });
 }

@@ -5,12 +5,14 @@
 // that carries the person's remember choice.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdtempSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createHeartbeat } from '../../packages/osionos-node/heartbeat.mjs';
 import { saveMachine } from '../../packages/osionos-node/machine-identity.mjs';
+import { signMessage } from '../../scripts/ide-agent-frames.mjs';
+import { goneMessage } from '../../scripts/ide-machine-protocol.mjs';
 import { createRememberedComputers } from '../../packages/osionos-node/remembered-computers.mjs';
 import { KEY, MACHINE, OWNER, STRANGER, mint, mintResume, open, world } from './support/pty-world.mjs';
 import { pairedMachine } from './support/paired-node.mjs';
@@ -124,21 +126,28 @@ test('R8: forget from the node\'s own page deletes the record; another origin ca
 	assert.equal(existsSync(file), false);
 });
 
-test('R8: the heartbeat\'s 410 deletes the remembered computers before the node stops', async (t) => {
+test('R8, TB9, TB15: a signed gone archives the identity, then onGone clears the remembered computers', async (t) => {
 	const dir = mkdtempSync(join(tmpdir(), 'beat-forget-'));
 	chmodSync(dir, 0o700);
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
 	const machineFile = join(dir, 'machine.json');
 	const remembered = join(dir, 'remembered-computers.json');
 	saveMachine(machineFile, pairedMachine(KEY));
-	createRememberedComputers({ file: remembered, owner: OWNER, machine: MACHINE, origins: [PROD] }).issue(PROD);
-	assert.equal(existsSync(remembered), true);
+	const devices = createRememberedComputers({ file: remembered, owner: OWNER, machine: MACHINE, origins: [PROD] });
+	const device = devices.issue(PROD);
 	let leftOnStop = null;
 	const beat = createHeartbeat({
-		file: machineFile, keys: { [KEY.kid]: KEY.publicKey }, ideOrigin: 'http://127.0.0.1:4100', forget: [remembered],
-		fetchImpl: async () => new Response('', { status: 410 }),
-		onGone: () => { leftOnStop = [existsSync(remembered), existsSync(machineFile)]; },
+		file: machineFile, keys: { [KEY.kid]: KEY.publicKey }, ideOrigin: 'http://127.0.0.1:4100',
+		fetchImpl: async (url, init) => {
+			const { ts } = JSON.parse(init.body);
+			const gone = { machineId: MACHINE, kid: KEY.kid, ts, sig: signMessage(KEY.privateKey, goneMessage({ origin: 'https://bridge.example', machineId: MACHINE, ts })) };
+			return new Response(JSON.stringify({ ok: false, code: 'gone', gone }), { status: 410 });
+		},
+		onGone: () => { devices.clear(); leftOnStop = [existsSync(remembered), existsSync(machineFile)]; },
 	});
 	t.after(() => beat.stop());
 	assert.equal(await beat.once(), 'gone');
 	assert.deepEqual(leftOnStop, [false, false]);
+	assert.equal(devices.open(device, PROD), false, 'the in-memory map is empty too');
+	assert.equal(readdirSync(dir).some((entry) => entry.startsWith('machine.removed-')), true);
 });
