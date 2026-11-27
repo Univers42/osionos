@@ -1,22 +1,68 @@
-/* Motion preferences: the three axes written to <html> by applyAppearance
-   (data-page-transition, data-overlay-transition, data-motion-speed). Each is absent at its
+/* Motion preferences: the axes written to <html> by applyAppearance
+   (data-page-transition, data-overlay-transition, data-motion-speed, data-easing,
+   data-press-feedback). Each is absent at its
    default, so a person who never chose one gets today's pixels. Everything here is a plain
    CSS animation or a token, so the reduced-motion reset at the end of global.css (durations
    forced to 0.01ms) covers it without a rule of its own. */
 
-/* Animation speed: the four duration tokens, scaled. Nothing else moves. */
+/* An explicit speed, easing or press choice beats the theme: applyCompiledTheme writes the
+   theme's dur-* and ease-* as inline declarations on <html>, and only an !important author
+   declaration outranks those. The default (attribute absent) keeps the theme's own motion. */
 :root[data-motion-speed="slow"] {
-  --osio-dur-instant: 128ms;
-  --osio-dur-fast: 192ms;
-  --osio-dur-base: 288ms;
-  --osio-dur-slow: 416ms;
+  --osio-dur-instant: 128ms !important;
+  --osio-dur-fast: 192ms !important;
+  --osio-dur-base: 288ms !important;
+  --osio-dur-slow: 416ms !important;
 }
 
 :root[data-motion-speed="fast"] {
-  --osio-dur-instant: 48ms;
-  --osio-dur-fast: 72ms;
-  --osio-dur-base: 108ms;
-  --osio-dur-slow: 156ms;
+  --osio-dur-instant: 48ms !important;
+  --osio-dur-fast: 72ms !important;
+  --osio-dur-base: 108ms !important;
+  --osio-dur-slow: 156ms !important;
+}
+
+:root[data-easing="snappy"] {
+  --osio-ease-standard: cubic-bezier(0.2, 0, 0, 1) !important;
+  --osio-ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1) !important;
+  --osio-ease-decelerate: cubic-bezier(0, 0, 0, 1) !important;
+  --osio-ease-spring: cubic-bezier(0.2, 0, 0, 1) !important;
+}
+
+:root[data-easing="smooth"] {
+  --osio-ease-standard: cubic-bezier(0.45, 0, 0.55, 1) !important;
+  --osio-ease-emphasized: cubic-bezier(0.65, 0, 0.35, 1) !important;
+  --osio-ease-decelerate: cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+  --osio-ease-spring: cubic-bezier(0.45, 0, 0.55, 1) !important;
+}
+
+:root[data-easing="bouncy"] {
+  --osio-ease-standard: cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  --osio-ease-emphasized: cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  --osio-ease-decelerate: cubic-bezier(0.34, 1.3, 0.64, 1) !important;
+  --osio-ease-spring: cubic-bezier(0.34, 1.8, 0.64, 1) !important;
+}
+
+/* Button press: uses the scale property so it composes with any transform. "none" cancels the
+   ad hoc active:scale-* utilities; "squish" presses every enabled, non-draggable button to 0.96
+   with no transition of its own (setting one would clobber the element's own transition list).
+   Squish does nothing under reduced motion, matching the reset at the end of global.css. */
+:root[data-press-feedback="none"] :is(button, [role="button"]):active {
+  scale: none !important;
+}
+
+:root[data-press-feedback="squish"] :is(button, [role="button"]):not(:disabled, [aria-disabled="true"], [draggable="true"]):active {
+  scale: 0.96;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-press-feedback="squish"]:not([data-motion="full"]) :is(button, [role="button"]):active {
+    scale: none !important;
+  }
+}
+
+:root[data-press-feedback="squish"][data-motion="reduce"] :is(button, [role="button"]):active {
+  scale: none !important;
 }
 
 /* Page and tab transition: one keyframe per style on the visible tab container (PaneView sets
