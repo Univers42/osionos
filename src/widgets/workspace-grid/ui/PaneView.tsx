@@ -83,6 +83,9 @@ function useKeptTabs(activeId: string | null, openIds: readonly string[]): reado
   return next;
 }
 
+const PANE_CLASS_FRAMED = "relative flex flex-col min-w-0 min-h-0 flex-1 overflow-hidden rounded-[var(--osio-radius-pane)] border border-[var(--osio-pane-border)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-pane-shadow)]";
+const PANE_CLASS_WELCOME = "relative flex flex-col min-w-0 min-h-0 flex-1 overflow-hidden rounded-[var(--osio-radius-pane)]";
+
 /** A single tab-group leaf: tab bar + the active tab's content + drop zones. */
 const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   const isActive = useWorkspaceLayout((s) => s.activePaneId === pane.id);
@@ -93,17 +96,19 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   const zoom = isPaneZoomEnabled() ? normalizePaneZoom(pane.zoom) : 1;
   // A lone pane has nothing to be told apart from.
   const isOneOfMany = useWorkspaceLayout((s) => s.root.type === "split");
+  const welcome = pane.tabs.length === 0 && !isOneOfMany;
 
   return (
     <div
       data-osio-pane={pane.id}
+      data-osio-pane-welcome={welcome ? "" : undefined}
       data-osio-pane-active={isActive && isOneOfMany ? "" : undefined}
       // `contain: layout paint` isolates each pane's rendering so an edit/scroll in
       // one pane can't trigger layout/paint of the other panes (key with 8 open).
       style={{ contain: "layout paint" }}
-      className="relative flex flex-col min-w-0 min-h-0 flex-1 overflow-hidden rounded-[var(--osio-radius-pane)] border border-[var(--osio-pane-border)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-pane-shadow)]"
+      className={welcome ? PANE_CLASS_WELCOME : PANE_CLASS_FRAMED}
     >
-      <TabStrip pane={pane} zoom={zoom} />
+      {welcome ? null : <TabStrip pane={pane} zoom={zoom} />}
       {activeTab && <EditorTitleBar tab={activeTab} />}
       <div
         className="relative flex-1 min-h-0 overflow-hidden"

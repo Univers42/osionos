@@ -19,7 +19,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 
 import { captureOpenOrigin, openCreatedPage } from "./createdPageOpen";
-import { homeTab } from "./layoutPersist";
+import { chatTab, homeTab } from "./layoutPersist";
 import { useWorkspaceLayout } from "./workspaceLayout";
 
 function activeWorkspace(): { workspaceId: string; jwt: string } | null {
@@ -47,4 +47,9 @@ export async function startNewFolder(): Promise<void> {
 export function openHome(): void {
   const layout = useWorkspaceLayout.getState();
   layout.openTab(homeTab(), layout.activePaneId);
+}
+
+/** Opens the assistant chat as a tab in the active pane. */
+export function openAssistantChat(): void {
+  useWorkspaceLayout.getState().openTab(chatTab());
 }
