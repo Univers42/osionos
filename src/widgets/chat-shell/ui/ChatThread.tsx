@@ -42,6 +42,7 @@ import { askAgent } from "@/features/chat/model/askAgent";
 import { agentName, handoffFromParts, otherAgents, questionBefore } from "@/features/chat/model/agentHandoff";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import { AppliedWrites, AppliedWritesLoader } from "@/features/chat/ui/AppliedWrites";
+import { TypingDots } from "@/shared/ui/typing/TypingDots";
 import { AgentAvatar } from "./AgentAvatar";
 import { AgentHandoffChip } from "./AgentHandoffChip";
 import { AskAnotherAgent } from "./AskAnotherAgent";
@@ -215,7 +216,6 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
   const agents = useChatStore((s) => s.agents);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages.length]);
 
-  // An edit would race a run in flight: the Edit button waits for it.
   const busy = messages.some((message) => message.status === "streaming");
 
   return (
@@ -225,12 +225,11 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
       <MessageWindow items={messages}>
         {(visible, offset) => visible.map((m, visibleIndex) => {
         const index = offset + visibleIndex;
-        // The agent that shaped the answer: its avatar and name head the answer.
         const agent = m.role === "assistant" && m.agentId ? agents.find((one) => one.id === m.agentId) : undefined;
         if (m.role === "user") {
           return (
             <div key={m.id} className="flex justify-end">
-              <div data-role="user" data-status={m.status} className="max-w-[80%] break-words rounded-2xl rounded-br-md bg-[var(--osio-bg-subtle)] px-4 py-2.5 text-sm text-[var(--osio-fg-default)]">
+              <div data-role="user" data-status={m.status} className="max-w-[80%] break-words rounded-2xl rounded-br-md bg-[color-mix(in_srgb,var(--osio-accent)_14%,var(--osio-bg-surface))] px-4 py-2.5 text-sm text-[var(--osio-fg-default)]">
                 <UserTurn messageId={m.id} content={m.content} canEdit={!busy} />
               </div>
             </div>
@@ -242,7 +241,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
         const research = researchFromParts(m.parts);
         return (
           <div key={m.id} className="flex gap-3">
-            <AgentAvatar agent={agent ?? null} size={28} mood={streamingNow ? "thinking" : "curious"} />
+            <div className="mt-0.5 shrink-0"><AgentAvatar agent={agent ?? null} size={28} mood={streamingNow ? "thinking" : "curious"} /></div>
             <div data-role={m.role} data-status={m.status} className="min-w-0 flex-1 break-words text-sm leading-relaxed text-[var(--osio-fg-default)]">
               <div className="mb-1 flex min-w-0 items-baseline gap-2 text-xs">
                 <span className="font-medium text-[var(--osio-fg-default)]" data-testid={agent ? "chat-agent-label" : undefined}>{agentName(m.agentId, agents)}</span>
@@ -262,7 +261,8 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
               ) : null}
               {streamingNow ? (
                 <span className="inline-flex items-center gap-1 text-xs text-[var(--osio-fg-muted)]" data-testid="chat-streaming">
-                  <span className="animate-pulse motion-reduce:animate-none">Writing…</span>
+                  <TypingDots />
+                  <span className="sr-only">Writing…</span>
                 </span>
               ) : null}
               {!streamingNow && m.content ? (

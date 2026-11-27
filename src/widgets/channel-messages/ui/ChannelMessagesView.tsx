@@ -25,23 +25,21 @@
  * failure is toasted.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-/** Newest messages rendered per window; "Show earlier" grows by another window. */
-const MESSAGE_WINDOW = 80;
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useUserStore } from "@/features/auth";
 import type { ChatMessage } from "@/shared/chat/messageApi";
 import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { useUnreadStore } from "@/store/chat/useUnreadStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
-import { postChannelRead } from "@/shared/chat/unreadApi";
 import { useChannelActions, type SendOutcome } from "../model/useChannelActions";
 import { useChannelHistory } from "../model/useChannelHistory";
 import { useChannelInfo } from "../model/useChannelInfo";
 import { useChannelLive } from "../model/useChannelLive";
 import { useChannelReceipts } from "../model/useChannelReceipts";
 import { buildMessageRows, firstUnreadId } from "../model/messageGrouping";
+import { useMessageWindow } from "../model/useMessageWindow";
+import { useStickyScroll } from "../model/useStickyScroll";
 import { mentionsAi } from "../model/aiAnswerDraft";
 import { canDeleteMessage, reportAiAnswer } from "../model/aiAnswerRow";
 import { aiDraftStore, useAiDraft } from "../model/useAiAnswerDraft";
@@ -51,6 +49,7 @@ import { AiAutopostMarker } from "./AiAutopostMarker";
 import { AiDraftCard } from "./AiDraftCard";
 import { CallPanel } from "./CallPanel";
 import { ChannelHeader } from "./ChannelHeader";
+import { DateDivider, UnreadDivider } from "./MessageDividers";
 import { MessageRow } from "./MessageRow";
 import { TypingIndicator } from "./TypingIndicator";
 import { MessageComposer } from "./composer/MessageComposer";
@@ -64,22 +63,6 @@ interface ChannelMessagesViewProps {
   variant?: 'full' | 'compact';
 }
 
-const DateDivider: React.FC<{ label: string }> = ({ label }) => (
-  <div className="my-3 flex items-center gap-3" role="separator" aria-label={label}>
-    <span className="h-px flex-1 bg-[var(--osio-border-default)]" />
-    <span className="rounded-full bg-[var(--osio-bg-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--osio-fg-muted)]">{label}</span>
-    <span className="h-px flex-1 bg-[var(--osio-border-default)]" />
-  </div>
-);
-
-const UnreadDivider: React.FC = () => (
-  <div className="my-2 flex items-center gap-3" role="separator" aria-label="New messages">
-    <span className="h-px flex-1 bg-[var(--osio-accent)]" />
-    <span className="rounded-full bg-[var(--osio-accent)] px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide text-[var(--osio-accent-fg)]">New</span>
-    <span className="h-px flex-1 bg-[var(--osio-accent)]" />
-  </div>
-);
-
 export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   channelId,
   workspaceId,
@@ -92,13 +75,6 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   const [threadRoot, setThreadRoot] = useState<ChatMessage | null>(null);
   const activeUserId = useUserStore((s) => s.activeUserId) || "anonymous";
   const persona = useUserStore((s) => s.activePersona());
-  const endRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const atBottomRef = useRef(true);
-  const prevLenRef = useRef(0);
-  const [atBottom, setAtBottom] = useState(true);
-  const [newCount, setNewCount] = useState(0);
-
   const channel = useChannelInfo(channelId);
   const isCallChannel = channel?.kind === "voice" || channel?.kind === "video";
   const history = useChannelHistory(channelId);
@@ -109,32 +85,15 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   const latestMessageId = messages.length ? messages[messages.length - 1].id : undefined;
   useChannelReceipts(receiptsWorkspaceId, channelId, activeUserId, latestMessageId);
   const rows = useMemo(() => buildMessageRows(messages), [messages]);
-  // Snapshot the last-seen mark ONCE per channel (before markSeen overwrites it)
-  // so the "New" divider stays anchored to where the reader left off.
   const readSnapshot = useMemo(() => useUnreadStore.getState().lastSeen[channelId] ?? null, [channelId]);
   const firstUnread = useMemo(() => firstUnreadId(messages, readSnapshot, activeUserId), [messages, readSnapshot, activeUserId]);
-  // Windowed tail: only the newest slice becomes DOM. A busy channel previously
-  // mounted EVERY message (thousands of rows + one authed media fetch each) on
-  // open. The window always reaches back to the unread anchor so the "New"
-  // divider is never hidden; "Show earlier" grows it on demand.
-  const [visibleCount, setVisibleCount] = useState(MESSAGE_WINDOW);
-  useEffect(() => setVisibleCount(MESSAGE_WINDOW), [channelId]);
-  const windowStart = useMemo(() => {
-    const start = Math.max(0, rows.length - visibleCount);
-    if (!firstUnread || start === 0) return start;
-    const anchor = rows.findIndex((row) => row.message.id === firstUnread);
-    return anchor >= 0 ? Math.min(start, anchor) : start;
-  }, [rows, visibleCount, firstUnread]);
-  const visibleRows = useMemo(
-    () => (windowStart > 0 ? rows.slice(windowStart) : rows),
-    [rows, windowStart],
-  );
+  const { windowStart, visibleRows, showEarlier } = useMessageWindow(rows, channelId, firstUnread);
+  const { scrollRef, endRef, atBottom, newCount, jumpToBottom } = useStickyScroll(channelId, messages);
   const authorNames = useMemo(() => {
     const map: Record<string, string> = {};
     for (const m of messages) map[m.authorId] = m.authorName;
     return map;
   }, [messages]);
-  const markSeen = useUnreadStore((s) => s.markSeen);
   const actions = useChannelActions({
     mode: history.mode,
     channelId,
@@ -142,13 +101,7 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
     userName: persona?.name ?? activeUserId,
     setMessages: history.setMessages,
   });
-  // Stable row callbacks: inline arrows gave every MessageRow fresh props each
-  // render, defeating its memo — one incoming message re-rendered every row.
-  // Destructured because the individual fns are useCallback'd in useChannelActions
-  // (stable), while the wrapping `actions` object is rebuilt every render.
   const { edit: editMessage, remove: removeMessage, react: reactMessage } = actions;
-  // The edit answer is passed through, not swallowed: the row's form stays
-  // open until the write really happened.
   const handleEdit = useCallback(
     (id: string, content: string, options?: { acknowledgeWarning?: boolean }) => editMessage(id, content, options),
     [editMessage],
@@ -161,23 +114,17 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
     (id: string, emoji: string, add: boolean) => { void reactMessage(id, emoji, add).catch(() => undefined); },
     [reactMessage],
   );
-  // The send answer: the reply target is cleared only when the message was
-  // really written, and only a plain failure is toasted — a warning from L0
-  // is the author's question, and the composer answers it.
   const aiDraft = useAiDraft(channelId);
   const canAskAi = channel?.kind === "text" && isChannelAiAnswersEnabled() && isAiConfigured();
   const autopost = canAskAi && channel?.aiAutopost === true;
   const draftWorkspaceId = liveWorkspaceId || channel?.workspaceId || workspaceId;
   const { setMessages } = history;
-  // A posted answer shows at once, by a click or by auto-post; the realtime echo is the same id.
   const addPosted = useCallback((message: ChatMessage) => {
     setMessages((current) => (current.some((m) => m.id === message.id) ? current : [...current, message]));
   }, [setMessages]);
   const handleSendOutcome = useCallback((outcome: SendOutcome): SendOutcome => {
     if (outcome.ok) {
       setReplyTarget(null);
-      // "@AI" drafts privately for the sender; the channel sees nothing until they post (C429)
-      // or, in an auto-post channel, until the bridge's guards pass the ready answer (OB1).
       if (canAskAi && outcome.message && mentionsAi(outcome.message.content)) {
         aiDraftStore.getState().ask({
           channelId,
@@ -198,69 +145,9 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   }, [canAskAi, autopost, addPosted, channelId, draftWorkspaceId, title, activeUserId]);
   const canModerate = channel?.memberRole === "owner" || channel?.memberRole === "admin";
 
-  const jumpToBottom = () => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    atBottomRef.current = true;
-    setAtBottom(true);
-    setNewCount(0);
-  };
-
   useEffect(() => {
     initRealtimeMessagesBridge();
   }, []);
-
-  // Track whether the reader is parked at the bottom (≈last 120px).
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return undefined;
-    const onScroll = () => {
-      const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-      atBottomRef.current = near;
-      setAtBottom(near);
-      if (near) setNewCount(0);
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // Channel switch: reset to bottom and clear the unread pill.
-  const readPostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    atBottomRef.current = true;
-    setAtBottom(true);
-    setNewCount(0);
-    prevLenRef.current = 0;
-    markSeen(channelId);
-    void postChannelRead(channelId).catch(() => undefined);
-    return () => {
-      // Drop a pending high-water write for the channel we're leaving.
-      if (readPostTimerRef.current) globalThis.clearTimeout(readPostTimerRef.current);
-      readPostTimerRef.current = null;
-    };
-  }, [channelId, markSeen]);
-
-  // New messages: stick to the bottom only if already there, else count them.
-  useEffect(() => {
-    const delta = messages.length - prevLenRef.current;
-    prevLenRef.current = messages.length;
-    if (atBottomRef.current) {
-      endRef.current?.scrollIntoView({ block: "end" });
-      if (delta > 0) {
-        markSeen(channelId); // local badge clears immediately
-        // Coalesced: the read POST fired once PER incoming message while parked
-        // at the bottom. The high-water id is idempotent — one write per burst.
-        if (readPostTimerRef.current) globalThis.clearTimeout(readPostTimerRef.current);
-        const lastId = messages[messages.length - 1]?.id;
-        readPostTimerRef.current = globalThis.setTimeout(() => {
-          readPostTimerRef.current = null;
-          void postChannelRead(channelId, lastId).catch(() => undefined);
-        }, 1200);
-      }
-      setNewCount(0);
-    } else if (delta > 0) {
-      setNewCount((n) => n + delta);
-    }
-  }, [messages, channelId, markSeen]);
 
   const channelName = title || "messages";
 
@@ -307,7 +194,7 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
             {windowStart > 0 && (
               <button
                 type="button"
-                onClick={() => setVisibleCount((count) => count + MESSAGE_WINDOW)}
+                onClick={showEarlier}
                 className="mb-2 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-1.5 text-xs text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-muted)] hover:text-[var(--osio-fg-default)]"
               >
                 Show earlier messages ({windowStart})

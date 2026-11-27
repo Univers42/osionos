@@ -8,42 +8,47 @@
   --osio-menu-shadow: var(--osio-shadow-menu);
 }
 
+/* Presets beat a theme: a theme writes its tokens inline on <html> (themeApply.ts, index.html), which
+   beats any rule, so every custom property below is !important. With no preset the attribute is absent,
+   none of this applies and the theme (or the default) shows unchanged. Zen, phone and compact are not
+   outranked: zen redefines the tokens on its own element, and the other two are excluded by their selectors. */
 /* Depth. Overlay and dialog remaps apply everywhere; flat/deep lift the dialog the kit pins to e4. */
 :root[data-elevation="flat"] {
-  --osio-overlay-shadow: var(--osio-e1);
-  --osio-menu-shadow: var(--osio-e1);
-  --osio-dialog-shadow: var(--osio-e2);
+  --osio-overlay-shadow: var(--osio-e1) !important;
+  --osio-menu-shadow: var(--osio-e1) !important;
+  --osio-dialog-shadow: var(--osio-e2) !important;
 }
 
 :root[data-elevation="deep"] {
-  --osio-overlay-shadow: var(--osio-e5);
-  --osio-menu-shadow: var(--osio-e5);
-  --osio-dialog-shadow: var(--osio-e5);
+  --osio-overlay-shadow: var(--osio-e5) !important;
+  --osio-menu-shadow: var(--osio-e5) !important;
+  --osio-dialog-shadow: var(--osio-e5) !important;
 }
 
 :root:is([data-elevation="flat"], [data-elevation="deep"]) [data-modal-overlay] > [role="dialog"] {
   box-shadow: var(--osio-dialog-shadow);
 }
 
-:root[data-borders="none"] { --osio-overlay-border: transparent; }
-:root[data-borders="strong"] { --osio-overlay-border: var(--osio-border-strong); }
+:root[data-borders="none"] { --osio-overlay-border: transparent !important; }
+:root[data-borders="strong"] { --osio-overlay-border: var(--osio-border-strong) !important; }
 
 /* Forced colours: a border is how the system draws an edge, so "none" keeps it. */
 @media (forced-colors: active) {
-  :root[data-borders="none"] { --osio-overlay-border: var(--osio-border-default); }
+  :root[data-borders="none"] { --osio-overlay-border: var(--osio-border-default) !important; }
 }
 
 /* Panes and the dock only where the frame gap exists: compact and zen run cards edge to edge
    and phones (shell.css: max-width 767.98px; the sidebar hook uses 767) have no gap, so none
    of these may re-add a border or shadow there. */
 @media (width > 767.98px) {
-  :root:not([data-density="compact"])[data-elevation="flat"] { --osio-pane-shadow: none; }
-  :root:not([data-density="compact"])[data-elevation="deep"] { --osio-pane-shadow: var(--osio-e4); }
-  :root:not([data-density="compact"])[data-borders="none"] { --osio-pane-border: transparent; }
-  :root:not([data-density="compact"])[data-borders="strong"] { --osio-pane-border: var(--osio-border-strong); }
+  :root:not([data-density="compact"])[data-elevation="flat"] { --osio-pane-shadow: none !important; }
+  :root:not([data-density="compact"])[data-elevation="deep"] { --osio-pane-shadow: var(--osio-e4) !important; }
+  :root:not([data-density="compact"])[data-borders="none"] { --osio-pane-border: transparent !important; }
+  :root:not([data-density="compact"])[data-borders="strong"] { --osio-pane-border: var(--osio-border-strong) !important; }
+  :root:not([data-density="compact"]):is([data-elevation="flat"], [data-elevation="deep"], [data-surface="glass"]) { --osio-dock-shadow: var(--osio-pane-shadow) !important; }
 
   @media (forced-colors: active) {
-    :root:not([data-density="compact"])[data-borders="none"] { --osio-pane-border: var(--osio-border-default); }
+    :root:not([data-density="compact"])[data-borders="none"] { --osio-pane-border: var(--osio-border-default) !important; }
   }
 }
 
@@ -115,24 +120,24 @@
 @media (width > 767.98px) {
   :root:not([data-density="compact"])[data-surface="glass"] {
     --osio-glass-edge: inset 0 1px 0 rgb(255 255 255 / 0.55);
-    --osio-pane-shadow: var(--osio-glass-edge), var(--osio-e1);
+    --osio-pane-shadow: var(--osio-glass-edge), var(--osio-e1) !important;
   }
 
   :root:not([data-density="compact"])[data-surface="glass"][data-theme="dark"] {
     --osio-glass-edge: inset 0 1px 0 rgb(255 255 255 / 0.08);
   }
 
-  :root:not([data-density="compact"])[data-surface="glass"][data-elevation="flat"] { --osio-pane-shadow: var(--osio-glass-edge); }
-  :root:not([data-density="compact"])[data-surface="glass"][data-elevation="deep"] { --osio-pane-shadow: var(--osio-glass-edge), var(--osio-e4); }
+  :root:not([data-density="compact"])[data-surface="glass"][data-elevation="flat"] { --osio-pane-shadow: var(--osio-glass-edge) !important; }
+  :root:not([data-density="compact"])[data-surface="glass"][data-elevation="deep"] { --osio-pane-shadow: var(--osio-glass-edge), var(--osio-e4) !important; }
 
   :root:not([data-density="compact"])[data-surface="glass"] aside:not([data-sidebar-mode="peek"]) [data-osio-sidebar-card] {
     background-color: color-mix(in srgb, var(--osio-bg-surface) 76%, transparent);
   }
 
   @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
-    :root:not([data-density="compact"])[data-surface="glass"] { --osio-pane-shadow: var(--osio-e1); }
-    :root:not([data-density="compact"])[data-surface="glass"][data-elevation="flat"] { --osio-pane-shadow: none; }
-    :root:not([data-density="compact"])[data-surface="glass"][data-elevation="deep"] { --osio-pane-shadow: var(--osio-e4); }
+    :root:not([data-density="compact"])[data-surface="glass"] { --osio-pane-shadow: var(--osio-e1) !important; }
+    :root:not([data-density="compact"])[data-surface="glass"][data-elevation="flat"] { --osio-pane-shadow: none !important; }
+    :root:not([data-density="compact"])[data-surface="glass"][data-elevation="deep"] { --osio-pane-shadow: var(--osio-e4) !important; }
 
     :root:not([data-density="compact"])[data-surface="glass"] aside:not([data-sidebar-mode="peek"]) [data-osio-sidebar-card] {
       background-color: var(--osio-bg-surface);

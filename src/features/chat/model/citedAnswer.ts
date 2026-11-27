@@ -184,6 +184,13 @@ export function renderCitedAnswer(
   return withMarkers(elements, sources, onCite, "m") as React.ReactElement[];
 }
 
+const SOURCE_CHIP = "osio-chip max-w-64 border text-xs";
+
+/** A chip's tooltip: its full label (the chip truncates it), then the text the answer drew on. */
+function chipTitle(label: string, snippet: string): string {
+  return `${label} — ${snippet}`;
+}
+
 /**
  * The sources of an answer, under it.
  *
@@ -193,8 +200,6 @@ export function renderCitedAnswer(
  * from, because there is no page to open. A web source is a link that shows
  * its domain and opens the page in a new tab.
  */
-const SOURCE_CHIP = "inline-block max-w-64 truncate rounded-full border px-2.5 py-1";
-
 export function renderCitationSources(
   citations: Citation[],
   onOpen: (citation: Citation) => void,
@@ -217,26 +222,27 @@ export function renderCitationSources(
                 {
                   ...webLinkProps(citation),
                   className: `${SOURCE_CHIP} border-transparent bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)] no-underline transition-colors hover:border-[var(--osio-accent)] hover:text-[var(--osio-accent-text)]`,
+                  title: `${citation.n}. ${citation.domain}`,
                   "data-testid": "chat-web-source",
                 },
-                `${citation.n}. ${citation.domain}`,
+                React.createElement("span", { className: "truncate" }, `${citation.n}. ${citation.domain}`),
               )
             : citation.collection === "pack"
             ? React.createElement(
                 "span",
-                { className: `${SOURCE_CHIP} border-dashed border-[var(--osio-border-default)] text-[var(--osio-fg-muted)]`, title: citation.snippet },
-                `${citation.n}. ${citation.title} · osionos docs`,
+                { className: `${SOURCE_CHIP} border-dashed border-[var(--osio-border-default)] text-[var(--osio-fg-muted)]`, title: chipTitle(`${citation.n}. ${citation.title} · osionos docs`, citation.snippet) },
+                React.createElement("span", { className: "truncate" }, `${citation.n}. ${citation.title} · osionos docs`),
               )
             : React.createElement(
                 "button",
                 {
                   type: "button",
                   className: `${SOURCE_CHIP} border-transparent bg-[var(--osio-bg-subtle)] text-left text-[var(--osio-fg-default)] transition-colors hover:border-[var(--osio-accent)] hover:text-[var(--osio-accent-text)]`,
-                  title: citation.snippet,
+                  title: chipTitle(`${citation.n}. ${citation.title}`, citation.snippet),
                   "aria-label": `Open source ${citation.n}: ${citation.title}`,
                   onClick: () => onOpen(citation),
                 },
-                `${citation.n}. ${citation.title}`,
+                React.createElement("span", { className: "truncate" }, `${citation.n}. ${citation.title}`),
               ),
         ),
       ),
