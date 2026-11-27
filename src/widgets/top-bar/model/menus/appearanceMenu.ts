@@ -54,6 +54,11 @@ export function appearanceSubmenu(): MenuSubmenu {
         checked: () => useUIStore.getState().sidebarMode === "panel",
       },
       sidebarSideRow(),
+      {
+        id: "view.topbar-autohide", label: "Auto-hide title bar",
+        run: () => useUIStore.getState().toggleTopBarAutoHide(),
+        checked: () => useUIStore.getState().topBarAutoHide,
+      },
       ...workbenchAppearanceMenu(),
     ],
   };

@@ -21,6 +21,7 @@ import { useNotifyLive } from "@/store/chat/useNotifyLive";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { useZenMode } from "@/shared/config/useZenMode";
+import { useUIStore } from "@/shared/config/uiStore";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
 import { usePageStore } from "@/store/usePageStore";
 import { loadActivePage } from "@/store/pageStore.helpers";
@@ -120,6 +121,7 @@ const App: React.FC = () => {
   // Zen (focus) mode — Ctrl+K Ctrl+Z. Drives [data-zen] on the shell; global.css
   // hides every chrome region off it. Session-only: a reload always exits zen.
   const zen = useZenMode((s) => s.zen);
+  const topBarAutoHide = useUIStore((s) => s.topBarAutoHide);
 
   // Database automations → app services: notify events become toasts; webhook
   // actions route through the bridge's SSRF-guarded proxy endpoint.
@@ -221,6 +223,7 @@ const App: React.FC = () => {
         data-testid="app-shell"
         data-osio-shell
         data-zen={zen ? "1" : undefined}
+        data-topbar-autohide={topBarAutoHide ? "1" : undefined}
         className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
       >
         {/* First stop of the Tab order, shown only when focused: past the top bar and the sidebar (RGAA 12.7). */}

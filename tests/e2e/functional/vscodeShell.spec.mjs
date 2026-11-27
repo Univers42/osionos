@@ -18,6 +18,7 @@
 
 import { expect, test } from "@playwright/test";
 import { createNewWorkspacePage, createParagraphs, getEditors, openFreshPage, selectText } from "../../browser/core/app.mjs";
+import { chooseViewAppearance } from "../support/viewMenu.mjs";
 
 const sidebar = (page) => page.locator('aside[aria-label="Sidebar"]');
 const panes = (page) => page.locator("[data-osio-pane]");
@@ -131,12 +132,6 @@ async function chooseEditorLayout(page, rowName) {
   await page.getByTestId("app-topbar").getByRole("button", { name: "View", exact: true }).click();
   await page.getByRole("menuitem", { name: "Editor layout" }).click();
   await page.getByRole("menuitem", { name: rowName, exact: true }).click();
-}
-
-async function chooseViewAppearance(page, rowName) {
-  await page.getByTestId("app-topbar").getByRole("button", { name: "View", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Appearance" }).click();
-  await page.getByRole("menuitem", { name: rowName }).click();
 }
 
 const railBox = (page) => page.getByRole("tablist", { name: "Activity bar" }).first().boundingBox();
