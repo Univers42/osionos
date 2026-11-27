@@ -16,7 +16,6 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 
 import type { Machine } from "../../src/features/machines/api/machinesApi.ts";
 import {
@@ -91,18 +90,6 @@ test("the node hint is the machine /machine would open, else the default, else t
   assert.equal(localNodeHint(null), null);
 });
 
-// For a node installed before local=1, whose page reads only `node`: the id it should name.
-test("the node hint is the machine /machine would open, else the default, else the only one", () => {
-  assert.equal(localNodeHint([A, B]), B.id);
-  assert.equal(localNodeHint([A]), A.id);
-  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false)]), "m-cccccccccccccccc");
-  assert.equal(localNodeHint([A, machine("m-cccccccccccccccc", false, true)]), A.id);
-  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false), machine("m-dddddddddddddddd", false, true)]), "m-dddddddddddddddd");
-  assert.equal(localNodeHint([machine("m-cccccccccccccccc", false), machine("m-dddddddddddddddd", false)]), null);
-  assert.equal(localNodeHint([]), null);
-  assert.equal(localNodeHint(null), null);
-});
-
 test("/machine with no node chooses; a machine id opens it with or without a folder; a free name is the legacy path", () => {
   assert.deepEqual(readMachineRoute(""), { kind: "choose" });
   assert.deepEqual(readMachineRoute("?node=m-aaaaaaaaaaaaaaaa"), { kind: "machine", id: "m-aaaaaaaaaaaaaaaa", folder: null });
@@ -113,9 +100,12 @@ test("/machine with no node chooses; a machine id opens it with or without a fol
   }
 });
 
-test("R5: the command from production or the beta remembers that origin; any other app's remembers nothing", () => {
+test("TB19: production and the beta print one line that serves and remembers both origins; any other app's remembers nothing", () => {
+  const line = "curl -fsSL https://raw.githubusercontent.com/Univers42/osionos/main/packages/osionos-node/install.sh | sh -s -- --bridge https://baas.tail10f2ea.ts.net:10000"
+    + " --app-origin https://baas.tail10f2ea.ts.net:8443 --app-origin https://baas-beta.tail10f2ea.ts.net"
+    + " --remember-origin https://baas.tail10f2ea.ts.net:8443 --remember-origin https://baas-beta.tail10f2ea.ts.net --name laptop";
   for (const origin of ["https://baas.tail10f2ea.ts.net:8443", "https://baas-beta.tail10f2ea.ts.net"]) {
-    assert.match(connectCommand("https://baas.tail10f2ea.ts.net:10000", origin, "laptop"), new RegExp(` --app-origin ${origin} --remember-origin ${origin} --name laptop$`));
+    assert.equal(connectCommand("https://baas.tail10f2ea.ts.net:10000", origin, "laptop"), line, origin);
   }
   assert.doesNotMatch(connectCommand("https://baas.example:10000", "https://app.example"), /--remember-origin/);
 });

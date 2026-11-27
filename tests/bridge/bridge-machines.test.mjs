@@ -16,14 +16,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { bridgeKeyFromSeed, nextKeyMessage, verifyMachineToken } from '../../scripts/ide-machine-protocol.mjs';
+import { bridgeKeyFromSeed, goneMessage, nextKeyMessage, verifyMachineToken } from '../../scripts/ide-machine-protocol.mjs';
 import { fromB64url, verifyMessage } from '../../scripts/ide-agent-frames.mjs';
 import { createBridgeServer } from '../../scripts/bridge-api.mjs';
+import { readPresence } from '../../scripts/bridge-machines-presence.mjs';
 import { createPg } from '../../scripts/bridge-pg.mjs';
 import { accountConfig } from './support/account-world.mjs';
 import { createTtlKv } from './support/account-kv.mjs';
 import {
-	IDE_ORIGIN, ORIGIN, SEED, USER_A, USER_B, call, createMachineStore, machineEnv, onlineMachine, pairThrough, routedFetch, startMachineWorld,
+	IDE_ORIGIN, ORIGIN, SEED, USER_A, USER_B, call, createMachineStore, fakeMachine, machineEnv, onlineMachine, pairThrough, routedFetch, startMachineWorld,
 } from './support/machines-world.mjs';
 
 const CURRENT = bridgeKeyFromSeed(SEED);
@@ -90,15 +91,40 @@ describe('POST /api/machines/heartbeat', () => {
 		assert.equal(answer.body.code, 'bad_signature');
 	});
 
-	it('answers a revoked machine exactly like an unknown one: 410 gone (condition 6)', async (t) => {
+	it('answers a revoked machine exactly like an unknown one on a bad signature or a stale ts: 410 gone (condition 6, TB12)', async (t) => {
 		const world = await startMachineWorld(t);
 		const { id, machine, token } = await onlineMachine(world);
 		assert.equal((await call(world.base, `/api/machines/${id}`, { method: 'DELETE', token })).status, 204);
-		const revoked = await call(world.base, '/api/machines/heartbeat', { body: machine.heartbeatBody(id, world.clock.at + 1) });
 		const unknown = await call(world.base, '/api/machines/heartbeat', { body: machine.heartbeatBody('m-aaaaaaaaaaaaaaaa', world.clock.at + 1) });
-		assert.equal(revoked.status, 410);
-		assert.deepEqual(revoked.body, unknown.body);
-		assert.equal(revoked.body.code, 'gone');
+		const forged = await call(world.base, '/api/machines/heartbeat', { body: fakeMachine().heartbeatBody(id, world.clock.at + 2) });
+		const stale = await call(world.base, '/api/machines/heartbeat', { body: machine.heartbeatBody(id, world.clock.at - 120_000) });
+		assert.equal(unknown.status, 410);
+		assert.equal(unknown.body.code, 'gone');
+		assert.equal(Object.hasOwn(unknown.body, 'gone'), false);
+		for (const answer of [forged, stale]) {
+			assert.equal(answer.status, 410);
+			assert.deepEqual(answer.body, unknown.body);
+		}
+	});
+
+	it('tells a revoked machine that signs its beat a gone signed with the current key, once per ts, and writes no presence (TB13)', async (t) => {
+		const world = await startMachineWorld(t);
+		const { id, machine, token } = await onlineMachine(world);
+		assert.equal((await call(world.base, `/api/machines/${id}`, { method: 'DELETE', token })).status, 204);
+		const ts = world.clock.at + 1;
+		const answer = await call(world.base, '/api/machines/heartbeat', { body: machine.heartbeatBody(id, ts) });
+		assert.equal(answer.status, 410);
+		assert.equal(answer.body.code, 'gone');
+		assert.deepEqual(Object.keys(answer.body.gone).sort(), ['kid', 'machineId', 'sig', 'ts']);
+		assert.equal(answer.body.gone.machineId, id);
+		assert.equal(answer.body.gone.kid, CURRENT.kid);
+		assert.equal(answer.body.gone.ts, ts);
+		assert.equal(verifyMessage(fromB64url(CURRENT.publicKey), goneMessage({ origin: ORIGIN, machineId: id, ts }), answer.body.gone.sig), true);
+		assert.equal(verifyMessage(fromB64url(CURRENT.publicKey), goneMessage({ origin: ORIGIN, machineId: id, ts: ts + 1 }), answer.body.gone.sig), false);
+		const replay = await call(world.base, '/api/machines/heartbeat', { body: machine.heartbeatBody(id, ts) });
+		assert.equal(replay.status, 410);
+		assert.equal(Object.hasOwn(replay.body, 'gone'), false, 'a replayed ts gets the plain answer');
+		assert.equal(await readPresence(world.kv, id), null);
 	});
 
 	it('hands the next key signed by the current one, so a machine rotates without re-pairing (condition 3)', async (t) => {

@@ -1,6 +1,7 @@
 // The app's half of a frame of the node's editor page: the same link as the terminal's, the app's
 // theme on `ready`, and only what editorFrameProtocol.ts lets through. The app never sees a path, a
-// listing or a file's content: it hears a base name and whether it has unsaved changes.
+// listing or a file's content: it hears a base name and whether it has unsaved changes. A token it
+// mints carries "Remember this computer" only after a step-up that drew the box (TB5).
 import { watchAppearance } from "@/features/ide/ui/watchAppearance";
 import React from "react";
 
@@ -8,8 +9,9 @@ import { readIdeMessage } from "@/features/ide/vscode/ideFrameProtocol";
 import { EDITOR_THEME, readEditorToApp, type AppToEditor, type EditorTheme, type EditorToApp } from "./editorFrameProtocol";
 import { LOCAL_NODE_ORIGIN } from "./machineWindow";
 import { probeOldNode } from "./oldNodeProbe";
+import { createRememberConsent } from "./rememberConsent";
 import type { TerminalFramePhase } from "./terminalFrame";
-import { startMachineFrame } from "./terminalFrameStore";
+import { startMachineFrame, useTerminalFrameStore } from "./terminalFrameStore";
 
 export const EDITOR_PAGE_URL = `${LOCAL_NODE_ORIGIN}/editor/index.html`;
 
@@ -33,6 +35,7 @@ export function useEditorFrame({ armed, mayPromptStepUp, onMessage }: {
   const [attempt, setAttempt] = React.useState(0);
   const [phase, setPhase] = React.useState<EditorFramePhase>("idle");
   const [ready, setReady] = React.useState(false);
+  const [consent] = React.useState(() => createRememberConsent(() => useTerminalFrameStore.getState().remember));
   const handler = React.useRef(onMessage);
   React.useEffect(() => { handler.current = onMessage; }, [onMessage]);
 
@@ -57,8 +60,12 @@ export function useEditorFrame({ armed, mayPromptStepUp, onMessage }: {
       colors: () => ({}),
       probeOldNode,
       onConnected: () => undefined,
-      onPhase: setPhase,
+      onPhase: (next) => {
+        consent.onPhase(next);
+        setPhase(next);
+      },
       mayPromptStepUp,
+      remember: consent.remember,
     });
     return () => {
       globalThis.removeEventListener("message", onWindowMessage);
@@ -66,7 +73,7 @@ export function useEditorFrame({ armed, mayPromptStepUp, onMessage }: {
       setPhase("idle");
       setReady(false);
     };
-  }, [armed, attempt, mayPromptStepUp, post]);
+  }, [armed, attempt, mayPromptStepUp, post, consent]);
 
   // The folder tree and the open file repaint with the app, whatever changed its theme.
   React.useEffect(() => {
@@ -75,5 +82,5 @@ export function useEditorFrame({ armed, mayPromptStepUp, onMessage }: {
     return watchAppearance(host, () => post({ type: EDITOR_THEME, theme: appTheme() }));
   }, [armed, ready, post]);
 
-  return { frameRef, attempt, phase, ready, post, tryAgain: React.useCallback(() => setAttempt((count) => count + 1), []) };
+  return { frameRef, attempt, phase, ready, post, rememberShown: consent.shown, tryAgain: React.useCallback(() => setAttempt((count) => count + 1), []) };
 }

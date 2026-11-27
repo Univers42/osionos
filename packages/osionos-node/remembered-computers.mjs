@@ -11,8 +11,9 @@
 /* ************************************************************************** */
 
 // The computers this node remembers (devil verdict 2026-11-01, Amendment 1, R4, R7, R8; groot ADR
-// 0041, R5 overridden: production and the beta). A device secret is half of a remembered open: it
-// opens a shell only beside a fresh resume assertion (R1, pty-service.mjs). The file holds only its
+// 0041, R5 overridden: production and the beta; limits 12 h idle / 30 d absolute, devil 2026-11-27
+// TB7). A device secret is half of a remembered open: it
+// opens a shell or the files only beside a fresh resume assertion (R1, TB1). The file holds only its
 // sha256, bound to the owner, this machine and the app origin it was issued to; a record of another
 // owner or machine (a re-pair) or an origin no longer in --remember-origin is deleted on load.
 import { createHash, randomBytes } from 'node:crypto';
@@ -21,14 +22,20 @@ import { dirname } from 'node:path';
 
 import { assertPrivateFile, assertPrivateFolder, writePrivateFile } from './private-file.mjs';
 
-const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
 // Caveat: both windows run on this machine's wall clock; setting it back keeps a record alive past
-// its 30 or 90 days, setting it forward expires records early (the person then gets a step-up).
-export const REMEMBER_LIMITS = Object.freeze({ maxRecords: 8, idleMs: 30 * DAY_MS, absoluteMs: 90 * DAY_MS });
+// its 12 hours or 30 days, setting it forward expires records early (the person then gets a step-up).
+// Caveat: the idle window slides when a shell or editor opens and when its last socket closes
+// (touch); a node that crashes with a session open loses that closing touch, so the window counts
+// from the opening instead and a long session can need one more step-up.
+export const REMEMBER_LIMITS = Object.freeze({ maxRecords: 8, idleMs: 12 * HOUR_MS, absoluteMs: 30 * DAY_MS });
 const SECRET = /^[A-Za-z0-9_-]{43}$/;
 const HASH = /^[0-9a-f]{64}$/;
 
-const hashOf = (secret) => createHash('sha256').update(secret).digest('hex');
+export const deviceHash = (secret) => createHash('sha256').update(secret).digest('hex');
+const hashOf = deviceHash;
+const isLiveAt = (record, at) => at - record.lastUsedAt <= REMEMBER_LIMITS.idleMs && at - record.createdAt <= REMEMBER_LIMITS.absoluteMs;
 
 const isRecord = (value) => value !== null && typeof value === 'object' && HASH.test(value.hash ?? '')
 	&& typeof value.owner === 'string' && typeof value.machine === 'string' && typeof value.appOrigin === 'string'
@@ -51,7 +58,7 @@ function readRecords(file) {
 export function createRememberedComputers({ file, owner, machine, origins, now = Date.now, newSecret = () => randomBytes(32).toString('base64url') }) {
 	const allowed = new Set(origins);
 	const records = new Map();
-	const isLive = (record, at) => at - record.lastUsedAt <= REMEMBER_LIMITS.idleMs && at - record.createdAt <= REMEMBER_LIMITS.absoluteMs;
+	const isLive = isLiveAt;
 
 	function save() {
 		if (records.size === 0) return rmSync(file, { force: true });
@@ -94,6 +101,19 @@ export function createRememberedComputers({ file, owner, machine, origins, now =
 		return true;
 	}
 
+	/**
+	 * Slides the idle window of a record this store still holds and that is still live (TB8): called when
+	 * a session's last socket closes. Never re-adds a forgotten, cleared or expired record, so it cannot
+	 * write the file back after a removal.
+	 */
+	function touch(hash) {
+		const record = typeof hash === 'string' ? records.get(hash) : undefined;
+		const at = now();
+		if (!record || !isLive(record, at)) return;
+		record.lastUsedAt = at;
+		save();
+	}
+
 	function forget(secret) {
 		if (typeof secret === 'string' && records.delete(hashOf(secret))) save();
 	}
@@ -103,5 +123,14 @@ export function createRememberedComputers({ file, owner, machine, origins, now =
 		rmSync(file, { force: true });
 	}
 
-	return { issue, open, forget, clear, count: () => records.size };
+	return { issue, open, touch, forget, clear, count: () => records.size };
+}
+
+/**
+ * What `osionos-node status` prints (TB23): origin and ages of each live record, never a hash. Reads
+ * only; the store's own load would rewrite the file.
+ */
+export function readRememberedSummary(file, at = Date.now()) {
+	return readRecords(file).filter((record) => isLiveAt(record, at))
+		.map((record) => ({ appOrigin: record.appOrigin, idleMs: at - record.lastUsedAt, ageMs: at - record.createdAt }));
 }

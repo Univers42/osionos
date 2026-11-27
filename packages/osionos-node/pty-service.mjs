@@ -16,8 +16,8 @@
 // (the same jti guard) as /api/node/session, or the session secret this node gave that frame on its
 // first shell, both through the gate /api/fs shares (node-credentials.mjs, devil F5). A remembered
 // computer opens with its device secret beside a fresh resume assertion instead, with no step-up
-// (Amendment 1, R1-R4); only this service's gate is given the remembered computers, so /api/fs
-// never takes that opening. The first shell a remembering token opens is told a device secret,
+// (Amendment 1, R1-R4); /api/fs takes the same opening through the same store and jti guard (devil
+// verdict 2026-11-27, TB1). The first shell a remembering token opens is told a device secret,
 // once (R6). The token gates the opening, not the life: a shell lives until its socket closes, the
 // node stops, or the owner is revoked. `conn` is the slice of ws's WebSocket used here.
 import { checkNodeOrigin } from '../../scripts/ide-node-policy.mjs';

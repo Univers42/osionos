@@ -104,8 +104,8 @@ export function createIdeOriginServer({ secret, capSecret = secret, verifySessio
 	const isRevoked = (userId, iat) => iat <= (revokedAt.get(userId) ?? -1);
 	const paired = machineRoutes !== null;
 	const pty = paired && ptyOptions ? createPtyService({ ...ptyOptions, ideOrigin, ownerId, verifySession, verifyResume, devices, isRevoked }) : null;
-	const remembers = pty !== null && devices !== null && verifyResume !== null;
-	const disk = paired && fsOptions ? createFsService({ ...fsOptions, ideOrigin, ownerId, verifySession, isRevoked }) : null;
+	const disk = paired && fsOptions ? createFsService({ ...fsOptions, ideOrigin, ownerId, verifySession, verifyResume, devices, isRevoked }) : null;
+	const remembers = (pty !== null || disk !== null) && devices !== null && verifyResume !== null;
 
 	async function openSession(req, res) {
 		if (req.method !== 'POST') throw fail(405);
