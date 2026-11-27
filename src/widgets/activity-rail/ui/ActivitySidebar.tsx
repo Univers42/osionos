@@ -13,6 +13,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useUIStore, PANEL_MAX_WIDTH } from "@/shared/config/uiStore";
 import { PHONE_QUERY } from "@/shared/config/useResponsiveSidebar";
+import { useEffectiveSidebarSide } from "@/shared/config/useSidebarSide";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { ActivityRail } from "./ActivityRail";
@@ -30,7 +31,7 @@ interface Props {
 }
 
 /**
- * The left sidebar: the activity rail, always there when docked, and the panel
+ * The primary side bar (left, or right by `sidebarSide`; the DOM follows the visual order so Tab does): the activity rail, always there when docked, and the panel
  * beside it. One click on a rail icon switches panel; clicking the active one
  * folds the panel away. Docking changes are instant: animating the width would
  * relayout the editor next to it on every frame.
@@ -51,6 +52,8 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
   const collapseToRail = useUIStore((s) => s.collapseToRail);
   const expandToPanel = useUIStore((s) => s.expandToPanel);
   const hide = useUIStore((s) => s.hide);
+  const side = useEffectiveSidebarSide();
+  const sign = side === "right" ? -1 : 1;
   const panelRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   // The peek shows the panel whatever mode the docked sidebar was last in.
@@ -108,49 +111,52 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
     },
     onLiveWidth: onLive,
     onCommit,
+    direction: sign,
   });
 
   const onResizeKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        setSidebarWidth(useUIStore.getState().sidebarWidth - 16);
-      } else if (event.key === "ArrowRight") {
-        event.preventDefault();
-        setSidebarWidth(useUIStore.getState().sidebarWidth + 16);
-      }
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      const step = event.key === "ArrowRight" ? 16 : -16;
+      setSidebarWidth(useUIStore.getState().sidebarWidth + sign * step);
     },
-    [setSidebarWidth],
+    [setSidebarWidth, sign],
   );
 
   if (sidebarMode === "hidden" && !peek) return null;
 
+  const parts = [
+    <ActivityRail key="rail" onOpenSettings={onOpenSettings} />,
+    <div key="panel" ref={panelRef} className={styles.panel} data-osio-sidebar-card hidden={!showPanel}>
+      {panelMounted ? (
+        <div className={styles.panelInner} style={{ width: sidebarWidth }}>
+          <SidebarPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} peek={peek} />
+        </div>
+      ) : null}
+    </div>,
+    showPanel && !peek ? <div key="scrim" className={styles.scrim} aria-hidden onClick={collapseToRail} /> : null,
+    peek ? null : (
+      <div
+        key="handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        aria-valuemin={RAIL_WIDTH}
+        aria-valuemax={RAIL_WIDTH + PANEL_MAX_WIDTH}
+        aria-valuenow={Math.round(RAIL_WIDTH + panelWidth)}
+        tabIndex={0}
+        className={styles.resizeHandle}
+        onPointerDown={startResize}
+        onDoubleClick={onResizeDoubleClick}
+        onKeyDown={onResizeKeyDown}
+      />
+    ),
+  ];
+
   return (
-    <aside className={styles.activitySidebar} aria-label="Sidebar" data-sidebar-mode={peek ? "peek" : sidebarMode}>
-      <ActivityRail onOpenSettings={onOpenSettings} />
-      <div ref={panelRef} className={styles.panel} data-osio-sidebar-card hidden={!showPanel}>
-        {panelMounted ? (
-          <div className={styles.panelInner} style={{ width: sidebarWidth }}>
-            <SidebarPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} peek={peek} />
-          </div>
-        ) : null}
-      </div>
-      {showPanel && !peek ? <div className={styles.scrim} aria-hidden onClick={collapseToRail} /> : null}
-      {peek ? null : (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize sidebar"
-          aria-valuemin={RAIL_WIDTH}
-          aria-valuemax={RAIL_WIDTH + PANEL_MAX_WIDTH}
-          aria-valuenow={Math.round(RAIL_WIDTH + panelWidth)}
-          tabIndex={0}
-          className={styles.resizeHandle}
-          onPointerDown={startResize}
-          onDoubleClick={onResizeDoubleClick}
-          onKeyDown={onResizeKeyDown}
-        />
-      )}
+    <aside className={styles.activitySidebar} aria-label="Sidebar" data-sidebar-mode={peek ? "peek" : sidebarMode} data-sidebar-side={side}>
+      {side === "right" ? parts.reverse() : parts}
     </aside>
   );
 };

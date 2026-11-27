@@ -26,6 +26,8 @@ const KNOWN_COMMAND_IDS = new Set<CommandId>([
   "heading1", "heading2", "heading3", "openPalette", "openSearch", "openSettings", "splitPane",
   "bold", "italic", "underline", "inlineCode", "link", "toggleZenMode", "openFolder",
   "zoomPaneIn", "zoomPaneOut", "zoomPaneReset", "newPage", "toggleSidebar", "openSearchPanel", "focusExplorer", "focusConversations",
+  "toggleExplorerPanel", "toggleScmPanel", "goBack", "goForward",
+  "focusEditorGroup1", "focusEditorGroup2", "focusEditorGroup3",
 ]);
 
 /** A context where every enabled default's `when` predicate holds (block selection
@@ -71,9 +73,10 @@ test("DISABLED defaults (native-handled format keys) never fire", () => {
   const ctx = passingContext();
   for (const automation of DEFAULT_AUTOMATIONS.filter((a) => !a.enabled)) {
     const combo = normalizeComboString(automation.trigger.combo);
-    // No ENABLED default shares that combo, so the dispatcher matches nothing.
+    // An enabled row on the same combo for another condition (Ctrl+B outside text
+    // toggles the side bar) may answer; the disabled row itself never does.
     const matched = matchAutomation(DEFAULT_AUTOMATIONS, combo, ctx);
-    assert.equal(matched, null, `${combo} (${automation.id}) must not resolve while disabled`);
+    assert.notEqual(matched?.id, automation.id, `${combo} (${automation.id}) must not resolve while disabled`);
   }
 });
 

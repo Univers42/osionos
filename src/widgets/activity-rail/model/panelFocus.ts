@@ -22,6 +22,13 @@ export function openAndFocusPanel(panel: ActivePanel): void {
   focusWhenReady(panel, FOCUS_ATTEMPTS);
 }
 
+/** The VS Code view key: hides the side bar when `panel` is the one showing, else opens and focuses it. */
+export function toggleAndFocusPanel(panel: ActivePanel): void {
+  const ui = useUIStore.getState();
+  if (ui.sidebarMode === "panel" && ui.activePanel === panel) ui.hide();
+  else openAndFocusPanel(panel);
+}
+
 /** File > Open Folder, its shortcut and the palette: the Explorer opens on the machine section and
  *  that section's frame shows the picker. */
 export function openMachineFolder(): void {

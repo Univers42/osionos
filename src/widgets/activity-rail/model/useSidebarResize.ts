@@ -19,6 +19,8 @@ interface Options {
   onLiveWidth: (width: number) => void;
   /** Called once on pointer-up with the final width — commit mode/width to the store here. */
   onCommit: (width: number) => void;
+  /** 1 when the handle is on the panel's right edge (side bar left), -1 when on its left edge. */
+  direction?: 1 | -1;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Options {
  * the drag writes the DOM each frame and commits to the store only on release).
  * Returns an `onPointerDown` to spread onto the resize handle.
  */
-export function useSidebarResize({ getStartWidth, onLiveWidth, onCommit }: Options) {
+export function useSidebarResize({ getStartWidth, onLiveWidth, onCommit, direction = 1 }: Options) {
   const raf = useRef<number | null>(null);
   const latest = useRef(0);
 
@@ -44,7 +46,7 @@ export function useSidebarResize({ getStartWidth, onLiveWidth, onCommit }: Optio
       document.body.dataset.sidebarResizing = "true";
 
       const move = (moveEvent: PointerEvent) => {
-        latest.current = startWidth + (moveEvent.clientX - startX);
+        latest.current = startWidth + direction * (moveEvent.clientX - startX);
         if (raf.current !== null) return;
         raf.current = requestAnimationFrame(() => {
           raf.current = null;
@@ -68,6 +70,6 @@ export function useSidebarResize({ getStartWidth, onLiveWidth, onCommit }: Optio
       handle.addEventListener("pointermove", move);
       handle.addEventListener("pointerup", up);
     },
-    [getStartWidth, onLiveWidth, onCommit],
+    [getStartWidth, onLiveWidth, onCommit, direction],
   );
 }

@@ -1,3 +1,4 @@
+import { SHELL_COMMANDS } from "./commands/shellCommands";
 import { APP_COMMANDS } from "./commands/appCommands";
 import { CLIPBOARD_COMMANDS } from "./commands/clipboardCommands";
 import { EDITING_COMMANDS } from "./commands/editingCommands";
@@ -10,6 +11,7 @@ export const ALL_COMMANDS: Command[] = [
   ...CLIPBOARD_COMMANDS,
   ...FORMAT_COMMANDS,
   ...APP_COMMANDS,
+  ...SHELL_COMMANDS,
 ];
 
 export const commandById: Record<string, Command> = Object.fromEntries(
