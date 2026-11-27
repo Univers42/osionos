@@ -160,10 +160,21 @@ export function parseThemeDoc(input: unknown): { doc: ThemeDoc | null; issues: T
   return { doc, issues };
 }
 
+const PLAIN_LENGTH = /^\d{1,3}(?:\.\d{1,3})?(?:px|rem)$/;
+const CORNER_KEY = /^(?:radius(?:-[a-z]+)?|[a-z]+-radius)$/;
+
+/** A corner token's plain length scaled by the Sharp/Round setting; anything else (pill, scale, calc, var) as written.
+ *
+ * Ponytail: a pill pinned as a plain length under 1000px (not `radius-full`) is scaled too; pin it as 9999px+ or as radius-full to stay a pill. */
+function scaleCorner(key: string, value: string): string {
+  if (!CORNER_KEY.test(key) || key === "radius-full" || key === "radius-scale" || !PLAIN_LENGTH.test(value)) return value;
+  return `calc(${value} * var(--osio-radius-scale, 1))`;
+}
+
 export function compileTheme(doc: ThemeDoc): CompiledTheme {
   const vars: Record<string, string> = {};
   for (const group of THEME_GROUPS as readonly ThemeGroup[]) {
-    for (const [key, value] of Object.entries(doc[group] ?? {})) vars[`--osio-${key}`] = value;
+    for (const [key, value] of Object.entries(doc[group] ?? {})) vars[`--osio-${key}`] = scaleCorner(key, value);
   }
   return { ...(doc.base ? { base: doc.base } : {}), ...(doc.palette ? { palette: doc.palette } : {}), vars };
 }

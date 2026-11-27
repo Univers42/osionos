@@ -50,12 +50,15 @@ function isName(name) {
 	return typeof name === 'string' && name.trim().length > 0 && name.length <= THEME_LIMITS.nameMax;
 }
 
+// The one var() a value may hold: a plain length scaled by the corner setting (themeDoc.ts compileTheme writes it).
+const RADIUS_SCALED_RE = /^calc\(\d{1,3}(?:\.\d{1,3})?(?:px|rem) \* var\(--osio-radius-scale, 1\)\)$/;
+
 /** @param {unknown} value @returns {boolean} */
 export function isSafeTokenValue(value) {
 	return typeof value === 'string'
 		&& value.length > 0
 		&& value.length <= THEME_LIMITS.valueMax
-		&& !FORBIDDEN_RE.test(value);
+		&& (RADIUS_SCALED_RE.test(value) || !FORBIDDEN_RE.test(value));
 }
 
 /** The storage key of a theme name; '' when the name holds no letter or digit. @param {string} name */

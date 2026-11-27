@@ -104,3 +104,27 @@ test("an unknown top-level field is an error at that field", () => {
   assert.equal(issueAt(issues, ["extra"])?.severity, "error");
   assert.ok(doc);
 });
+
+test("compiling wraps a plain corner length in the Sharp/Round scale and leaves the rest alone", () => {
+  const { vars } = compileTheme({
+    name: "Corners",
+    layout: {
+      radius: "10px",
+      "radius-card": "0.5rem",
+      "control-radius": "6px",
+      "radius-full": "9999px",
+      "radius-pane": "calc(4px * 2)",
+      "radius-scale": "1",
+      "radius-chip": "50%",
+      "page-max-width": "880px",
+    },
+  });
+  assert.equal(vars["--osio-radius"], "calc(10px * var(--osio-radius-scale, 1))");
+  assert.equal(vars["--osio-radius-card"], "calc(0.5rem * var(--osio-radius-scale, 1))");
+  assert.equal(vars["--osio-control-radius"], "calc(6px * var(--osio-radius-scale, 1))");
+  assert.equal(vars["--osio-radius-full"], "9999px");
+  assert.equal(vars["--osio-radius-pane"], "calc(4px * 2)");
+  assert.equal(vars["--osio-radius-scale"], "1");
+  assert.equal(vars["--osio-radius-chip"], "50%");
+  assert.equal(vars["--osio-page-max-width"], "880px");
+});
