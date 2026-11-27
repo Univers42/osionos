@@ -157,6 +157,7 @@ export const EXCLUDED_TOKENS: readonly { pattern: RegExp; reason: string }[] = [
   { pattern: /^(glass|frost)-edge$/, reason: "internal: the glass or frosted surface's lit pane edge, folded into pane-shadow" },
   { pattern: /^safe-(top|right|bottom|left)$/, reason: "device constant: the platform's safe-area inset, not an appearance setting" },
   { pattern: /^touch-target$/, reason: "accessibility floor: the minimum coarse-pointer hit area, not an appearance setting" },
+  { pattern: /^overlay-from-(opacity|transform|filter)$/, reason: "internal: the start state of the menu and dialog entrance, set by the menus-and-dialogs transition (data-overlay-transition)" },
   { pattern: /^layout-(cols|min|gap)$/, reason: "internal: set on a column list by its stored layout style (ADR 0064)" },
 ];
 
