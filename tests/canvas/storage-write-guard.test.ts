@@ -130,7 +130,8 @@ test("no bare localStorage.setItem outside the allowlist, and the allowlist is n
   assert.deepEqual(stale, [], "allowlist entries that no longer match");
 });
 
-const AGENT_PAGE = "widgets/agent-conversation/ui/AgentConversationPage.tsx";
+const AGENT_STORAGE = "widgets/agent-conversation/model/agentStorage.ts";
+const AGENT_HOOK = "widgets/agent-conversation/model/useAgentConversation.ts";
 const AGENT_WRITER = /\bnoticingWriter\(\s*(['"])Agent conversations\1\s*,\s*setItemEvictingPageCaches\s*\)/g;
 const AGENT_WRITER_BINDING = /\bconst\s+writeAgentThreads\s*=\s*noticingWriter\(\s*(['"])Agent conversations\1\s*,\s*setItemEvictingPageCaches\s*\)/;
 const WRITE_CALL = /\b(\w*(?:[Ww]rite|setItem)\w*)\s*\(/g;
@@ -163,7 +164,7 @@ test("the wiring scanner reads a function body, an effect and its writes", () =>
 });
 
 test("A5 agent conversations: one noticing writer that makes room first, labelled for the store", () => {
-  const source = read(AGENT_PAGE);
+  const source = read(AGENT_STORAGE);
   assert.equal(source.match(AGENT_WRITER)?.length ?? 0, 1, "noticingWriter('Agent conversations', setItemEvictingPageCaches)");
   assert.match(source, AGENT_WRITER_BINDING, "bound to writeAgentThreads");
   assert.match(source, /import\s*\{[^}]*\bnoticingWriter\b[^}]*\}\s*from\s*["']@\/shared\/lib\/storage-full\/noticingWrite["']/);
@@ -171,7 +172,7 @@ test("A5 agent conversations: one noticing writer that makes room first, labelle
 });
 
 test("A5 agent conversations: writeThread writes only through writeAgentThreads, under the threads key", () => {
-  const source = read(AGENT_PAGE);
+  const source = read(AGENT_STORAGE);
   assert.match(source, /\bconst\s+AGENT_THREADS_STORAGE_KEY\s*=\s*["']osionos:agent-conversations["']/);
   const body = functionBody(source, "writeThread");
   assert.notEqual(body, "", "writeThread is declared");
@@ -180,7 +181,7 @@ test("A5 agent conversations: writeThread writes only through writeAgentThreads,
 });
 
 test("A5 agent conversations: an effect writes the thread whenever the messages or the page change", () => {
-  const writers = effectCalls(read(AGENT_PAGE)).filter((call) => /\bwriteThread\(\s*pageId\s*,\s*messages\s*\)/.test(call));
+  const writers = effectCalls(read(AGENT_HOOK)).filter((call) => /\bwriteThread\(\s*pageId\s*,\s*messages\s*\)/.test(call));
   assert.equal(writers.length, 1, "one useEffect calls writeThread(pageId, messages)");
   assert.match(writers[0], /\[\s*(?:messages\s*,\s*pageId|pageId\s*,\s*messages)\s*\]\s*\)$/, "its deps are messages and pageId");
 });
