@@ -13,11 +13,12 @@ import {
 import { uniqueThemeName } from '@/features/theme/model/themeNaming';
 import { resolveTheme, useThemeLibrary } from '@/features/theme/model/useThemeLibrary';
 import type { ThemeDoc } from '@/shared/config/themeDoc';
+import { stableStringify } from '@/store/sync/mergePageContent.tree';
 import type { ThemeSelection } from '@/features/theme/model/useThemeSelection';
 import { ConfirmModal } from '../ui/ConfirmModals';
 import { Section, SettingRow } from '../ui/settingsKit';
 
-const sameDoc = (first: ThemeDoc, second: ThemeDoc) => JSON.stringify(first, Object.keys(first).sort()) === JSON.stringify(second, Object.keys(second).sort());
+const sameDoc = (first: ThemeDoc, second: ThemeDoc) => stableStringify(first) === stableStringify(second);
 
 /**
  * Makes an imported theme the active one: an own theme with the same content is reused, else

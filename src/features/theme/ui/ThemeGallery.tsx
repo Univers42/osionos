@@ -56,10 +56,16 @@ export const ThemeGallery: React.FC<{ mode: 'light' | 'dark' | 'system' }> = ({ 
 
   const select = useCallback((name: string | null) => setActiveTheme(name), [setActiveTheme]);
 
-  /** Arrow/Home/End move the selection and the focus together, as a radio group does. */
+  /** Arrow/Home/End move the selection and the focus together, as a radio group does; Space/Enter select the focused card. */
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const cards = Array.from(group.current?.querySelectorAll<HTMLElement>('[role="radio"]') ?? []);
-    const next = targetIndex(event.key, cards.indexOf(document.activeElement as HTMLElement), cards.length);
+    const current = cards.indexOf(document.activeElement as HTMLElement);
+    if ((event.key === ' ' || event.key === 'Enter') && current >= 0) {
+      event.preventDefault();
+      select(names[current]);
+      return;
+    }
+    const next = targetIndex(event.key, current, cards.length);
     if (next < 0 || cards.length === 0) return;
     event.preventDefault();
     const name = names[next];
