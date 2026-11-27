@@ -18,7 +18,7 @@ const SETTINGS_URL = (baseURL) => new URL("/?settings=preferences", baseURL).toS
 
 async function openEditor(page, baseURL) {
   await page.goto(SETTINGS_URL(baseURL), { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "Advanced (JSON)" }).first().click();
+  await page.getByRole("button", { name: "New theme", exact: true }).first().click();
   await page.locator(".monaco-editor textarea").first().waitFor({ state: "attached", timeout: 150_000 });
 }
 
@@ -37,10 +37,10 @@ async function editorTextarea(page) {
 test.describe("theme editor", () => {
   test.setTimeout(300_000);
 
-  test("Advanced (JSON) opens a theme-json tab", async ({ page, baseURL }) => {
+  test("New theme opens a theme-json tab", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await page.goto(SETTINGS_URL(baseURL), { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Advanced (JSON)" }).first().click();
+    await page.getByRole("button", { name: "New theme", exact: true }).first().click();
     await expect(page.locator('[data-osio-tabstrip] [title$=".json"]')).toHaveCount(1, { timeout: 30_000 });
   });
 
@@ -77,7 +77,7 @@ test.describe("theme editor", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     // reopen editor
     await page.goto(SETTINGS_URL(baseURL), { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Advanced (JSON)" }).first().click();
+    await page.getByRole("button", { name: "New theme", exact: true }).first().click();
     await page.locator(".monaco-editor textarea").first().waitFor({ state: "attached", timeout: 150_000 });
     await expect.poll(async () => (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--osio-bg-page").trim())), { timeout: 10_000 }).toBe("#102030");
 
@@ -100,23 +100,20 @@ test.describe("theme editor", () => {
     await enterJson(page, '{\n  "name": "Drafty",\n  "colors": { "bg-page": "#102030" }\n}');
     await page.getByRole("button", { name: /Close .*\.json/ }).first().click();
     await page.goto(SETTINGS_URL(baseURL), { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Advanced (JSON)" }).first().click();
+    await page.getByRole("button", { name: "New theme", exact: true }).first().click();
     await page.locator(".monaco-editor textarea").first().waitFor({ state: "attached", timeout: 150_000 });
     await expect(page.getByText("Draft restored")).toBeVisible({ timeout: 5_000 });
   });
 
-  test("opening Harbor Night and saving creates Harbor Night (copy)", async ({ page, baseURL }) => {
+  test("customizing Harbor Night creates and opens Harbor Night copy", async ({ page, baseURL }) => {
     await page.goto(SETTINGS_URL(baseURL), { waitUntil: "domcontentloaded" });
-    // select Harbor Night in theme dropdown
-    const select = page.locator("#theme-library-select");
-    await select.selectOption("Harbor Night");
-    await page.getByRole("button", { name: "Advanced (JSON)" }).first().click();
+    const library = page.locator('[data-settings-anchor="theme-json"]');
+    await library.getByRole("radio", { name: "Harbor Night", exact: true }).click();
+    await library.getByRole("button", { name: "Customize", exact: true }).click();
     await page.locator(".monaco-editor textarea").first().waitFor({ state: "attached", timeout: 150_000 });
-    await page.getByRole("button", { name: "Save" }).first().click();
-    await page.waitForTimeout(1000);
     await page.goto(SETTINGS_URL(baseURL), { waitUntil: "domcontentloaded" });
-    const option = page.locator("#theme-library-select option", { hasText: "Harbor Night (copy)" });
-    await expect(option).toHaveCount(1, { timeout: 10_000 });
+    const copy = page.locator('[data-settings-anchor="theme-json"]').getByRole("radio", { name: "Harbor Night copy", exact: true });
+    await expect(copy).toHaveAttribute("aria-checked", "true", { timeout: 10_000 });
   });
 
   test("?theme=safe shows banner and palette value", async ({ page, baseURL }) => {

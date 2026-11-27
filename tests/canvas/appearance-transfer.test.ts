@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { DEFAULT_APPEARANCE, PALETTES } from "../../src/shared/config/theme.ts";
+import { SHIPPED_THEMES } from "../../src/shared/config/themes/index.ts";
 import {
   defaultsFor,
   diffFromDefault,
@@ -77,4 +78,41 @@ test("an unknown palette or mode is dropped, not an error", () => {
   assert.equal(result.palette, undefined);
   assert.equal(result.mode, undefined);
   assert.equal(result.count, 0);
+});
+
+const base = { appearance: DEFAULT_APPEARANCE, palette, mode: "light" } as const;
+const own = { name: "My Look", base: "dark", colors: { accent: "#ff0066" } } as const;
+
+test("an own theme travels whole through export and import", () => {
+  const result = importAppearance(exportAppearance({ ...base, theme: { ...own, colors: { ...own.colors } } }));
+  assert.ok(result.ok);
+  assert.deepEqual(result.theme, own);
+  assert.equal(result.themeName, undefined);
+});
+
+test("a shipped theme travels by name, built-in carries neither key", () => {
+  const shipped = SHIPPED_THEMES[0];
+  const named = JSON.parse(exportAppearance({ ...base, theme: shipped }));
+  assert.equal(named.themeName, shipped.name);
+  assert.equal("theme" in named, false);
+  const result = importAppearance(JSON.stringify(named));
+  assert.ok(result.ok);
+  assert.equal(result.themeName, shipped.name);
+  const plain = JSON.parse(exportAppearance({ ...base, theme: null }));
+  assert.equal("theme" in plain || "themeName" in plain, false);
+});
+
+test("an invalid theme is dropped with a warning while the axes still import", () => {
+  const result = importAppearance(doc({ appearance: { surface: "glass" }, theme: { name: "Bad", colors: { accent: "url(x)" } } }));
+  assert.ok(result.ok);
+  assert.equal(result.theme, undefined);
+  assert.equal(result.appearance.surface, "glass");
+  assert.match(result.warnings[0], /^The theme in this file was skipped: /);
+});
+
+test("an unknown themeName is dropped", () => {
+  const result = importAppearance(doc({ themeName: "No Such Theme" }));
+  assert.ok(result.ok);
+  assert.equal(result.themeName, undefined);
+  assert.deepEqual(result.warnings, []);
 });
