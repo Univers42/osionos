@@ -50,7 +50,7 @@ async function stubSkills(page) {
 test("an opencode SKILL.md fills the skill form, and only Create sends it", async ({ page, baseURL }, testInfo) => {
   const created = await stubSkills(page);
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
-  await openSettings(page, "AI connections");
+  await openSettings(page, "AI skills");
   const panel = page.locator("section", { has: page.getByRole("heading", { name: "Workspace skills" }) });
   await expect(panel).toBeVisible();
 
