@@ -14,7 +14,7 @@ import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { hasLocalTerminal } from "@/features/ide/model/localPty";
 import { isSandboxReachable, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
 import type { MenuAction } from "@/widgets/top-bar/model/menuTypes";
-import { terminalMenuAction, workbenchAppearanceItems, workbenchViewItems, type WorkbenchViewActionMap } from "@/widgets/top-bar/model/workbenchMenuItems";
+import { terminalMenuAction, panelPositionItems, workbenchAppearanceItems, workbenchViewItems, type WorkbenchViewActionMap } from "@/widgets/top-bar/model/workbenchMenuItems";
 import { useWorkbenchStore } from "./workbenchStore";
 
 /** Terminal menu: in the desktop app the dock's terminal, a shell on this computer. On the web, one
@@ -40,11 +40,13 @@ function workbenchActions(): WorkbenchViewActionMap {
   const workbench = (): ReturnType<typeof useWorkbenchStore.getState> => useWorkbenchStore.getState();
   return {
     toggleDock: () => workbench().toggleDock(),
+    toggleDockMaximized: () => workbench().toggleDockMaximized(),
     toggleStatusBar: () => workbench().toggleStatusBar(),
     openProblems: () => workbench().openDock("problems"),
     openOutput: () => workbench().openDock("output"),
     openPorts: () => workbench().openDock("ports"),
     isDockOpen: () => workbench().dockOpen,
+    isDockMaximized: () => workbench().dockOpen && workbench().dockMaximized,
     isStatusBarVisible: () => workbench().statusBarVisible,
   };
 }
@@ -57,4 +59,12 @@ export function workbenchViewMenu(): MenuAction[] {
 /** The Appearance rows for the dock Panel and the Status bar. */
 export function workbenchAppearanceMenu(): MenuAction[] {
   return workbenchAppearanceItems(workbenchActions());
+}
+
+/** The "Panel position" rows (Bottom, Left, Right), checked from and writing to the workbench store. */
+export function workbenchPositionMenu(): MenuAction[] {
+  return panelPositionItems(
+    () => useWorkbenchStore.getState().dockPosition,
+    (position) => useWorkbenchStore.getState().setDockPosition(position),
+  );
 }

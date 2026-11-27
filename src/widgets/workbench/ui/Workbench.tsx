@@ -30,6 +30,11 @@ import { DockSplitter } from "./DockSplitter";
 import { WorkbenchDock } from "./WorkbenchDock";
 import { WorkbenchStatusBar } from "./WorkbenchStatusBar";
 
+const GRID: Readonly<Record<"shown" | "hidden", string>> = Object.freeze({
+  shown: "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
+  hidden: "relative hidden min-h-0 min-w-0 flex-1 overflow-hidden",
+});
+
 const BODY: Readonly<Record<DockPosition, string>> = Object.freeze({
   bottom: "flex min-h-0 min-w-0 flex-1 flex-col",
   right: "flex min-h-0 min-w-0 flex-1 flex-row",
@@ -50,6 +55,7 @@ export const Workbench: React.FC = () => {
   const [dockEverOpened, setDockEverOpened] = React.useState(dockOpen);
   if (dockOpen && !dockEverOpened) setDockEverOpened(true);
   const dock = dockPresence({ open: dockOpen, everOpened: dockEverOpened });
+  const maximized = useWorkbenchStore((s) => s.dockOpen && s.dockMaximized);
   const storedPosition = useWorkbenchStore((s) => s.dockPosition);
   const position = effectiveDockPosition(storedPosition, useMediaQuery(PHONE_QUERY));
 
@@ -69,15 +75,16 @@ export const Workbench: React.FC = () => {
   return (
     <div data-osio-workbench className="flex h-full w-full min-w-0 flex-col">
       <MachineWindowHost />
-      <div data-testid="workbench-body" data-dock-position={position} className={BODY[position]}>
-        <div data-testid="workbench-grid" className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div data-testid="workbench-body" data-dock-position={position}
+        data-dock-maximized={maximized ? "true" : undefined} className={BODY[position]}>
+        <div data-testid="workbench-grid" className={GRID[maximized ? "hidden" : "shown"]}>
           <MainContent />
         </div>
         {/* The same tree whether shown or hidden, so hiding never remounts the shell. */}
         {dock !== "absent" && (
           <div className={dock === "shown" ? "contents" : "hidden"}>
-            <DockSplitter position={position} />
-            <WorkbenchDock position={position} />
+            {!maximized && <DockSplitter position={position} />}
+            <WorkbenchDock position={position} maximized={maximized} />
           </div>
         )}
       </div>
