@@ -52,7 +52,7 @@ export const ThemeTokenReference: React.FC = () => {
   return (
     <div className="space-y-3">
       <p className="text-sm text-[var(--osio-fg-muted)]">
-        Every key a theme JSON accepts, with the value it has right now. Put colors under &quot;colors&quot;, the rest under &quot;layout&quot; or &quot;fonts&quot;.
+        Put colors under &quot;colors&quot;, the rest under &quot;layout&quot; or &quot;fonts&quot;.
       </p>
       <label className="block text-sm text-[var(--osio-fg-default)]">
         Filter tokens

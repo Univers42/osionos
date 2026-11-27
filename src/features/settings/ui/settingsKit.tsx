@@ -23,14 +23,18 @@ function anchorFromTitle(value: string): string {
     .replaceAll(/^-|-$/g, '');
 }
 
-export const Section: React.FC<{ title: string; anchor?: string; children: React.ReactNode; className?: string }> = ({ title, anchor, children, className = '' }) => (
-  <section className={`space-y-4 ${className}`} data-settings-anchor={anchor ?? anchorFromTitle(title)}>
-    {/* h2 (not h3): the tab view's heading is the h1, so the document outline keeps no gap. */}
-    {/* font-sans: the base heading rule is serif; only the page h1 keeps it. */}
-    <h2 className="font-sans text-base font-semibold text-[var(--osio-fg-default)]">{title}</h2>
-    <div>{children}</div>
-  </section>
-);
+export const Section: React.FC<{ title: string; anchor?: string; description?: React.ReactNode; children: React.ReactNode; className?: string }> = ({ title, anchor, description, children, className = '' }) => {
+  const descriptionId = React.useId();
+  return (
+    <section className={`space-y-4 ${className}`} data-settings-anchor={anchor ?? anchorFromTitle(title)} aria-describedby={description ? descriptionId : undefined}>
+      {/* h2 (not h3): the tab view's heading is the h1, so the document outline keeps no gap. */}
+      {/* font-sans: the base heading rule is serif; only the page h1 keeps it. */}
+      <h2 className="font-sans text-base font-semibold text-[var(--osio-fg-default)]">{title}</h2>
+      {description && <p id={descriptionId} className="-mt-3 text-sm leading-[18px] text-[var(--osio-fg-muted)]">{description}</p>}
+      <div>{children}</div>
+    </section>
+  );
+};
 
 export const SettingRow: React.FC<{
   title: React.ReactNode;
