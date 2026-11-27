@@ -210,7 +210,7 @@ export function persistAppearance(appearance: Appearance) {
 const ATTRIBUTE_AXES = [
   "accent", "density", "radius", "uiScale", "linkUnderline", "motion", "animatedImages", "hovercards",
   "caretColor", "caretShape", "caretBlink", "surface", "elevation", "borders",
-  "pageTransition", "overlayTransition", "motionSpeed",
+  "pageTransition", "overlayTransition", "motionSpeed", "easing", "pressFeedback",
 ] as const;
 
 /** The appearance as it stands. applyAppearance() keeps it up to date, so a

@@ -26,7 +26,7 @@ export type ChoiceAxis =
   | "density" | "radius" | "uiScale"
   | "surface" | "elevation" | "borders"
   | "caretColor" | "caretShape" | "caretBlink"
-  | "linkUnderline" | "motion" | "pageTransition" | "overlayTransition" | "motionSpeed"
+  | "linkUnderline" | "motion" | "pageTransition" | "overlayTransition" | "motionSpeed" | "easing" | "pressFeedback"
   | "animatedImages" | "hovercards" | "urlPaste";
 
 export interface AxisChoices<K extends ChoiceAxis> {
@@ -71,6 +71,8 @@ export const APPEARANCE_CHOICES: { readonly [K in ChoiceAxis]: AxisChoices<K> } 
     ],
   },
   motionSpeed: { label: "Animation speed", options: [{ value: "slow", label: "Slow" }, { value: "default", label: "Default" }, { value: "fast", label: "Fast" }] },
+  easing: { label: "Easing style", options: [{ value: "standard", label: "Standard" }, { value: "snappy", label: "Snappy" }, { value: "smooth", label: "Smooth" }, { value: "bouncy", label: "Bouncy" }] },
+  pressFeedback: { label: "Button press", options: [{ value: "default", label: "Default" }, { value: "none", label: "None" }, { value: "squish", label: "Squish" }] },
   animatedImages: { label: "Animated images", options: [{ value: "play", label: "Play" }, { value: "system", label: "System" }, { value: "still", label: "Still" }] },
   hovercards: { label: "Hovercards", options: [{ value: "on", label: "On" }, { value: "off", label: "Off" }] },
   urlPaste: { label: "Paste a link", options: [{ value: "link", label: "Link" }, { value: "plain", label: "Plain" }] },

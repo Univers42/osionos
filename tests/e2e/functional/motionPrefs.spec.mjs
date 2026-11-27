@@ -86,4 +86,96 @@ test.describe("motion preferences", () => {
       expect(violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target).join(" ")}`)).toEqual([]);
     }
   });
+
+  test.describe("an explicit motion choice beats the theme", () => {
+    const token = (page, name) => page.evaluate((property) => getComputedStyle(document.documentElement).getPropertyValue(property).trim(), name);
+    const normalise = (curve) => curve.replace(/\s+/g, "").replace(/(^|[(,])\./g, "$10.");
+    const choose = (page, group, name) => page.getByRole("group", { name: group, exact: true }).getByRole("tab", { name }).click();
+
+    async function openWithMeadow(page, baseURL) {
+      await seed(page);
+      await openFreshPage(page, baseURL);
+      await openMotionSettings(page);
+      await page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: /Meadow/ }).check({ force: true });
+      await expect.poll(() => token(page, "--osio-dur-base")).toBe("320ms");
+    }
+
+    test("Animation speed overrides Meadow's durations and Default hands them back", async ({ page, baseURL }) => {
+      await openWithMeadow(page, baseURL);
+      await choose(page, "Animation speed", "Fast");
+      await expect.poll(() => token(page, "--osio-dur-base")).toBe("108ms");
+      await choose(page, "Animation speed", "Default");
+      await expect.poll(() => token(page, "--osio-dur-base")).toBe("320ms");
+    });
+
+    test("Easing style overrides Meadow's curve and Standard hands it back", async ({ page, baseURL }) => {
+      await openWithMeadow(page, baseURL);
+      await choose(page, "Easing style", "Bouncy");
+      await expect.poll(async () => normalise(await token(page, "--osio-ease-standard"))).toBe("cubic-bezier(0.34,1.56,0.64,1)");
+      await choose(page, "Easing style", "Standard");
+      await expect.poll(async () => normalise(await token(page, "--osio-ease-standard"))).toBe("cubic-bezier(0.33,1,0.68,1)");
+    });
+
+    test("the chosen easing is on <html> at first paint", async ({ page, baseURL }) => {
+      await seed(page, { easing: "snappy", pressFeedback: "squish" });
+      await page.goto(baseURL, { waitUntil: "commit" });
+      await expect(html(page)).toHaveAttribute("data-easing", "snappy");
+      await expect(html(page)).toHaveAttribute("data-press-feedback", "squish");
+    });
+  });
+
+  test.describe("button press", () => {
+    const pressedScale = async (page) => {
+      const button = page.getByRole("group", { name: "Animation speed", exact: true }).getByRole("tab", { name: "Default" });
+      await button.scrollIntoViewIfNeeded();
+      const box = await button.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      const scale = await button.evaluate((element) => getComputedStyle(element).scale);
+      await page.mouse.up();
+      return scale;
+    };
+
+    test("Squish presses a button to 0.96, and reduced motion keeps it still", async ({ page, baseURL }) => {
+      await seed(page, { pressFeedback: "squish" });
+      await openFreshPage(page, baseURL);
+      await openMotionSettings(page);
+      expect(await pressedScale(page)).toBe("0.96");
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      expect(await pressedScale(page)).toBe("none");
+    });
+
+    test("None cancels an ad hoc press scale (no active:scale-* button is visible here, so a stand-in carries one)", async ({ page, baseURL }) => {
+      await seed(page, { pressFeedback: "none" });
+      await openFreshPage(page, baseURL);
+      await page.addStyleTag({ content: ".press-probe:active { scale: 0.95; }" });
+      await page.evaluate(() => {
+        const probe = document.createElement("button");
+        probe.className = "press-probe";
+        probe.textContent = "probe";
+        probe.style.cssText = "position:fixed;top:40px;left:40px;width:80px;height:40px;z-index:99999";
+        document.body.append(probe);
+      });
+      const probe = page.locator(".press-probe");
+      const box = await probe.boundingBox();
+      await page.mouse.move(box.x + 10, box.y + 10);
+      await page.mouse.down();
+      expect(await probe.evaluate((element) => getComputedStyle(element).scale)).toBe("none");
+      await page.mouse.up();
+    });
+  });
+
+  test("Easing style and Button press pass axe in both themes", async ({ page, baseURL }) => {
+    await seed(page);
+    await openFreshPage(page, baseURL);
+    await openMotionSettings(page);
+    await page.getByRole("group", { name: "Easing style", exact: true }).getByRole("tab", { name: "Bouncy" }).click();
+    await page.getByRole("group", { name: "Button press", exact: true }).getByRole("tab", { name: "Squish" }).click();
+    for (const theme of ["light", "dark"]) {
+      await page.getByRole("button", { name: theme === "dark" ? "Dark" : "Light", exact: true }).click();
+      await expect(html(page)).toHaveAttribute("data-theme", theme);
+      const { violations } = await new AxeBuilder({ page }).include('[data-testid="motion-controls"]').withTags(WCAG_AA).analyze();
+      expect(violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target).join(" ")}`)).toEqual([]);
+    }
+  });
 });
