@@ -127,4 +127,7 @@ export const pairPollMessage = ({ origin, pairId, ts }) => signed('osionos-machi
 export const heartbeatMessage = ({ origin, machineId, ideOrigin, ts }) => signed('osionos-machine-heartbeat-v1', origin, machineId, ideOrigin, String(ts));
 export const whoamiMessage = ({ origin, machineId, ideOrigin, nonce }) => signed('osionos-machine-whoami-v1', origin, machineId, ideOrigin, nonce);
 // What the bridge signs with its current key to hand a machine the next one (condition 3).
+// The bridge's answer to a revoked machine that signed its beat (devil verdict 2026-11-27, TB13): bound
+// to that beat's ts, so it is no token a later beat can replay, and never signed for an unknown id.
+export const goneMessage = ({ origin, machineId, ts }) => signed('osionos-machine-gone-v1', origin, machineId, String(ts));
 export const nextKeyMessage = ({ origin, kid, publicKey }) => signed('osionos-machine-next-key-v1', origin, kid, publicKey);
