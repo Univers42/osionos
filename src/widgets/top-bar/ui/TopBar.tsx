@@ -12,6 +12,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import type { SettingsSectionId } from "@/features/settings/model/sections";
+import { useUIStore } from "@/shared/config/uiStore";
 import { buildCommands, type PaletteCommand } from "../model/commands";
 import { buildMenus } from "../model/menus";
 import { usePalette, useTopBarHotkeys } from "../model/usePalette";
@@ -34,10 +35,14 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
   useTopBarHotkeys();
   const ctx = useMemo(() => ({ openSettings: onOpenSettings }), [onOpenSettings]);
-  const menus = useMemo(() => buildMenus(ctx), [ctx]);
+  // Labels are read when the tree is built, so it is built on every render and
+  // this bar re-renders when the state a label names changes ("Move primary
+  // side bar right/left"). A memo kept the first label for the whole session.
+  useUIStore((state) => state.sidebarSide);
+  const menus = buildMenus(ctx);
   const [settingsCommands, setSettingsCommands] = useState<PaletteCommand[] | null>(null);
   const paletteOpen = usePalette((state) => state.open);
-  const commands = useMemo(() => buildCommands(ctx, settingsCommands ?? []), [ctx, settingsCommands]);
+  const commands = buildCommands(ctx, settingsCommands ?? []);
 
   // The settings and page registries load WITH the palette, never with the
   // entry chunk. One attempt, one warning per failed module — the other module
