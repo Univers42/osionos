@@ -31,6 +31,7 @@ import { createIdeOriginServer } from './ide-origin.mjs';
 import { createMachineSession, loadMachine } from './machine-identity.mjs';
 import { pairMachine } from './pair.mjs';
 import { createRememberedComputers } from './remembered-computers.mjs';
+import { readStatus } from './status.mjs';
 import { SERVER_PIN } from './pin.mjs';
 import { createPtyHost, serverSocketAcceptor } from './pty-runtime.mjs';
 import { isRememberOrigin } from './pty-wire.mjs';
@@ -212,11 +213,16 @@ async function serve(argv, env) {
 	process.once('SIGTERM', stop);
 }
 
+async function printStatus(env) {
+	console.log(await readStatus({ home: env.HOME ?? homedir() }));
+}
+
 const USAGE = [
 	'usage: osionos-node connect --bridge <url> --app-origin <origin>... [--remember-origin <origin>...] [--name <name>] [--pair-only]',
 	'       osionos-node pair --bridge <url> --name <name> [--accept-account <email>]',
 	'       osionos-node serve --server <lib dir> --app-origin <origin>... [--remember-origin <origin>...] [--listen 127.0.0.1:4100] [--client <dist-ide>] [--terminal <build/terminal>]',
 	'       (unpaired, milestone 1: add --node <id> and OSIONOS_IDE_TOKEN_SECRET / OSIONOS_IDE_OWNER)',
+	'       osionos-node status',
 	'       osionos-node update',
 ].join('\n');
 
@@ -283,7 +289,7 @@ async function connect(argv, env) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
 	const [command, ...rest] = process.argv.slice(2);
-	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env), connect: () => connect(rest, process.env), open: () => openFolder(rest, process.env), update: () => updateNode(rest, process.env) };
+	const commands = { serve: () => serve(rest, process.env), pair: () => pair(rest, process.env), connect: () => connect(rest, process.env), status: () => printStatus(process.env), open: () => openFolder(rest, process.env), update: () => updateNode(rest, process.env) };
 	const run = commands[command]?.() ?? Promise.reject(new Error(USAGE));
 	run.catch((error) => { console.error(`osionos-node: ${error.message}`); process.exit(1); });
 }

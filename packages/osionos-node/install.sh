@@ -140,10 +140,13 @@ BIN_DIR=$HOME/.local/bin
 mkdir -p "$BIN_DIR"
 {
     echo '#!/bin/sh'
-    echo 'case "${1:-}" in'
+    echo "case \"\${1:-}\" in"
     echo '    update|--update)'
     echo '        shift'
     printf "        exec '%s' '%s' update \"\$@\"\n" "$NODE" "$CLI"
+    echo '        ;;'
+    echo '    status|--status)'
+    printf "        exec '%s' '%s' status\n" "$NODE" "$CLI"
     echo '        ;;'
     echo '    *)'
     printf "        exec '%s' '%s' open \"\$@\"\n" "$NODE" "$CLI"
