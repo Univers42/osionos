@@ -61,3 +61,24 @@ test("Alt+Left previous page painted", async ({ page }) => {
   });
   assertBudget("vscodeShell", "altLeft.back", stats, { target: floor.p95 + 16, budget: floor.p95 + 16 }, { floor });
 });
+
+test("maximize panel painted", async ({ page }) => {
+  test.setTimeout(120_000);
+  await bootApp(page);
+  await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
+  const floor = await measureFloor(page);
+  await page.keyboard.press("Control+j");
+  const dock = page.getByTestId("workbench-dock");
+  await dock.waitFor();
+  const stats = await measureToPaint(page, () => dock.getByRole("button", { name: "Maximize panel size" }).click(), {
+    startEvent: "click",
+    until: { selector: '[data-testid="workbench-body"][data-dock-maximized="true"]' },
+    before: async () => {
+      if (await page.locator('[data-dock-maximized="true"]').count()) {
+        await dock.getByRole("button", { name: "Restore panel size" }).click();
+        await page.locator('[data-dock-maximized="true"]').waitFor({ state: "detached" });
+      }
+    },
+  });
+  assertBudget("vscodeShell", "maximize.panel", stats, { target: floor.p95 + 16, budget: floor.p95 + 16 }, { floor });
+});

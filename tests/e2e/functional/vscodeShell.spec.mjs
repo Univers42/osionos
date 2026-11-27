@@ -184,3 +184,102 @@ test.describe("primary side bar side", () => {
     expect((await railBox(page)).x).toBeLessThan((await mainBox(page)).x + 1);
   });
 });
+
+const bodyOf = (page) => page.getByTestId("workbench-body");
+const dockOf = (page) => page.getByTestId("workbench-dock");
+const gridOf = (page) => page.getByTestId("workbench-grid");
+const rectOf = (locator) => locator.evaluate((el) => el.getBoundingClientRect().toJSON());
+
+async function openDock(page, baseURL) {
+  await openDesktop(page, baseURL);
+  if (!(await dockOf(page).isVisible())) await page.keyboard.press("Control+j");
+  await dockOf(page).waitFor();
+}
+
+test.describe("maximize panel", () => {
+  test("the chevron fills the body, keeps the editor mounted, and Hide panel restores", async ({ page, baseURL }) => {
+    await openDock(page, baseURL);
+    await page.evaluate(() => { document.querySelector('[data-testid="workbench-grid"]').firstElementChild.__osioMark = "editor"; });
+    const maximize = dockOf(page).getByRole("button", { name: "Maximize panel size" });
+    await expect(maximize).toHaveAttribute("aria-pressed", "false");
+    await maximize.click();
+    await expect(bodyOf(page)).toHaveAttribute("data-dock-maximized", "true");
+    await expect(gridOf(page)).toBeHidden();
+    const [body, dock] = [await rectOf(bodyOf(page)), await rectOf(dockOf(page))];
+    expect(dock.height).toBeGreaterThan(body.height - 40);
+    expect(dock.width).toBeGreaterThan(body.width - 40);
+    const restore = dockOf(page).getByRole("button", { name: "Restore panel size" });
+    await expect(restore).toHaveAttribute("aria-pressed", "true");
+    await restore.click();
+    await expect(bodyOf(page)).not.toHaveAttribute("data-dock-maximized", "true");
+    await expect(gridOf(page)).toBeVisible();
+    expect(await page.evaluate(() => document.querySelector('[data-testid="workbench-grid"]').firstElementChild.__osioMark)).toBe("editor");
+    await dockOf(page).getByRole("button", { name: "Maximize panel size" }).click();
+    await dockOf(page).getByRole("button", { name: "Hide panel" }).click();
+    await expect(dockOf(page)).toBeHidden();
+    await page.keyboard.press("Control+j");
+    await expect(dockOf(page)).toBeVisible();
+    await expect(bodyOf(page)).not.toHaveAttribute("data-dock-maximized", "true");
+    await expect(gridOf(page)).toBeVisible();
+  });
+
+  test("a side dock uses the same button and the Appearance row follows the state", async ({ page, baseURL }) => {
+    await openDock(page, baseURL);
+    await dockOf(page).getByRole("button", { name: "Panel position" }).click();
+    await page.getByRole("menuitemradio", { name: "Right", exact: true }).click();
+    await dockOf(page).getByRole("button", { name: "Maximize panel size" }).click();
+    await expect(bodyOf(page)).toHaveAttribute("data-dock-maximized", "true");
+    await page.getByTestId("customize-layout").click();
+    await expect(page.getByRole("menuitemcheckbox", { name: "Maximize panel" })).toHaveAttribute("aria-checked", "true");
+    await page.getByRole("menuitemcheckbox", { name: "Maximize panel" }).click();
+    await expect(bodyOf(page)).not.toHaveAttribute("data-dock-maximized", "true");
+  });
+});
+
+test.describe("customize layout", () => {
+  test("one menu holds every layout switch and returns focus on Escape", async ({ page, baseURL }) => {
+    await openDesktop(page, baseURL);
+    const button = page.getByTestId("customize-layout");
+    await expect(button).toHaveAttribute("aria-haspopup", "menu");
+    await expect(button).toHaveAttribute("aria-expanded", "false");
+    await button.click();
+    await expect(button).toHaveAttribute("aria-expanded", "true");
+    const menu = page.getByRole("menu");
+    await expect(menu.getByRole("menuitemcheckbox", { name: "Status bar" })).toHaveAttribute("aria-checked", "true");
+    await expect(menu.getByRole("menuitemcheckbox", { name: "Bottom" })).toHaveAttribute("aria-checked", "true");
+    await expect(menu.getByRole("menuitemcheckbox", { name: "Left" })).toHaveAttribute("aria-checked", "false");
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+    await expect(button).toBeFocused();
+  });
+
+  test("Status bar toggles off and on, and Panel position Right moves the dock", async ({ page, baseURL }) => {
+    await openDock(page, baseURL);
+    const status = page.getByTestId("workbench-statusbar");
+    const button = page.getByTestId("customize-layout");
+    const hadStatus = await status.count();
+    await button.click();
+    await page.getByRole("menuitemcheckbox", { name: "Status bar" }).click();
+    await expect(status).toHaveCount(hadStatus ? 0 : 1);
+    await button.click();
+    await page.getByRole("menuitemcheckbox", { name: "Status bar" }).click();
+    await expect(status).toHaveCount(hadStatus);
+    await button.click();
+    await page.getByRole("menuitemcheckbox", { name: "Right" }).click();
+    await expect(bodyOf(page)).toHaveAttribute("data-dock-position", "right");
+    const [grid, dock] = [await rectOf(gridOf(page)), await rectOf(dockOf(page))];
+    expect(dock.left).toBeGreaterThanOrEqual(grid.right - 1);
+  });
+
+  test("the keyboard opens, moves and runs a row", async ({ page, baseURL }) => {
+    await openDock(page, baseURL);
+    const button = page.getByTestId("customize-layout");
+    await button.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.getByRole("menuitemcheckbox", { name: "Left" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(bodyOf(page)).toHaveAttribute("data-dock-position", "left");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  });
+});
