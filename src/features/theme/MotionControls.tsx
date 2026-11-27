@@ -10,7 +10,8 @@ import React, { useRef, useSyncExternalStore } from 'react';
 
 import type { Appearance, MotionSpeed, OverlayTransition, PageTransition } from '@/shared/config/theme';
 
-import { Segmented } from './AppearanceControls';
+import { AxisRow } from './ui/AppearanceRow';
+import { Segmented } from './ui/Segmented';
 import { replayPageTransition } from './model/replayPageTransition';
 
 const REDUCED_QUERY = '(prefers-reduced-motion: reduce)';
@@ -71,40 +72,47 @@ const PagePreview: React.FC = () => {
   );
 };
 
+/** The three motion rows, a preview of the page transition, and a note when reduced motion is on. */
 export const MotionControls: React.FC<{ appearance: Appearance; onChange: (patch: Partial<Appearance>) => void }> = ({ appearance, onChange }) => {
   const reduced = useMotionReduced(appearance.motion);
   return (
-    <div className="space-y-4" data-testid="motion-controls">
-      <p className="text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">Motion</p>
-      {reduced ? <p className="text-xs text-[var(--osio-fg-muted)]">Your reduced-motion setting turns these off.</p> : null}
-      <div data-settings-anchor="motion-page" className="space-y-3">
-        <Segmented<PageTransition>
-          label="Page and tab transition"
-          description="How a page or tab comes in when you switch to it."
-          value={appearance.pageTransition}
-          options={PAGE_OPTIONS}
-          onChange={(pageTransition) => onChange({ pageTransition })}
-        />
-        <PagePreview />
-      </div>
-      <div data-settings-anchor="motion-overlay">
+    <div data-testid="motion-controls">
+      {reduced ? <p className="pb-3 text-sm text-[var(--osio-fg-muted)]">Your reduced-motion setting turns these off.</p> : null}
+      <AxisRow
+        anchor="motion-page"
+        title="Page and tab transition"
+        description="How a page or tab comes in when you switch to it."
+        appearance={appearance}
+        axes={['pageTransition']}
+        onChange={onChange}
+        stack
+      >
+        <div className="space-y-3">
+          <Segmented<PageTransition>
+            label="Page and tab transition"
+            value={appearance.pageTransition}
+            options={PAGE_OPTIONS}
+            onChange={(pageTransition) => onChange({ pageTransition })}
+          />
+          <PagePreview />
+        </div>
+      </AxisRow>
+      <AxisRow anchor="motion-overlay" title="Menus and dialogs" description="How popovers, menus and dialogs open." appearance={appearance} axes={['overlayTransition']} onChange={onChange}>
         <Segmented<OverlayTransition>
           label="Menus and dialogs"
-          description="How popovers, menus and dialogs open."
           value={appearance.overlayTransition}
           options={OVERLAY_OPTIONS}
           onChange={(overlayTransition) => onChange({ overlayTransition })}
         />
-      </div>
-      <div data-settings-anchor="motion-speed">
+      </AxisRow>
+      <AxisRow anchor="motion-speed" title="Animation speed" description="Scales every animation in the app." appearance={appearance} axes={['motionSpeed']} onChange={onChange}>
         <Segmented<MotionSpeed>
           label="Animation speed"
-          description="Scales every animation in the app."
           value={appearance.motionSpeed}
           options={SPEED_OPTIONS}
           onChange={(motionSpeed) => onChange({ motionSpeed })}
         />
-      </div>
+      </AxisRow>
     </div>
   );
 };
