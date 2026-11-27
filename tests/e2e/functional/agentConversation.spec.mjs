@@ -93,6 +93,27 @@ test("Enter sends: a right-aligned bubble, a typing status, then the answer and 
   await expect(rows.first()).toContainText("Found 2 pages");
 });
 
+test("Enter during a run sends nothing, and the thread survives a reload", async ({ page }) => {
+  const release = await stubClaude(page);
+  const region = await openAgentPage(page);
+  const composer = region.getByRole("textbox", { name: "Message Claude" });
+  await composer.fill("Find my plans");
+  await composer.press("Enter");
+  await expect(region.getByRole("status")).toContainText("Claude is writing");
+  await composer.fill("Second question");
+  await composer.press("Enter");
+  await expect(region.locator('[data-role="user"]')).toHaveCount(1);
+  await expect(composer).toHaveValue("Second question");
+  release();
+  await expect(region.getByText(REPLY)).toBeVisible();
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const reloaded = page.getByRole("region", { name: "Agent conversation" });
+  await expect(reloaded).toBeVisible({ timeout: 15_000 });
+  await expect(reloaded.locator('[data-role="user"]')).toContainText("Find my plans");
+  await expect(reloaded.getByText(REPLY)).toBeVisible();
+});
+
 test("the Tools disclosure and a tool chip report their state", async ({ page }) => {
   const region = await openAgentPage(page);
   const disclosure = region.getByRole("button", { name: /^Tools · 8 of 9/ });

@@ -59,7 +59,7 @@ const ToolChip: React.FC<{ label: string; value: AgentToolKey; pressed: boolean;
     aria-pressed={pressed}
     data-agent-tool-toggle={value}
     onClick={() => onToggle(value)}
-    className={`${PILL_CLASS} h-7 aria-pressed:bg-[var(--osio-accent-subtle)] aria-pressed:text-[var(--osio-accent-text)]`}
+    className={`${PILL_CLASS} aria-pressed:bg-[var(--osio-accent-subtle)] aria-pressed:text-[var(--osio-accent-text)]`}
   >
     {pressed ? <Check size={12} aria-hidden="true" /> : null}
     {label}

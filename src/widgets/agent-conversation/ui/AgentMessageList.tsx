@@ -34,7 +34,8 @@ const UserTurn: React.FC<{ message: AgentMessage }> = ({ message }) => (
   </article>
 );
 
-/** Claude's turn: avatar, name and time, then plain text; typing dots while nothing has arrived. */
+/** Claude's turn: avatar, name and time, then plain text; typing dots while nothing has arrived,
+ *  "No response" for an empty turn persisted mid-stream (a reload during a run). */
 const AssistantTurn: React.FC<{ message: AgentMessage; pending: boolean }> = ({ message, pending }) => (
   <article className="flex flex-col gap-1.5">
     <div className="flex items-center gap-2 text-xs text-[var(--osio-fg-muted)]">
@@ -44,6 +45,7 @@ const AssistantTurn: React.FC<{ message: AgentMessage; pending: boolean }> = ({ 
     </div>
     <div className="pl-8">
       {message.body ? <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.body}</p> : null}
+      {!message.body && !pending && !message.toolEvents?.length ? <p className="text-sm italic text-[var(--osio-fg-muted)]">No response</p> : null}
       {pending ? (
         <div role="status" aria-live="polite" className="inline-flex h-6 items-center text-[var(--osio-fg-muted)]">
           <TypingDots />
