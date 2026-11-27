@@ -3,7 +3,7 @@ import { BookOpen, CircleCheck, CircleX, FileText, Globe, Layers, LoaderCircle }
 
 import type { ContextChip } from "@/features/ai/model/aiContext";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
-import { openAiHub } from "@/features/ai/model/aiHubNav";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import { outgoingContext, type OutgoingRow } from "@/features/ai/model/outgoingContext";
 import { useAccountContext } from "@/features/settings/ai/AccountContextToggle";
 import { openCitation } from "@/features/chat/model/openCitation";
@@ -63,7 +63,7 @@ const ContextTab: React.FC<{ chips: readonly ContextChip[]; selection: AiSelecti
             </li>
           ))}
         </ul>
-        <button type="button" onClick={() => openAiHub("privacy")} className="mt-2 text-xs text-[var(--osio-accent-text)] hover:underline">
+        <button type="button" onClick={() => openSettings("ai", "ai-privacy")} className="mt-2 text-xs text-[var(--osio-accent-text)] hover:underline">
           Privacy settings
         </button>
       </section>

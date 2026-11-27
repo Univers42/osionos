@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getHealth, getUsage, isAiConfigured } from "@/features/ai/api/aiClient";
-import type { Loadable } from "./HubCards";
+import type { Loadable } from "./AiStatusCards";
 
 /** One request on mount; nothing is requested when the service is not configured. */
 export function useLoaded<T>(load: () => Promise<T>): Loadable<T> {

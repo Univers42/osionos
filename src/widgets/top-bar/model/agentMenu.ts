@@ -12,7 +12,7 @@
 
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import { useAgentRequest } from "@/features/chat/model/agentRequest";
-import { aiHubTab, chatTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { chatTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import type { MenuAction, MenuContext } from "./menuTypes";
 
@@ -60,7 +60,7 @@ function agentRow(agent: AgentSummary): MenuAction {
 
 /**
  * The agent caret's menu: up to eight runnable agents (or a disabled "No agents
- * yet"), then the AI hub and the agents settings.
+ * yet"), then the AI settings and the agents settings.
  */
 export function agentMenuItems(agents: readonly AgentSummary[], ctx: MenuContext): MenuAction[] {
   const rows = agents.filter(isRunnable).slice(0, AGENT_MENU_CAP).map(agentRow);
@@ -70,7 +70,7 @@ export function agentMenuItems(agents: readonly AgentSummary[], ctx: MenuContext
   head[head.length - 1] = { ...head[head.length - 1], separatorAfter: true };
   return [
     ...head,
-    { id: "agent.hub", label: "AI hub", run: () => useWorkspaceLayout.getState().openTab(aiHubTab()) },
-    { id: "agent.manage", label: "Manage agents…", run: () => ctx.openSettings("ai") },
+    { id: "agent.hub", label: "AI settings", run: () => ctx.openSettings("ai") },
+    { id: "agent.manage", label: "Manage agents…", run: () => ctx.openSettings("ai_agents") },
   ];
 }

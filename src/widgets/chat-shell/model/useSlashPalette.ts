@@ -18,7 +18,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { listCommands, type AiCommand } from "@/features/ai/api/aiClient";
-import { openAiHub, type HubSectionId } from "@/features/ai/model/aiHubNav";
 import {
   CHAT_ACTIONS,
   expandSlashText,
@@ -29,7 +28,8 @@ import {
   type ChatCommand,
 } from "@/features/ai/model/chatCommands";
 import { useChatStore } from "@/features/chat/model/useChatStore";
-import { isSlashActionAvailable, slashActionTarget } from "./slashActionTarget";
+import { openSettings } from "@/features/settings/model/settingsNav";
+import { isSlashActionAvailable, slashActionTarget, slashSettingsTarget } from "./slashActionTarget";
 
 /** The service's chat commands — fetched ONCE per session; a failure leaves the actions. */
 let serviceCommands: Promise<AiCommand[]> | null = null;
@@ -37,8 +37,6 @@ function loadServiceCommands(): Promise<AiCommand[]> {
   serviceCommands ??= listCommands("chat").catch(() => []);
   return serviceCommands;
 }
-
-const HUB_ACTIONS: Record<string, HubSectionId> = { skills: "skills", memory: "memory", mcp: "mcp", routing: "routing", hub: "overview" };
 
 interface Options {
   value: string;
@@ -135,8 +133,11 @@ export function useSlashPalette({ value, onChange, onSubmit, textarea, root, syn
       onChange("");
       if (command.name === "new") useChatStore.getState().createConversation();
       else if (command.name === "context") write("@");
-      else if (Object.hasOwn(HUB_ACTIONS, command.name)) openAiHub(HUB_ACTIONS[command.name]);
-      else requestAnimationFrame(() => reach(command.name));
+      else {
+        const settings = slashSettingsTarget(command.name);
+        if (settings) openSettings(settings.section, settings.anchor);
+        else requestAnimationFrame(() => reach(command.name));
+      }
     },
     [reach, onChange, write],
   );

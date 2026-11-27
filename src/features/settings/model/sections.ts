@@ -29,11 +29,9 @@ import {
   LayoutGrid,
   Mail,
   Palette,
-  Plug,
   Settings,
   Shield,
   SlidersHorizontal,
-  Sparkles,
   Terminal,
   User,
   UserPlus,
@@ -44,6 +42,7 @@ import {
 
 import { isAccountDeleteEnabled } from "@/shared/config/featureFlags";
 
+import { AI_SETTINGS_SECTIONS } from "./aiSections";
 import type { SettingsAnchor, SettingsSection } from "./sectionTypes";
 
 export { SETTINGS_GROUPS } from "./sectionTypes";
@@ -170,19 +169,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: Keyboard,
     anchors: [{ id: "keyboard-shortcuts", label: "Keyboard shortcuts", keywords: ["shortcut", "shortcuts", "keyboard", "keybinding", "hotkey", "automation", "combo", "vscode"], description: "Rebind, add, and export keyboard shortcuts." }],
   },
-  {
-    id: "ai", group: "features", label: "osionos AI", title: "osionos AI",
-    subtitle: "Search everywhere, automate meeting notes and configure AI features", icon: Sparkles,
-    anchors: [{ id: "osionos-ai", label: "osionos AI", keywords: ["ai", "agents", "meeting notes", "summaries", "search"] }],
-  },
-  {
-    id: "ai_connections", group: "features", label: "AI connections", title: "AI connections",
-    subtitle: "Bring your own model access — your keys stay on the server", icon: Plug,
-    anchors: [
-      { id: "ai-connections", label: "AI connections", keywords: ["openrouter", "model", "provider", "api key", "byok", "connect"] },
-      { id: "ai-access-tokens", label: "AI access tokens", keywords: ["token", "access token", "pat", "api", "assistant"] },
-    ],
-  },
+  ...AI_SETTINGS_SECTIONS,
   {
     id: "mcp", group: "features", label: "osionos MCP", title: "osionos MCP",
     subtitle: "Connect osionos to your AI tools to summarize, search, and move faster", icon: Bot,

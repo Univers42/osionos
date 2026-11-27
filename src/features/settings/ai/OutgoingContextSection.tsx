@@ -1,13 +1,12 @@
+// Settings › osionos AI: what the next message carries, and to whom. The switches that
+// change it (account context, web access, sentiment) are AiSwitches' rows, drawn once.
 import React, { useEffect, useState } from "react";
 import { isAiConfigured, listConnections, listProviders } from "@/features/ai/api/aiClient";
 import type { AiConnection, AiProvider } from "@/features/ai/api/aiContract";
 import { readAiSelection } from "@/features/ai/model/aiSelection";
 import { outgoingContext, recipientOf, type OutgoingRow } from "@/features/ai/model/outgoingContext";
-import { useUserStore } from "@/features/auth";
-import { AccountContextToggle, useAccountContext } from "@/features/settings/ai/AccountContextToggle";
-import { WebAccessRow } from "@/features/settings/ai/WebAccessRow";
-import { SentimentSection } from "@/features/settings/ai/SentimentSection";
-import { Section, SettingRow } from "@/features/settings/ui/settingsKit";
+import { Section, SettingRow } from "../ui/settingsKit";
+import { useAccountContext } from "./AccountContextToggle";
 
 function marker(row: OutgoingRow): string {
   if (!row.sent) return "Not sent";
@@ -43,24 +42,15 @@ function useRecipientData(): { connections: AiConnection[]; providers: AiProvide
   return data;
 }
 
-export const HubPrivacySection: React.FC = () => {
+export const OutgoingContextSection: React.FC = () => {
   const [accountContext] = useAccountContext();
-  const workspaceId = useUserStore((state) => state.activeWorkspace()?._id ?? "local-workspace");
   const { connections, providers } = useRecipientData();
   const selection = readAiSelection();
   const recipient = recipientOf(selection, connections, providers);
   return (
-    <div className="space-y-8">
-      <Section title="What your next message sends">
-        <p data-testid="outgoing-recipient" className="text-sm font-medium text-[var(--osio-fg-default)]">{recipient.text}</p>
-        {outgoingContext({ accountContext, selection }).map((row) => <Row key={row.id} row={row} />)}
-      </Section>
-      <Section title="Controls">
-        <AccountContextToggle />
-        {isAiConfigured() && workspaceId !== "local-workspace" && <WebAccessRow key={workspaceId} workspaceId={workspaceId} />}
-      </Section>
-      {/* The sentiment opt-in is a real server-side switch, unlike the other device switches. */}
-      {isAiConfigured() && workspaceId !== "local-workspace" && <SentimentSection key={workspaceId} workspaceId={workspaceId} />}
-    </div>
+    <Section title="What your next message sends" anchor="ai-privacy">
+      <p data-testid="outgoing-recipient" className="text-sm font-medium text-[var(--osio-fg-default)]">{recipient.text}</p>
+      {outgoingContext({ accountContext, selection }).map((row) => <Row key={row.id} row={row} />)}
+    </Section>
   );
 };

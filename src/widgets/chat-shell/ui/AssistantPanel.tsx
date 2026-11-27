@@ -19,9 +19,9 @@ import { Settings2 } from "lucide-react";
 
 import { useUserStore } from "@/features/auth";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
-import { openAiHub } from "@/features/ai/model/aiHubNav";
 import { useAssistantDraft } from "@/features/chat/model/assistantDraft";
 import { openAiChat, startAiChat } from "@/features/chat/model/openAssistantWith";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import { conversationsOf, isUntouchedConversation, useChatStore } from "@/features/chat/model/useChatStore";
 import { activitiesOf, sourcesOf } from "../model/conversationTrail";
 import { AssistantChats } from "./AssistantChats";
@@ -77,10 +77,10 @@ export const AssistantPanel: React.FC = () => {
       <div className="border-t border-[var(--osio-border-soft)] p-1.5">
         <button
           type="button"
-          onClick={() => openAiHub("overview")}
+          onClick={() => openSettings("ai")}
           className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         >
-          <Settings2 size={15} aria-hidden="true" /> AI Hub
+          <Settings2 size={15} aria-hidden="true" /> AI settings
         </button>
       </div>
     </div>

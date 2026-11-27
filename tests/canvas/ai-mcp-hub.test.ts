@@ -1,5 +1,5 @@
 /* ************************************************************************** */
-/*  ai-mcp-hub.test.ts — the AI Hub manages a user's MCP servers (E1c):      */
+/*  ai-mcp-hub.test.ts — Settings manages a user's MCP servers (E1c):        */
 /*  the list shows host and last4 only, the form validates before it sends   */
 /*  (C268), the disclosure gates the add (C282), 404 hides the part (C288),  */
 /*  the refusals are sentences, a tool switch calls its route.               */

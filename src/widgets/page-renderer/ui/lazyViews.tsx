@@ -97,10 +97,6 @@ export const LazyChatShell = lazy(() =>
   import("@/widgets/chat-shell").then((m) => ({ default: m.ChatShell })),
 );
 
-export const LazyAiHubView = lazy(() =>
-  import("@/widgets/ai-hub").then((m) => ({ default: m.AiHubView })),
-);
-
 // The Notion-style Library: its own chunk so the tree table never rides the
 // warm pane path. The rail prefetches it on hover and the pane then renders the
 // loaded component directly: React.lazy suspends once even for a cached chunk and

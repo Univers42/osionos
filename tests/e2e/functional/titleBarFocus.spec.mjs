@@ -72,7 +72,7 @@ test.describe("title-bar focus", () => {
   test("agent: a row that leaves the composer unfocused lands focus on the caret, not the body", async ({ page, baseURL }) => {
     await openPage(page, baseURL, { width: 1440, height: 900 });
     await caret(page).click();
-    await page.getByRole("menuitem", { name: "AI hub" }).click();
+    await page.getByRole("menuitem", { name: "AI settings" }).click();
     await expect(menus(page)).toHaveCount(0);
     await expect(caret(page)).toBeFocused();
   });

@@ -33,7 +33,7 @@ import { activitiesOf, sourcesOf } from "./conversationTrail";
  * text and attachments, and the connection onboarding. Who answers, the pages read and the
  * model are the shared draft (`assistantDraft`), which the sidebar's Assistant panel shows too.
  * Another account's conversation is never shown: switching accounts starts a new one.
- * The Hub's "Try it" request is taken once, and the selection follows it while rendering.
+ * The agents settings' "Try it" request is taken once, and the selection follows it while rendering.
  * The hand-off from a block fills the composer and stays there until the user presses Send.
  * The AI service owns the providers, so a streaming port needs no connector of the app's own.
  * A panel talks one agent at a time: the next message waits for its end. Web toggles are
