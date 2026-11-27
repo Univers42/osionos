@@ -33,7 +33,13 @@
   "layout": {
     "radius": "10px",
     "page-max-width": "880px",
-    "topbar-h": "44px"
+    "topbar-h": "44px",
+    "ease-standard": "cubic-bezier(.22,1,.36,1)",
+    "ease-spring": "cubic-bezier(.22,1,.36,1)",
+    "dur-instant": "72ms",
+    "dur-fast": "180ms",
+    "dur-base": "288ms",
+    "dur-slow": "468ms"
   },
   "fonts": {
     "font-ui": "\"Inter Variable\", system-ui, sans-serif"

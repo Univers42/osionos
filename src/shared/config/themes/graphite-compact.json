@@ -39,7 +39,13 @@
     "space-3": "10px",
     "space-4": "12px",
     "topbar-h": "36px",
-    "statusbar-h": "24px"
+    "statusbar-h": "24px",
+    "ease-standard": "cubic-bezier(.2,0,0,1)",
+    "ease-spring": "cubic-bezier(.2,0,0,1)",
+    "dur-instant": "40ms",
+    "dur-fast": "100ms",
+    "dur-base": "160ms",
+    "dur-slow": "260ms"
   },
   "fonts": {
     "font-size-ui": "13px"
