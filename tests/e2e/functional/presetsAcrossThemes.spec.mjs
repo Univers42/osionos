@@ -70,6 +70,10 @@ function expectPreset(preset, got, custom) {
   } else if (p.elevation === "deep") {
     expect(got.menuShadow).toBe(got.e5);
     expect(got.paneShadow).toContain(got.e4);
+  } else if (p.surface === "frosted") {
+    same("menuShadow");
+    if (custom.paneShadow === "none") same("paneShadow");
+    else expect(got.paneShadow).toMatch(/^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px, )*rgba\([^)]*\) 0px 1px 0px 0px inset, /);
   } else {
     same("menuShadow");
     if (p.surface !== "glass") same("paneShadow");
