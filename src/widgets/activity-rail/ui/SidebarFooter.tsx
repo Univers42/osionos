@@ -11,37 +11,19 @@
 /* ************************************************************************** */
 
 import React from "react";
-import {
-  Settings,
-  LayoutGrid,
-  Archive,
-  Database,
-  UserPlus,
-  X,
-} from "lucide-react";
+import { UserPlus, X } from "lucide-react";
 
 import { useWorkspaceInvitesStore } from "@/store/settings";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { LegalLinks } from "@/features/legal/ui/LegalLinks";
-import { SidebarNavItem } from "./SidebarNavItem";
-
-// Parity gate: the BaaS console nav item only exists when a project is
-// configured, so a stock build (no VITE_BAAS_URL) renders byte-identical.
-const BAAS_ENABLED = Boolean((import.meta.env ?? {}).VITE_BAAS_URL);
 
 interface SidebarFooterProps {
-  onOpenSettings?: () => void;
-  onOpenTrash?: () => void;
-  onOpenConsole?: () => void;
   showInviteCTA: boolean;
   onDismissInvite: () => void;
 }
 
-/** Bottom section: Settings / Marketplace / archived files, the legal links + optional Invite CTA. */
+/** Bottom of the Explorer: the legal links and the optional Invite CTA. Places live on the rail (railItems.ts), never here. */
 export const SidebarFooter: React.FC<SidebarFooterProps> = ({
-  onOpenSettings,
-  onOpenTrash,
-  onOpenConsole,
   showInviteCTA,
   onDismissInvite,
 }) => {
@@ -62,32 +44,6 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
         }}
       />
 
-      <div className="px-2 pt-1 flex flex-col gap-px">
-        <SidebarNavItem
-          icon={<Settings size={16} />}
-          label="Settings"
-          onClick={() => onOpenSettings?.()}
-        />
-        <SidebarNavItem
-          icon={<LayoutGrid size={16} />}
-          label="Marketplace"
-          onClick={() => {
-            /* placeholder */
-          }}
-        />
-        <SidebarNavItem
-          icon={<Archive size={16} />}
-          label="Archived files"
-          onClick={() => onOpenTrash?.()}
-        />
-        {BAAS_ENABLED && (
-          <SidebarNavItem
-            icon={<Database size={16} />}
-            label="BaaS Console"
-            onClick={() => onOpenConsole?.()}
-          />
-        )}
-      </div>
       <LegalLinks className="px-4 pb-1 pt-1.5" />
 
       {showInviteCTA && (

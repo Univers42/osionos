@@ -40,7 +40,7 @@ async function makeBootChunkStale(page, documents, reloads) {
   });
 }
 
-const appIsUp = (page) => expect(page.getByRole("button", { name: "Settings", exact: true }).first()).toBeVisible({ timeout: 20_000 });
+const appIsUp = (page) => expect(page.getByRole("tab", { name: "Settings", exact: true }).first()).toBeVisible({ timeout: 20_000 });
 
 test("S1 a navigation started right after boot is not aborted by the preload handler", async ({ page, baseURL }) => {
   const documents = recordDocumentRequests(page);

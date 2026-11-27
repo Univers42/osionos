@@ -14,7 +14,7 @@ const dockOf = (page) => page.getByTestId("workbench-dock");
 
 // What openSignedIn does after its goto, for a page that was reloaded in place.
 async function signedInAfterReload(page) {
-  await page.getByRole("button", { name: "Settings", exact: true }).first().waitFor();
+  await page.getByRole("tab", { name: "Settings", exact: true }).first().waitFor();
   await page.evaluate(() => globalThis.__playgroundUserStore.setState({ activePageJwt: () => "e2e-page-jwt" }));
 }
 

@@ -57,7 +57,7 @@ for (const mode of ["light", "dark"]) {
 
     test("the settings tab", async ({ page, baseURL }) => {
       await openFreshPage(page, baseURL);
-      await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+      await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
       // The section strip is made of buttons; the workspace tab strip's close
       // button is the one only the settings tab has.
       await expect(page.getByRole("region", { name: "Settings", exact: true })).toBeVisible();

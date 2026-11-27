@@ -24,6 +24,6 @@ export async function stubBridge(page, respond) {
 // Seeded once the boot sign-in has written its session, or that write overwrites the token.
 export async function openSignedIn(page, baseURL) {
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "Settings", exact: true }).first().waitFor();
+  await page.getByRole("tab", { name: "Settings", exact: true }).first().waitFor();
   await page.evaluate(() => globalThis.__playgroundUserStore.setState({ activePageJwt: () => "e2e-page-jwt" }));
 }

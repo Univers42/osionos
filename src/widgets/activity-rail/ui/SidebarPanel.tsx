@@ -23,7 +23,7 @@ import { SIDEBAR_LABEL_TYPE } from "./sidebarLabelType";
 // together, and the workbench's file tree stays off the first paint.
 const ExplorerPanel = React.lazy(() =>
   Promise.all([import("./panels/ExplorerPanel"), import("../model/openWorkspaceEntry")]).then(([panel, entry]) => ({
-    default: (props: Omit<Props, "peek">) => <panel.ExplorerPanel {...props} onOpenFile={entry.openWorkspaceEntry} />,
+    default: () => <panel.ExplorerPanel onOpenFile={entry.openWorkspaceEntry} />,
   })));
 const LAZY_PANELS = Object.fromEntries(
   Object.entries(PANEL_LOADERS).map(([panel, load]) => [panel, React.lazy(load)]),
@@ -47,21 +47,18 @@ const PANEL_TITLES: Record<ActivePanel, string> = {
 };
 
 interface Props {
-  onOpenSettings?: () => void;
-  onOpenTrash?: () => void;
-  onOpenConsole?: () => void;
   /** Shown as the hidden-mode peek: a pin docks the sidebar again. */
   peek?: boolean;
 }
 
-/** One panel's content. Memoized on its props, which do not change when the
+/** One panel's content. Memoized on its panel id, which does not change when the
  *  user switches panel: a switch only flips the wrapper's `hidden`, and the
  *  panels behind it (the Explorer's whole page tree) do not render at all. */
-const PanelBody = React.memo(function PanelBody({ panel, onOpenSettings, onOpenTrash, onOpenConsole }: Omit<Props, "peek"> & { panel: ActivePanel }) {
+const PanelBody = React.memo(function PanelBody({ panel }: { panel: ActivePanel }) {
   // Chosen once per mount: swapping the lazy wrapper for the loaded component
   // later would be a different element type, and React would remount the panel.
   const [Body] = useState(() => readyPanel(panel) ?? LAZY_PANELS[panel as keyof typeof LAZY_PANELS]);
-  if (panel === "files") return <ExplorerPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
+  if (panel === "files") return <ExplorerPanel />;
   return Body ? <Body /> : null;
 });
 
@@ -78,7 +75,7 @@ function returnFocusToContent(event: React.KeyboardEvent): void {
  * remount (no Suspense flash, scroll and state kept).
  * Memoized: the parent re-renders on drag and mode flips.
  */
-export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, onOpenTrash, onOpenConsole, peek = false }: Props) {
+export const SidebarPanel = React.memo(function SidebarPanel({ peek = false }: Props) {
   const activePanel = useUIStore((s) => s.activePanel);
   const toggleDocked = useUIStore((s) => s.toggleDocked);
   const [visited, setVisited] = useState<ReadonlySet<ActivePanel>>(() => new Set([activePanel]));
@@ -112,7 +109,7 @@ export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, o
       {[...visited].map((panel) => (
         <div key={panel} data-sidebar-panel={panel} hidden={panel !== activePanel} className="flex min-h-0 flex-1 flex-col">
           <React.Suspense fallback={null}>
-            <PanelBody panel={panel} onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
+            <PanelBody panel={panel} />
           </React.Suspense>
         </div>
       ))}

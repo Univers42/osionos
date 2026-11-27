@@ -24,11 +24,9 @@ import { useZenMode } from "@/shared/config/useZenMode";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
 import { usePageStore } from "@/store/usePageStore";
 import { loadActivePage } from "@/store/pageStore.helpers";
-import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
 import { useNavHistoryRecorder } from "@/widgets/workspace-grid/model/useNavHistory";
 import { useDocumentTitle } from "@/widgets/workspace-grid/model/tabTitle";
-import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarHosts } from "./SidebarHosts";
 import { LazyCanvasDebugRoute, LazyMachineView, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
 import { syncObjectDbForAccount } from "./objectDbAccountSync";
@@ -215,11 +213,7 @@ const App: React.FC = () => {
   // A connected machine's folder (ADR-006): signed in, and nothing of the workbench around it.
   if (globalThis.location?.pathname === "/machine") return <LazyMachineView />;
 
-  const sidebarHandlers = {
-    onOpenSettings: () => openSettings(),
-    onOpenTrash: () => useWorkspaceLayout.getState().openTab(trashTab()),
-    onOpenConsole: () => useWorkspaceLayout.getState().openTab(consoleTab()),
-  };
+  const onOpenSettings = () => openSettings();
 
   return (
     <BindingSourcesProvider>
@@ -241,7 +235,7 @@ const App: React.FC = () => {
         <TopBar onOpenSettings={openSettings} />
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          <SidebarHosts edge="left" {...sidebarHandlers} />
+          <SidebarHosts edge="left" onOpenSettings={onOpenSettings} />
 
           {/* Content area — the unified workbench (grid + dock + status bar), or the
               no-access screen when a shared link pointed at an unreadable page. */}
@@ -255,7 +249,7 @@ const App: React.FC = () => {
             )}
           </main>
 
-          <SidebarHosts edge="right" {...sidebarHandlers} />
+          <SidebarHosts edge="right" onOpenSettings={onOpenSettings} />
         </div>
 
         <ShellHosts />

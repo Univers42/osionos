@@ -78,6 +78,8 @@ Each opens as a `tab.kind` pane (see `PaneContent.tsx`) or a page `surface`:
 
 ## Conventions, gates & gotchas
 
+- **Feature placement:** one rail entry per feature, its settings and consoles in Settings, no second navigation — `docs/feature-placement.md` (the `/machine` window is the only exception).
+
 - **Hard rules:** conventional commit messages, `type(scope): what` (e.g. `fix(settings): …`) — this overrides the repo-root `"updated"` rule for this app; **no auto-push** (changes are reviewed first); **no `Co-Authored-By`/"Generated with" trailer**. Branch from `develop` into a short-lived `feat/…` branch — never commit to `develop`/`main` directly (`docs/CONTRIBUTING.md`).
 - **File size ≤200 lines / ≤5 functions is honor-system** (no eslint rule) and widely violated — the biggest refactor targets are `features/block-editor/model/usePlaygroundBlockEditor.ts` (~2200), `components/blocks/EditableContent.tsx` (~1750), `block-editor/ui/canvas/LayoutBlockEditor.tsx` (~1480; its pure logic is already in sibling `layout.{constants,helpers,types}.ts` — extend those), and `store/pageStore.{actions,helpers}.ts` (~1050/~900). Existing violations are not licence to add more.
 - **Gate order matters:** graph-engine tsc → markdown-engine tsc → root tsc → eslint. `build`, `typecheck` and `quality` each repeat the tsc chain in `scripts/docker-run.sh` — change them together.

@@ -21,7 +21,7 @@ import { openFreshPage } from "../../browser/core/app.mjs";
 
 async function openMcpSettings(page, baseURL) {
   await openFreshPage(page, baseURL);
-  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+  await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
   // Section rows are navigation buttons inside the settings tab's region.
   await page.getByRole("region", { name: "Settings", exact: true }).waitFor();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "osionos MCP" }).click();

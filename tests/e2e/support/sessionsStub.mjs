@@ -56,7 +56,7 @@ export async function stubSessions(page, rows) {
 export async function openProfile(page, baseURL, { bridgeToken = "" } = {}) {
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   // Seed only once the boot sign-in has written its session, or it overwrites the token below.
-  await page.getByRole("button", { name: "Settings", exact: true }).first().waitFor();
+  await page.getByRole("tab", { name: "Settings", exact: true }).first().waitFor();
   await page.evaluate(([jwt, token]) => {
     globalThis.__signedOut = [];
     const store = globalThis.__playgroundUserStore;
