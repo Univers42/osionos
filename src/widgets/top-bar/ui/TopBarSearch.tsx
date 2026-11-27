@@ -174,7 +174,7 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
             >
               <span className="flex h-[var(--osio-control-h-sm)] min-w-0 flex-1 items-center justify-between gap-4 px-2 text-left text-sm text-[var(--osio-fg-default)]">
                 <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                  <span className="max-w-[60%] shrink-0 truncate">{result.title}</span>
+                  <span className="max-w-full shrink-0 truncate">{result.title}</span>
                   {result.subtitle && <span className="min-w-0 flex-1 truncate text-xs text-[var(--osio-fg-muted)] group-hover:text-[var(--osio-fg-default)] group-aria-selected:text-[var(--osio-fg-default)]">{result.subtitle}</span>}
                 </span>
                 {result.accelerator && <span className="shrink-0 font-mono text-xs text-[var(--osio-fg-muted)] group-hover:text-[var(--osio-fg-default)] group-aria-selected:text-[var(--osio-fg-default)]">{result.accelerator}</span>}
