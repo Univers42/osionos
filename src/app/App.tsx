@@ -37,7 +37,9 @@ import { ensureBridgeWorkspacePages, seedEmptyOnlineWorkspaces } from "./workspa
 import { startDrawnCaret } from "@/features/theme/model/drawnCaret";
 import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { applyStoredTheme } from "@/shared/config/themeApply";
-import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
+import { PHONE_QUERY, useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
+import { useMediaQuery } from "@/shared/config/useMediaQuery";
+import { PhoneApp } from "./PhoneApp";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
@@ -113,6 +115,7 @@ const App: React.FC = () => {
 
   // Collapse the pushing sidebar to the icon rail on mobile so content isn't squished.
   useResponsiveSidebar();
+  const isPhone = useMediaQuery(PHONE_QUERY);
 
   // Single document-level keyboard-shortcut dispatcher (flag osio.automations; inert when OFF).
   useAutomationDispatcher();
@@ -214,6 +217,8 @@ const App: React.FC = () => {
 
   // A connected machine's folder (ADR-006): signed in, and nothing of the workbench around it.
   if (globalThis.location?.pathname === "/machine") return <LazyMachineView />;
+
+  if (isPhone) return <PhoneApp />;
 
   const onOpenSettings = () => openSettings();
 

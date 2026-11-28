@@ -1,0 +1,42 @@
+/* The phone shell: safe-area padding on the top and bottom bars, and the page slide
+   (at most 200ms, none under reduced motion, matching motion.css). */
+.phone-topbar {
+  min-height: calc(var(--osio-touch-target) + var(--osio-safe-top));
+  padding-top: var(--osio-safe-top);
+}
+
+.phone-tabbar {
+  height: calc(56px + var(--osio-safe-bottom));
+  padding-bottom: var(--osio-safe-bottom);
+}
+
+.phone-page {
+  animation: phone-page-in 180ms ease-out;
+}
+
+.phone-page[data-leaving="true"] {
+  animation: phone-page-out 180ms ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes phone-page-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes phone-page-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-page,
+  .phone-page[data-leaving="true"] {
+    animation: none;
+  }
+}
+
+:root[data-motion="reduce"] .phone-page,
+:root[data-motion="reduce"] .phone-page[data-leaving="true"] {
+  animation: none;
+}
