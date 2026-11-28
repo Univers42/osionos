@@ -143,3 +143,17 @@ test("(g) unmount, then the import resolves: nothing happens", async () => {
   assert.deepEqual(tab.calls, { resets: 0, starts: 0 });
   assert.equal(tab.previousAccount.current, null);
 });
+
+test("(h) a sync that cannot run never calls the loader", () => {
+  let loads = 0;
+  const previousAccount = { current: null as string | null };
+  const cleanup = syncObjectDbForAccount(
+    () => { loads += 1; return Promise.reject(new Error("must not load")); },
+    previousAccount,
+    "user-a",
+    () => false,
+  );
+  cleanup();
+  assert.equal(loads, 0);
+  assert.equal(previousAccount.current, null);
+});
