@@ -18,6 +18,7 @@ import { readdirSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 import { giveTheAppABridgeOrigin, seedSession, stubRestOfTheBridge } from "../support/bridgeSession.mjs";
+import { isPhoneWidth, openMoreOnPhone } from "../support/phoneNav.mjs";
 
 const ROUTE = "**/api/account/admin/insights**";
 const NOTICE = "Groups with fewer than 5 people are never shown";
@@ -39,6 +40,11 @@ async function openInsights(page, baseURL, role, body) {
 const adminNav = (page) => page.getByRole("navigation", { name: "Admin sections" });
 
 async function gotoInsights(page) {
+  if (isPhoneWidth(page)) {
+    await openMoreOnPhone(page, "Admin");
+    await adminNav(page).getByRole("button", { name: "Insights" }).click();
+    return;
+  }
   await page.getByRole("tab", { name: "Admin", exact: true }).click();
   await adminNav(page).getByRole("button", { name: "Insights" }).click();
 }

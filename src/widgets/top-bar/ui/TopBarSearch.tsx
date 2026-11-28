@@ -26,6 +26,8 @@ import { usePaletteResults, type SettingsTable } from "../model/usePaletteResult
 interface TopBarSearchProps {
   commands: PaletteCommand[];
   settings: SettingsTable;
+  /** 44px input for a finger; the desktop bar stays 28px. */
+  touch?: boolean;
 }
 
 const MODE_ICONS: Record<PaletteMode, LucideIcon> = {
@@ -105,7 +107,7 @@ function useCloseOnOutsidePress(open: boolean, containerRef: React.RefObject<HTM
   }, [open, containerRef, setOpen]);
 }
 
-export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands, settings }) => {
+export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands, settings, touch = false }) => {
   const { open, query, focusSeq, setQuery, setOpen, close } = usePalette();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -173,7 +175,8 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands, settings }
         onFocus={() => { setOpen(true); setActive(0); }}
         onKeyDown={onKeyDown}
         className={cx(
-          "h-7 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] pl-8 text-sm text-[var(--osio-fg-default)] placeholder:text-[var(--osio-fg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]",
+          touch ? "h-11 text-base" : "h-7 text-sm",
+          "w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] pl-8 text-[var(--osio-fg-default)] placeholder:text-[var(--osio-fg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]",
           named ? "pr-24" : "pr-3",
         )}
       />

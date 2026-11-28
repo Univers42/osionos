@@ -209,31 +209,11 @@ test.describe("title-bar menus", () => {
     await expect(selected(page)).toHaveCount(2);
   });
 
-  test("phone 390x844: Open menu is a top sheet with disclosures, no sideways scroll, a 44px agent target", async ({ page, baseURL }) => {
+  test("phone 390x844: the phone shell replaces the title bar, so no Open menu sheet exists", async ({ page, baseURL }) => {
     await openPage(page, baseURL, { width: 390, height: 844 });
-    const open = bar(page).getByRole("button", { name: "Open menu" });
-    await expect(open).toBeVisible();
-    const noSideScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth
-      && document.querySelector('[data-testid="app-topbar"]').scrollWidth <= document.querySelector('[data-testid="app-topbar"]').clientWidth);
-    expect(await noSideScroll()).toBe(true);
-    const ask = (await bar(page).getByRole("button", { name: "Ask an agent" }).boundingBox());
-    expect(Math.min(ask.width, ask.height)).toBeGreaterThanOrEqual(44);
-    await open.click();
-    const sheet = page.getByRole("dialog", { name: "Menu" });
-    await expect(sheet).toBeVisible();
-    await expect(menus(page)).toHaveCount(0);
-    await sheet.getByText("File", { exact: true }).click();
-    await sheet.getByText("Preferences", { exact: true }).click();
-    const settings = sheet.getByRole("button", { name: "Settings", exact: true });
-    expect((await settings.boundingBox()).height).toBeGreaterThanOrEqual(44);
-    expect(await noSideScroll()).toBe(true);
-    await page.keyboard.press("Escape");
-    await expect(sheet).toHaveCount(0);
-    await expect(open).toBeFocused();
-    await open.click();
-    await sheet.getByText("File", { exact: true }).click();
-    await sheet.getByRole("button", { name: "New page" }).click();
-    await expect(sheet).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Open menu" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Account and settings" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 
   test("the bar names no sidebar toggle verb and no brand", async ({ page, baseURL }) => {

@@ -98,7 +98,7 @@ test.describe("the settings tab", () => {
     await page.setViewportSize({ width: 375, height: 812 });
 
     const strip = page.getByRole("navigation", { name: "Settings sections" });
-    const heading = page.getByRole("heading", { level: 1 });
+    const heading = region(page).getByRole("heading", { level: 1 });
     await expect.poll(async () => Boolean((await strip.boundingBox()) && (await heading.boundingBox()))).toBe(true);
     expect((await heading.boundingBox()).y).toBeGreaterThan((await strip.boundingBox()).y);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

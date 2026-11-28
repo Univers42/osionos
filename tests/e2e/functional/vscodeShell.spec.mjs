@@ -169,14 +169,14 @@ test.describe("primary side bar side", () => {
     await expect.poll(width).toBeGreaterThan(start);
   });
 
-  test("a phone ignores the setting and never scrolls sideways", async ({ page, baseURL }) => {
+  test("a phone has no side bar, so the setting is moot, and it never scrolls sideways", async ({ page, baseURL }) => {
     await openDesktop(page, baseURL);
     await chooseViewAppearance(page, "Move primary side bar right");
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(sidebar(page)).toHaveAttribute("data-sidebar-side", "left");
+    await expect(page.locator('aside[aria-label="Sidebar"]')).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
-    expect((await railBox(page)).x).toBeLessThan((await mainBox(page)).x + 1);
   });
 });
 

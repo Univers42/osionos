@@ -10,13 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// The phone shell at 390x844 with a touch screen: nothing scrolls the page sideways, the
-// sidebar drawer takes focus, keeps Tab inside and gives focus back, a finger-sized control
-// is 44px (tab close, search toggles and menu rows included), a tab closes with a tap, the Customize
-// layout menu fits the screen, a split stacks, a field is 16px, and the drawer and that menu pass
-// WCAG 2.2 AA in both themes. A desktop pointer keeps its small rows and its hover-only close.
+// The phone shell at 390x844 with a touch screen: a bottom tab bar and none of the desktop chrome,
+// a tapped page opens full screen with a back arrow, the browser back (the Android back button)
+// returns to the tree without leaving the app, each tab keeps its own stack, every shell control is
+// 44px, nothing scrolls the page sideways, and both views pass WCAG 2.2 AA in both themes. The
+// Customize layout menu (768px, the narrowest width that still has the desktop shell) and a desktop pointer keep their rules.
 // Ponytail: the 44px check reads the control box or its ::before hit box, so it cannot see a
-// neighbour's hit box covering part of it; Playwright's touch emulation is not a real iOS.
+// neighbour's hit box covering part of it; Playwright's touch emulation is not a real Android back.
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
@@ -25,39 +25,32 @@ import { createNewWorkspacePage } from "../../browser/core/app.mjs";
 import { seedPages } from "../support/embedSeed.mjs";
 
 const WCAG_AA = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
-const CONTROLS_SHELL = [
-  '[data-testid="app-topbar"] button',
-  'aside[aria-label="Sidebar"] [role="tab"]',
-  '[data-testid="workbench-statusbar"] button',
-  '[role="tablist"][aria-label="Panel tabs"] [role="tab"]',
-].join(",");
+const DESKTOP_CHROME = [
+  '[data-testid="app-topbar"]',
+  'aside[aria-label="Sidebar"]',
+  '[data-testid="workbench-statusbar"]',
+  "[data-osio-tabstrip]",
+];
+const PAGE_NAME = "Meeting Notes";
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-const sidebar = (page) => page.locator('aside[aria-label="Sidebar"]');
-const explorerTab = (page) => page.getByRole("tab", { name: /^Explorer/ }).first();
-const focusIn = (page, selector) => page.evaluate((sel) => document.querySelector(sel)?.contains(document.activeElement) ?? false, selector);
+const tabBar = (page) => page.getByRole("navigation", { name: "Primary" });
+const backArrow = (page) => page.getByRole("button", { name: "Back" });
 
 async function openPhone(page, baseURL) {
   await page.route("**/*", (route) => (route.request().method() === "GET" ? route.fallback() : route.abort()));
   await seedPages(page, [{ _id: "agent-page-1", title: "Research agent", surface: "agent", content: [] }]);
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
-  await page.getByTestId("app-topbar").waitFor();
+  await tabBar(page).waitFor();
 }
 
-async function openAgent(page) {
-  await page.getByRole("tab", { name: /^Conversations/ }).click();
-  await page.locator('[data-sidebar-panel="conversations"]').getByRole("button", { name: "Research agent" }).click();
-  await expect(page.getByRole("region", { name: "Agent conversation" })).toBeVisible({ timeout: 15_000 });
+async function openPage(page) {
+  await page.locator("main").getByText(PAGE_NAME, { exact: true }).first().tap();
+  await expect(backArrow(page)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("phone-page")).toBeVisible();
 }
 
-const closeButton = (page) => page.locator("[data-osio-tabstrip] [data-tab-id] button[aria-label^='Close ']").first();
-const openCustomizeMenu = async (page) => {
-  await page.getByTestId("customize-layout").tap();
-  const menu = page.getByRole("menu");
-  await menu.first().waitFor();
-  return menu.first();
-};
 const smallControls = (page, selector) => page.evaluate((sel) => {
   const failures = [];
   for (const el of document.querySelectorAll(sel)) {
@@ -70,107 +63,100 @@ const smallControls = (page, selector) => page.evaluate((sel) => {
   }
   return failures;
 }, selector);
-const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+const overflowing = (page) => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+const axeViolations = async (page) => {
+  const { violations } = await new AxeBuilder({ page }).withTags(WCAG_AA).analyze();
+  return violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`);
+};
 
 test.describe("phone shell 390x844", () => {
-  test("no page scrolls sideways: home, a page, an agent page", async ({ page, baseURL }) => {
+  test("the signed-in home shows the bottom nav and none of the desktop chrome", async ({ page, baseURL }) => {
     await openPhone(page, baseURL);
-    await page.waitForTimeout(1500);
-    expect(await overflow(page)).toBeLessThanOrEqual(0);
-    await createNewWorkspacePage(page);
-    expect(await overflow(page)).toBeLessThanOrEqual(0);
-    await openAgent(page);
-    expect(await overflow(page)).toBeLessThanOrEqual(0);
+    for (const name of ["Home", "Search", "Inbox", "Agent"]) await expect(tabBar(page).getByRole("button", { name })).toBeVisible();
+    await expect(tabBar(page).getByRole("button", { name: "Home" })).toHaveAttribute("aria-current", "page");
+    for (const selector of DESKTOP_CHROME) await expect(page.locator(selector)).toHaveCount(0);
   });
 
-  test("the drawer takes focus, keeps Tab inside, Esc returns focus, the backdrop closes it", async ({ page, baseURL }) => {
+  test("a tapped page opens full screen with a back arrow and the browser back returns to the tree", async ({ page, baseURL }) => {
     await openPhone(page, baseURL);
-    await explorerTab(page).click();
-    await expect(sidebar(page)).toHaveAttribute("data-sidebar-mode", "panel");
-    await expect.poll(() => focusIn(page, "[data-osio-sidebar-card]")).toBe(true);
-    for (const key of ["Tab", "Tab", "Tab", "Tab", "Shift+Tab", "Shift+Tab", "Shift+Tab"]) {
-      await page.keyboard.press(key);
-      expect(await focusIn(page, 'aside[aria-label="Sidebar"]')).toBe(true);
-    }
-    for (let step = 0; step < 80; step += 1) await page.keyboard.press("Tab");
-    expect(await focusIn(page, 'aside[aria-label="Sidebar"]')).toBe(true);
-    for (let step = 0; step < 80; step += 1) await page.keyboard.press("Shift+Tab");
-    expect(await focusIn(page, 'aside[aria-label="Sidebar"]')).toBe(true);
-
-    await page.keyboard.press("Escape");
-    await expect(sidebar(page)).toHaveAttribute("data-sidebar-mode", "rail");
-    await expect(explorerTab(page)).toBeFocused();
-
-    await explorerTab(page).click();
-    await expect(sidebar(page)).toHaveAttribute("data-sidebar-mode", "panel");
-    await page.touchscreen.tap(375, 420);
-    await expect(sidebar(page)).toHaveAttribute("data-sidebar-mode", "rail");
+    const url = page.url();
+    await openPage(page);
+    expect(page.url()).toBe(url);
+    await page.goBack();
+    await expect(page.getByTestId("phone-page")).toHaveCount(0);
+    await expect(backArrow(page)).toHaveCount(0);
+    expect(page.url()).toBe(url);
+    await expect(page.locator("main").getByText(PAGE_NAME, { exact: true }).first()).toBeVisible();
   });
 
-  test("a split stacks the panes instead of squeezing them side by side", async ({ page, baseURL }) => {
+  test("the back arrow pops the page like the browser back", async ({ page, baseURL }) => {
     await openPhone(page, baseURL);
-    await createNewWorkspacePage(page);
-    await page.keyboard.press("Control+\\");
-    const panes = page.locator("[data-osio-pane]");
-    await expect(panes).toHaveCount(2);
-    const [first, second] = await panes.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
-    expect(first.width).toBeGreaterThanOrEqual(280);
-    expect(second.width).toBeGreaterThanOrEqual(280);
-    expect(second.top).toBeGreaterThanOrEqual(first.bottom - 1);
+    await openPage(page);
+    await backArrow(page).tap();
+    await expect(page.getByTestId("phone-page")).toHaveCount(0);
   });
 
-  test("a field is 16px so iOS does not zoom, and every shell control has a 44px hit area", async ({ page, baseURL }) => {
+  test("switching to Search and back keeps the Home stack", async ({ page, baseURL }) => {
     await openPhone(page, baseURL);
-    await page.keyboard.press("Control+j");
-    await page.getByRole("tab", { name: /^Conversations/ }).click();
-    const filter = page.getByLabel("Filter conversations");
-    expect(await filter.evaluate((el) => getComputedStyle(el).fontSize)).toBe("16px");
-    await page.keyboard.press("Escape");
-    expect(await smallControls(page, CONTROLS_SHELL)).toEqual([]);
+    await openPage(page);
+    await tabBar(page).getByRole("button", { name: "Search" }).tap();
+    await expect(page.getByLabel("Search query")).toBeVisible();
+    await expect(page.getByTestId("phone-page")).toHaveCount(0);
+    await tabBar(page).getByRole("button", { name: "Home" }).tap();
+    await expect(page.getByTestId("phone-page")).toBeVisible();
+    await expect(backArrow(page)).toBeVisible();
   });
 
-  for (const theme of ["light", "dark"]) {
-    test(`the open drawer has no WCAG 2.2 AA violation in the ${theme} theme`, async ({ page, baseURL }) => {
-      await page.addInitScript((mode) => localStorage.setItem("osionos:theme-mode", mode), theme);
-      await openPhone(page, baseURL);
-      await explorerTab(page).click();
-      await expect(sidebar(page)).toHaveAttribute("data-sidebar-mode", "panel");
-      await page.waitForTimeout(800);
-      const { violations } = await new AxeBuilder({ page }).withTags(WCAG_AA).analyze();
-      expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`)).toEqual([]);
-    });
-  }
-
-  test("a tab's close button shows without hover, has a 44px hit area and closes the tab on tap", async ({ page, baseURL }) => {
+  test("the bottom nav and the back arrow are 44px, and nothing scrolls sideways", async ({ page, baseURL }) => {
     await openPhone(page, baseURL);
-    await createNewWorkspacePage(page);
-    const close = closeButton(page);
-    await expect(close).toBeVisible();
-    expect(await close.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
-    expect(await smallControls(page, "[data-osio-tabstrip] [data-tab-id] button")).toEqual([]);
-    const tabs = page.locator("[data-osio-tabstrip] [data-tab-id]");
-    const before = await tabs.count();
-    await close.tap();
-    await expect(tabs).toHaveCount(before - 1);
+    expect(await smallControls(page, '[aria-label="Primary"] button')).toEqual([]);
+    expect(await overflowing(page)).toBe(false);
+    await openPage(page);
+    expect(await smallControls(page, '[aria-label="Primary"] button, button[aria-label="Back"]')).toEqual([]);
+    expect(await overflowing(page)).toBe(false);
   });
 
   test("the search panel toggles have a 44px hit area", async ({ page, baseURL }) => {
     await openPhone(page, baseURL);
-    await page.getByRole("tab", { name: /^Search/ }).click();
+    await tabBar(page).getByRole("button", { name: "Search" }).tap();
     await expect(page.getByLabel("Search query")).toBeVisible();
-    await expect(page.getByLabel("Search query")).toHaveAttribute("placeholder", "Search all pages");
     await expect(page.locator("[data-touch-hit]").first()).toBeVisible();
     expect(await smallControls(page, "[data-touch-hit]")).toEqual([]);
   });
+
+  for (const theme of ["light", "dark"]) {
+    test(`the home tab and an open page have no WCAG 2.2 AA violation in the ${theme} theme`, async ({ page, baseURL }) => {
+      await page.addInitScript((mode) => localStorage.setItem("osionos:theme-mode", mode), theme);
+      await openPhone(page, baseURL);
+      await page.waitForTimeout(800);
+      expect(await axeViolations(page)).toEqual([]);
+      await openPage(page);
+      await page.waitForTimeout(800);
+      expect(await axeViolations(page)).toEqual([]);
+    });
+  }
 });
 
-// The Customize layout button is hidden under 640px (the phone has its own menu), so its menu is
+async function openDesktop(page, baseURL) {
+  await page.route("**/*", (route) => (route.request().method() === "GET" ? route.fallback() : route.abort()));
+  await page.goto(baseURL, { waitUntil: "domcontentloaded" });
+  await page.getByTestId("app-topbar").waitFor();
+}
+const openCustomizeMenu = async (page) => {
+  await page.getByTestId("customize-layout").tap();
+  const menu = page.getByRole("menu");
+  await menu.first().waitFor();
+  return menu.first();
+};
+const closeButton = (page) => page.locator("[data-osio-tabstrip] [data-tab-id] button[aria-label^='Close ']").first();
+
+// The Customize layout button is hidden on the phone shell, so its menu is
 // measured at the narrowest touch width that shows it.
-test.describe("Customize layout menu at 640x844 with a touch screen", () => {
-  test.use({ viewport: { width: 640, height: 844 }, hasTouch: true, isMobile: true });
+test.describe("Customize layout menu at 768x844 with a touch screen", () => {
+  test.use({ viewport: { width: 768, height: 844 }, hasTouch: true, isMobile: true });
 
   test("the Customize layout menu fits the screen and every row is 44px tall", async ({ page, baseURL }) => {
-    await openPhone(page, baseURL);
+    await openDesktop(page, baseURL);
     const menu = await openCustomizeMenu(page);
     const box = await menu.boundingBox();
     expect(box.x).toBeGreaterThanOrEqual(0);
@@ -186,7 +172,7 @@ test.describe("Customize layout menu at 640x844 with a touch screen", () => {
   for (const theme of ["light", "dark"]) {
     test(`the open Customize layout menu has no WCAG 2.2 AA violation in the ${theme} theme`, async ({ page, baseURL }) => {
       await page.addInitScript((mode) => localStorage.setItem("osionos:theme-mode", mode), theme);
-      await openPhone(page, baseURL);
+      await openDesktop(page, baseURL);
       await openCustomizeMenu(page);
       await page.waitForTimeout(800);
       const { violations } = await new AxeBuilder({ page }).withTags(WCAG_AA).analyze();
@@ -198,8 +184,17 @@ test.describe("Customize layout menu at 640x844 with a touch screen", () => {
 test.describe("desktop pointer 1280x800", () => {
   test.use({ viewport: { width: 1280, height: 800 }, hasTouch: false, isMobile: false });
 
+  test("still the IDE shell: rail, top bar and status bar, no bottom nav", async ({ page, baseURL }) => {
+    await page.route("**/*", (route) => (route.request().method() === "GET" ? route.fallback() : route.abort()));
+    await page.goto(baseURL, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("app-topbar").waitFor();
+    await expect(page.locator('aside[aria-label="Sidebar"]')).toBeVisible();
+    await expect(page.getByTestId("workbench-statusbar")).toBeVisible();
+    await expect(tabBar(page)).toHaveCount(0);
+  });
+
   test("nothing grew: a menu row is under 40px and the tab close shows only on hover", async ({ page, baseURL }) => {
-    await openPhone(page, baseURL);
+    await openDesktop(page, baseURL);
     await createNewWorkspacePage(page);
     const close = closeButton(page);
     expect(await close.evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
