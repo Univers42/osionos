@@ -48,3 +48,21 @@ test("cancelled drags (dragend, no drop) reset too; safety re-arms per drag", as
   await tick();
   assert.equal(useDragSession.getState().dragKind, null);
 });
+
+test("the dragged tab is marked a frame after the drag starts, and a leftover frame from an ended drag marks nothing", async () => {
+  useDragSession.getState().beginTabDrag("tab-a", 96);
+  assert.equal(useDragSession.getState().dragTabId, null, "not on the drag-start frame: the drag image is taken then");
+  assert.equal(useDragSession.getState().dragTabWidth, 96);
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(useDragSession.getState().dragTabId, "tab-a");
+  useDragSession.getState().endDrag();
+  assert.equal(useDragSession.getState().dragTabWidth, 0);
+
+  useDragSession.getState().beginTabDrag("tab-old", 80);
+  useDragSession.getState().endDrag();
+  useDragSession.getState().beginTabDrag("tab-new", 120);
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(useDragSession.getState().dragTabId, "tab-new");
+  useDragSession.getState().endDrag();
+  await tick();
+});

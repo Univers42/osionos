@@ -20,7 +20,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { TOKEN_KEY_RE } from "../../scripts/bridge-theme-rules.mjs";
-import { EXCLUDED_TOKENS, THEME_TOKENS, themeToken } from "../../src/shared/config/themeTokens.ts";
+import { EXCLUDED_TOKENS, THEME_TOKENS, themeToken, tokenJsonLine } from "../../src/shared/config/themeTokens.ts";
 
 const STYLES = new URL("../../src/app/styles/", import.meta.url).pathname;
 
@@ -85,4 +85,10 @@ test("themeToken finds a key and nothing else", () => {
   assert.equal(themeToken("bg-page")?.kind, "color");
   assert.equal(themeToken("page-max-width")?.group, "layout");
   assert.equal(themeToken("n-1"), undefined);
+});
+
+test("a token's copied JSON line parses for any value, quotes included (#345 K2)", () => {
+  for (const value of ['"Inter", sans-serif', "a\\b", "320ms", ""]) {
+    assert.deepEqual(JSON.parse(`{${tokenJsonLine("font-ui", value)}}`), { "font-ui": value }, value);
+  }
 });

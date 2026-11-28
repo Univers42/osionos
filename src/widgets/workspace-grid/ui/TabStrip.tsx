@@ -10,125 +10,56 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useRef, useState } from "react";
+import React from "react";
 import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
 import { IconButton } from "@osionos/ui/atoms/IconButton";
-import { useDragSession } from "@/store/dragSession";
-import { usePageStore } from "@/store/usePageStore";
 import { useWorkspaceLayout } from "../model/workspaceLayout";
-import { pageEntryToTab } from "../model/pageToTab";
-import { TAB_DND_MIME } from "../model/paneDropZone";
 import type { PaneNode } from "../model/layoutTree";
 import { TabButton } from "./TabButton";
+import { useTabStripDrop } from "./useTabStripDrop";
 
-interface DropHint {
-  index: number;
-  replaceTabId?: string;
-}
-
-const InsertBar: React.FC = () => (
-  <div className="w-0.5 self-stretch shrink-0 bg-[var(--osio-accent)]" aria-hidden="true" />
-);
-
-/** Header bar of one pane: its onglets + split/close actions. Accepts tabs
- *  dragged from other panes AND files dragged from the sidebar tree — showing an
- *  insertion bar (where it lands) or a full-tab highlight (drop ONTO a tab to
- *  replace it, VSCode-style — so it's not always about accumulating tabs). */
+/** Header bar of one pane: its onglets + split/close actions. Accepts tabs dragged from any
+ *  pane and pages dragged from the sidebar. While a drag is over it the tabs part to open a gap
+ *  where the drop lands (or, with Tab dragging set to Line, a bar marks it); dropping onto the
+ *  middle of a tab replaces it with the page, VSCode-style. */
 export const TabStrip: React.FC<{ pane: PaneNode; zoom: number }> = ({ pane, zoom }) => {
-  const { setActiveTab, closeTab, setActivePane, splitActivePane, closePane, moveTab, openTabAt, replaceTabWith, zoomPane } =
-    useWorkspaceLayout.getState();
+  const { setActiveTab, closeTab, setActivePane, splitActivePane, closePane, zoomPane } = useWorkspaceLayout.getState();
   const zoomPercent = Math.round(zoom * 100);
-  const endDrag = useDragSession((s) => s.endDrag);
-  const listRef = useRef<HTMLDivElement>(null);
-  const [hint, setHint] = useState<DropHint | null>(null);
-
-  function computeHint(clientX: number): DropHint {
-    const children = listRef.current
-      ? (Array.from(listRef.current.querySelectorAll("[data-tab-id]")) as HTMLElement[])
-      : [];
-    for (let i = 0; i < children.length; i += 1) {
-      const r = children[i].getBoundingClientRect();
-      if (clientX < r.left + r.width * 0.25) return { index: i };
-      if (clientX < r.left + r.width * 0.75) return { index: i, replaceTabId: pane.tabs[i]?.tabId };
-      if (clientX < r.right) return { index: i + 1 };
-    }
-    return { index: pane.tabs.length };
-  }
-
-  // Read the LIVE dragKind (not the render-time selector) so the handler works
-  // even if React hasn't re-rendered the strip since the drag started — the
-  // gated `onDragOver={dndActive ? … : undefined}` attachment was racing the
-  // native drag events and silently rejecting drops.
-  function onDragOver(event: React.DragEvent<HTMLDivElement>) {
-    const kind = useDragSession.getState().dragKind;
-    if (kind !== "page" && kind !== "tab") return;
-    event.preventDefault(); // REQUIRED — without it the browser refuses the drop
-    if (kind === "page") {
-      // MUST match the drag source's effectAllowed ("move", set in src/features/ide/ui/WorkspaceExplorerRow.tsx) —
-      // a "copy" dropEffect against an effectAllowed of "move" is incompatible, so
-      // the browser silently CANCELS the drop (onDragOver shows the hint but the
-      // drop event never fires). This was why the tab never landed.
-      event.dataTransfer.dropEffect = "move";
-      setHint(computeHint(event.clientX));
-    }
-  }
-
-  function onDrop(event: React.DragEvent<HTMLDivElement>) {
-    const kind = useDragSession.getState().dragKind;
-    if (kind !== "page" && kind !== "tab") return;
-    event.preventDefault();
-    event.stopPropagation();
-    const tabRaw = event.dataTransfer.getData(TAB_DND_MIME);
-    if (tabRaw) {
-      try {
-        const { paneId: fromPaneId, tabId } = JSON.parse(tabRaw) as { paneId: string; tabId: string };
-        moveTab(fromPaneId, tabId, pane.id);
-      } catch {
-        /* malformed payload */
-      }
-      setHint(null);
-      return;
-    }
-    const pageId = event.dataTransfer.getData("text/plain") || useDragSession.getState().draggingId || "";
-    const page = pageId ? usePageStore.getState().pageById(pageId) : null;
-    const drop = computeHint(event.clientX);
-    if (page && page.surface !== "folder") {
-      const tab = pageEntryToTab(page);
-      if (drop.replaceTabId) replaceTabWith(pane.id, drop.replaceTabId, tab);
-      else openTabAt(tab, pane.id, drop.index);
-    }
-    setHint(null);
-    endDrag();
-  }
-
-  function onDragLeave(event: React.DragEvent<HTMLDivElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHint(null);
-  }
+  const { listRef, hint, snap, sourceIndex, settlingTabId, clearSettling, gapPx, dropHandlers } = useTabStripDrop(pane);
+  const gapIndex = hint && hint.replaceTabId === undefined ? hint.index : -1;
 
   return (
     <div
       data-osio-tabstrip
-      className="flex items-stretch h-9 shrink-0 gap-0.5 px-1"
+      className="flex items-stretch h-9 pointer-coarse:h-[var(--osio-touch-target)] shrink-0 gap-0.5 px-1"
       onMouseDown={() => setActivePane(pane.id)}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragLeave={onDragLeave}
+      {...dropHandlers}
     >
-      <div ref={listRef} className="flex items-stretch min-w-0 flex-1 overflow-x-auto osio-scrollbar-hidden">
+      <div
+        ref={listRef}
+        data-drop-list
+        data-drop-snap={snap ? "" : undefined}
+        style={{ "--osio-drag-gap": `${gapPx}px` } as React.CSSProperties}
+        className="relative flex items-stretch min-w-0 flex-1 overflow-x-auto osio-scrollbar-hidden"
+      >
         {pane.tabs.map((tab, index) => (
-          <React.Fragment key={tab.tabId}>
-            {hint && hint.replaceTabId === undefined && hint.index === index ? <InsertBar /> : null}
-            <TabButton
-              tab={tab}
-              paneId={pane.id}
-              active={tab.tabId === pane.activeTabId}
-              replaceTarget={hint?.replaceTabId === tab.tabId}
-              onSelect={() => setActiveTab(pane.id, tab.tabId)}
-              onClose={() => closeTab(pane.id, tab.tabId)}
-            />
-          </React.Fragment>
+          <TabButton
+            key={tab.tabId}
+            tab={tab}
+            paneId={pane.id}
+            active={tab.tabId === pane.activeTabId}
+            replaceTarget={hint?.replaceTabId === tab.tabId}
+            dragSource={index === sourceIndex}
+            dropShift={gapIndex >= 0 && index >= gapIndex && index !== sourceIndex}
+            settling={tab.tabId === settlingTabId}
+            onSettled={clearSettling}
+            onSelect={() => setActiveTab(pane.id, tab.tabId)}
+            onClose={() => closeTab(pane.id, tab.tabId)}
+          />
         ))}
-        {hint && hint.replaceTabId === undefined && hint.index >= pane.tabs.length ? <InsertBar /> : null}
+        {gapIndex >= 0 ? (
+          <div className="osio-tab-slot" aria-hidden="true" style={{ transform: `translateX(${hint?.edge ?? 0}px)` }} />
+        ) : null}
       </div>
       <div className="flex items-center gap-0.5 px-1 shrink-0">
         {zoomPercent === 100 ? null : (

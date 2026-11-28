@@ -98,6 +98,7 @@ export const StyleControls: React.FC<{ appearance: Appearance; onChange: (patch:
           label="Surface"
           value={appearance.surface}
           options={APPEARANCE_CHOICES.surface.options}
+          previewAxis="surface"
           onChange={(surface) => onChange({ surface })}
         />
       </AxisRow>
@@ -106,6 +107,7 @@ export const StyleControls: React.FC<{ appearance: Appearance; onChange: (patch:
           label="Depth"
           value={appearance.elevation}
           options={APPEARANCE_CHOICES.elevation.options}
+          previewAxis="elevation"
           onChange={(elevation) => onChange({ elevation })}
         />
       </AxisRow>
@@ -114,6 +116,7 @@ export const StyleControls: React.FC<{ appearance: Appearance; onChange: (patch:
           label="Borders"
           value={appearance.borders}
           options={APPEARANCE_CHOICES.borders.options}
+          previewAxis="borders"
           onChange={(borders) => onChange({ borders })}
         />
       </AxisRow>

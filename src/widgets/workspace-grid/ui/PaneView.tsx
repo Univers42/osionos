@@ -18,6 +18,7 @@ import type { PaneNode, WorkspaceTab } from "../model/layoutTree";
 import { useReplayPageTransition } from "@/features/theme/model/replayPageTransition";
 import { normalizePaneZoom } from "../model/paneZoom";
 import { keepRecentTabs } from "../model/keptTabs";
+import { forgetFreshPane, isFreshPane } from "../model/freshPanes";
 import { TabStrip } from "./TabStrip";
 import { EmptyWorkspace } from "./EmptyWorkspace";
 import { PaneDropOverlay } from "./PaneDropOverlay";
@@ -111,12 +112,16 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   // A lone pane has nothing to be told apart from.
   const isOneOfMany = useWorkspaceLayout((s) => s.root.type === "split");
   const welcome = pane.tabs.length === 0 && !isOneOfMany;
+  // Read once at mount: only a pane a split or a drop just made grows in.
+  const [entering] = React.useState(() => isFreshPane(pane.id));
+  React.useEffect(() => forgetFreshPane(pane.id), [pane.id]);
 
   return (
     <div
       data-osio-pane={pane.id}
       data-osio-pane-welcome={welcome ? "" : undefined}
       data-osio-pane-active={isActive && isOneOfMany ? "" : undefined}
+      data-pane-enter={entering ? "" : undefined}
       // `contain: layout paint` isolates each pane's rendering so an edit/scroll in
       // one pane can't trigger layout/paint of the other panes (key with 8 open).
       style={{ contain: "layout paint" }}

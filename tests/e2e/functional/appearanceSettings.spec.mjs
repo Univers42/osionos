@@ -10,10 +10,11 @@ import { expect, test } from "@playwright/test";
 import { openFreshPage } from "../../browser/core/app.mjs";
 
 const WCAG_AA = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
-const ANCHORS = ["appearance", "style", "color", "layout", "motion-page", "motion-overlay", "motion-speed", "accessibility", "appearance-backup", "input-options", "language-time", "desktop-app", "privacy"];
+const ANCHORS = ["appearance", "style", "color", "layout", "motion-page", "motion-overlay", "motion-speed", "motion-drag", "accessibility", "appearance-backup", "input-options", "language-time", "desktop-app", "privacy"];
 const html = (page) => page.locator("html");
 const storedAppearance = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("osionos:appearance") ?? "null"));
 const region = (page) => page.getByRole("region", { name: "Settings", exact: true });
+const backupStatus = (page) => region(page).locator('[data-settings-anchor="appearance-backup"]').getByRole("status");
 
 async function seed(page, appearance) {
   await page.route("**/*", (route) => (route.request().method() === "GET" ? route.fallback() : route.abort()));
@@ -75,7 +76,7 @@ test.describe("appearance settings", () => {
     await region(page).getByRole("group", { name: "Corners" }).getByRole("tab", { name: "Round" }).click();
     await region(page).getByRole("group", { name: "Density" }).getByRole("tab", { name: "Compact" }).click();
     await region(page).getByRole("button", { name: "Copy as JSON" }).click();
-    await expect(region(page).getByRole("status")).toHaveText("Appearance copied");
+    await expect(backupStatus(page)).toHaveText("Appearance copied");
     const exported = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
     expect(exported.kind).toBe("osionos-appearance");
     expect(exported.appearance).toEqual({ radius: "round", density: "compact" });
@@ -92,7 +93,7 @@ test.describe("appearance settings", () => {
     await expect(html(page)).not.toHaveAttribute("data-surface", /.*/);
     await box.fill('{"kind":"osionos-appearance","version":1,"appearance":{"surface":"glass","pageTransition":"blur"}}');
     await region(page).getByRole("button", { name: "Apply", exact: true }).click();
-    await expect(region(page).getByRole("status")).toHaveText("Imported 2 settings");
+    await expect(backupStatus(page)).toHaveText("Imported 2 settings");
     await expect(html(page)).toHaveAttribute("data-surface", "glass");
     await expect(html(page)).toHaveAttribute("data-page-transition", "blur");
     await expect(alert).toHaveCount(0);
@@ -111,7 +112,7 @@ test.describe("appearance settings", () => {
     expect(stored.motionSpeed).toBe("default");
     const axes = await page.evaluate(() => Object.keys(document.documentElement.dataset).filter((key) => key !== "theme" && key !== "palette"));
     expect(axes).toEqual([]);
-    await expect(region(page).getByText("Everything is at its default.")).toBeVisible();
+    await expect(region(page).locator('[data-settings-anchor="appearance-backup"]').getByText("Everything is at its default.")).toBeVisible();
   });
 
   for (const [transition, fromOpacity] of [["blur", "0"], ["none", "1"]]) {

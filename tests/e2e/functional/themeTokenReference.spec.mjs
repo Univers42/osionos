@@ -78,6 +78,28 @@ test.describe("theme token reference", () => {
     }
   });
 
+  test("Copy writes a JSON line that parses and announces it; a refused clipboard is announced too (#345 K2)", async ({ page, baseURL }) => {
+    // A stub clipboard: the real one needs a permission only Chromium can grant.
+    await page.addInitScript(() => {
+      window.__copied = [];
+      window.__refuseClipboard = false;
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: (text) => (window.__refuseClipboard ? Promise.reject(new Error("denied")) : (window.__copied.push(text), Promise.resolve())) },
+      });
+    });
+    await start(page, baseURL);
+    await section(page).getByLabel("Filter tokens").fill("font-family-sans");
+    const status = section(page).getByRole("status");
+    await section(page).getByRole("button", { name: "Copy font-family-sans", exact: true }).click();
+    await expect(status).toHaveText("Copied font-family-sans");
+    const line = await page.evaluate(() => window.__copied.at(-1));
+    expect(JSON.parse(`{${line}}`)["font-family-sans"]).toBe(await computed(page, "font-family-sans"));
+    await page.evaluate(() => { window.__refuseClipboard = true; });
+    await section(page).getByRole("button", { name: "Copy font-family-sans", exact: true }).click();
+    await expect(status).toHaveText("Could not copy font-family-sans");
+  });
+
   test("at 400px wide the section does not overflow", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 400, height: 800 });
     await start(page, baseURL);

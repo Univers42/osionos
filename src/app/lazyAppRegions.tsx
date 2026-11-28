@@ -11,28 +11,17 @@
 /* ************************************************************************** */
 
 import { lazy, Suspense } from "react";
+import { contentFallback } from "./contentFallback";
 
 /**
  * Code-split the heavy editor / page-renderer subtree (block editor, katex,
- * table & canvas editors, …) and the dev-only canvas debug route out of the
- * entry chunk. The app shell (sidebar + auth) paints from the small entry
- * bundle while these regions stream in on demand.
+ * table & canvas editors, …) out of the entry chunk. Only SignedInApp imports
+ * this module, so none of it (nor its boot-time warmups) reaches the sign-in
+ * screen. The app shell paints first while these regions stream in on demand.
  */
-const CanvasDebugRouteImpl = lazy(() =>
-  import("@/features/block-editor/ui/canvas/__demo__/CanvasDebugRoute").then((module) => ({
-    default: module.CanvasDebugRoute,
-  })),
-);
-
 const MachineViewImpl = lazy(() =>
   import("@/features/ide/vscode/ui/MachineView").then((module) => ({
     default: module.MachineView,
-  })),
-);
-
-const StyleGuideRouteImpl = lazy(() =>
-  import("@/app/__styleguide__/StyleGuideRoute").then((module) => ({
-    default: module.StyleGuideRoute,
   })),
 );
 
@@ -100,20 +89,6 @@ if (globalThis.window !== undefined) {
     module.applyPageDeepLink();
     module.applyTabUrlSync();
   });
-}
-
-const contentFallback = (
-  <div className="flex h-full w-full items-center justify-center">
-    <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--osio-accent)] border-t-transparent" />
-  </div>
-);
-
-export function LazyCanvasDebugRoute() {
-  return <Suspense fallback={contentFallback}>{<CanvasDebugRouteImpl />}</Suspense>;
-}
-
-export function LazyStyleGuideRoute() {
-  return <Suspense fallback={contentFallback}>{<StyleGuideRouteImpl />}</Suspense>;
 }
 
 export function LazyMachineView() {

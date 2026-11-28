@@ -60,6 +60,7 @@ export const CaretSettings: React.FC<Props> = ({ appearance, onChange }) => (
         label="Caret shape"
         value={appearance.caretShape}
         options={APPEARANCE_CHOICES.caretShape.options}
+        previewAxis="caretShape"
         onChange={(caretShape) => onChange({ caretShape })}
       />
     </AxisRow>
@@ -68,6 +69,7 @@ export const CaretSettings: React.FC<Props> = ({ appearance, onChange }) => (
         label="Caret blink"
         value={appearance.caretBlink}
         options={APPEARANCE_CHOICES.caretBlink.options}
+        previewAxis="caretBlink"
         onChange={(caretBlink) => onChange({ caretBlink })}
       />
     </AxisRow>

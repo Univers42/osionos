@@ -149,6 +149,7 @@ export const EXCLUDED_TOKENS: readonly { pattern: RegExp; reason: string }[] = [
   { pattern: /^fade-(top|bottom)$/, reason: "internal: set by a scrolling list as it scrolls" },
   { pattern: /^pane-zoom$/, reason: "internal: written by the pane zoom control" },
   { pattern: /^splitter-hit-min$/, reason: "internal: the pane splitter's hit area" },
+  { pattern: /^drag-gap$/, reason: "internal: the dragged tab's width, set on a tab strip during a drag" },
   { pattern: /^transition-(colors|press)$/, reason: "shorthand: a list of transitions built from dur-* and ease-*" },
   { pattern: /^motion-(fast|slow|standard)$/, reason: "shorthand: a duration and a curve; set dur-* and ease-*" },
   { pattern: /^wide-/, reason: "local layout utility: measured from the page scroller, not a theme setting" },
@@ -165,4 +166,9 @@ const BY_KEY = new Map(THEME_TOKENS.map((token) => [token.key, token]));
 
 export function themeToken(key: string): ThemeToken | undefined {
   return BY_KEY.get(key);
+}
+
+/** The `"key": "value"` line a theme JSON takes, escaped so any value (quotes, backslashes) parses. */
+export function tokenJsonLine(key: string, value: string): string {
+  return `${JSON.stringify(key)}: ${JSON.stringify(value)}`;
 }

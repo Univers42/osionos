@@ -207,10 +207,10 @@ export function persistAppearance(appearance: Appearance) {
 
 /** The axes that live on <html> as an attribute. urlPaste is not one of them:
  *  it changes what a paste does, not what the document looks like. */
-const ATTRIBUTE_AXES = [
+export const ATTRIBUTE_AXES = [
   "accent", "density", "radius", "uiScale", "linkUnderline", "motion", "animatedImages", "hovercards",
   "caretColor", "caretShape", "caretBlink", "surface", "elevation", "borders",
-  "pageTransition", "overlayTransition", "motionSpeed",
+  "pageTransition", "overlayTransition", "motionSpeed", "easing", "pressFeedback", "dragMotion",
 ] as const;
 
 /** The appearance as it stands. applyAppearance() keeps it up to date, so a
@@ -234,10 +234,9 @@ export function subscribeAppearance(listener: () => void): () => void {
   };
 }
 
-/** Writes the appearance to <html>: an attribute per axis, removed at its default, and the one
- *  inline hue only while the accent is custom. */
-export function applyAppearance(appearance: Appearance) {
-  if (typeof document === "undefined") return;
+/** An attribute per axis on <html>, removed at its default, and the one inline hue only while
+ *  the accent is custom. */
+function writeAppearanceToDom(appearance: Appearance) {
   const { dataset, style } = document.documentElement;
   for (const name of ATTRIBUTE_AXES) {
     const value = appearance[name];
@@ -246,8 +245,25 @@ export function applyAppearance(appearance: Appearance) {
   }
   if (appearance.accent === CUSTOM_ACCENT) style.setProperty("--osio-accent-hue", String(appearance.hue));
   else style.removeProperty("--osio-accent-hue");
+}
+
+/** Writes the appearance to <html> and makes it the live one. */
+export function applyAppearance(appearance: Appearance) {
+  if (typeof document === "undefined") return;
+  writeAppearanceToDom(appearance);
   currentAppearance = appearance;
   for (const listener of appearanceListeners) listener();
+}
+
+/** Shows `patch` over the live appearance while an option is hovered in Settings: written to
+ *  <html> only, never stored and never announced, so nothing can keep it. `null` puts the live
+ *  appearance back. */
+export function previewAppearance(patch: Partial<Appearance> | null) {
+  if (typeof document === "undefined") return;
+  const live = readCurrentAppearance();
+  // A hover must never turn on motion a reduced-motion choice (or the OS, on System) turned off,
+  // so the two axes that gate motion are never previewed, only chosen.
+  writeAppearanceToDom(patch ? { ...live, ...patch, motion: live.motion, animatedImages: live.animatedImages } : live);
 }
 
 /** Applies one change to the live appearance and stores it. The change is

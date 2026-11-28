@@ -1,22 +1,68 @@
-/* Motion preferences: the three axes written to <html> by applyAppearance
-   (data-page-transition, data-overlay-transition, data-motion-speed). Each is absent at its
+/* Motion preferences: the axes written to <html> by applyAppearance
+   (data-page-transition, data-overlay-transition, data-motion-speed, data-easing,
+   data-press-feedback). Each is absent at its
    default, so a person who never chose one gets today's pixels. Everything here is a plain
    CSS animation or a token, so the reduced-motion reset at the end of global.css (durations
    forced to 0.01ms) covers it without a rule of its own. */
 
-/* Animation speed: the four duration tokens, scaled. Nothing else moves. */
+/* An explicit speed, easing or press choice beats the theme: applyCompiledTheme writes the
+   theme's dur-* and ease-* as inline declarations on <html>, and only an !important author
+   declaration outranks those. The default (attribute absent) keeps the theme's own motion. */
 :root[data-motion-speed="slow"] {
-  --osio-dur-instant: 128ms;
-  --osio-dur-fast: 192ms;
-  --osio-dur-base: 288ms;
-  --osio-dur-slow: 416ms;
+  --osio-dur-instant: 128ms !important;
+  --osio-dur-fast: 192ms !important;
+  --osio-dur-base: 288ms !important;
+  --osio-dur-slow: 416ms !important;
 }
 
 :root[data-motion-speed="fast"] {
-  --osio-dur-instant: 48ms;
-  --osio-dur-fast: 72ms;
-  --osio-dur-base: 108ms;
-  --osio-dur-slow: 156ms;
+  --osio-dur-instant: 48ms !important;
+  --osio-dur-fast: 72ms !important;
+  --osio-dur-base: 108ms !important;
+  --osio-dur-slow: 156ms !important;
+}
+
+:root[data-easing="snappy"] {
+  --osio-ease-standard: cubic-bezier(0.2, 0, 0, 1) !important;
+  --osio-ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1) !important;
+  --osio-ease-decelerate: cubic-bezier(0, 0, 0, 1) !important;
+  --osio-ease-spring: cubic-bezier(0.2, 0, 0, 1) !important;
+}
+
+:root[data-easing="smooth"] {
+  --osio-ease-standard: cubic-bezier(0.45, 0, 0.55, 1) !important;
+  --osio-ease-emphasized: cubic-bezier(0.65, 0, 0.35, 1) !important;
+  --osio-ease-decelerate: cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+  --osio-ease-spring: cubic-bezier(0.45, 0, 0.55, 1) !important;
+}
+
+:root[data-easing="bouncy"] {
+  --osio-ease-standard: cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  --osio-ease-emphasized: cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  --osio-ease-decelerate: cubic-bezier(0.34, 1.3, 0.64, 1) !important;
+  --osio-ease-spring: cubic-bezier(0.34, 1.8, 0.64, 1) !important;
+}
+
+/* Button press: uses the scale property so it composes with any transform. "none" cancels the
+   ad hoc active:scale-* utilities; "squish" presses every enabled, non-draggable button to 0.96
+   with no transition of its own (setting one would clobber the element's own transition list).
+   Squish does nothing under reduced motion, matching the reset at the end of global.css. */
+:root[data-press-feedback="none"] :is(button, [role="button"]):active {
+  scale: none !important;
+}
+
+:root[data-press-feedback="squish"] :is(button, [role="button"]):not(:disabled, [aria-disabled="true"], [draggable="true"]):active {
+  scale: 0.96;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-press-feedback="squish"]:not([data-motion="full"]) :is(button, [role="button"]):active {
+    scale: none !important;
+  }
+}
+
+:root[data-press-feedback="squish"][data-motion="reduce"] :is(button, [role="button"]):active {
+  scale: none !important;
 }
 
 /* Page and tab transition: one keyframe per style on the visible tab container (PaneView sets
@@ -91,4 +137,107 @@
 :root[data-overlay-transition="zoom"] {
   --osio-overlay-from-opacity: 0;
   --osio-overlay-from-transform: scale(0.88);
+}
+
+/* Tab dragging (data-drag-motion, absent at Slide). TabStrip marks the carried tab
+   data-drag-source, the tabs after the drop point data-drop-shift, and the tab that just
+   landed data-settling; .osio-tab-slot marks where the drop lands. Every move is a transform or
+   an opacity except the source's fold, which is a max-width so its neighbours close up; it is
+   never display:none, so the dragged node keeps the drag alive. data-drop-snap turns all of it
+   off for the two frames where the layout and the slide swap places (drag start, drop). */
+.osio-tab {
+  transition:
+    background-color var(--osio-dur-fast) var(--osio-ease-standard),
+    color var(--osio-dur-fast) var(--osio-ease-standard),
+    transform var(--osio-dur-base) var(--osio-ease-emphasized),
+    max-width var(--osio-dur-base) var(--osio-ease-emphasized),
+    padding var(--osio-dur-base) var(--osio-ease-emphasized),
+    margin var(--osio-dur-base) var(--osio-ease-emphasized),
+    opacity var(--osio-dur-fast) var(--osio-ease-standard);
+}
+
+:root:not([data-drag-motion="line"]) .osio-tab[data-drop-shift] {
+  transform: translateX(var(--osio-drag-gap));
+}
+
+:root:not([data-drag-motion="line"]) .osio-tab[data-drag-source] {
+  max-width: 0;
+  padding-inline: 0;
+  margin-inline: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+:root[data-drag-motion="line"] .osio-tab[data-drag-source] {
+  opacity: 0.5;
+}
+
+@keyframes osio-tab-settle {
+  from {
+    opacity: 0.6;
+    transform: scale(0.92);
+  }
+}
+
+.osio-tab[data-settling] {
+  animation: osio-tab-settle var(--osio-dur-base) var(--osio-ease-spring) backwards;
+}
+
+@keyframes osio-slot-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.osio-tab-slot {
+  position: absolute;
+  inset-block: 4px;
+  left: 0;
+  width: var(--osio-drag-gap);
+  pointer-events: none;
+  border-radius: var(--osio-radius-chip);
+  outline: 1.5px dashed var(--osio-accent);
+  outline-offset: -1.5px;
+  background: var(--osio-accent-subtle);
+  transition: transform var(--osio-dur-base) var(--osio-ease-emphasized);
+  animation: osio-slot-in var(--osio-dur-fast) var(--osio-ease-decelerate) backwards;
+}
+
+:root[data-drag-motion="line"] .osio-tab-slot {
+  width: 2px;
+  margin-left: -1px;
+  outline: none;
+  border-radius: 1px;
+  background: var(--osio-accent);
+}
+
+[data-drop-snap] > .osio-tab,
+[data-drop-snap] > .osio-tab-slot {
+  transition: none;
+}
+
+/* Pane drop area (PaneDropOverlay): one box whose inset glides between the five zones, and
+   that grows in when a drag first enters the pane. A pane made by a drop or a split grows in
+   once too (PaneView, data-pane-enter). */
+@keyframes osio-drop-zone-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.osio-drop-zone {
+  transition: inset var(--osio-dur-base) var(--osio-ease-emphasized);
+  animation: osio-drop-zone-in var(--osio-dur-fast) var(--osio-ease-decelerate) backwards;
+}
+
+@keyframes osio-pane-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+[data-pane-enter] {
+  animation: osio-pane-enter var(--osio-dur-base) var(--osio-ease-decelerate) backwards;
 }
