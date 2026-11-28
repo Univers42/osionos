@@ -30,6 +30,7 @@ import { useDocumentTitle } from "@/widgets/workspace-grid/model/tabTitle";
 import { SidebarHosts } from "./SidebarHosts";
 import { LazyMachineView, LazyWorkbench } from "./lazyAppRegions";
 import { syncObjectDbForAccount } from "./objectDbAccountSync";
+import { objectDatabaseServerSyncReady } from "@/widgets/database-view/model/objectDatabaseSyncReady";
 import { ShellHosts } from "./ShellHosts";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { openSettings } from "@/features/settings/model/settingsNav";
@@ -90,6 +91,7 @@ function useSignedInServices({ persistedActivePage, objectDbPrevUser }: SignedIn
       () => import("@/widgets/database-view/model/knownDatabaseState"),
       objectDbPrevUser,
       activeUserId,
+      objectDatabaseServerSyncReady,
     );
   }, [activeUserId, objectDbPrevUser]);
   useEffect(() => {

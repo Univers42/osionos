@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { lazy, Suspense } from "react";
+import { PHONE_QUERY } from "@/shared/config/useResponsiveSidebar";
 import { contentFallback } from "./contentFallback";
 
 /**
@@ -55,7 +56,17 @@ function initialSurfaceUsesEditor(): boolean {
   return stored !== "database" && stored !== "graph";
 }
 
-if (initialSurfaceUsesEditor()) {
+/**
+ * True when a speculative download is unwelcome: the visitor asked the browser to save
+ * data, or the viewport is the phone one (the editor is ~1.7 MB and loads on first page open).
+ */
+function warmIsUnwelcome(): boolean {
+  const connection = (globalThis.navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  if (connection?.saveData) return true;
+  return globalThis.matchMedia?.(PHONE_QUERY).matches ?? false;
+}
+
+if (initialSurfaceUsesEditor() && !warmIsUnwelcome()) {
   const warmEditor = (): void => { void import("@/pages/notion-page/ui/NotionPage"); };
   if (typeof globalThis.requestIdleCallback === "function") {
     globalThis.requestIdleCallback(warmEditor, { timeout: 2500 });
