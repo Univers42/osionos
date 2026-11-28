@@ -211,7 +211,7 @@ test("isBlankPage accepts only childless empty paragraphs", () => {
 
 test("TopBar isolates both lazy command factory failures", async () => {
   const { readFile } = await import("node:fs/promises");
-  const source = await readFile(new URL("../../src/widgets/top-bar/ui/TopBar.tsx", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../src/widgets/top-bar/model/usePaletteSources.ts", import.meta.url), "utf8");
   assert.ok(source.includes('import("@/features/settings/model/settingsCommands").then((module) => module.settingsPaletteCommands())'));
   assert.ok(source.includes('import("@/features/page-shells/model/layoutPaletteCommands").then((module) => module.layoutPaletteCommands())'));
 });

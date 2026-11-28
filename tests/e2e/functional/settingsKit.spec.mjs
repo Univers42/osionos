@@ -93,7 +93,7 @@ test.describe("settings use the kit", () => {
       const sectionId = await row.getAttribute("data-settings-section");
       await row.click();
       await expect(row).toHaveAttribute("aria-current", "page");
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(body.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(region(page).locator(`[data-settings-panel="${sectionId}"]`)).toBeVisible();
       // Nav rows and switches are not Buttons. The appearance controls belong to the
       // appearance sections (theme, style, color, layout, motion, accessibility), whose swatches and
@@ -189,7 +189,7 @@ test.describe("settings use the kit", () => {
       await rows.nth(index).scrollIntoViewIfNeeded();
       await rows.nth(index).click();
       await expect(rows.nth(index)).toHaveAttribute("aria-current", "page");
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(body.getByRole("heading", { level: 1 })).toBeVisible();
     }
   });
 

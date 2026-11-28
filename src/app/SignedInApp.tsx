@@ -32,7 +32,9 @@ import { LazyMachineView, LazyWorkbench } from "./lazyAppRegions";
 import { syncObjectDbForAccount } from "./objectDbAccountSync";
 import { objectDatabaseServerSyncReady } from "@/widgets/database-view/model/objectDatabaseSyncReady";
 import { ShellHosts } from "./ShellHosts";
-import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
+import { PHONE_QUERY, useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
+import { useMediaQuery } from "@/shared/config/useMediaQuery";
+import { PhoneApp } from "./PhoneApp";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
@@ -107,9 +109,11 @@ export default function SignedInApp(props: SignedInAppProps) {
   const zen = useZenMode((s) => s.zen);
   const topBarAutoHide = useUIStore((s) => s.topBarAutoHide);
   const deniedPageId = usePageStore((s) => s.deniedPage?.pageId ?? null);
+  const isPhone = useMediaQuery(PHONE_QUERY);
   const onOpenSettings = () => openSettings();
 
   if (globalThis.location?.pathname === "/machine") return <LazyMachineView />;
+  if (isPhone) return <PhoneApp />;
 
   return (
     <BindingSourcesProvider>

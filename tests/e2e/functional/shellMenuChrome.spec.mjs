@@ -134,8 +134,7 @@ test.describe("shell menus draw the overlay chrome", () => {
       await openFreshPage(page, baseURL);
       await page.setViewportSize({ width, height });
       await clearAndTypePageTitle(page, "Quarterly plan");
-      // A phone collapses the sidebar to its rail; the Explorer tab brings the tree back.
-      if (width < 768) await page.getByRole("tab", { name: "Explorer", exact: true }).click();
+      if (width < 768) await page.getByRole("navigation", { name: "Primary" }).getByRole("button", { name: "Home" }).click();
       await explorerRow(page, "Quarterly plan").click({ button: "right" });
       await page.getByRole("menuitem", { name: "Share", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Share" });

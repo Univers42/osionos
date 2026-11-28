@@ -169,17 +169,12 @@ test("the position and the width are remembered across a reload", async ({ page,
   await expect(splitterOf(page)).toHaveAttribute("aria-valuenow", String(max));
 });
 
-test("a phone gets the bottom whatever is stored, and the desktop gets its choice back", async ({ page, baseURL }) => {
+test("a phone has no dock whatever is stored, and the desktop gets its choice back", async ({ page, baseURL }) => {
   await openDock(page, baseURL);
   await placeDock(page, "Right");
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(bodyOf(page)).toHaveAttribute("data-dock-position", "bottom");
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
-  await ensureDockOpen(page);
-  await expect(bodyOf(page)).toHaveAttribute("data-dock-position", "bottom");
-  await expect(dockOf(page).getByRole("button", { name: "Panel position" })).toHaveCount(0);
-  await expect(splitterOf(page)).toHaveAttribute("aria-orientation", "horizontal");
+  await expect(page.locator("[data-osio-workbench]")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(bodyOf(page)).toHaveAttribute("data-dock-position", "right");
   await expect(dockOf(page).getByRole("button", { name: "Panel position" })).toBeVisible();

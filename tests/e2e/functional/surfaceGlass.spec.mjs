@@ -99,12 +99,10 @@ test.describe("glass surface", () => {
   test.describe("phone", () => {
     test.use({ viewport: { width: 390, height: 844 } });
 
-    test("the drawer is opaque, the pane has no shadow, the aurora still paints", async ({ page }) => {
+    test("glass on a phone: there is no pane to carry a shadow, and the shell still renders", async ({ page }) => {
       await setAttrs(page, { surface: "glass", elevation: "deep" });
-      const glass = await facts(page);
-      expect(alphaOf(glass.card)).toBe(1);
-      expect(glass.paneShadow).toBe("none");
-      expect(glass.image).toContain("radial-gradient");
+      await expect(page.locator("[data-osio-pane]")).toHaveCount(0);
+      await expect(page.getByTestId("app-shell")).toBeVisible();
     });
   });
 
@@ -122,8 +120,7 @@ test.describe("glass surface", () => {
     await page.evaluate(() => delete document.body.dataset.paneResizing);
 
     await page.setViewportSize({ width: 390, height: 844 });
-    const phone = await facts(page);
-    expect([phone.paneShadow, phone.cardShadow]).toEqual(["none", "none"]);
+    await expect(page.locator("[data-osio-pane]")).toHaveCount(0);
     await page.setViewportSize({ width: 1440, height: 900 });
 
     await page.keyboard.press("Control+k");

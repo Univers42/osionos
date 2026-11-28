@@ -1,0 +1,20 @@
+/* The phone bottom sheet: slides up in at most 200ms, none under reduced motion (as motion.css). */
+.osio-bottom-sheet {
+  animation: osio-sheet-up 180ms ease-out;
+  padding-bottom: var(--osio-safe-bottom);
+}
+
+@keyframes osio-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .osio-bottom-sheet {
+    animation: none;
+  }
+}
+
+:root[data-motion="reduce"] .osio-bottom-sheet {
+  animation: none;
+}

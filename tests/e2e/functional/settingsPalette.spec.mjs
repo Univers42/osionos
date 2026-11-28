@@ -17,6 +17,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
+import { openSearchOnPhone } from "../support/phoneNav.mjs";
 
 function settingsRegion(page) {
   return page.getByRole("region", { name: "Settings", exact: true });
@@ -66,9 +67,8 @@ test.describe("settings from the palette, the chord and the link", () => {
 
   test("at a phone width the Notifications anchors are told apart, none truncated", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    // Narrow AFTER the page is arranged: at a phone width the rail drops out
-    // of the a11y tree, and the page must be opened first.
     await page.setViewportSize({ width: 375, height: 812 });
+    await openSearchOnPhone(page);
     await paletteInput(page).fill(">notif");
 
     const anchors = ["In-app notifications", "Slack notifications", "Discord notifications", "Email notifications"];

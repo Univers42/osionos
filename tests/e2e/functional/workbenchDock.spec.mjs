@@ -75,20 +75,13 @@ test.describe("dock card", () => {
     expect(Math.abs(box.left - card.left)).toBeLessThanOrEqual(1);
   });
 
-  test("a phone width runs the dock edge to edge", async ({ page, baseURL }) => {
+  test("a phone width has no dock: the phone shell replaces the workbench", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    // No "New page" affordance at this width; the workbench itself is what is under test.
     await page.goto(baseURL, { waitUntil: "domcontentloaded" });
-    await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
+    await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator("[data-osio-workbench]")).toHaveCount(0);
     await page.keyboard.press("Control+j");
-    await dockOf(page).waitFor();
-    expect(await style(dockOf(page), "borderTopLeftRadius")).toBe("0px");
-    expect(await style(dockOf(page), "boxShadow")).toBe("none");
-    expect(await frameGap(page)).toBe(0);
-    const card = await rect(dockOf(page));
-    const hide = await rect(dockOf(page).getByRole("button", { name: "Hide panel" }));
-    expect(hide.right).toBeLessThanOrEqual(card.right);
-    expect(hide.left).toBeGreaterThanOrEqual(card.left);
+    await expect(dockOf(page)).toHaveCount(0);
   });
 
   test("zen runs the dock edge to edge", async ({ page, baseURL }) => {
