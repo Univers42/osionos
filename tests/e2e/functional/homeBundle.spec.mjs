@@ -10,14 +10,15 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// The signed-in home at phone size downloads what it paints. The dashboard page is the editor
-// (NotionPage) and shows page icons, so those load; a database below the fold, the database
-// state and the emoji data do not, until the block is scrolled near. The same regex matches a
+// The signed-in home at phone size downloads what it paints. The phone home is the page tree, so
+// no database, database state or emoji data loads there; opening a page that holds a database
+// loads the block once it is scrolled near. The same regex matches a
 // dev module path (DatabaseBlock.tsx) and a built chunk (DatabaseBlock-<hash>.js).
 // Ponytail: the dev server names modules by file, so a chunk renamed by a bundler config change
 // would slip past the regex; run the built-chunk list in the S1b report to cross-check.
 
 import { expect, test } from "@playwright/test";
+import { openPageOnPhone } from "../support/phoneNav.mjs";
 
 const DEFERRED = /(DatabaseBlock|WorkspaceDatabaseBlock|knownDatabaseState|emojiPickerData)[.-]/;
 const DATABASE = /\/DatabaseBlock[.-]/;
@@ -32,7 +33,7 @@ async function openHome(page, baseURL) {
   });
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await page.getByTestId("app-shell").waitFor();
-  await page.getByTestId("block-tree-root").first().waitFor();
+  await page.getByRole("navigation", { name: "Primary" }).waitFor();
   await page.waitForTimeout(3000);
   return requested;
 }
@@ -44,6 +45,7 @@ test("the phone home requests no database, database state or emoji data", async 
 
 test("a database block scrolled into view still loads and renders", async ({ page, baseURL }) => {
   const requested = await openHome(page, baseURL);
+  await openPageOnPhone(page, "Cell containment fixture");
   const block = page.locator('article[data-block-type="database_inline"]').first();
   await block.scrollIntoViewIfNeeded();
   await expect.poll(() => requested.some((url) => DATABASE.test(url))).toBe(true);
