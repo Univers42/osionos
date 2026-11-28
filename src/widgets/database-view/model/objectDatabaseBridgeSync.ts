@@ -19,8 +19,8 @@
 // next flush — it never throws into the persist path and never loses data.
 
 import type { NotionState } from "@notion-db/object-database";
-import { getActivePageJwt, API_BASE } from "@/shared/api/client";
-import { isObjectDatabaseServerSyncEnabled } from "@/shared/config/featureFlags";
+import { getActivePageJwt } from "@/shared/api/client";
+import { objectDatabaseServerSyncReady } from "./objectDatabaseSyncReady";
 import { emptySlice, hashSlice, sliceAllDatabases, userDatabaseIds } from "./objectDatabaseSlice";
 import { reconcileServerDatabases } from "./objectDatabaseReconcile";
 import { withoutDeletedPages, tombstonesStillNeeded } from "./knownDatabasePersistedState";
@@ -58,11 +58,7 @@ let hydrationDone = false; // hydrate() has been launched with a session this ac
 let hydrationWait: SessionWait | null = null; // the wait for the session token, one per account
 let hydrationCompleted = false; // hydrate() finished — gates every push
 
-/** Sync is possible only client-side, with the flag on and a bridge URL set
- *  (the offline/Playwright build blanks `VITE_API_URL`, so it no-ops there). */
-export function objectDatabaseServerSyncReady(): boolean {
-  return globalThis.window !== undefined && Boolean(API_BASE) && isObjectDatabaseServerSyncEnabled();
-}
+export { objectDatabaseServerSyncReady };
 
 // The legacy home of the record (localStorage), read once at tab load. A store with a durable
 // copy replaces both the record and its sink when its copy is read (devil I5).
