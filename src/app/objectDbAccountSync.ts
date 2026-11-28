@@ -23,6 +23,8 @@ export type ObjectDbSync = {
  * `""`, which then skipped the next real switch's reset (ADR 0057).
  * The mark is a closure local on purpose: a flag in a ref is cleared by the next run before the
  * stale callback lands, and the stale callback acts again.
+ * `isReady` (default true) says whether a sync can run at all; when it answers false the loader is
+ * never called, so a build or session without a bridge does not download the database state.
  * Caveat: when several ids follow each other inside one import window, only the last one acts;
  * the ids in between are never started.
  */
@@ -30,7 +32,9 @@ export function syncObjectDbForAccount(
   loadSync: () => Promise<ObjectDbSync>,
   previousAccount: { current: string | null },
   accountId: string,
+  isReady: () => boolean = () => true,
 ): () => void {
+  if (!isReady()) return () => undefined;
   let isStale = false;
   void loadSync().then(({ resetObjectDatabaseSync, startObjectDatabaseSync }) => {
     if (isStale) return;

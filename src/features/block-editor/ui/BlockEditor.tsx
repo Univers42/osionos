@@ -66,6 +66,7 @@ import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
 import { ResizableWideBlock } from "./ResizableWideBlock";
 import { VisibleWhenGate } from "@/entities/block/ui/VisibleWhenGate";
+import { DeferredMount } from "@/entities/block/ui/DeferredMount";
 import { BlockResizeFrame } from "@/shared/ui/molecules/BlockResizeFrame";
 
 // The same build-time switch the slash menu and the chat port read. Hoisted so
@@ -1029,14 +1030,16 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           >
             {(wide) => (
               <div data-wide-block-content={wide ? "" : undefined} className={wide ? undefined : "contents"}>
-                <Suspense fallback={null}>
-                  <DatabaseBlock
-                    databaseId={block.databaseId}
-                    initialViewId={block.viewId}
-                    mode="inline"
-                    recordLimit={block.recordLimit}
-                  />
-                </Suspense>
+                <DeferredMount>
+                  <Suspense fallback={null}>
+                    <DatabaseBlock
+                      databaseId={block.databaseId}
+                      initialViewId={block.viewId}
+                      mode="inline"
+                      recordLimit={block.recordLimit}
+                    />
+                  </Suspense>
+                </DeferredMount>
               </div>
             )}
           </ResizableWideBlock>
@@ -1063,13 +1066,15 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           className="relative group/dbblock my-0 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
         >
           <div className="osio-block-scroll-x h-full">
-            <Suspense fallback={null}>
-              <DatabaseBlock
-                databaseId={block.databaseId}
-                initialViewId={block.viewId}
-                mode="full"
-              />
-            </Suspense>
+            <DeferredMount minHeight={520}>
+              <Suspense fallback={null}>
+                <DatabaseBlock
+                  databaseId={block.databaseId}
+                  initialViewId={block.viewId}
+                  mode="full"
+                />
+              </Suspense>
+            </DeferredMount>
           </div>
         </div>
       );
