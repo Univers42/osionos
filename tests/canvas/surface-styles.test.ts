@@ -190,6 +190,6 @@ test("glass: the aurora sits on the shell hook, the card is translucent without 
   assert.ok(/aside:not\(\[data-sidebar-mode="peek"\]\) \[data-osio-sidebar-card\]/.test(css), "peek stays opaque");
   const cardRules = css.slice(css.indexOf("Glass edge")).split("}").filter((r) => r.includes("data-osio-sidebar-card"));
   for (const rule of cardRules) assert.ok(!/backdrop-filter/.test(rule), rule);
-  const shell = readFileSync("src/app/App.tsx", "utf8");
+  const shell = readFileSync("src/app/SignedInApp.tsx", "utf8");
   assert.match(shell, /data-osio-shell/);
 });
