@@ -17,8 +17,6 @@ import { MotionConfig } from "motion/react";
 import { useMotionConfigMode } from "@/shared/config/useAppearance";
 import App from "./App.tsx";
 import { installPreloadRecovery, readSessionStorage } from "./preloadRecovery.ts";
-import { setInferencePort } from "@/features/chat/model/useChatStore";
-import { selectInferencePort } from "@/features/ai/model/aiInferencePort";
 import { installLinkFaviconFallback } from "@/shared/lib/embed/linkFaviconFallback";
 import { isWorkerReloadSafe, keepAppWorkerCurrent } from "@/shared/lib/service-worker/appWorker";
 
@@ -59,9 +57,6 @@ function AppearanceMotion({ children }: { children: ReactNode }) {
   const reducedMotion = useMotionConfigMode();
   return <MotionConfig reducedMotion={reducedMotion}>{children}</MotionConfig>;
 }
-// The Assistant pane talks to a port, chosen once and for all here: the AI
-// service when a base URL is configured, the offline stub otherwise.
-setInferencePort(selectInferencePort());
 installLinkFaviconFallback();
 
 // The offline app shell (#176): a reload without a connection opens the app. Not in dev,
