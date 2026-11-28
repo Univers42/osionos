@@ -32,7 +32,7 @@ export const DockShell: React.FC<DockShellProps> = ({ raised = false, children }
   return (
     <div
       data-osio-dock
-      className={`pointer-events-none fixed bottom-0 ${corner} flex max-w-full items-end gap-[var(--osio-space-3)] p-[var(--osio-space-4)]`}
+      className={`pointer-events-none fixed bottom-[var(--osio-dock-inset,0px)] ${corner} flex max-w-full items-end gap-[var(--osio-space-3)] p-[var(--osio-space-4)]`}
       style={{ zIndex: raised ? 'var(--osio-z-popover)' : 'var(--osio-z-sticky)' }}
     >
       {children}

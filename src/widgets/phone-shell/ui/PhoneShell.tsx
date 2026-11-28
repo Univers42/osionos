@@ -4,6 +4,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { PaneContent } from "@/widgets/page-renderer/ui/PaneContent";
 import { currentStack, type PhoneEntry, type PhoneTabId } from "../model/phoneStack";
 import { usePhoneNav } from "../model/usePhoneNav";
+import { PhoneAccountSheet } from "./PhoneAccountSheet";
 import { PhoneTabBar } from "./PhoneTabBar";
 import { PhoneTabView } from "./PhoneTabViews";
 import { PhoneTopBar } from "./PhoneTopBar";
@@ -52,6 +53,7 @@ export const PhoneShell: React.FC = () => {
   const stack = currentStack(state);
   const top = stack.at(-1);
   const leaving = useLeavingPage(stack);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [visited, setVisited] = useState<ReadonlySet<PhoneTabId>>(() => new Set([state.tab]));
   if (!visited.has(state.tab)) setVisited(new Set([...visited, state.tab]));
   const pageTitle = usePageStore((s) => (top?.kind === "page" ? s.pageById(top.pageId)?.title : undefined));
@@ -59,7 +61,7 @@ export const PhoneShell: React.FC = () => {
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col">
-      <PhoneTopBar title={title} canGoBack={canGoBack} onBack={back} />
+      <PhoneTopBar title={title} canGoBack={canGoBack} onBack={back} onOpenAccount={() => setAccountOpen(true)} />
       <main id="osio-main" tabIndex={-1} className="relative min-h-0 flex-1 overflow-hidden outline-none">
         {[...visited].map((id) => (
           <div key={id} inert={stack.length > 1} className={id === state.tab ? "h-full" : "hidden"}>
@@ -70,6 +72,7 @@ export const PhoneShell: React.FC = () => {
         {leaving?.kind === "page" && <PhonePage key="leaving" entry={leaving} leaving />}
       </main>
       <PhoneTabBar active={state.tab} onSelect={switchTab} />
+      <PhoneAccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} />
     </div>
   );
 };

@@ -58,3 +58,9 @@ test("switching to the selected tab returns the same state", () => {
   const state = initialPhoneNav();
   assert.equal(phoneNavReducer(state, { type: "switch", tab: "home" }), state);
 });
+
+test("a shell mounted over an already open page starts Home on top of it", () => {
+  const state = initialPhoneNav(page("open"));
+  assert.equal(topPageId(state), "open");
+  assert.equal(currentStack(phoneNavReducer(state, { type: "pop" })).length, 1);
+});

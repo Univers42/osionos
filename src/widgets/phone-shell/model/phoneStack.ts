@@ -22,9 +22,11 @@ export type PhoneNavAction =
 
 const ROOT: PhoneEntry = { kind: "tab-root" };
 
-/** A fresh state: Home selected, every tab at its root. */
-export function initialPhoneNav(): PhoneNavState {
-  return { tab: "home", stacks: { home: [ROOT], search: [ROOT], inbox: [ROOT], agent: [ROOT] } };
+/** A fresh state: Home selected, every tab at its root; `open` (the page already active when the
+ *  shell mounts, as after a wide window narrows) starts Home on top of that page. */
+export function initialPhoneNav(open?: PhoneEntry): PhoneNavState {
+  const home = open ? [ROOT, open] : [ROOT];
+  return { tab: "home", stacks: { home, search: [ROOT], inbox: [ROOT], agent: [ROOT] } };
 }
 
 /** The entries of the selected tab, root first. */
