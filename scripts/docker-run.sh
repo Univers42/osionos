@@ -38,7 +38,7 @@ run_inside_container() {
     build-terminal) exec sh -c 'NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build --config vite.terminal.config.ts' ;;
     build-editor) exec sh -c 'NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build --config vite.editor.config.ts' ;;
     # Offline-mode prod bundle for the perf benches (same env as the Playwright webServer).
-    build-offline) exec sh -c 'VITE_API_URL= VITE_REQUIRE_BRIDGE_SESSION=false VITE_ALLOW_OFFLINE_MODE=true VITE_BAAS_URL= VITE_BAAS_API_KEY= VITE_BAAS_LIVE_MOUNTS= NODE_OPTIONS=--max-old-space-size=6144 pnpm exec vite build' ;;
+    build-offline) exec sh -c 'NODE_ENV=production VITE_API_URL= VITE_REQUIRE_BRIDGE_SESSION=false VITE_ALLOW_OFFLINE_MODE=true VITE_BAAS_URL= VITE_BAAS_API_KEY= VITE_BAAS_LIVE_MOUNTS= NODE_OPTIONS=--max-old-space-size=6144 pnpm exec vite build' ;;
     preview) exec pnpm exec vite preview --host 0.0.0.0 "$@" ;;
     typecheck) exec sh -c 'pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit' ;;
     lint) exec pnpm exec eslint src/ packages/ scripts/ services/osionos-ai --max-warnings=0 "$@" ;;
