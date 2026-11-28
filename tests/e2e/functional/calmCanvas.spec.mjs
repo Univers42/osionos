@@ -118,8 +118,10 @@ test.describe("calm canvas shell", () => {
   test("a phone width is edge-to-edge", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openFreshPage(page, baseURL);
-    expect(await frameGap(page)).toBe(0);
-    expect(await style(pane(page).first(), "borderTopLeftRadius")).toBe("0px");
+    await expect(pane(page)).toHaveCount(0);
+    const shell = await page.getByTestId("app-shell").boundingBox();
+    expect(shell.x).toBe(0);
+    expect(Math.round(shell.width)).toBe(390);
   });
 
   test("only the active pane of two is outlined, and the outline follows focus", async ({ page, baseURL }) => {

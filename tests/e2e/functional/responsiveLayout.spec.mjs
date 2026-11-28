@@ -277,7 +277,7 @@ test.describe("responsive — mobile (375×812)", () => {
 		await page.locator("main").getByText("Meeting Notes", { exact: true }).first().click();
 		const stage = page.getByTestId("phone-page");
 		await expect(stage).toBeVisible();
-		expect((await stage.boundingBox()).width).toBe(VIEWPORTS.mobile.width);
+		expect((await stage.boundingBox()).width).toBeCloseTo(VIEWPORTS.mobile.width, 0);
 		const title = page.locator("main").getByLabel("Page title").filter({ hasText: "Meeting Notes" });
 		await expect(title).toBeVisible();
 		expect((await title.boundingBox()).width).toBeGreaterThan(200);

@@ -246,7 +246,7 @@ test.describe("surface styles", () => {
     await page.evaluate(() => delete document.body.dataset.paneResizing);
 
     await page.setViewportSize({ width: 390, height: 844 });
-    expect((await pane()).shadow).toBe("none");
+    await expect(page.locator("[data-osio-pane]")).toHaveCount(0);
     await page.setViewportSize({ width: 1280, height: 800 });
 
     await page.evaluate(() => (document.documentElement.dataset.borders = "strong"));

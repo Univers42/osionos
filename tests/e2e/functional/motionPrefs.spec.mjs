@@ -7,6 +7,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
+import { isPhoneWidth, openSettingsOnPhone } from "../support/phoneNav.mjs";
 
 const WCAG_AA = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const html = (page) => page.locator("html");
@@ -35,7 +36,8 @@ function switchTabAndReadAnimations(page) {
 }
 
 async function openMotionSettings(page) {
-  await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
+  if (isPhoneWidth(page)) await openSettingsOnPhone(page);
+  else await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
   await page.getByRole("region", { name: "Settings", exact: true }).waitFor();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Preferences" }).click();
   await page.getByTestId("motion-controls").waitFor();

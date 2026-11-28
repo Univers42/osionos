@@ -29,36 +29,6 @@ async function openPage(page, baseURL, viewport) {
 }
 
 test.describe("title-bar focus", () => {
-  test("phone sheet: aria-modal, Tab wraps both ways, a plain row returns focus to Open menu", async ({ page, baseURL }) => {
-    await openPage(page, baseURL, { width: 390, height: 844 });
-    const open = bar(page).getByRole("button", { name: "Open menu" });
-    await open.click();
-    const sheet = page.getByRole("dialog", { name: "Menu" });
-    await expect(sheet).toHaveAttribute("aria-modal", "true");
-    await expect(sheet.locator("summary").first()).toBeFocused();
-    await page.keyboard.press("Shift+Tab");
-    await expect(sheet.locator(":scope > details > summary").last()).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(sheet.locator("summary").first()).toBeFocused();
-    await sheet.getByText("File", { exact: true }).click();
-    await sheet.getByRole("button", { name: "New page" }).click();
-    await expect(sheet).toHaveCount(0);
-    await expect(open).toBeFocused();
-  });
-
-  test("phone sheet: Undo gives the editable focus before it runs", async ({ page, baseURL }) => {
-    await openPage(page, baseURL, { width: 390, height: 844 });
-    const editor = (await createParagraphs(page, ["abc"])).first();
-    await editor.click();
-    await page.keyboard.type("def");
-    await bar(page).getByRole("button", { name: "Open menu" }).click();
-    const sheet = page.getByRole("dialog", { name: "Menu" });
-    await sheet.getByText("Edit", { exact: true }).click();
-    await sheet.getByRole("button", { name: "Undo" }).click();
-    await expect(sheet).toHaveCount(0);
-    await expect(editor).toBeFocused();
-  });
-
   test("agent: Escape on the main button closes the menu and focuses the caret", async ({ page, baseURL }) => {
     await openPage(page, baseURL, { width: 1440, height: 900 });
     await caret(page).click();

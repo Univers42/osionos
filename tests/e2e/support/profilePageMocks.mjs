@@ -16,6 +16,7 @@
 import { expect } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
+import { isPhoneWidth } from "./phoneNav.mjs";
 
 export const OTHER = { id: "user-456", username: "bob" };
 
@@ -103,6 +104,7 @@ export function answerProfileReads(url) {
 }
 
 export async function openProfileFromPalette(page, name) {
+  if (isPhoneWidth(page)) await page.getByRole("navigation", { name: "Primary" }).getByRole("button", { name: "Search" }).click();
   const box = page.getByRole("combobox", { name: "Search pages or run a command" });
   await box.click();
   await box.fill(`user:${name}`);

@@ -20,6 +20,7 @@ import { mkdirSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
+import { isPhoneWidth } from "../support/phoneNav.mjs";
 import { BOB_PUBLIC, OTHER, expectNoErrorToast, giveTheAppABridgeOrigin, heading, mockApi, openProfile, seedSession } from "../support/profilePageMocks.mjs";
 
 const SHOTS = "target/shots/profile";
@@ -59,6 +60,7 @@ async function openOwn(page, baseURL) {
   const mine = await seedSession(page);
   const public_ = { ...BOB_PUBLIC, userId: mine, username: "me-user", displayName: "Me Myself", bannerUrl: BANNER };
   await mockApi(page, { id: mine, username: "me-user", name: "Me Myself", publicBody: public_, profileExtra: { bannerUrl: BANNER } });
+  if (isPhoneWidth(page)) await page.getByRole("navigation", { name: "Primary" }).getByRole("button", { name: "Search" }).click();
   const box = page.getByRole("combobox", { name: "Search pages or run a command" });
   await box.click();
   await box.fill("user:Me");

@@ -7,6 +7,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
+import { isPhoneWidth, openSettingsOnPhone } from "../support/phoneNav.mjs";
 
 const WCAG_AA = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const region = (page) => page.getByRole("region", { name: "Settings", exact: true });
@@ -23,7 +24,8 @@ async function start(page, baseURL, viewport) {
     localStorage.setItem("osionos:theme-mode", "light");
   });
   await openFreshPage(page, baseURL);
-  await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
+  if (viewport && isPhoneWidth(page)) await openSettingsOnPhone(page);
+  else await page.getByRole("tab", { name: "Settings", exact: true }).first().click();
   await region(page).waitFor();
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Preferences" }).click();
   await summary(page).waitFor();
